@@ -22,7 +22,7 @@
     color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
-  #app{display:flex; flex-direction:column; height:100vh}
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
   header{
     display:flex; align-items:center; gap:16px; padding:14px 22px;
     border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1626,#0b0f1a);
@@ -102,16 +102,21 @@
     background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
   #setup button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
 
-  @media (max-width:900px){
-    body{overflow:auto}
-    #app{height:auto; min-height:100vh}
-    main{grid-template-columns:1fr; overflow:visible}
-    .col, .cards{min-height:auto}
-    .cards{grid-template-columns:1fr; grid-auto-rows:auto}
-    .card{min-height:190px}
-    .list{flex:none; overflow:auto; max-height:46vh}
-    #map{height:300px; min-height:300px}
-    header{position:sticky; top:0; z-index:500}
+  /* Narrower screens: stack map on top, cards fill the rest — still fits the
+     screen with no page scroll (cards trim themselves to fit via fitList). */
+  @media (max-width:1000px){
+    main{grid-template-columns:1fr; grid-template-rows:34dvh 1fr}
+    #map{min-height:0}
+    .cards{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:560px){
+    main{grid-template-rows:22dvh 1fr; gap:10px; padding:10px}
+    header{padding:10px 14px}
+    header .title{font-size:16px}
+    header .clock .time{font-size:22px}
+  }
+  @media (max-width:440px){
+    .cards{grid-template-columns:1fr}
   }
 </style>
 </head>
@@ -397,12 +402,14 @@ function renderRail(trains){
 function railKey(m){ return m==="BRD"?-2 : m==="ARR"?-1 : (parseInt(m,10)||99); }
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
 function fitList(box){
-  if(!box || box.clientHeight < 40) return;   // skip until the card has a real height
+  if(!box || box.clientHeight < 8) return;    // skip only when not laid out yet (height ~0)
   let guard=0;
   while(box.scrollHeight > box.clientHeight + 1 && box.lastElementChild && guard++ < 80){
     box.removeChild(box.lastElementChild);
   }
 }
+/* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
+function fitAll(){ ["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList"].forEach(s=>fitList($(s))); }
 function renderRailNoKey(){
   $("#railList").innerHTML="";
   $("#railList").appendChild(el("div","empty","Add a free WMATA key (⚙︎) to see live train times."));
@@ -745,10 +752,14 @@ function boot(){
   setInterval(fetchRideOn, CFG.rideonEveryMs);
 
   // re-fit cards to the new layout when the window/display changes size
-  let rzT; window.addEventListener("resize", ()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{
+  let rzT; window.addEventListener("resize", ()=>{
     if(state.map) state.map.invalidateSize();
-    refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
-  }, 350); });
+    fitAll();                              // instant: never clip/scroll while shrinking
+    clearTimeout(rzT); rzT=setTimeout(()=>{ // then reload data to refill rows if we grew
+      if(state.map) state.map.invalidateSize();
+      refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+    }, 350);
+  });
 
   requestGeo();
 }
