@@ -12,7 +12,7 @@ Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Po
 - All map vehicles (Metro, MARC, Amtrak, buses, planes) **animate smoothly** between position updates instead of jumping
 - **🌙 Night mode** (`night.html`, "Night" tab) — a big-letters, dark, low-light page showing just the **nearest flight**: airline, flight #, aircraft, and **origin → destination** cities (via [adsbdb](https://www.adsbdb.com)), plus live distance/altitude/phase. *(True on-time/late status isn't shown — it needs a paid flight-status API; see note below.)*
 - **🚄 Amtrak** — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
-- **🚆 MARC** *(optional)* — live commuter-rail trains (Brunswick / Penn / Camden lines) on the map, color-coded, with speed and distance. Needs the free MARC helper (below).
+- **🚆 MARC** — next **scheduled** commuter-rail trains at your nearest MARC stations (Brunswick / Penn / Camden), from a bundled copy of MARC's timetable. **Zero setup — no key, no Worker.** *(Optional: add live MARC trains moving on the map with the free Worker below.)*
 - **🚌 Ride On** *(optional)* — **scheduled** departures at nearby stops. Needs a free Transitland key (below). Live Ride On isn't publicly available, so this is timetable-only.
 - **✈️ Planes overhead** — live ADS-B aircraft within ~12 nm (altitude, airline, speed, climbing/descending), plotted on a live map
 - Auto-detects your location (with 20816 as the fallback), refreshes transit/Amtrak every 30s and planes every 15s
@@ -80,10 +80,20 @@ anyone who clicks the link opens the live board in their browser.
 - Metrorail predictions are live estimates (the Metro runs on frequencies, so trains don't have a
   fixed per-train published timetable the way buses do — buses show both live and scheduled).
 - If trains/buses stay empty, re-check the WMATA key in ⚙︎ (the status bar will say "transit stale").
-## Optional: enable MARC trains on the map (free, ~5 min)
-A browser can't read MARC's feed directly (it's protobuf on S3 with no CORS). The included
-**`marc-worker.js`** is a tiny [Cloudflare Worker](https://workers.cloudflare.com) that reads it
-server-side and re-serves it as JSON — free tier, always on, never sleeps.
+## MARC schedule — built in, no setup
+The MARC card works out of the box: it reads **`marc-schedule.json`**, a bundled copy of MARC's
+published timetable, and shows the next scheduled trains at your nearest MARC stations. Nothing to
+configure. When MARC changes its timetable (a few times a year), refresh the file with:
+
+```bash
+python3 gen-marc-schedule.py    # re-downloads MARC's GTFS and rewrites marc-schedule.json
+```
+
+## Optional: live MARC trains *moving on the map* (free, ~5 min)
+Only if you also want MARC trains gliding on the map (not just the schedule): a browser can't read
+MARC's live feed directly (protobuf on S3, no CORS), so the included **`marc-worker.js`** is a tiny
+[Cloudflare Worker](https://workers.cloudflare.com) that reads it server-side and re-serves it as
+JSON — free tier, always on, never sleeps.
 
 1. Go to **[dash.cloudflare.com](https://dash.cloudflare.com)** → sign up (free) → **Workers & Pages** → **Create** → **Create Worker**.
 2. Give it a name (e.g. `marc`), click **Deploy**, then **Edit code**.

@@ -191,12 +191,22 @@ function render(pick){
     subEl.style.display="";
   }
 
-  // Status: live flight phase (real) + on-time badge (needs a flight-status API)
+  // Status: live flight phase + estimated arrival (distance to destination ÷ ground speed).
+  // This is a live estimate, not an airline's official on-time/late (that needs a paid API).
   const spd = a.gs ? `${Math.round(a.gs)} kt` : "";
+  let etaHtml = `<span class="badge na">en route</span>`;
+  if(route && route.destination && typeof route.destination.latitude==="number" && a.gs>40){
+    const dNm=haversineNm({lat:a.lat,lon:a.lon},{lat:route.destination.latitude,lon:route.destination.longitude});
+    const mins=Math.round(dNm/a.gs*60);
+    if(mins>=0 && mins<24*60){
+      const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+      etaHtml = mins<=1 ? `<span class="badge ok">landing now</span>`
+        : `<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`;
+    }
+  }
   $("#status").innerHTML =
     `<span class="phase">${phaseOf(a)}</span>`+
-    (spd?`<span class="alt">${spd}</span>`:"")+
-    `<span class="badge na" title="Live on-time status needs a flight-status API key">status —</span>`;
+    (spd?`<span class="alt">${spd}</span>`:"")+ etaHtml;
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
