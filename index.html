@@ -142,7 +142,7 @@
         <span>◉ Metro train</span>
         <span>🔴 Metro station</span>
         <span>━ Metro lines</span>
-        <span style="opacity:.7">all vehicles move live</span>
+        <span style="opacity:.7">vehicles move live · zoom in for labels</span>
       </div>
     </div>
 
@@ -233,6 +233,7 @@ const CFG = {
   transitEveryMs: 30000,
   planeEveryMs: 15000,
   metroEveryMs: 10000,   // live Metrorail train positions (track-circuit based)
+  labelZoom: 12,         // at this zoom and closer, show vehicle labels; below, just dots
   busPosEveryMs: 15000,  // live Metrobus positions (markers glide between updates)
   amtrakEveryMs: 20000,
   marcEveryMs: 15000,
@@ -328,19 +329,33 @@ function initMap(){
   state.metroLayer  = L.layerGroup().addTo(state.map);
   state.planeLayer  = L.layerGroup().addTo(state.map);
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:1,weight:2}).addTo(state.map);
+  state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
+  state.map.on("zoomend", updateLabelVisibility);
 }
-function planeIcon(track){
-  return L.divIcon({
-    className:"plane-icon", iconSize:[22,22], iconAnchor:[11,11],
-    html:`<svg width="22" height="22" viewBox="0 0 24 24" style="transform:rotate(${(track||0)}deg)">
-      <path d="M12 2 L14 11 L22 15 L22 17 L13 14 L13 20 L16 22 L16 23 L12 21.5 L8 23 L8 22 L11 20 L11 14 L2 17 L2 15 L10 11 Z"
-      fill="#ffd166" stroke="#7a5a00" stroke-width=".5"/></svg>`
-  });
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// A dot at the exact location + an info chip floating to its right.
+// The chip is hidden when zoomed out (state.labelsOn) to avoid clutter.
+function labelIcon(color, label){
+  const chip = (state.labelsOn && label) ? `<span style="position:absolute;left:8px;top:-8px;
+      background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
+      font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
+      box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
+    html:`<div style="position:relative">
+      <span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>${chip}
+    </div>` });
 }
-function busDot(){
-  return L.divIcon({ className:"veh-icon", iconSize:[12,12], iconAnchor:[6,6],
-    html:`<div style="width:11px;height:11px;border-radius:50%;background:#6aa9ff;
-      border:1px solid #08203f;box-shadow:0 0 5px rgba(106,169,255,.7)"></div>` });
+// Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
+function planeIcon(track, label){
+  const lbl = (state.labelsOn && label) ? `<span style="position:absolute;left:19px;top:3px;background:rgba(9,13,24,.85);
+      color:#ffd166;padding:1px 5px;border-radius:5px;font:700 10px/13px system-ui;white-space:nowrap;
+      box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  return L.divIcon({ className:"plane-icon", iconSize:[22,22], iconAnchor:[11,11],
+    html:`<div style="position:relative;width:22px;height:22px">
+      <svg width="22" height="22" viewBox="0 0 24 24" style="transform:rotate(${track||0}deg);filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))">
+        <path d="M12 2 L14 11 L22 15 L22 17 L13 14 L13 20 L16 22 L16 23 L12 21.5 L8 23 L8 22 L11 20 L11 14 L2 17 L2 15 L10 11 Z"
+        fill="#ffd166" stroke="#7a5a00" stroke-width=".5"/></svg>${lbl}</div>` });
 }
 
 /* ---------- animated vehicle markers (smooth "live" movement) ----------
@@ -362,15 +377,25 @@ function updateFleet(fleet, items, dur){
     if(!v){
       const m=L.marker([it.lat,it.lon], {icon:it.icon(), keyboard:false}).addTo(layer);
       if(it.tip) m.bindTooltip(it.tip, {direction:"top"});
-      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik };
+      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon };
     } else {
       const c=v.marker.getLatLng();                 // animate from current interpolated spot
-      v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1);
+      v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
       if(it.tip) v.marker.setTooltipContent(it.tip);
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
     }
   }
   for(const id in F){ if(!keep.has(id)){ layer.removeLayer(F[id].marker); delete F[id]; } }
+}
+// Re-render every marker's icon (used when zoom crosses the label threshold).
+function refreshFleetIcons(){
+  for(const f in state.fleets){ const F=state.fleets[f];
+    for(const id in F){ if(F[id].iconFn) F[id].marker.setIcon(F[id].iconFn()); }
+  }
+}
+function updateLabelVisibility(){
+  const on = state.map.getZoom() >= CFG.labelZoom;
+  if(on!==state.labelsOn){ state.labelsOn=on; refreshFleetIcons(); }
 }
 function animateFleets(){
   const now=performance.now();
@@ -565,11 +590,14 @@ function renderPlanes(ac){
 }
 function badge(txt){ const b=el("div","badge",txt); b.style.background="var(--plane)"; b.style.color="#3a2b00"; return b; }
 function drawPlanes(ac){
-  const items=ac.filter(a=>a.alt_baro!=="ground" && a.lat && a.lon).map(a=>({
-    id:"p"+a.hex, lat:a.lat, lon:a.lon,
-    icon:()=>planeIcon(a.track), ik:"t"+Math.round((a.track||0)/8),
-    tip:`${(a.flight||a.r||"?").trim()} · ${typeof a.alt_baro==="number"?a.alt_baro+"′":a.alt_baro}`
-  }));
+  const items=ac.filter(a=>a.alt_baro!=="ground" && a.lat && a.lon).map(a=>{
+    const call=(a.flight||a.r||"").trim();
+    return {
+      id:"p"+a.hex, lat:a.lat, lon:a.lon,
+      icon:()=>planeIcon(a.track, call), ik:"t"+Math.round((a.track||0)/8)+"_"+call,
+      tip:`${call||"?"} · ${typeof a.alt_baro==="number"?a.alt_baro+"′":a.alt_baro}`
+    };
+  });
   updateFleet("plane", items, CFG.planeEveryMs);
 }
 function drawStops(){
@@ -580,27 +608,45 @@ function drawStops(){
     .bindTooltip("Stop: "+s.Name,{direction:"top"}).addTo(state.stopLayer));
 }
 
-/* ---------- Metrorail route lines (the subway map) ---------- */
+/* ---------- Metrorail route lines (the subway map) ----------
+   Order each line's own stations into a path: start from one terminus (the
+   two farthest-apart stations) and chain by nearest neighbor. Metro lines are
+   essentially linear, so this traces them cleanly without WMATA's jPath (which
+   truncates lines that share track downtown). */
+function orderLineStations(st){
+  if(st.length<2) return st;
+  let a=0, best=-1;                                   // find the two farthest apart
+  for(let i=0;i<st.length;i++) for(let j=i+1;j<st.length;j++){
+    const d=haversine({lat:st[i].Lat,lon:st[i].Lon},{lat:st[j].Lat,lon:st[j].Lon});
+    if(d>best){ best=d; a=i; }
+  }
+  const rem=st.slice(), order=[rem.splice(a,1)[0]];   // nearest-neighbor chain
+  while(rem.length){
+    const last=order[order.length-1]; let ni=0, nd=Infinity;
+    for(let i=0;i<rem.length;i++){
+      const d=haversine({lat:last.Lat,lon:last.Lon},{lat:rem[i].Lat,lon:rem[i].Lon});
+      if(d<nd){ nd=d; ni=i; }
+    }
+    order.push(rem.splice(ni,1)[0]);
+  }
+  return order;
+}
 async function fetchRailRoutes(){
   if(!state.wmataKey || !state.routeLayer) return;
   try{
-    const cached=JSON.parse(localStorage.getItem("transitboard.railroutes")||"null");
-    if(cached && Date.now()-cached.t < 864e5 && cached.lines?.length){ drawRailRoutes(cached.lines); return; }
+    const cached=JSON.parse(localStorage.getItem("transitboard.railroutes2")||"null");
+    if(cached && Date.now()-cached.t < 864e5 && cached.lines?.length>=5){ drawRailRoutes(cached.lines); return; }
   }catch(e){}
-  try{
-    const stations=await ensureStations();
-    const coord={}; stations.forEach(s=>{ coord[s.Code]=[s.Lat,s.Lon]; });
-    const linesData=await getJSON(wmata("Rail.svc/json/jLines"));
-    const lines=[];
-    for(const ln of (linesData.Lines||[])){
-      try{
-        const path=await getJSON(wmata(`Rail.svc/json/jPath?FromStationCode=${ln.StartStationCode}&ToStationCode=${ln.EndStationCode}`));
-        const pts=(path.Path||[]).map(p=>coord[p.StationCode]).filter(Boolean);
-        if(pts.length>1) lines.push({ code:ln.LineCode, pts });
-      }catch(e){}
-    }
-    if(lines.length){ localStorage.setItem("transitboard.railroutes", JSON.stringify({t:Date.now(), lines})); drawRailRoutes(lines); }
-  }catch(e){}
+  let stations;
+  try{ stations=await ensureStations(); }catch(e){ return; }
+  const lines=[];
+  ["RD","OR","BL","GR","YL","SV"].forEach(code=>{
+    const st=stations.filter(s=>(s.lines||[]).includes(code) && typeof s.Lat==="number");
+    if(st.length>1) lines.push({ code, pts:orderLineStations(st).map(s=>[s.Lat,s.Lon]) });
+  });
+  if(!lines.length) return;
+  if(lines.length>=5){ try{ localStorage.setItem("transitboard.railroutes2", JSON.stringify({t:Date.now(), lines})); }catch(e){} }
+  drawRailRoutes(lines);
 }
 function drawRailRoutes(lines){
   if(!state.routeLayer) return;
@@ -616,12 +662,6 @@ function drawRailRoutes(lines){
    place a train by interpolating between the two stations its circuit sits
    between. Requires WMATA's "TrainPositions" API product. */
 const METRO = { routes:null };
-function metroIcon(line){
-  const col=RAIL_COLORS[line]||"#8aa";
-  return L.divIcon({ className:"train-icon", iconSize:[15,15], iconAnchor:[7.5,7.5],
-    html:`<div style="width:13px;height:13px;border-radius:50%;background:${col};
-      border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.7)"></div>` });
-}
 async function ensureMetroRoutes(){
   if(METRO.routes) return METRO.routes;
   try{ const c=JSON.parse(localStorage.getItem("transitboard.stdroutes")||"null");
@@ -652,24 +692,28 @@ function circuitLatLon(arr, cid, coord){
 }
 async function fetchMetroTrains(){
   if(!state.wmataKey) return;
-  let routes, coord, data;
+  let routes, coord, nameByCode, data;
   try{
     routes=await ensureMetroRoutes();
     const stations=await ensureStations();
-    coord={}; stations.forEach(s=>{ coord[s.Code]=[s.Lat,s.Lon]; });
+    coord={}; nameByCode={};
+    stations.forEach(s=>{ coord[s.Code]=[s.Lat,s.Lon]; nameByCode[s.Code]=s.Name; });
     data=await getJSON(wmata("TrainPositions/TrainPositions?contentType=json"));
   }catch(e){ return; }   // product not enabled / unreachable → no metro trains, no error
   const items=[];
   (data.TrainPositions||[]).forEach(tp=>{
     if(!tp.CircuitId || !tp.LineCode || tp.LineCode==="None") return;
+    if(tp.ServiceType==="NoPassengers" || tp.ServiceType==="Unknown") return;  // skip out-of-service / yard moves
     let ll = circuitLatLon(routes[tp.LineCode+"_"+tp.DirectionNum], tp.CircuitId, coord)
           || circuitLatLon(routes[tp.LineCode+"_1"], tp.CircuitId, coord)
           || circuitLatLon(routes[tp.LineCode+"_2"], tp.CircuitId, coord);
     if(!ll){ for(const k in routes){ ll=circuitLatLon(routes[k], tp.CircuitId, coord); if(ll) break; } }
     if(!ll) return;
+    const destN=nameByCode[tp.DestinationStationCode]||tp.DestinationStationCode||"";
     items.push({ id:"mt"+(tp.TrainId||tp.TrainNumber||tp.CircuitId), lat:ll[0], lon:ll[1],
-      icon:()=>metroIcon(tp.LineCode), ik:"metro-"+tp.LineCode,
-      tip:`Metro ${tp.LineCode} → ${tp.DestinationStationCode||"?"}${tp.CarCount?` · ${tp.CarCount} cars`:""}` });
+      icon:()=>labelIcon(RAIL_COLORS[tp.LineCode]||"#8aa", `${tp.LineCode}${destN?" → "+destN:""}`),
+      ik:"metro-"+tp.LineCode+"-"+(tp.DestinationStationCode||""),
+      tip:`Metro ${tp.LineCode} → ${destN||"?"}${tp.CarCount?` · ${tp.CarCount} cars`:""}` });
   });
   updateFleet("metro", items, CFG.metroEveryMs);
 }
@@ -681,7 +725,8 @@ async function fetchBusPositions(){
   try{ data=await getJSON(wmata(`Bus.svc/json/jBusPositions?Lat=${state.loc.lat}&Lon=${state.loc.lon}&Radius=${CFG.busPosRadius}`)); }
   catch(e){ return; }
   const items=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null).map(v=>({
-    id:"b"+(v.VehicleID||`${v.RouteID}-${v.Lat}`), lat:v.Lat, lon:v.Lon, icon:busDot, ik:"bus",
+    id:"b"+(v.VehicleID||`${v.RouteID}-${v.Lat}`), lat:v.Lat, lon:v.Lon,
+    icon:()=>labelIcon("#6aa9ff", v.RouteID), ik:"bus-"+v.RouteID,
     tip:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`
   }));
   updateFleet("bus", items, CFG.busPosEveryMs);
@@ -689,12 +734,6 @@ async function fetchBusPositions(){
 
 /* ---------- AMTRAK (regional / intercity rail) ---------- */
 function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
-function trainIcon(){
-  return L.divIcon({ className:"train-icon", iconSize:[24,24], iconAnchor:[12,12],
-    html:`<div style="width:22px;height:22px;border-radius:50%;background:#3ad0c8;display:flex;
-      align-items:center;justify-content:center;font-size:12px;border:1px solid #08302d;
-      box-shadow:0 1px 3px rgba(0,0,0,.6)">🚆</div>` });
-}
 function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
 async function fetchAmtrak(){
   let data;
@@ -733,7 +772,9 @@ function renderAmtrak(list){
 }
 function drawAmtrak(list){
   const items=list.map(({t})=>({
-    id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon, icon:trainIcon, ik:"amtrak",
+    id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
+    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
+    ik:"a-"+(t.trainNum||"")+(t.destCode||""),
     tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
   }));
   updateFleet("amtrak", items, CFG.amtrakEveryMs);
@@ -741,13 +782,6 @@ function drawAmtrak(list){
 
 /* ---------- MARC (commuter rail, via the Cloudflare Worker helper) ---------- */
 const MARC_COL = { Brunswick:"#e8792b", Penn:"#d1495b", Camden:"#e0a800" };
-function marcIcon(line){
-  const col=MARC_COL[line]||"#e8792b";
-  return L.divIcon({ className:"train-icon", iconSize:[22,22], iconAnchor:[11,11],
-    html:`<div style="width:19px;height:19px;border-radius:5px;background:${col};display:flex;
-      align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;
-      border:1px solid #2a1400;box-shadow:0 1px 3px rgba(0,0,0,.6)">M</div>` });
-}
 async function fetchMarc(){
   if(!state.marcUrl){ return; }
   let data;
@@ -758,7 +792,8 @@ async function fetchMarc(){
 }
 function drawMarc(veh){
   const items=veh.map(v=>({
-    id:"m"+(v.id||v.train), lat:v.lat, lon:v.lon, icon:()=>marcIcon(v.line), ik:"marc-"+v.line,
+    id:"m"+(v.id||v.train), lat:v.lat, lon:v.lon,
+    icon:()=>labelIcon(MARC_COL[v.line]||"#e8792b", `${v.line} ${v.train}`), ik:"marc-"+v.line+"-"+v.train,
     tip:`MARC ${v.line} #${v.train}${v.mph!=null?` · ${v.mph} mph`:""}`
   }));
   updateFleet("marc", items, CFG.marcEveryMs);
