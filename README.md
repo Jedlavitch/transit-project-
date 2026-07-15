@@ -7,8 +7,9 @@ talks directly to public APIs, so once it's on free hosting it **never expires**
 Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Portal.
 
 ## What it shows
-- **🚆 Metrorail** — WMATA live arrival predictions at your nearest stations (Bethesda / Friendship Heights, etc.)
-- **🚌 Metrobus** — WMATA **live predictions** *and* **scheduled** timetable times at the nearest stops; live buses also plotted on the map
+- **🚆 Metrorail** — WMATA live arrival predictions at your nearest stations (Bethesda / Friendship Heights, etc.), the colored **Metro line map**, and (with the TrainPositions product, below) **live trains gliding along the lines**
+- **🚌 Metrobus** — WMATA **live predictions** *and* **scheduled** timetable times at the nearest stops; live buses also plotted on the map and move in real time
+- All map vehicles (Metro, MARC, Amtrak, buses, planes) **animate smoothly** between position updates instead of jumping
 - **🚄 Amtrak** — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
 - **🚆 MARC** *(optional)* — live commuter-rail trains (Brunswick / Penn / Camden lines) on the map, color-coded, with speed and distance. Needs the free MARC helper (below).
 - **🚌 Ride On** *(optional)* — **scheduled** departures at nearby stops. Needs a free Transitland key (below). Live Ride On isn't publicly available, so this is timetable-only.
@@ -37,6 +38,13 @@ Planes work with zero setup. Trains and buses need a **free** WMATA key:
 
 The key is stored only in your browser (`localStorage`). The Default Tier allows 10 requests/sec
 and 50,000/day — far more than this board uses.
+
+### Optional: live Metro *trains* moving on the map
+The colored Metro **lines** and arrival **times** work with the Default Tier. To also show Metro
+**trains** moving along the lines, subscribe to WMATA's **“TrainPositions”** product on the same
+[products page](https://developer.wmata.com/products) (same key). WMATA reports trains as track-circuit
+IDs, so the board interpolates each train's position between the two stations its circuit sits between.
+If the product isn't enabled, everything else still works — Metro trains simply don't appear.
 
 ## Run locally
 ```bash
