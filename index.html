@@ -22,7 +22,7 @@
     color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
-  #app{display:flex; flex-direction:column; height:100vh}
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
   header{
     display:flex; align-items:center; gap:16px; padding:14px 22px;
     border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1626,#0b0f1a);
@@ -38,25 +38,23 @@
   }
   header button:hover{border-color:var(--accent)}
 
-  main{flex:1; display:grid; grid-template-columns:1.35fr 1fr; gap:14px; padding:14px; min-height:0}
-  .col{display:flex; flex-direction:column; gap:14px; min-height:0}
-  .cards{display:flex; flex-direction:column; gap:14px; min-height:0; overflow:auto; padding-right:2px}
+  main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
+  .col{display:flex; flex-direction:column; gap:12px; min-height:0}
+  .cards{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:12px; min-height:0; flex:1}
   .card{
     background:linear-gradient(180deg,var(--panel),var(--panel2));
-    border:1px solid var(--line); border-radius:16px; padding:14px 16px;
-    display:flex; flex-direction:column; flex:1 1 0; min-height:150px; overflow:hidden;
+    border:1px solid var(--line); border-radius:14px; padding:11px 13px;
+    display:flex; flex-direction:column; min-height:0; overflow:hidden;
   }
-  .card h2{margin:0 0 8px; font-size:15px; letter-spacing:.4px; text-transform:uppercase;
-    color:var(--muted); display:flex; align-items:center; gap:10px}
-  .card h2 .icon{font-size:20px}
+  .card h2{margin:0 0 7px; font-size:13px; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--muted); display:flex; align-items:center; gap:8px}
+  .card h2 .icon{font-size:17px}
   .card h2 .count{margin-left:auto; font-size:12px; color:var(--muted); font-weight:600}
-  .list{overflow:auto; display:flex; flex-direction:column; gap:6px; padding-right:4px}
-  .list::-webkit-scrollbar{width:8px}
-  .list::-webkit-scrollbar-thumb{background:#243052; border-radius:8px}
+  .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:5px; padding-right:2px}
 
   .row{
-    display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:10px;
-    padding:9px 10px; border-radius:12px; background:#0d1424; border:1px solid #172038;
+    display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
+    padding:7px 9px; border-radius:10px; background:#0d1424; border:1px solid #172038;
   }
   .row .badge{
     min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
@@ -109,9 +107,9 @@
     #app{height:auto; min-height:100vh}
     main{grid-template-columns:1fr; overflow:visible}
     .col, .cards{min-height:auto}
-    .cards{grid-template-rows:none}
-    .card{min-height:200px}
-    .list{max-height:46vh}
+    .cards{grid-template-columns:1fr; grid-auto-rows:auto}
+    .card{min-height:190px}
+    .list{flex:none; overflow:auto; max-height:46vh}
     #map{height:300px; min-height:300px}
     header{position:sticky; top:0; z-index:500}
   }
@@ -394,8 +392,17 @@ function renderRail(trains){
   }
   if(!shown) box.appendChild(el("div","empty","No trains predicted right now."));
   $("#railCount").textContent = state.nearRail.map(s=>s.Name).slice(0,2).join(" · ");
+  fitList(box);
 }
 function railKey(m){ return m==="BRD"?-2 : m==="ARR"?-1 : (parseInt(m,10)||99); }
+/* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
+function fitList(box){
+  if(!box || box.clientHeight < 40) return;   // skip until the card has a real height
+  let guard=0;
+  while(box.scrollHeight > box.clientHeight + 1 && box.lastElementChild && guard++ < 80){
+    box.removeChild(box.lastElementChild);
+  }
+}
 function renderRailNoKey(){
   $("#railList").innerHTML="";
   $("#railList").appendChild(el("div","empty","Add a free WMATA key (⚙︎) to see live train times."));
@@ -453,6 +460,7 @@ async function fetchBus(){
   }
   if(!any) box.appendChild(el("div","empty","No buses predicted at nearby stops right now."));
   $("#busCount").textContent = state.busStops.length? `${state.busStops.length} stops nearby` : "";
+  fitList(box);
 }
 function nextScheduledByRoute(arrivals){
   const now=Date.now(), out={};
@@ -492,6 +500,7 @@ function renderPlanes(ac){
     box.appendChild(row);
   });
   $("#planeCount").textContent = `${flying.length} aloft`;
+  fitList(box);
 }
 function badge(txt){ const b=el("div","badge",txt); b.style.background="var(--plane)"; b.style.color="#3a2b00"; return b; }
 function drawPlanes(ac){
@@ -567,6 +576,7 @@ function renderAmtrak(list){
     box.appendChild(row);
   });
   $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
+  fitList(box);
 }
 function drawAmtrak(list){
   state.trainLayer.clearLayers();
@@ -620,6 +630,7 @@ function renderMarc(veh){
     box.appendChild(row);
   });
   $("#marcCount").textContent = `${near.length} nearby · ${veh.length} running`;
+  fitList(box);
 }
 function marcMsg(m){ const box=$("#marcList"); box.innerHTML=""; box.appendChild(el("div","empty",m)); }
 
@@ -666,6 +677,7 @@ async function fetchRideOn(){
   }
   if(!any) rideonMsg("No upcoming scheduled Ride On departures.");
   $("#rideonCount").textContent = `${stops.length} stops nearby`;
+  fitList(box);
 }
 function rideonMsg(m){ const box=$("#rideonList"); box.innerHTML=""; box.appendChild(el("div","empty",m)); }
 
@@ -711,7 +723,7 @@ $("#saveKey").onclick=()=>{
   localStorage.setItem(LS.marc, state.marcUrl);
   localStorage.setItem(LS.tlkey, state.tlKey);
   closeSetup(); applyOptionalCards();
-  state.busStops=[]; refreshTransit(); fetchMarc(); fetchRideOn();
+  state.busStops=[]; refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
 };
 $("#skipKey").onclick=()=>{ closeSetup(); };
 $("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
@@ -731,6 +743,13 @@ function boot(){
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
   setInterval(fetchMarc, CFG.marcEveryMs);
   setInterval(fetchRideOn, CFG.rideonEveryMs);
+
+  // re-fit cards to the new layout when the window/display changes size
+  let rzT; window.addEventListener("resize", ()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{
+    if(state.map) state.map.invalidateSize();
+    refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+  }, 350); });
+
   requestGeo();
 }
 document.addEventListener("DOMContentLoaded", boot);
