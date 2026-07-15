@@ -142,6 +142,7 @@
         <span>◉ Metro train</span>
         <span>🔴 Metro station</span>
         <span>━ Metro lines</span>
+        <span style="color:#3ad0c8">┈ Amtrak route</span>
         <span style="opacity:.7">vehicles move live · zoom in for labels</span>
       </div>
     </div>
@@ -321,7 +322,8 @@ function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(state.map);
-  state.routeLayer  = L.layerGroup().addTo(state.map);   // rail lines, beneath everything
+  state.routeLayer  = L.layerGroup().addTo(state.map);   // Metro rail lines, beneath everything
+  state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
   state.stopLayer   = L.layerGroup().addTo(state.map);
   state.busVehLayer = L.layerGroup().addTo(state.map);
   state.marcLayer   = L.layerGroup().addTo(state.map);
@@ -735,18 +737,43 @@ async function fetchBusPositions(){
 /* ---------- AMTRAK (regional / intercity rail) ---------- */
 function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
+async function ensureAmtrakStations(){
+  if(state.amStations) return state.amStations;
+  try{ const c=JSON.parse(localStorage.getItem("transitboard.amstations")||"null");
+    if(c && Date.now()-c.t < 864e5 && c.map){ state.amStations=c.map; return c.map; } }catch(e){}
+  const data=await getJSON("https://api-v3.amtraker.com/v3/stations", 12000);
+  const map={};
+  for(const code in data){ const s=data[code];
+    if(typeof s.lat==="number" && typeof s.lon==="number") map[code]=[s.lat,s.lon]; }
+  state.amStations=map;
+  try{ localStorage.setItem("transitboard.amstations", JSON.stringify({t:Date.now(), map})); }catch(e){}
+  return map;
+}
 async function fetchAmtrak(){
-  let data;
+  let data, amSt={};
   try{ data=await getJSON("https://api-v3.amtraker.com/v3/trains", 12000); }catch(e){ return; }
-  const here=state.loc, out=[];
+  try{ amSt=await ensureAmtrakStations(); }catch(e){}
+  const here=state.loc, byNum={};
   for(const arr of Object.values(data)) for(const t of (arr||[])){
     if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+    if(t.trainState && t.trainState!=="Active") continue;       // only trains actually en route
     const distMi=kmToMi(haversine(here,{lat:t.lat,lon:t.lon}));
-    if(distMi<=CFG.amtrakRadiusMi) out.push({t, distMi});
+    if(distMi>CFG.amtrakRadiusMi) continue;
+    const ex=byNum[t.trainNum];                                 // dedupe: keep the nearest instance
+    if(!ex || distMi<ex.distMi) byNum[t.trainNum]={t, distMi};
   }
-  out.sort((a,b)=>a.distMi-b.distMi);
+  const out=Object.values(byNum).sort((a,b)=>a.distMi-b.distMi);
   state.lastAmtrakOk=Date.now();
-  renderAmtrak(out); drawAmtrak(out);
+  renderAmtrak(out); drawAmtrak(out); drawAmtrakRoutes(out, amSt);
+}
+function drawAmtrakRoutes(list, amSt){
+  if(!state.amtrakRouteLayer) return;
+  state.amtrakRouteLayer.clearLayers();
+  list.forEach(({t})=>{
+    const pts=(t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
+    if(pts.length>1) L.polyline(pts, {color:"#3ad0c8", weight:2.5, opacity:.35,
+      lineCap:"round", lineJoin:"round", dashArray:"1 6"}).addTo(state.amtrakRouteLayer);
+  });
 }
 function renderAmtrak(list){
   const box=$("#amtrakList"); box.innerHTML="";
