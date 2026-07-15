@@ -25,8 +25,10 @@
     text-transform:uppercase; letter-spacing:.35em}
   header .clock{margin-left:auto; font-size:clamp(1rem,2.6vw,2rem); color:var(--muted);
     font-variant-numeric:tabular-nums}
-  header a{color:var(--muted); text-decoration:none; font-size:clamp(.9rem,2.2vw,1.4rem);
-    border:1px solid var(--faint); border-radius:10px; padding:.4em .7em}
+  header a, header button{color:var(--muted); text-decoration:none; font-size:clamp(.9rem,2.2vw,1.4rem);
+    border:1px solid var(--faint); border-radius:10px; padding:.4em .7em; background:none;
+    cursor:pointer; display:inline-flex; align-items:center; font-family:inherit}
+  header a:hover, header button:hover{color:var(--amber-dim); border-color:var(--amber-dim)}
 
   main{flex:1; display:flex; flex-direction:column; justify-content:center; gap:2.4vmin;
     padding:2vmin 5vw; min-height:0}
@@ -63,6 +65,7 @@
   <header>
     <span class="tag">✈ Nearest flight</span>
     <span class="clock" id="clock">—</span>
+    <button id="fsBtn" title="Full screen (F)"></button>
     <a href="index.html" title="Back to the board">‹ board</a>
   </header>
 
@@ -219,7 +222,34 @@ async function tick(){
 }
 function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
 
+/* ---- full-screen kiosk mode + keep-awake ---- */
+const SVG_EXPAND=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
+const SVG_COMPRESS=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m8 0v-3a2 2 0 0 1 2-2h3"/></svg>`;
+let wakeLock=null;
+async function requestWake(){ try{ if("wakeLock" in navigator) wakeLock=await navigator.wakeLock.request("screen"); }catch(e){} }
+async function releaseWake(){ try{ if(wakeLock) await wakeLock.release(); }catch(e){} wakeLock=null; }
+function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+function toggleFullscreen(){
+  const el=document.documentElement;
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
+  else { const req=el.requestFullscreen||el.webkitRequestFullscreen; if(req){ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); } }
+}
+function onFsChange(){
+  const on=!!fsElement(), b=$("#fsBtn");
+  if(b){ b.innerHTML=on?SVG_COMPRESS:SVG_EXPAND; b.title=on?"Exit full screen (F)":"Full screen (F)"; }
+  if(on) requestWake(); else releaseWake();
+}
+function initFullscreen(){
+  $("#fsBtn").onclick=toggleFullscreen;
+  document.addEventListener("fullscreenchange", onFsChange);
+  document.addEventListener("webkitfullscreenchange", onFsChange);
+  document.addEventListener("keydown", e=>{ if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen(); });
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
+  onFsChange();
+}
+
 function boot(){
+  initFullscreen();
   $("#radlbl").textContent = CFG.radiusNm+" nm";
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
