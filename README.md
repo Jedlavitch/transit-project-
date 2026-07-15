@@ -10,6 +10,7 @@ Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Po
 - **🚆 Metrorail** — WMATA live arrival predictions at your nearest stations (Bethesda / Friendship Heights, etc.), the colored **Metro line map**, and (with the TrainPositions product, below) **live trains gliding along the lines**
 - **🚌 Metrobus** — WMATA **live predictions** *and* **scheduled** timetable times at the nearest stops; live buses also plotted on the map and move in real time
 - All map vehicles (Metro, MARC, Amtrak, buses, planes) **animate smoothly** between position updates instead of jumping
+- **🌙 Night mode** (`night.html`, "Night" tab) — a big-letters, dark, low-light page showing just the **nearest flight**: airline, flight #, aircraft, and **origin → destination** cities (via [adsbdb](https://www.adsbdb.com)), plus live distance/altitude/phase. *(True on-time/late status isn't shown — it needs a paid flight-status API; see note below.)*
 - **🚄 Amtrak** — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
 - **🚆 MARC** *(optional)* — live commuter-rail trains (Brunswick / Penn / Camden lines) on the map, color-coded, with speed and distance. Needs the free MARC helper (below).
 - **🚌 Ride On** *(optional)* — **scheduled** departures at nearby stops. Needs a free Transitland key (below). Live Ride On isn't publicly available, so this is timetable-only.

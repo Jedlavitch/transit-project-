@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<title>Night Mode — Nearest Flight</title>
+<style>
+  :root{
+    --bg:#000; --amber:#ffb454; --amber-dim:#c98a3a; --muted:#6b5636; --faint:#3a2f1e;
+    --good:#5ad17a; --late:#ff6b5a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--amber);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+    display:flex; flex-direction:column; height:100dvh;
+    letter-spacing:.5px;
+  }
+  /* top bar */
+  header{display:flex; align-items:center; gap:14px; padding:3.2vmin 4vw 0}
+  header .tag{font-size:clamp(.8rem,2.1vw,1.5rem); color:var(--amber-dim); font-weight:700;
+    text-transform:uppercase; letter-spacing:.35em}
+  header .clock{margin-left:auto; font-size:clamp(1rem,2.6vw,2rem); color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  header a{color:var(--muted); text-decoration:none; font-size:clamp(.9rem,2.2vw,1.4rem);
+    border:1px solid var(--faint); border-radius:10px; padding:.4em .7em}
+
+  main{flex:1; display:flex; flex-direction:column; justify-content:center; gap:2.4vmin;
+    padding:2vmin 5vw; min-height:0}
+
+  .dist{font-size:clamp(1rem,3vw,2.2rem); color:var(--amber-dim); font-weight:600}
+  .airline{font-size:clamp(2.4rem,8.5vw,8.5rem); font-weight:800; line-height:.98; color:var(--amber)}
+  .flight{font-size:clamp(1.3rem,4vw,3.4rem); color:var(--amber-dim); font-weight:700; margin-top:.1em}
+
+  .route{display:flex; align-items:baseline; gap:2.5vw; flex-wrap:wrap; margin-top:1vmin}
+  .route .city{font-size:clamp(2rem,7vw,7rem); font-weight:800; line-height:1; color:#ffe6c2}
+  .route .code{font-size:clamp(1rem,2.6vw,2.4rem); color:var(--muted); font-weight:700}
+  .route .arrow{font-size:clamp(2rem,6vw,6rem); color:var(--amber-dim); font-weight:400}
+  .subcity{font-size:clamp(.95rem,2.4vw,1.9rem); color:var(--muted); font-weight:600; margin-top:.3em}
+
+  .status{display:flex; align-items:center; gap:1.2em; flex-wrap:wrap; margin-top:2vmin;
+    font-size:clamp(1.2rem,3.4vw,3rem); font-weight:800}
+  .status .phase{color:var(--amber)}
+  .status .alt{color:var(--amber-dim); font-weight:700}
+  .status .badge{padding:.12em .5em; border-radius:.3em; font-weight:800}
+  .status .badge.ok{background:rgba(90,209,122,.14); color:var(--good)}
+  .status .badge.late{background:rgba(255,107,90,.15); color:var(--late)}
+  .status .badge.na{color:var(--muted); border:1px solid var(--faint)}
+
+  .empty{font-size:clamp(2rem,7vw,6rem); font-weight:800; color:var(--amber-dim); text-align:center}
+
+  footer{padding:2vmin 5vw 3vmin; color:var(--faint); font-size:clamp(.8rem,2vw,1.2rem);
+    display:flex; gap:1.5em}
+  footer b{color:var(--muted)}
+  .pulse{animation:pulse 3s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.72}}
+</style>
+</head>
+<body>
+  <header>
+    <span class="tag">✈ Nearest flight</span>
+    <span class="clock" id="clock">—</span>
+    <a href="index.html" title="Back to the board">‹ board</a>
+  </header>
+
+  <main id="main">
+    <div class="empty pulse" id="loading">Scanning the sky…</div>
+
+    <div id="flight" style="display:none">
+      <div class="dist" id="dist"></div>
+      <div class="airline" id="airline"></div>
+      <div class="flight" id="flightno"></div>
+      <div class="route" id="route"></div>
+      <div class="subcity" id="subcity"></div>
+      <div class="status" id="status"></div>
+    </div>
+  </main>
+
+  <footer>
+    <span>overhead within <b id="radlbl">30 nm</b></span>
+    <span id="loclbl"></span>
+    <span id="updated"></span>
+  </footer>
+
+<script>
+"use strict";
+const CFG = {
+  defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
+  radiusNm: 30,
+  refreshMs: 12000,
+};
+let loc = CFG.defaultLoc;
+const routeCache = loadRouteCache();
+
+const $ = s=>document.querySelector(s);
+function loadRouteCache(){ try{ const c=JSON.parse(localStorage.getItem("nightmode.routes")||"{}"); return c; }catch(e){ return {}; } }
+function saveRouteCache(){ try{ localStorage.setItem("nightmode.routes", JSON.stringify(routeCache)); }catch(e){} }
+
+async function getJSON(url, timeout=10000){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+function haversineNm(a,b){
+  const R=3440.065, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+const COMPASS=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function bearingFrom(a,b){
+  const y=Math.sin((b.lon-a.lon)*Math.PI/180)*Math.cos(b.lat*Math.PI/180);
+  const x=Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180)-Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lon-a.lon)*Math.PI/180);
+  return COMPASS[Math.round((Math.atan2(y,x)*180/Math.PI+360)%360/22.5)%16];
+}
+
+/* ---- flight route lookup (adsbdb: airline + origin + destination) ---- */
+async function lookupRoute(callsign){
+  if(!callsign) return null;
+  const hit=routeCache[callsign];
+  if(hit && Date.now()-hit.t < 216e5) return hit.v;          // cache 6h
+  try{
+    const d=await getJSON(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(callsign)}`);
+    const fr=d && d.response && d.response.flightroute;
+    const v = fr ? { airline:fr.airline, origin:fr.origin, destination:fr.destination } : null;
+    routeCache[callsign]={ t:Date.now(), v }; saveRouteCache();
+    return v;
+  }catch(e){ routeCache[callsign]={ t:Date.now(), v:null }; return null; }
+}
+
+/* pick the nearest airborne flight that has a resolvable airline route;
+   fall back to the nearest airborne aircraft overall. */
+async function pickFlight(planes){
+  const air=planes.filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
+    .map(a=>({a, nm: a.dst!=null? a.dst : haversineNm(loc,{lat:a.lat,lon:a.lon})}))
+    .sort((x,y)=>x.nm-y.nm);
+  if(!air.length) return null;
+  const airliners=air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,4);
+  for(const x of airliners){
+    const route=await lookupRoute((x.a.flight||"").trim());
+    if(route && route.origin && route.destination) return { ...x, route };
+  }
+  return { ...air[0], route:null };
+}
+
+function phaseOf(a){
+  const alt=typeof a.alt_baro==="number"?a.alt_baro:null, rate=a.baro_rate||0;
+  if(alt==null) return "en route";
+  if(alt<4000 && rate<-150) return "on final approach";
+  if(rate<-350) return "descending";
+  if(rate>350) return "climbing";
+  if(alt>=28000) return "cruising";
+  return "en route";
+}
+function airlineName(route, a){
+  if(route && route.airline && route.airline.name) return route.airline.name;
+  if(a.ownOp) return a.ownOp;
+  const cs=(a.flight||"").trim();
+  return cs || a.r || "Unknown aircraft";
+}
+
+function render(pick){
+  $("#updated").textContent = "updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  if(!pick){
+    $("#loading").style.display=""; $("#loading").textContent="No aircraft overhead"; $("#loading").classList.remove("pulse");
+    $("#flight").style.display="none"; return;
+  }
+  $("#loading").style.display="none";
+  $("#flight").style.display="";
+  const {a, nm, route}=pick;
+  const dir=bearingFrom(loc,{lat:a.lat,lon:a.lon});
+  $("#dist").textContent = `${nm.toFixed(1)} nm ${dir}${typeof a.alt_baro==="number"?` · ${a.alt_baro.toLocaleString()} ft`:""}`;
+  $("#airline").textContent = airlineName(route, a);
+  const cs=(a.flight||"").trim();
+  $("#flightno").textContent = [cs, a.desc||a.t].filter(Boolean).join("  ·  ");
+
+  const routeEl=$("#route"), subEl=$("#subcity");
+  if(route && route.origin && route.destination){
+    const o=route.origin, d=route.destination;
+    routeEl.innerHTML =
+      `<span class="city">${escapeHtml(o.municipality||o.iata_code||"?")}</span>`+
+      `<span class="arrow">→</span>`+
+      `<span class="city">${escapeHtml(d.municipality||d.iata_code||"?")}</span>`;
+    subEl.textContent = `${o.iata_code||""} ${o.name||""}  →  ${d.iata_code||""} ${d.name||""}`.trim();
+    routeEl.style.display=""; subEl.style.display="";
+  } else {
+    routeEl.style.display="none";
+    subEl.textContent = a.ownOp ? a.ownOp : "General aviation — no scheduled route";
+    subEl.style.display="";
+  }
+
+  // Status: live flight phase (real) + on-time badge (needs a flight-status API)
+  const spd = a.gs ? `${Math.round(a.gs)} kt` : "";
+  $("#status").innerHTML =
+    `<span class="phase">${phaseOf(a)}</span>`+
+    (spd?`<span class="alt">${spd}</span>`:"")+
+    `<span class="badge na" title="Live on-time status needs a flight-status API key">status —</span>`;
+}
+function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function tick(){
+  try{
+    const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
+    const pick=await pickFlight(data.ac||[]);
+    render(pick);
+  }catch(e){ /* keep last render */ }
+}
+function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+
+function boot(){
+  $("#radlbl").textContent = CFG.radiusNm+" nm";
+  $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
+  clock(); setInterval(clock, 1000);
+  tick(); setInterval(tick, CFG.refreshMs);
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(p=>{
+      loc={ lat:p.coords.latitude, lon:p.coords.longitude, label:"your location" };
+      $("#loclbl").textContent="near your location"; tick();
+    }, ()=>{}, { enableHighAccuracy:false, timeout:8000, maximumAge:600000 });
+  }
+}
+document.addEventListener("DOMContentLoaded", boot);
+</script>
+</body>
+</html>

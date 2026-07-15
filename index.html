@@ -37,6 +37,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
+  header #nightBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
+  header #nightBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -124,6 +127,7 @@
 <div id="app">
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
+    <a id="nightBtn" href="night.html" title="Night mode — nearest flight">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
