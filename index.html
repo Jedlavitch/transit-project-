@@ -124,6 +124,7 @@
 <div id="app">
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
+    <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
       <div class="time" id="clock">--:--</div>
@@ -941,6 +942,38 @@ $("#saveKey").onclick=()=>{
 };
 $("#skipKey").onclick=()=>{ closeSetup(); };
 $("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
+
+/* ---------- full-screen kiosk mode + keep-awake ---------- */
+const SVG_EXPAND=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
+const SVG_COMPRESS=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m8 0v-3a2 2 0 0 1 2-2h3"/></svg>`;
+let wakeLock=null;
+async function requestWake(){
+  try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); } }catch(e){}
+}
+async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); } }catch(e){} wakeLock=null; }
+function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+function toggleFullscreen(){
+  const el=document.documentElement;
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
+  else { const req=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(req){ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); } }
+}
+function onFsChange(){
+  const on=!!fsElement();
+  const b=$("#fsBtn");
+  if(b){ b.innerHTML=on?SVG_COMPRESS:SVG_EXPAND; b.title=on?"Exit full screen (F)":"Full screen (F)"; }
+  if(on) requestWake(); else releaseWake();          // keep display awake only in kiosk mode
+  if(state.map) setTimeout(()=>{ state.map.invalidateSize(); fitAll(); }, 120);
+}
+$("#fsBtn").onclick=toggleFullscreen;
+document.addEventListener("fullscreenchange", onFsChange);
+document.addEventListener("webkitfullscreenchange", onFsChange);
+document.addEventListener("keydown", e=>{
+  if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
+});
+// browsers drop the wake lock when the tab is hidden; re-acquire when visible in kiosk mode
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
+onFsChange();   // set initial icon
 
 /* ---------- boot ---------- */
 function boot(){
