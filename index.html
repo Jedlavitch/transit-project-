@@ -37,6 +37,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
+  header #nightBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
+  header #nightBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -124,6 +127,7 @@
 <div id="app">
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
+    <a id="nightBtn" href="night.html" title="Night mode — nearest flight">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
@@ -197,9 +201,10 @@
     <p style="font-size:12px">Stored only in this browser (localStorage). Planes &amp; Amtrak work without it.</p>
 
     <details style="margin-top:6px">
-      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: add MARC trains &amp; Ride On schedule</summary>
-      <p style="margin-top:10px"><b>MARC trains on the map</b> — paste your free Cloudflare Worker URL (see <code>marc-worker.js</code> / README):</p>
-      <input id="marcInput" type="text" placeholder="https://marc.yourname.workers.dev" autocomplete="off" spellcheck="false" />
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional extras: live MARC map, Ride On schedule</summary>
+      <p style="margin-top:10px"><b>MARC schedule works with no setup</b> (built in). Only if you also want live MARC
+        <b>trains moving on the map</b>, paste a free Cloudflare Worker URL (see <code>marc-worker.js</code> / README):</p>
+      <input id="marcInput" type="text" placeholder="https://marc.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
       <p><b>Ride On scheduled times</b> — paste a free <a href="https://www.transit.land/documentation#api-keys" target="_blank" rel="noopener">Transitland API key</a> (live Ride On isn't public, schedule only):</p>
       <input id="tlInput" type="text" placeholder="Transitland API key…" autocomplete="off" spellcheck="false" />
     </details>
@@ -311,7 +316,7 @@ function requestGeo(){
       applyLoc(loc);
       if(state.map) state.map.setView([loc.lat,loc.lon], 12);
       state.busStops=[]; // force re-scan of nearby stops
-      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); fetchMarc(); fetchRideOn();
+      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); fetchMarc(); refreshMarc(); fetchRideOn();
     },
     _err => {/* keep default */},
     { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
@@ -810,13 +815,14 @@ function drawAmtrak(list){
 
 /* ---------- MARC (commuter rail, via the Cloudflare Worker helper) ---------- */
 const MARC_COL = { Brunswick:"#e8792b", Penn:"#d1495b", Camden:"#e0a800" };
+// Optional Cloudflare Worker: live MARC positions on the map only (the card
+// below works with zero setup from the bundled schedule).
 async function fetchMarc(){
-  if(!state.marcUrl){ return; }
+  if(!state.marcUrl) return;
   let data;
-  try{ data=await getJSON(state.marcUrl, 12000); }
-  catch(e){ marcMsg("MARC helper unreachable — check the Worker URL."); return; }
+  try{ data=await getJSON(state.marcUrl, 12000); }catch(e){ return; }
   const veh=(data.vehicles||[]).filter(v=>typeof v.lat==="number"&&typeof v.lon==="number");
-  drawMarc(veh); renderMarc(veh);
+  drawMarc(veh);
 }
 function drawMarc(veh){
   const items=veh.map(v=>({
@@ -826,27 +832,57 @@ function drawMarc(veh){
   }));
   updateFleet("marc", items, CFG.marcEveryMs);
 }
-function renderMarc(veh){
-  const box=$("#marcList"); box.innerHTML="";
-  const here=state.loc;
-  const near=veh.map(v=>({v, mi:kmToMi(haversine(here,{lat:v.lat,lon:v.lon}))}))
-    .filter(x=>x.mi<=CFG.marcRadiusMi).sort((a,b)=>a.mi-b.mi);
-  if(!near.length){ box.appendChild(el("div","empty",`No MARC trains within ${CFG.marcRadiusMi} mi. (${veh.length} running system-wide.)`)); $("#marcCount").textContent=`${veh.length} running`; return; }
-  near.slice(0,8).forEach(({v,mi})=>{
-    const row=el("div","row");
-    const b=el("div","badge rail", v.line.slice(0,4)); b.style.background=MARC_COL[v.line]||"#e8792b";
-    const mid=el("div");
-    mid.appendChild(el("div","dest", `${v.line} Line · #${v.train}`));
-    mid.appendChild(el("div","sub", `${mi.toFixed(0)} mi away${v.mph!=null?` · ${v.mph} mph`:""}`));
-    const times=el("div","times");
-    times.appendChild(el("div","live", v.mph!=null&&v.mph>3?"en route":"stopped"));
-    row.append(b, mid, el("div"), times);
-    box.appendChild(row);
-  });
-  $("#marcCount").textContent = `${near.length} nearby · ${veh.length} running`;
+
+/* MARC card from the bundled GTFS schedule (marc-schedule.json) — no key,
+   no Worker, no proxy. Shows the next scheduled trains at nearby stations. */
+function marcYmd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
+function marcHM(t){ const p=t.split(":"); return (+p[0])*60+(+p[1]||0); }
+function marcClock(t){ let [h,m]=t.split(":").map(Number); h=h%24; const ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
+function marcStationName(n){ return (n||"").replace(/\bMARC\b/ig,"").replace(/\b(eb|wb|nb|sb)\b/ig,"").replace(/\s+/g," ").trim(); }
+async function ensureMarcSchedule(){
+  if(state.marcSched) return state.marcSched;
+  try{ state.marcSched=await getJSON("marc-schedule.json", 15000); }catch(e){}
+  return state.marcSched;
+}
+function marcActiveServices(s, date){
+  const y=marcYmd(date), dow=(date.getDay()+6)%7;         // Mon=0 … Sun=6
+  const act=new Set();
+  for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
+  const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  return act;
+}
+async function refreshMarc(){
+  const s=await ensureMarcSchedule(); const box=$("#marcList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","MARC schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(used>=2) break;
+    const deps=(s.dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:marcHM(d.t)}))
+      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+marcStationName(st.name)+`  ·  ${mi.toFixed(1)} mi`));
+    deps.forEach(d=>{
+      const row=el("div","row");
+      const b=el("div","badge rail", d.line.slice(0,4)); b.style.background=MARC_COL[d.line]||"#e8792b";
+      const mid=el("div");
+      mid.appendChild(el("div","dest", marcStationName(d.hs)||(d.line+" Line")));
+      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+      mid.appendChild(el("div","sub", d.line+" Line · "+relTxt));
+      const times=el("div","times");
+      const t=el("div","live"); t.style.color="#e8a34a"; t.textContent=marcClock(d.t);
+      times.append(t, el("div","sched","scheduled"));
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row); shown++;
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No more MARC trains today at nearby stations."));
+  $("#marcCount").textContent="scheduled";
   fitList(box);
 }
-function marcMsg(m){ const box=$("#marcList"); box.innerHTML=""; box.appendChild(el("div","empty",m)); }
 
 /* ---------- RIDE ON (scheduled only, via Transitland) ---------- */
 function fmtClock(t){
@@ -897,7 +933,7 @@ function rideonMsg(m){ const box=$("#rideonList"); box.innerHTML=""; box.appendC
 
 /* show/hide the optional cards based on whether their source is configured */
 function applyOptionalCards(){
-  document.getElementById("marcCard").style.display   = state.marcUrl ? "flex" : "none";
+  document.getElementById("marcCard").style.display   = "flex";           // schedule works with zero setup
   document.getElementById("rideonCard").style.display = state.tlKey   ? "flex" : "none";
 }
 
@@ -986,13 +1022,14 @@ function boot(){
   applyOptionalCards();
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshTransit(); refreshPlanes(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); fetchMarc(); fetchRideOn();
+  fetchAmtrak(); fetchMarc(); refreshMarc(); fetchRideOn();
   setInterval(refreshTransit, CFG.transitEveryMs);
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(fetchBusPositions, CFG.busPosEveryMs);
   setInterval(fetchMetroTrains, CFG.metroEveryMs);
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
   setInterval(fetchMarc, CFG.marcEveryMs);
+  setInterval(refreshMarc, 30000);       // recompute next scheduled MARC trains
   setInterval(fetchRideOn, CFG.rideonEveryMs);
   setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
