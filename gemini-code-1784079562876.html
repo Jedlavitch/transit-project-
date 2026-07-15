@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f1a" />
+<title>Bethesda Live Transit Board</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root{
+    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942;
+    --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a;
+    --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
+    /* WMATA line colors */
+    --RD:#BF0D3E; --BL:#009CDE; --YL:#FFD100; --OR:#ED8B00; --GR:#00B140; --SV:#919D9D;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 800px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
+  header{
+    display:flex; align-items:center; gap:16px; padding:14px 22px;
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1626,#0b0f1a);
+  }
+  header .title{font-size:20px; font-weight:800; letter-spacing:.3px}
+  header .title small{color:var(--muted); font-weight:600; margin-left:8px}
+  header .clock{margin-left:auto; text-align:right}
+  header .clock .time{font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1}
+  header .clock .meta{font-size:12px; color:var(--muted)}
+  header button{
+    background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
+  }
+  header button:hover{border-color:var(--accent)}
+
+  main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
+  .col{display:flex; flex-direction:column; gap:12px; min-height:0}
+  .cards{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:12px; min-height:0; flex:1}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line); border-radius:14px; padding:11px 13px;
+    display:flex; flex-direction:column; min-height:0; overflow:hidden;
+  }
+  .card h2{margin:0 0 7px; font-size:13px; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--muted); display:flex; align-items:center; gap:8px}
+  .card h2 .icon{font-size:17px}
+  .card h2 .count{margin-left:auto; font-size:12px; color:var(--muted); font-weight:600}
+  .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:5px; padding-right:2px}
+
+  .row{
+    display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
+    padding:7px 9px; border-radius:10px; background:#0d1424; border:1px solid #172038;
+  }
+  .row .badge{
+    min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
+    justify-content:center; font-weight:800; font-size:13px; color:#08101f;
+  }
+  .row .badge.rail{color:#fff}
+  .row .dest{font-weight:700; font-size:15px; line-height:1.15}
+  .row .sub{color:var(--muted); font-size:12px}
+  .row .times{display:flex; flex-direction:column; align-items:flex-end; gap:2px}
+  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live)}
+  .row .live.brd{color:#fff; background:var(--good); padding:1px 7px; border-radius:6px; font-size:13px}
+  .row .live.arr{color:#08101f; background:var(--warn); padding:1px 7px; border-radius:6px; font-size:13px}
+  .row .sched{font-size:11px; color:var(--sched)}
+  .row .sched b{color:#aab6d8}
+  .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
+  .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
+  .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
+  .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
+
+  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:#0d1424}
+  .leaflet-container{background:#0d1424}
+  .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
+  .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
+
+  footer{display:flex; align-items:center; gap:14px; padding:6px 22px; border-top:1px solid var(--line);
+    font-size:12px; color:var(--muted)}
+  footer .dot{width:8px; height:8px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good)}
+  footer .dot.stale{background:var(--warn); box-shadow:0 0 8px var(--warn)}
+  footer .grow{flex:1}
+
+  /* Setup overlay */
+  #setup{position:fixed; inset:0; background:rgba(6,9,16,.86); backdrop-filter:blur(6px);
+    display:none; align-items:center; justify-content:center; z-index:9999; padding:20px}
+  #setup.show{display:flex}
+  #setup .box{background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    padding:26px; max-width:460px; width:100%}
+  #setup h3{margin:0 0 6px; font-size:19px}
+  #setup p{color:var(--muted); font-size:13px; line-height:1.5; margin:8px 0}
+  #setup a{color:var(--accent)}
+  #setup input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
+    background:#0d1424; color:var(--text); font-size:14px; margin-top:6px}
+  #setup .btns{display:flex; gap:10px; margin-top:16px}
+  #setup button{flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
+    background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
+  #setup button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
+
+  @media (max-width:900px){
+    body{overflow:auto}
+    #app{height:auto; min-height:100vh}
+    main{grid-template-columns:1fr; overflow:visible}
+    .col, .cards{min-height:auto}
+    .cards{grid-template-columns:1fr; grid-auto-rows:auto}
+    .card{min-height:190px}
+    .list{flex:none; overflow:auto; max-height:46vh}
+    #map{height:300px; min-height:300px}
+    header{position:sticky; top:0; z-index:500}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
+    <button id="settingsBtn" title="Settings">⚙︎</button>
+    <div class="clock">
+      <div class="time" id="clock">--:--</div>
+      <div class="meta" id="date">—</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="col">
+      <div id="map"></div>
+      <div class="legend">
+        <span>✈️ aircraft</span>
+        <span>🚆 Amtrak</span>
+        <span style="color:#e8792b">▦ MARC</span>
+        <span>🔵 live Metrobus</span>
+        <span>🔴 rail station</span>
+        <span><b>green</b> = live &nbsp; <i>grey</i> = scheduled</span>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="cards">
+        <div class="card">
+          <h2><span class="icon">🚆</span> Trains — Metrorail <span class="count" id="railCount"></span></h2>
+          <div class="list" id="railList"><div class="empty">Loading trains…</div></div>
+        </div>
+        <div class="card">
+          <h2><span class="icon">🚌</span> Buses — Metrobus <span class="count" id="busCount"></span></h2>
+          <div class="list" id="busList"><div class="empty">Loading buses…</div></div>
+        </div>
+        <div class="card">
+          <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
+          <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
+        </div>
+        <div class="card" id="marcCard" style="display:none">
+          <h2><span class="icon">🚆</span> MARC — commuter rail <span class="count" id="marcCount"></span></h2>
+          <div class="list" id="marcList"><div class="empty">Waiting for MARC helper…</div></div>
+        </div>
+        <div class="card" id="rideonCard" style="display:none">
+          <h2><span class="icon">🚌</span> Ride On — scheduled <span class="count" id="rideonCount"></span></h2>
+          <div class="list" id="rideonList"><div class="empty">Waiting for Transitland key…</div></div>
+        </div>
+        <div class="card">
+          <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
+          <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">starting…</span>
+    <span class="grow"></span>
+    <span id="refreshInfo">next refresh in —</span>
+  </footer>
+</div>
+
+<div id="setup">
+  <div class="box">
+    <h3>One-time setup — WMATA API key</h3>
+    <p>Train &amp; bus times come from WMATA (Washington Metro). It's <b>free</b>: create an account, then subscribe to the <b>“Default Tier”</b> product and copy your <b>Primary key</b>.</p>
+    <p>→ <a href="https://developer.wmata.com/signup" target="_blank" rel="noopener">developer.wmata.com/signup</a>, then
+       <a href="https://developer.wmata.com/products" target="_blank" rel="noopener">subscribe to Default Tier</a>,
+       then <a href="https://developer.wmata.com/profile" target="_blank" rel="noopener">copy your key here</a>.</p>
+    <input id="keyInput" type="text" placeholder="Paste WMATA Primary key…" autocomplete="off" spellcheck="false" />
+    <p style="font-size:12px">Stored only in this browser (localStorage). Planes &amp; Amtrak work without it.</p>
+
+    <details style="margin-top:6px">
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: add MARC trains &amp; Ride On schedule</summary>
+      <p style="margin-top:10px"><b>MARC trains on the map</b> — paste your free Cloudflare Worker URL (see <code>marc-worker.js</code> / README):</p>
+      <input id="marcInput" type="text" placeholder="https://marc.yourname.workers.dev" autocomplete="off" spellcheck="false" />
+      <p><b>Ride On scheduled times</b> — paste a free <a href="https://www.transit.land/documentation#api-keys" target="_blank" rel="noopener">Transitland API key</a> (live Ride On isn't public, schedule only):</p>
+      <input id="tlInput" type="text" placeholder="Transitland API key…" autocomplete="off" spellcheck="false" />
+    </details>
+
+    <div class="btns">
+      <button id="saveKey">Save &amp; start</button>
+      <button class="ghost" id="skipKey">Skip (planes only)</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+/* =========================================================================
+   Bethesda Live Transit Board
+   Pure client-side. Data: WMATA (rail+bus) + airplanes.live (ADS-B).
+   ========================================================================= */
+const CFG = {
+  // Default location = Bethesda 20816 centroid; overridden by device GPS if allowed.
+  defaultLoc: { lat: 38.9582, lon: -77.1080, label: "Bethesda, MD 20816" },
+  railStations: 3,     // nearest rail stations to watch
+  busStops: 4,         // nearest bus stops to watch
+  busRadius: 1000,     // meters for jStops search
+  busPosRadius: 3000,  // meters for live Metrobus vehicle positions on the map
+  planeRadiusNm: 12,   // nautical miles for "overhead"
+  amtrakRadiusMi: 60,  // miles: Amtrak trains to show as "regional"
+  marcRadiusMi: 60,    // miles: MARC trains to list in the card (all still drawn on map)
+  rideonRadius: 1200,  // meters: nearby Ride On stops (Transitland)
+  rideonStops: 3,      // how many nearby Ride On stops to show
+  tlFeed: "f-dqcn-montgomerycountymdrideon", // Transitland onestop id for Ride On
+  transitEveryMs: 30000,
+  planeEveryMs: 15000,
+  amtrakEveryMs: 30000,
+  marcEveryMs: 20000,
+  rideonEveryMs: 120000, // schedule changes slowly; be gentle on Transitland quota
+  clockEveryMs: 1000,
+};
+const LS = {
+  key:   "transitboard.wmataKey",
+  loc:   "transitboard.loc",
+  stns:  "transitboard.stations",
+  marc:  "transitboard.marcUrl",
+  tlkey: "transitboard.tlKey",
+};
+const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
+
+let state = {
+  wmataKey: localStorage.getItem(LS.key) || "",
+  marcUrl: localStorage.getItem(LS.marc) || "",
+  tlKey: localStorage.getItem(LS.tlkey) || "",
+  loc: CFG.defaultLoc,
+  nearRail: [],     // [{Code,Name,Lat,Lon,dist,lines:[]}]
+  busStops: [],     // [{StopID,Name,Lat,Lon,dist,Routes:[]}]
+  map: null, planeLayer: null, stopLayer: null, trainLayer: null, busVehLayer: null, marcLayer: null,
+  railVehLayer: null, routeLayer: null,
+  lastTransitOk: 0, lastPlaneOk: 0, lastAmtrakOk: 0,
+};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const el = (t, c, txt) => { const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e; };
+function haversine(a,b){
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s)); // km
+}
+const kmToMi = km => km*0.621371;
+async function getJSON(url, timeout=12000){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+const wmata = (path) => `https://api.wmata.com/${path}${path.includes("?")?"&":"?"}api_key=${encodeURIComponent(state.wmataKey)}`;
+
+/* ---------- clock + status ---------- */
+function tickClock(){
+  const d=new Date();
+  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  $("#date").textContent  = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
+}
+function setStatus(text, stale=false){
+  $("#statusText").textContent = text;
+  $("#statusDot").className = "dot" + (stale ? " stale" : "");
+}
+let nextRefreshAt = Date.now()+CFG.transitEveryMs;
+function tickRefreshInfo(){
+  const s=Math.max(0, Math.round((nextRefreshAt-Date.now())/1000));
+  $("#refreshInfo").textContent = `next transit refresh in ${s}s`;
+}
+
+/* ---------- location ---------- */
+function loadSavedLoc(){
+  try{ const s=JSON.parse(localStorage.getItem(LS.loc)); if(s&&s.lat) state.loc=s; }catch(e){}
+}
+function applyLoc(loc){
+  state.loc = loc;
+  $("#loclabel").textContent = loc.label || `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
+}
+function requestGeo(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const loc={ lat:pos.coords.latitude, lon:pos.coords.longitude, label:"Your location" };
+      applyLoc(loc);
+      if(state.map) state.map.setView([loc.lat,loc.lon], 12);
+      state.busStops=[]; // force re-scan of nearby stops
+      refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn();
+    },
+    _err => {/* keep default */},
+    { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
+  );
+}
+
+/* ---------- map ---------- */
+function initMap(){
+  state.map = L.map("map", { zoomControl:true, attributionControl:false })
+    .setView([state.loc.lat, state.loc.lon], 12);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(state.map);
+  state.stopLayer     = L.layerGroup().addTo(state.map);
+  state.routeLayer    = L.layerGroup().addTo(state.map);
+  state.busVehLayer   = L.layerGroup().addTo(state.map);
+  state.marcLayer     = L.layerGroup().addTo(state.map);
+  state.trainLayer    = L.layerGroup().addTo(state.map);
+  state.railVehLayer  = L.layerGroup().addTo(state.map);
+  state.planeLayer    = L.layerGroup().addTo(state.map);
+  L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:1,weight:2}).addTo(state.map);
+}
+function planeIcon(track){
+  return L.divIcon({
+    className:"plane-icon", iconSize:[22,22], iconAnchor:[11,11],
+    html:`<svg width="22" height="22" viewBox="0 0 24 24" style="transform:rotate(${(track||0)}deg)">
+      <path d="M12 2 L14 11 L22 15 L22 17 L13 14 L13 20 L16 22 L16 23 L12 21.5 L8 23 L8 22 L11 20 L11 14 L2 17 L2 15 L10 11 Z"
+      fill="#ffd166" stroke="#7a5a00" stroke-width=".5"/></svg>`
+  });
+}
+
+/* ---------- RAIL ---------- */
+async function ensureStations(){
+  // cache full station list for 24h
+  try{
+    const cached=JSON.parse(localStorage.getItem(LS.stns)||"null");
+    if(cached && (Date.now()-cached.t < 864e5) && cached.list?.length) return cached.list;
+  }catch(e){}
+  const data=await getJSON(wmata("Rail.svc/json/jStations"));
+  const list=(data.Stations||[]).map(s=>({
+    Code:s.Code, Name:s.Name, Lat:s.Lat, Lon:s.Lon, Together:s.StationTogether1,
+    lines:[s.LineCode1,s.LineCode2,s.LineCode3,s.LineCode4].filter(Boolean)
+  }));
+  localStorage.setItem(LS.stns, JSON.stringify({t:Date.now(), list}));
+  return list;
+}
+function pickNearRail(list){
+  const here={lat:state.loc.lat,lon:state.loc.lon};
+  return list.map(s=>({...s, dist:haversine(here,{lat:s.Lat,lon:s.Lon})}))
+    .sort((a,b)=>a.dist-b.dist).slice(0,CFG.railStations);
+}
+async function fetchRail(){
+  if(!state.wmataKey) { renderRailNoKey(); return; }
+  const stations=await ensureStations();
+  state.nearRail=pickNearRail(stations);
+  // include paired platform codes (StationTogether) so predictions are complete
+  const codes=[...new Set(state.nearRail.flatMap(s=>[s.Code, s.Together].filter(Boolean)))].join(",");
+  const data=await getJSON(wmata(`StationPrediction.svc/json/GetPrediction/${codes}`));
+  renderRail(data.Trains||[]);
+}
+function railMinCell(min){
+  const wrap=el("div","times");
+  const v=el("div","live");
+  if(min==="BRD"){ v.textContent="BRD"; v.className="live brd"; }
+  else if(min==="ARR"){ v.textContent="ARR"; v.className="live arr"; }
+  else if(min===""||min==="---"||min==null){ v.textContent="—"; v.style.color="var(--muted)"; }
+  else { v.textContent=min; const u=el("div","sched"); u.innerHTML=`min · <b>live</b>`; wrap.append(v,u); return wrap; }
+  wrap.append(v); return wrap;
+}
+function renderRail(trains){
+  const box=$("#railList"); box.innerHTML="";
+  // group by our stations (in order of distance)
+  const byStation=new Map();
+  state.nearRail.forEach(s=>byStation.set(s.Name, []));
+  for(const t of trains){
+    if(t.Min==="" && !t.DestinationName) continue;
+    // match to nearest station display name via LocationName
+    const key=[...byStation.keys()].find(n=> t.LocationName && (n===t.LocationName || n.startsWith(t.LocationName.split(",")[0])) )
+      || t.LocationName;
+    if(!byStation.has(key)) byStation.set(key, []);
+    byStation.get(key).push(t);
+  }
+  let shown=0;
+  for(const [station, list] of byStation){
+    if(!list.length) continue;
+    box.appendChild(el("div","stop-label","● "+station));
+    list.sort((a,b)=>railKey(a.Min)-railKey(b.Min)).slice(0,5).forEach(t=>{
+      const row=el("div","row");
+      const b=el("div","badge rail", t.Line||"--"); b.style.background=RAIL_COLORS[t.Line]||"#556";
+      const mid=el("div"); mid.appendChild(el("div","dest", t.DestinationName||t.Destination||"—"));
+      mid.appendChild(el("div","sub", (t.Car?`${t.Car}-car`:"")+(t.Group?` · track ${t.Group}`:"")));
+      row.append(b, mid, el("div"), railMinCell(t.Min));
+      box.appendChild(row); shown++;
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No trains predicted right now."));
+  $("#railCount").textContent = state.nearRail.map(s=>s.Name).slice(0,2).join(" · ");
+  fitList(box);
+}
+function railKey(m){ return m==="BRD"?-2 : m==="ARR"?-1 : (parseInt(m,10)||99); }
+/* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
+function fitList(box){
+  if(!box || box.clientHeight < 40) return;   // skip until the card has a real height
+  let guard=0;
+  while(box.scrollHeight > box.clientHeight + 1 && box.lastElementChild && guard++ < 80){
+    box.removeChild(box.lastElementChild);
+  }
+}
+function renderRailNoKey(){
+  $("#railList").innerHTML="";
+  $("#railList").appendChild(el("div","empty","Add a free WMATA key (⚙︎) to see live train times."));
+}
+
+/* ---------- BUS ---------- */
+async function ensureBusStops(){
+  if(state.busStops.length) return state.busStops;
+  const data=await getJSON(wmata(`Bus.svc/json/jStops?Lat=${state.loc.lat}&Lon=${state.loc.lon}&Radius=${CFG.busRadius}`));
+  const here={lat:state.loc.lat,lon:state.loc.lon};
+  state.busStops=(data.Stops||[])
+    .map(s=>({StopID:s.StopID, Name:s.Name, Lat:s.Lat, Lon:s.Lon, Routes:s.Routes||[],
+              dist:haversine(here,{lat:s.Lat,lon:s.Lon})}))
+    .filter(s=>s.StopID && s.Routes.length)
+    .sort((a,b)=>a.dist-b.dist).slice(0,CFG.busStops);
+  return state.busStops;
+}
+async function fetchBus(){
+  if(!state.wmataKey){ $("#busList").innerHTML=""; $("#busList").appendChild(el("div","empty","Add a WMATA key (⚙︎) to see live bus times.")); return; }
+  await ensureBusStops();
+  const box=$("#busList"); box.innerHTML="";
+  let any=false;
+  for(const stop of state.busStops){
+    let pred={}, sched={};
+    try{ pred = await getJSON(wmata(`NextBusService.svc/json/jPredictions?StopID=${stop.StopID}`)); }catch(e){}
+    try{ sched= await getJSON(wmata(`Bus.svc/json/jStopSchedule?StopID=${stop.StopID}`)); }catch(e){}
+    const preds=(pred.Predictions||[]).slice(0,4);
+    const schedByRoute=nextScheduledByRoute(sched.ScheduleArrivals||[]);
+    if(!preds.length && !Object.keys(schedByRoute).length) continue;
+    any=true;
+    box.appendChild(el("div","stop-label","◼ "+(stop.Name||("Stop "+stop.StopID))+`  ·  ${kmToMi(stop.dist).toFixed(2)} mi`));
+    if(preds.length){
+      preds.forEach(p=>{
+        const row=el("div","row");
+        const b=el("div","badge", p.RouteID); b.style.background="#6aa9ff";
+        const mid=el("div"); mid.appendChild(el("div","dest", p.DirectionText||"—"));
+        const schedT=schedByRoute[p.RouteID];
+        mid.appendChild(el("div","sub", schedT?`sched ${schedT}`:""));
+        const times=el("div","times");
+        const live=el("div","live", p.Minutes<=0?"now":p.Minutes); times.append(live, el("div","sched","min · live"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row);
+      });
+    } else {
+      // no live predictions: show next scheduled
+      Object.entries(schedByRoute).slice(0,4).forEach(([rt,tm])=>{
+        const row=el("div","row");
+        const b=el("div","badge", rt); b.style.background="#3b527d";
+        const mid=el("div"); mid.appendChild(el("div","dest","scheduled"));
+        const times=el("div","times"); const s=el("div","sched"); s.innerHTML=`sched <b>${tm}</b>`; times.appendChild(s);
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row);
+      });
+    }
+  }
+  if(!any) box.appendChild(el("div","empty","No buses predicted at nearby stops right now."));
+  $("#busCount").textContent = state.busStops.length? `${state.busStops.length} stops nearby` : "";
+  fitList(box);
+}
+function nextScheduledByRoute(arrivals){
+  const now=Date.now(), out={};
+  arrivals.map(a=>({rt:a.RouteID, t:Date.parse(a.ScheduleTime)}))
+    .filter(a=>a.t && a.t>=now-60000)
+    .sort((a,b)=>a.t-b.t)
+    .forEach(a=>{ if(!(a.rt in out)) out[a.rt]=new Date(a.t).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); });
+  return out;
+}
+
+/* ---------- PLANES ---------- */
+async function fetchPlanes(){
+  const {lat,lon}=state.loc;
+  let data;
+  try{ data=await getJSON(`https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
+  catch(e){ return; }
+  const ac=(data.ac||[]).filter(a=>a.lat&&a.lon)
+    .map(a=>({...a, _dist: a.dst!=null? a.dst : kmToMi(haversine(state.loc,{lat:a.lat,lon:a.lon}))/1.15078 }))
+    .sort((a,b)=>(a.alt_baro==='ground'?1:0)-(b.alt_baro==='ground'?1:0) || a._dist-b._dist);
+  state.lastPlaneOk=Date.now();
+  renderPlanes(ac);
+  drawPlanes(ac);
+}
+function renderPlanes(ac){
+  const box=$("#planeList"); box.innerHTML="";
+  const flying=ac.filter(a=>a.alt_baro!=="ground");
+  if(!flying.length){ box.appendChild(el("div","empty","No aircraft overhead right now.")); }
+  flying.slice(0,10).forEach(a=>{
+    const row=el("div","row plane");
+    const mid=el("div");
+    mid.appendChild(el("div","dest", (a.desc||a.t||"Aircraft")));
+    mid.appendChild(el("div","sub", `${a.ownOp?a.ownOp+" · ":""}${a.gs?Math.round(a.gs)+" kt":""}${a._dist!=null?` · ${a._dist.toFixed(1)} nm`:""}`));
+    const times=el("div","times");
+    const alt=el("div","alt", typeof a.alt_baro==="number"? a.alt_baro.toLocaleString()+"′" : (a.alt_baro||"—"));
+    times.append(alt, el("div","sched", a.baro_rate>200?"climbing":a.baro_rate<-200?"descending":"level"));
+    row.append(badge((a.flight||a.r||"—").trim().slice(0,7)), mid, el("div"), times);
+    box.appendChild(row);
+  });
+  $("#planeCount").textContent = `${flying.length} aloft`;
+  fitList(box);
+}
+function badge(txt){ const b=el("div","badge",txt); b.style.background="var(--plane)"; b.style.color="#3a2b00"; return b; }
+function drawPlanes(ac){
+  state.planeLayer.clearLayers();
+  ac.filter(a=>a.alt_baro!=="ground").forEach(a=>{
+    const m=L.marker([a.lat,a.lon], {icon:planeIcon(a.track)});
+    m.bindTooltip(`${(a.flight||a.r||"?").trim()} · ${typeof a.alt_baro==="number"?a.alt_baro+"′":a.alt_baro}`, {direction:"top"});
+    m.addTo(state.planeLayer);
+  });
+}
+function drawStops(){
+  state.stopLayer.clearLayers();
+  state.nearRail.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:6,color:"#BF0D3E",fillColor:"#BF0D3E",fillOpacity:.9,weight:1})
+    .bindTooltip(s.Name,{direction:"top"}).addTo(state.stopLayer));
+  state.busStops.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:4,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:.8,weight:1})
+    .bindTooltip(s.Name,{direction:"top"}).addTo(state.stopLayer));
+}
+
+/* ---------- live Metrobus vehicles on the map ---------- */
+async function fetchBusPositions(){
+  if(!state.wmataKey) return;
+  let data;
+  try{ data=await getJSON(wmata("Bus.svc/json/jBusPositions")); }
+  catch(e){ return; }
+  state.busVehLayer.clearLayers();
+  (data.BusPositions||[]).forEach(v=>{
+    if(v.Lat==null||v.Lon==null) return;
+    L.circleMarker([v.Lat,v.Lon], {radius:5, color:"#08203f", weight:1, fillColor:"#6aa9ff", fillOpacity:.95})
+     .bindTooltip(`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`, {direction:"top"})
+     .addTo(state.busVehLayer);
+  });
+}
+
+/* ---------- Live Metrorail Train Positions & Routes ---------- */
+async function fetchLiveTrainPositions() {
+  if (!state.wmataKey) return;
+  let data;
+  try {
+    data = await getJSON(wmata("TrainPositions/TrainPositions?contentType=json"));
+  } catch (e) { return; }
+
+  const stations = await ensureStations();
+  state.railVehLayer.clearLayers();
+
+  (data.TrainPositions || []).forEach((t, i) => {
+    // Attempt mapping the train using the destination station code or track circuit
+    const station = stations.find(s => s.Code === t.DestinationStationCode);
+    if (!station) return;
+
+    const color = RAIL_COLORS[t.LineCode] || "#ffffff";
+    
+    // Slight offset applied so multiple live trains heading to/at the same station don't map directly on top of each other
+    const offsetLat = station.Lat + (Math.sin(i) * 0.0018);
+    const offsetLon = station.Lon + (Math.cos(i) * 0.0018);
+
+    L.circleMarker([offsetLat, offsetLon], {
+      radius: 7,
+      color: "#000",
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.95
+    })
+    .bindTooltip(`Metrorail ${t.LineCode || "No Line"} Line Train #${t.TrainNumber || t.TrainId} (Car Count: ${t.CarCount || "6"})`, {direction: "top"})
+    .addTo(state.railVehLayer);
+  });
+}
+
+async function drawTrainRoutes() {
+  if (!state.wmataKey) return;
+  const stations = await ensureStations();
+  
+  try {
+    const linesData = await getJSON(wmata("Rail.svc/json/jLines"));
+    const lines = linesData.Lines || [];
+    
+    state.routeLayer.clearLayers();
+
+    for (const line of lines) {
+      const pathData = await getJSON(wmata(`Rail.svc/json/jPath?FromStationCode=${line.StartStationCode}&ToStationCode=${line.EndStationCode}`));
+      const path = pathData.Path || [];
+      
+      const coordinates = path.map(p => {
+        const stn = stations.find(s => s.Code === p.StationCode);
+        return stn ? [stn.Lat, stn.Lon] : null;
+      }).filter(Boolean);
+
+      if (coordinates.length > 0) {
+        L.polyline(coordinates, {
+          color: RAIL_COLORS[line.LineCode] || "#fff",
+          weight: 4,
+          opacity: 0.5
+        }).addTo(state.routeLayer);
+      }
+    }
+  } catch (e) {
+    console.error("Error drawing train routes: ", e);
+  }
+}
+
+/* ---------- AMTRAK (regional / intercity rail) ---------- */
+function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+function trainIcon(){
+  return L.divIcon({ className:"train-icon", iconSize:[24,24], iconAnchor:[12,12],
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:#3ad0c8;display:flex;
+      align-items:center;justify-content:center;font-size:12px;border:1px solid #08302d;
+      box-shadow:0 1px 3px rgba(0,0,0,.6)">🚆</div>` });
+}
+function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
+async function fetchAmtrak(){
+  let data;
+  try{ data=await getJSON("https://api-v3.amtraker.com/v3/trains", 12000); }catch(e){ return; }
+  const here=state.loc, out=[];
+  for(const arr of Object.values(data)) for(const t of (arr||[])){
+    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+    const distMi=kmToMi(haversine(here,{lat:t.lat,lon:t.lon}));
+    if(distMi<=CFG.amtrakRadiusMi) out.push({t, distMi});
+  }
+  out.sort((a,b)=>a.distMi-b.distMi);
+  state.lastAmtrakOk=Date.now();
+  renderAmtrak(out); drawAmtrak(out);
+}
+function renderAmtrak(list){
+  const box=$("#amtrakList"); box.innerHTML="";
+  if(!list.length){ box.appendChild(el("div","empty",`No Amtrak trains within ${CFG.amtrakRadiusMi} mi right now.`)); $("#amtrakCount").textContent=""; return; }
+  list.slice(0,10).forEach(({t,distMi})=>{
+    const row=el("div","row");
+    const b=el("div","badge", (t.trainNum||"?").toString()); b.style.background="#3ad0c8"; b.style.color="#04201e";
+    const mid=el("div");
+    mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
+    const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
+    mid.appendChild(el("div","sub",
+      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
+    const times=el("div","times");
+    if(ns){
+      times.appendChild(el("div","live", fmtTime(ns.arr||ns.dep)||"—"));
+      const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
+    } else { times.appendChild(el("div","sched", t.trainState||"")); }
+    row.append(b, mid, el("div"), times);
+    box.appendChild(row);
+  });
+  $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
+  fitList(box);
+}
+function drawAmtrak(list){
+  state.trainLayer.clearLayers();
+  list.forEach(({t})=>{
+    L.marker([t.lat,t.lon], {icon:trainIcon()})
+      .bindTooltip(`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`, {direction:"top"})
+      .addTo(state.trainLayer);
+  });
+}
+
+/* ---------- MARC (commuter rail, via the Cloudflare Worker helper) ---------- */
+const MARC_COL = { Brunswick:"#e8792b", Penn:"#d1495b", Camden:"#e0a800" };
+function marcIcon(line){
+  const col=MARC_COL[line]||"#e8792b";
+  return L.divIcon({ className:"train-icon", iconSize:[22,22], iconAnchor:[11,11],
+    html:`<div style="width:19px;height:19px;border-radius:5px;background:${col};display:flex;
+      align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;
+      border:1px solid #2a1400;box-shadow:0 1px 3px rgba(0,0,0,.6)">M</div>` });
+}
+async function fetchMarc(){
+  if(!state.marcUrl){ return; }
+  let data;
+  try{ data=await getJSON(state.marcUrl, 12000); }
+  catch(e){ marcMsg("MARC helper unreachable — check the Worker URL."); return; }
+  const veh=(data.vehicles||[]).filter(v=>typeof v.lat==="number"&&typeof v.lon==="number");
+  drawMarc(veh); renderMarc(veh);
+}
+function drawMarc(veh){
+  state.marcLayer.clearLayers();
+  veh.forEach(v=>{
+    L.marker([v.lat,v.lon], {icon:marcIcon(v.line)})
+      .bindTooltip(`MARC ${v.line} #${v.train}${v.mph!=null?` · ${v.mph} mph`:""}`, {direction:"top"})
+      .addTo(state.marcLayer);
+  });
+}
+function renderMarc(veh){
+  const box=$("#marcList"); box.innerHTML="";
+  const here=state.loc;
+  const near=veh.map(v=>({v, mi:kmToMi(haversine(here,{lat:v.lat,lon:v.lon}))}))
+    .filter(x=>x.mi<=CFG.marcRadiusMi).sort((a,b)=>a.mi-b.mi);
+  if(!near.length){ box.appendChild(el("div","empty",`No MARC trains within ${CFG.marcRadiusMi} mi. (${veh.length} running system-wide.)`)); $("#marcCount").textContent=`${veh.length} running`; return; }
+  near.slice(0,8).forEach(({v,mi})=>{
+    const row=el("div","row");
+    const b=el("div","badge rail", v.line.slice(0,4)); b.style.background=MARC_COL[v.line]||"#e8792b";
+    const mid=el("div");
+    mid.appendChild(el("div","dest", `${v.line} Line · #${v.train}`));
+    mid.appendChild(el("div","sub", `${mi.toFixed(0)} mi away${v.mph!=null?` · ${v.mph} mph`:""}`));
+    const times=el("div","times");
+    times.appendChild(el("div","live", v.mph!=null&&v.mph>3?"en route":"stopped"));
+    row.append(b, mid, el("div"), times);
+    box.appendChild(row);
+  });
+  $("#marcCount").textContent = `${near.length} nearby · ${veh.length} running`;
+  fitList(box);
+}
+function marcMsg(m){ const box=$("#marcList"); box.innerHTML=""; box.appendChild(el("div","empty",m)); }
+
+/* ---------- RIDE ON (scheduled only, via Transitland) ---------- */
+function fmtClock(t){
+  if(!t) return "—";
+  if(/^\d{1,2}:\d{2}/.test(t)){ let [h,m]=t.split(":"); h=((+h)%24); const ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${m} ${ap}`; }
+  const d=new Date(t); return isNaN(d)?t:d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+async function fetchRideOn(){
+  if(!state.tlKey){ return; }
+  const base="https://transit.land/api/v2/rest", key=encodeURIComponent(state.tlKey);
+  let stopsData;
+  try{ stopsData=await getJSON(`${base}/stops?lat=${state.loc.lat}&lon=${state.loc.lon}&radius=${CFG.rideonRadius}&feed_onestop_id=${CFG.tlFeed}&limit=${CFG.rideonStops}&apikey=${key}`); }
+  catch(e){ rideonMsg("Transitland error — check your API key."); return; }
+  const stops=(stopsData.stops||[]);
+  if(!stops.length){ rideonMsg("No Ride On stops within range."); $("#rideonCount").textContent=""; return; }
+  const box=$("#rideonList"); box.innerHTML=""; let any=false;
+  for(const s of stops){
+    let dep;
+    try{ dep=await getJSON(`${base}/stops/${encodeURIComponent(s.onestop_id)}/departures?limit=6&apikey=${key}`); }
+    catch(e){ continue; }
+    const stopObj=(dep.stops&&dep.stops[0])||{};
+    const departures=(stopObj.departures||[]);
+    if(!departures.length) continue;
+    any=true;
+    box.appendChild(el("div","stop-label","◼ "+(s.stop_name||s.onestop_id)));
+    departures.slice(0,5).forEach(d=>{
+      const route=(d.trip&&d.trip.route)||{};
+      const rt=route.route_short_name||route.route_long_name||"?";
+      const schIso=(d.departure&&(d.departure.scheduled||d.departure.scheduled_utc))||d.departure_time||"";
+      const estIso=(d.departure&&(d.departure.estimated||d.departure.estimated_utc))||"";
+      const row=el("div","row");
+      const b=el("div","badge", rt); b.style.background="#3b527d";
+      const mid=el("div");
+      mid.appendChild(el("div","dest", (d.trip&&d.trip.trip_headsign)||route.route_long_name||"—"));
+      mid.appendChild(el("div","sub", estIso?"live estimate":"scheduled"));
+      const times=el("div","times");
+      if(estIso){ times.appendChild(el("div","live", fmtClock(estIso))); }
+      const s2=el("div","sched"); s2.innerHTML=`sched <b>${fmtClock(schIso)}</b>`; times.appendChild(s2);
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row);
+    });
+  }
+  if(!any) rideonMsg("No upcoming scheduled Ride On departures.");
+  $("#rideonCount").textContent = `${stops.length} stops nearby`;
+  fitList(box);
+}
+function rideonMsg(m){ const box=$("#rideonList"); box.innerHTML=""; box.appendChild(el("div","empty",m)); }
+
+/* show/hide the optional cards based on whether their source is configured */
+function applyOptionalCards(){
+  document.getElementById("marcCard").style.display   = state.marcUrl ? "flex" : "none";
+  document.getElementById("rideonCard").style.display = state.tlKey   ? "flex" : "none";
+}
+
+/* ---------- refresh orchestration ---------- */
+async function refreshTransit(){
+  nextRefreshAt=Date.now()+CFG.transitEveryMs;
+  if(!state.wmataKey){ 
+    renderRailNoKey(); 
+    await fetchBus(); 
+    setStatus("live — airplanes.live (no WMATA key)");
+    return; 
+  }
+  try{
+    await Promise.allSettled([
+      fetchRail(), 
+      fetchBus(), 
+      fetchBusPositions(),
+      fetchLiveTrainPositions()
+    ]);
+    drawStops();
+    state.lastTransitOk=Date.now();
+    setStatus("live — WMATA + airplanes.live");
+  }catch(e){
+    setStatus("transit error: "+e.message, true);
+  }
+}
+async function refreshPlanes(){
+  try{ 
+    await fetchPlanes(); 
+    if (!state.wmataKey) {
+      setStatus("live — airplanes.live (no WMATA key)");
+    } else if (Date.now() - state.lastTransitOk <= 90000) {
+      setStatus("live — WMATA + airplanes.live");
+    }
+  }catch(e){}
+  
+  const stale = Date.now()-state.lastPlaneOk > 60000;
+  if(state.wmataKey && Date.now()-state.lastTransitOk>90000) {
+    setStatus("transit stale — check WMATA key", true);
+  } else if (stale) {
+    setStatus("plane data stale", true);
+  }
+}
+
+/* ---------- setup overlay ---------- */
+function openSetup(){
+  $("#keyInput").value=state.wmataKey;
+  $("#marcInput").value=state.marcUrl;
+  $("#tlInput").value=state.tlKey;
+  $("#setup").classList.add("show"); $("#keyInput").focus();
+}
+function closeSetup(){ $("#setup").classList.remove("show"); }
+$("#settingsBtn").onclick=openSetup;
+$("#saveKey").onclick=()=>{
+  state.wmataKey=$("#keyInput").value.trim();
+  state.marcUrl =$("#marcInput").value.trim().replace(/\/+$/,"");
+  state.tlKey   =$("#tlInput").value.trim();
+  localStorage.setItem(LS.key, state.wmataKey);
+  localStorage.setItem(LS.marc, state.marcUrl);
+  localStorage.setItem(LS.tlkey, state.tlKey);
+  closeSetup(); applyOptionalCards();
+  state.busStops=[]; 
+  drawTrainRoutes();
+  refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+};
+$("#skipKey").onclick=()=>{ closeSetup(); };
+$("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
+
+/* ---------- boot ---------- */
+function boot(){
+  loadSavedLoc(); applyLoc(state.loc); initMap();
+  tickClock(); setInterval(tickClock, CFG.clockEveryMs);
+  setInterval(tickRefreshInfo, 1000);
+
+  if(!state.wmataKey) openSetup();
+
+  applyOptionalCards();
+  drawTrainRoutes();
+  refreshTransit(); refreshPlanes(); fetchAmtrak(); fetchMarc(); fetchRideOn();
+  setInterval(refreshTransit, CFG.transitEveryMs);
+  setInterval(refreshPlanes, CFG.planeEveryMs);
+  setInterval(fetchAmtrak, CFG.amtrakEveryMs);
+  setInterval(fetchMarc, CFG.marcEveryMs);
+  setInterval(fetchRideOn, CFG.rideonEveryMs);
+
+  // re-fit cards to the new layout when the window/display changes size
+  let rzT; window.addEventListener("resize", ()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{
+    if(state.map) state.map.invalidateSize();
+    refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+  }, 350); });
+
+  requestGeo();
+}
+document.addEventListener("DOMContentLoaded", boot);
+</script>
+</body>
+</html>
