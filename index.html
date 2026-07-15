@@ -139,8 +139,9 @@
         <span>🚆 Amtrak</span>
         <span style="color:#e8792b">▦ MARC</span>
         <span>🔵 live Metrobus</span>
-        <span>🔴 rail station</span>
-        <span><b>green</b> = live &nbsp; <i>grey</i> = scheduled</span>
+        <span>🔴 Metro station</span>
+        <span>━ Metro lines</span>
+        <span style="opacity:.7">all vehicles move live</span>
       </div>
     </div>
 
@@ -230,9 +231,11 @@ const CFG = {
   tlFeed: "f-dqcn-montgomerycountymdrideon", // Transitland onestop id for Ride On
   transitEveryMs: 30000,
   planeEveryMs: 15000,
-  amtrakEveryMs: 30000,
-  marcEveryMs: 20000,
+  busPosEveryMs: 15000,  // live Metrobus positions (markers glide between updates)
+  amtrakEveryMs: 20000,
+  marcEveryMs: 15000,
   rideonEveryMs: 120000, // schedule changes slowly; be gentle on Transitland quota
+  routesEveryMs: 21600000, // Metrorail line geometry (rarely changes) — 6h
   clockEveryMs: 1000,
 };
 const LS = {
@@ -303,7 +306,7 @@ function requestGeo(){
       applyLoc(loc);
       if(state.map) state.map.setView([loc.lat,loc.lon], 12);
       state.busStops=[]; // force re-scan of nearby stops
-      refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn();
+      refreshTransit(); fetchBusPositions(); fetchAmtrak(); fetchMarc(); fetchRideOn();
     },
     _err => {/* keep default */},
     { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
@@ -330,6 +333,52 @@ function planeIcon(track){
       <path d="M12 2 L14 11 L22 15 L22 17 L13 14 L13 20 L16 22 L16 23 L12 21.5 L8 23 L8 22 L11 20 L11 14 L2 17 L2 15 L10 11 Z"
       fill="#ffd166" stroke="#7a5a00" stroke-width=".5"/></svg>`
   });
+}
+function busDot(){
+  return L.divIcon({ className:"veh-icon", iconSize:[12,12], iconAnchor:[6,6],
+    html:`<div style="width:11px;height:11px;border-radius:50%;background:#6aa9ff;
+      border:1px solid #08203f;box-shadow:0 0 5px rgba(106,169,255,.7)"></div>` });
+}
+
+/* ---------- animated vehicle markers (smooth "live" movement) ----------
+   Markers persist by id and glide from their last position to each new
+   fix over `dur` ms, so trains/buses/planes visibly move between updates. */
+state.fleets = { bus:{}, marc:{}, amtrak:{}, plane:{} };
+function fleetLayer(f){
+  return { bus:state.busVehLayer, marc:state.marcLayer, amtrak:state.trainLayer, plane:state.planeLayer }[f];
+}
+// items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
+function updateFleet(fleet, items, dur){
+  const F=state.fleets[fleet], layer=fleetLayer(fleet); if(!layer) return;
+  const now=performance.now(), keep=new Set();
+  for(const it of items){
+    if(typeof it.lat!=="number" || typeof it.lon!=="number") continue;
+    keep.add(it.id);
+    let v=F[it.id];
+    if(!v){
+      const m=L.marker([it.lat,it.lon], {icon:it.icon(), keyboard:false}).addTo(layer);
+      if(it.tip) m.bindTooltip(it.tip, {direction:"top"});
+      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik };
+    } else {
+      const c=v.marker.getLatLng();                 // animate from current interpolated spot
+      v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1);
+      if(it.tip) v.marker.setTooltipContent(it.tip);
+      if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
+    }
+  }
+  for(const id in F){ if(!keep.has(id)){ layer.removeLayer(F[id].marker); delete F[id]; } }
+}
+function animateFleets(){
+  const now=performance.now();
+  for(const f in state.fleets){ const F=state.fleets[f];
+    for(const id in F){ const v=F[id];
+      if(v.dur<=1) continue;
+      const p=(now-v.t0)/v.dur;
+      if(p>=1){ v.marker.setLatLng(v.to); v.dur=1; continue; }
+      v.marker.setLatLng([ v.from[0]+(v.to[0]-v.from[0])*p, v.from[1]+(v.to[1]-v.from[1])*p ]);
+    }
+  }
+  requestAnimationFrame(animateFleets);
 }
 
 /* ---------- RAIL ---------- */
@@ -512,19 +561,49 @@ function renderPlanes(ac){
 }
 function badge(txt){ const b=el("div","badge",txt); b.style.background="var(--plane)"; b.style.color="#3a2b00"; return b; }
 function drawPlanes(ac){
-  state.planeLayer.clearLayers();
-  ac.filter(a=>a.alt_baro!=="ground").forEach(a=>{
-    const m=L.marker([a.lat,a.lon], {icon:planeIcon(a.track)});
-    m.bindTooltip(`${(a.flight||a.r||"?").trim()} · ${typeof a.alt_baro==="number"?a.alt_baro+"′":a.alt_baro}`, {direction:"top"});
-    m.addTo(state.planeLayer);
-  });
+  const items=ac.filter(a=>a.alt_baro!=="ground" && a.lat && a.lon).map(a=>({
+    id:"p"+a.hex, lat:a.lat, lon:a.lon,
+    icon:()=>planeIcon(a.track), ik:"t"+Math.round((a.track||0)/8),
+    tip:`${(a.flight||a.r||"?").trim()} · ${typeof a.alt_baro==="number"?a.alt_baro+"′":a.alt_baro}`
+  }));
+  updateFleet("plane", items, CFG.planeEveryMs);
 }
 function drawStops(){
   state.stopLayer.clearLayers();
-  state.nearRail.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:6,color:"#BF0D3E",fillColor:"#BF0D3E",fillOpacity:.9,weight:1})
+  state.nearRail.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:5,color:"#fff",fillColor:"#BF0D3E",fillOpacity:1,weight:1.5})
     .bindTooltip(s.Name,{direction:"top"}).addTo(state.stopLayer));
-  state.busStops.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:4,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:.8,weight:1})
-    .bindTooltip(s.Name,{direction:"top"}).addTo(state.stopLayer));
+  state.busStops.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:3,weight:0,fillColor:"#5b6a8c",fillOpacity:.75})
+    .bindTooltip("Stop: "+s.Name,{direction:"top"}).addTo(state.stopLayer));
+}
+
+/* ---------- Metrorail route lines (the subway map) ---------- */
+async function fetchRailRoutes(){
+  if(!state.wmataKey || !state.routeLayer) return;
+  try{
+    const cached=JSON.parse(localStorage.getItem("transitboard.railroutes")||"null");
+    if(cached && Date.now()-cached.t < 864e5 && cached.lines?.length){ drawRailRoutes(cached.lines); return; }
+  }catch(e){}
+  try{
+    const stations=await ensureStations();
+    const coord={}; stations.forEach(s=>{ coord[s.Code]=[s.Lat,s.Lon]; });
+    const linesData=await getJSON(wmata("Rail.svc/json/jLines"));
+    const lines=[];
+    for(const ln of (linesData.Lines||[])){
+      try{
+        const path=await getJSON(wmata(`Rail.svc/json/jPath?FromStationCode=${ln.StartStationCode}&ToStationCode=${ln.EndStationCode}`));
+        const pts=(path.Path||[]).map(p=>coord[p.StationCode]).filter(Boolean);
+        if(pts.length>1) lines.push({ code:ln.LineCode, pts });
+      }catch(e){}
+    }
+    if(lines.length){ localStorage.setItem("transitboard.railroutes", JSON.stringify({t:Date.now(), lines})); drawRailRoutes(lines); }
+  }catch(e){}
+}
+function drawRailRoutes(lines){
+  if(!state.routeLayer) return;
+  state.routeLayer.clearLayers();
+  lines.forEach(l=>L.polyline(l.pts, {
+    color:RAIL_COLORS[l.code]||"#888", weight:4, opacity:.5, lineCap:"round", lineJoin:"round"
+  }).addTo(state.routeLayer));
 }
 
 /* ---------- live Metrobus vehicles on the map ---------- */
@@ -533,13 +612,11 @@ async function fetchBusPositions(){
   let data;
   try{ data=await getJSON(wmata(`Bus.svc/json/jBusPositions?Lat=${state.loc.lat}&Lon=${state.loc.lon}&Radius=${CFG.busPosRadius}`)); }
   catch(e){ return; }
-  state.busVehLayer.clearLayers();
-  (data.BusPositions||[]).forEach(v=>{
-    if(v.Lat==null||v.Lon==null) return;
-    L.circleMarker([v.Lat,v.Lon], {radius:5, color:"#08203f", weight:1, fillColor:"#6aa9ff", fillOpacity:.95})
-     .bindTooltip(`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`, {direction:"top"})
-     .addTo(state.busVehLayer);
-  });
+  const items=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null).map(v=>({
+    id:"b"+(v.VehicleID||`${v.RouteID}-${v.Lat}`), lat:v.Lat, lon:v.Lon, icon:busDot, ik:"bus",
+    tip:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`
+  }));
+  updateFleet("bus", items, CFG.busPosEveryMs);
 }
 
 /* ---------- AMTRAK (regional / intercity rail) ---------- */
@@ -587,12 +664,11 @@ function renderAmtrak(list){
   fitList(box);
 }
 function drawAmtrak(list){
-  state.trainLayer.clearLayers();
-  list.forEach(({t})=>{
-    L.marker([t.lat,t.lon], {icon:trainIcon()})
-      .bindTooltip(`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`, {direction:"top"})
-      .addTo(state.trainLayer);
-  });
+  const items=list.map(({t})=>({
+    id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon, icon:trainIcon, ik:"amtrak",
+    tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
+  }));
+  updateFleet("amtrak", items, CFG.amtrakEveryMs);
 }
 
 /* ---------- MARC (commuter rail, via the Cloudflare Worker helper) ---------- */
@@ -613,12 +689,11 @@ async function fetchMarc(){
   drawMarc(veh); renderMarc(veh);
 }
 function drawMarc(veh){
-  state.marcLayer.clearLayers();
-  veh.forEach(v=>{
-    L.marker([v.lat,v.lon], {icon:marcIcon(v.line)})
-      .bindTooltip(`MARC ${v.line} #${v.train}${v.mph!=null?` · ${v.mph} mph`:""}`, {direction:"top"})
-      .addTo(state.marcLayer);
-  });
+  const items=veh.map(v=>({
+    id:"m"+(v.id||v.train), lat:v.lat, lon:v.lon, icon:()=>marcIcon(v.line), ik:"marc-"+v.line,
+    tip:`MARC ${v.line} #${v.train}${v.mph!=null?` · ${v.mph} mph`:""}`
+  }));
+  updateFleet("marc", items, CFG.marcEveryMs);
 }
 function renderMarc(veh){
   const box=$("#marcList"); box.innerHTML="";
@@ -700,7 +775,7 @@ async function refreshTransit(){
   nextRefreshAt=Date.now()+CFG.transitEveryMs;
   if(!state.wmataKey){ renderRailNoKey(); await fetchBus(); return; }
   try{
-    await Promise.allSettled([fetchRail(), fetchBus(), fetchBusPositions()]);
+    await Promise.allSettled([fetchRail(), fetchBus()]);
     drawStops();
     state.lastTransitOk=Date.now();
     setStatus("live — WMATA + airplanes.live");
@@ -731,7 +806,8 @@ $("#saveKey").onclick=()=>{
   localStorage.setItem(LS.marc, state.marcUrl);
   localStorage.setItem(LS.tlkey, state.tlKey);
   closeSetup(); applyOptionalCards();
-  state.busStops=[]; refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+  state.busStops=[]; refreshTransit(); fetchBusPositions(); fetchRailRoutes();
+  fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
 };
 $("#skipKey").onclick=()=>{ closeSetup(); };
 $("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
@@ -745,12 +821,16 @@ function boot(){
   if(!state.wmataKey) openSetup();
 
   applyOptionalCards();
-  refreshTransit(); refreshPlanes(); fetchAmtrak(); fetchMarc(); fetchRideOn();
+  requestAnimationFrame(animateFleets);   // start the smooth-movement loop
+  refreshTransit(); refreshPlanes(); fetchBusPositions(); fetchRailRoutes();
+  fetchAmtrak(); fetchMarc(); fetchRideOn();
   setInterval(refreshTransit, CFG.transitEveryMs);
   setInterval(refreshPlanes, CFG.planeEveryMs);
+  setInterval(fetchBusPositions, CFG.busPosEveryMs);
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
   setInterval(fetchMarc, CFG.marcEveryMs);
   setInterval(fetchRideOn, CFG.rideonEveryMs);
+  setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
   // re-fit cards to the new layout when the window/display changes size
   let rzT; window.addEventListener("resize", ()=>{
