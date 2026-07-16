@@ -990,9 +990,19 @@ async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); } }ca
 function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
 function toggleFullscreen(){
   const el=document.documentElement;
-  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
-  else { const req=el.requestFullscreen||el.webkitRequestFullscreen;
-    if(req){ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); } }
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  const req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!req){ hintFS(); return; }
+  try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>hintFS()); }catch(e){ hintFS(); }
+}
+let hintTimer=null;
+function hintFS(){
+  let t=document.getElementById("fsHint");
+  if(!t){ t=document.createElement("div"); t.id="fsHint"; document.body.appendChild(t);
+    t.style.cssText="position:fixed;top:0;left:50%;transform:translate(-50%,-120%);z-index:9999;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:0 0 12px 12px;padding:12px 20px;font-size:14px;max-width:90vw;text-align:center;transition:transform .35s ease;box-shadow:0 10px 30px rgba(0,0,0,.5)"; }
+  t.textContent="Full screen is blocked here. Open this page in its own browser tab (or your deployed link) to go full screen.";
+  t.style.transform="translate(-50%,0)"; clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>{ t.style.transform="translate(-50%,-120%)"; }, 4500);
 }
 function onFsChange(){
   const on=!!fsElement();
