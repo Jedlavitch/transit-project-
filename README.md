@@ -12,20 +12,20 @@ Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Po
 - All map vehicles (Metro, MARC, Amtrak, buses, planes) **animate smoothly** between position updates instead of jumping
 - **🌙 Night mode** (`night.html`, "Night" tab) — a big-letters, dark, low-light page showing just the **nearest flight**: airline, flight #, aircraft, and **origin → destination** cities (via [adsbdb](https://www.adsbdb.com)), plus live distance/altitude/phase. *(True on-time/late status isn't shown — it needs a paid flight-status API; see note below.)*
 - **🚄 Amtrak** — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
-- **🚆 MARC** — next **scheduled** commuter-rail trains at your nearest MARC stations (Brunswick / Penn / Camden), from a bundled copy of MARC's timetable. **Zero setup — no key, no Worker.** *(Optional: add live MARC trains moving on the map with the free Worker below.)*
-- **🚌 Ride On** *(optional)* — **scheduled** departures at nearby stops. Needs a free Transitland key (below). Live Ride On isn't publicly available, so this is timetable-only.
+- **🚆 MARC** — next **scheduled** commuter-rail trains at your nearest stations **and trains placed on the map** (interpolated from the schedule), from a bundled copy of MARC's timetable. **Zero setup — no key, no Worker.** *(Optional: exact real-time positions via the free Worker below.)*
+- **🚌 Ride On** — next **scheduled** departures at your nearest stops, from a bundled (trimmed) copy of Ride On's timetable. **Zero setup — no key.** (Ride On has no public real-time feed, so this is timetable-only.)
 - **✈️ Planes overhead** — live ADS-B aircraft within ~12 nm (altitude, airline, speed, climbing/descending), plotted on a live map
 - Auto-detects your location (with 20816 as the fallback), refreshes transit/Amtrak every 30s and planes every 15s
 
-Everything works with **zero setup except the WMATA key**. MARC and Ride On are optional add-ons you can enable anytime via the ⚙︎ gear.
+Everything works with **zero setup except the WMATA key** (which only Metrorail/Metrobus need). MARC and Ride On are built in. You can also pick an **accent color** in the ⚙︎ gear.
 
 ## Data sources
 | Data | Source | Key needed? | Cost |
 |------|--------|-------------|------|
 | Metrorail + Metrobus | [WMATA API](https://developer.wmata.com) | ✅ free key | Free |
 | Amtrak | [amtraker API](https://github.com/piemadd/amtrak) | ❌ none | Free |
-| MARC *(optional)* | MTA Maryland feed via your Cloudflare Worker | ❌ none (needs the Worker) | Free |
-| Ride On *(optional)* | [Transitland](https://www.transit.land) (schedule) | ✅ free key | Free |
+| MARC | bundled `marc-schedule.json` (MTA Maryland GTFS) | ❌ none | Free |
+| Ride On | bundled `rideon-schedule.json` (Montgomery County GTFS) | ❌ none | Free |
 | Planes | [airplanes.live](https://airplanes.live) | ❌ none | Free |
 | Map tiles | CARTO / OpenStreetMap | ❌ none | Free |
 
@@ -80,35 +80,30 @@ anyone who clicks the link opens the live board in their browser.
 - Metrorail predictions are live estimates (the Metro runs on frequencies, so trains don't have a
   fixed per-train published timetable the way buses do — buses show both live and scheduled).
 - If trains/buses stay empty, re-check the WMATA key in ⚙︎ (the status bar will say "transit stale").
-## MARC schedule — built in, no setup
-The MARC card works out of the box: it reads **`marc-schedule.json`**, a bundled copy of MARC's
-published timetable, and shows the next scheduled trains at your nearest MARC stations. Nothing to
-configure. When MARC changes its timetable (a few times a year), refresh the file with:
+## MARC & Ride On — built in, no setup
+Both work out of the box from bundled copies of their published GTFS timetables:
+
+- **`marc-schedule.json`** → MARC card (next scheduled trains at nearby stations) **and** MARC trains
+  on the map, placed by interpolating each running trip's scheduled position between stations.
+- **`rideon-schedule.json`** → Ride On card (next scheduled departures at nearby stops). This is a
+  *trimmed* copy (stops within ~1.5 mi of home) because Ride On's full GTFS is ~34 MB. Ride On has
+  **no public real-time feed**, so scheduled is the honest best.
+
+When a timetable changes (a few times a year), regenerate the files:
 
 ```bash
-python3 gen-marc-schedule.py    # re-downloads MARC's GTFS and rewrites marc-schedule.json
+python3 gen-marc-schedule.py     # re-downloads MARC's GTFS -> marc-schedule.json
+python3 gen-rideon-schedule.py   # re-downloads Ride On's GTFS -> rideon-schedule.json
 ```
+(To recenter Ride On on a different area, edit `HERE`/`RADIUS_MI` at the top of `gen-rideon-schedule.py`.)
 
-## Optional: live MARC trains *moving on the map* (free, ~5 min)
-Only if you also want MARC trains gliding on the map (not just the schedule): a browser can't read
-MARC's live feed directly (protobuf on S3, no CORS), so the included **`marc-worker.js`** is a tiny
-[Cloudflare Worker](https://workers.cloudflare.com) that reads it server-side and re-serves it as
-JSON — free tier, always on, never sleeps.
+## Optional: exact real-time MARC positions (free, ~5 min)
+MARC on the map is *scheduled* by default. If you want the exact **live** positions instead, a browser
+can't read MARC's live feed directly (protobuf on S3, no CORS), so the included **`marc-worker.js`** is
+a tiny [Cloudflare Worker](https://workers.cloudflare.com) that reads it server-side and re-serves JSON.
 
 1. Go to **[dash.cloudflare.com](https://dash.cloudflare.com)** → sign up (free) → **Workers & Pages** → **Create** → **Create Worker**.
-2. Give it a name (e.g. `marc`), click **Deploy**, then **Edit code**.
-3. Delete the starter code, **paste in the entire contents of `marc-worker.js`**, and **Deploy** again.
-4. Copy your Worker URL (looks like `https://marc.YOUR-NAME.workers.dev`).
-5. In the board, click **⚙︎ → "add MARC trains & Ride On schedule"**, paste that URL into the **MARC helper URL** box, Save.
-
-MARC trains (Brunswick / Penn / Camden) now appear on the map as color-coded **M** markers. No API key needed.
-
-## Optional: enable Ride On scheduled times (free)
-Montgomery County publishes **no public live feed** for Ride On (live data is locked behind a private
-Swiftly key). The public timetable is available through Transitland, so this shows **scheduled** departures:
-
-1. Sign up for a free [Transitland API key](https://www.transit.land/documentation#api-keys).
-2. In the board, **⚙︎ → "add MARC trains & Ride On schedule"** → paste the key into the **Transitland API key** box, Save.
-
-A "Ride On — scheduled" card appears with upcoming departures at your nearest stops. (No live map dots —
-that data simply isn't public.)
+2. Name it (e.g. `marc`), **Deploy**, then **Edit code**.
+3. Delete the starter code, **paste in all of `marc-worker.js`**, **Deploy** again.
+4. Copy your Worker URL (`https://marc.YOUR-NAME.workers.dev`).
+5. In the board: **⚙︎ → "Advanced: real-time MARC positions"**, paste the URL, Save.
