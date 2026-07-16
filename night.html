@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#000000" />
+<meta name="theme-color" content="#010409" />
 <title>Night Mode — Nearest Flight</title>
 <style>
   :root{
-    --bg:#000; --amber:#ffb454; --amber-dim:#c98a3a; --muted:#6b5636; --faint:#3a2f1e;
-    --good:#5ad17a; --late:#ff6b5a;
+    --bg:#010409; --amber:#7db8ff; --amber-dim:#4a7fc4; --muted:#35567e; --faint:#16263c;
+    --good:#5ad1a0; --late:#ff6b5a;
   }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
@@ -38,7 +38,7 @@
   .flight{font-size:clamp(1.3rem,4vw,3.4rem); color:var(--amber-dim); font-weight:700; margin-top:.1em}
 
   .route{display:flex; align-items:baseline; gap:2.5vw; flex-wrap:wrap; margin-top:1vmin}
-  .route .city{font-size:clamp(2rem,7vw,7rem); font-weight:800; line-height:1; color:#ffe6c2}
+  .route .city{font-size:clamp(2rem,7vw,7rem); font-weight:800; line-height:1; color:#dcebff}
   .route .code{font-size:clamp(1rem,2.6vw,2.4rem); color:var(--muted); font-weight:700}
   .route .arrow{font-size:clamp(2rem,6vw,6rem); color:var(--amber-dim); font-weight:400}
   .subcity{font-size:clamp(.95rem,2.4vw,1.9rem); color:var(--muted); font-weight:600; margin-top:.3em}
@@ -54,6 +54,46 @@
 
   .empty{font-size:clamp(2rem,7vw,6rem); font-weight:800; color:var(--amber-dim); text-align:center}
 
+  /* ---- animated night sky background ---- */
+  #sky{position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none}
+  #sky .glow{position:absolute; border-radius:50%; filter:blur(70px); opacity:.28;
+    animation:drift 30s ease-in-out infinite alternate}
+  #sky .g1{width:60vmax;height:60vmax; left:-18vmax; top:-24vmax; background:radial-gradient(circle,#123c78,transparent 65%)}
+  #sky .g2{width:48vmax;height:48vmax; right:-14vmax; bottom:-18vmax; background:radial-gradient(circle,#0a2a55,transparent 65%); animation-delay:-11s}
+  #sky .g3{width:32vmax;height:32vmax; left:38vw; top:58vh; background:radial-gradient(circle,#0e3c6e,transparent 60%); animation-delay:-20s; opacity:.18}
+  @keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(6vmax,3vmax,0) scale(1.12)}}
+  .star{position:absolute; border-radius:50%; background:#9ec4ff;
+    animation:twinkle var(--tw,4s) ease-in-out var(--td,0s) infinite}
+  @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.85}}
+
+  /* ---- flight-change transition ---- */
+  #flight.swap{animation:swapIn .8s cubic-bezier(.2,.7,.2,1)}
+  @keyframes swapIn{
+    from{opacity:0; transform:translateY(30px) scale(.98); filter:blur(8px)}
+    to{opacity:1; transform:none; filter:none}
+  }
+
+  /* ---- route progress arc ---- */
+  #arcSvg{width:100%; max-width:920px; height:auto; margin-top:1.6vmin; display:none; overflow:visible}
+  #arcSvg text{fill:var(--muted); font:700 30px -apple-system,system-ui,sans-serif; letter-spacing:2px}
+  #arcSvg .base{stroke:var(--faint); stroke-width:4; fill:none; stroke-dasharray:.012 .012}
+  #arcSvg .done{stroke:var(--amber-dim); stroke-width:5; fill:none;
+    filter:drop-shadow(0 0 6px rgba(90,150,255,.6)); transition:stroke-dasharray 1.2s ease}
+  #arcSvg .endpt{fill:var(--muted)}
+  #arcPlane{transition:transform 1.2s ease}
+  #arcPlane path{fill:#bcd9ff; filter:drop-shadow(0 0 8px rgba(120,180,255,.9))}
+
+  #flight{display:grid; grid-template-columns:1.5fr 1fr; gap:4vw; align-items:center}
+  .photo{margin:0; min-width:0}
+  .photo img{width:100%; max-height:56vh; object-fit:cover; border-radius:1.6vmin;
+    border:1px solid var(--faint); box-shadow:0 8px 40px rgba(60,130,255,.12); display:block}
+  .photo figcaption{margin-top:.5em; text-align:right}
+  .photo a{color:var(--muted); font-size:clamp(.7rem,1.6vw,1rem); text-decoration:none}
+  @media (max-width:760px), (orientation:portrait){
+    #flight{grid-template-columns:1fr; gap:3vmin}
+    .photo img{max-height:30vh}
+  }
+
   footer{padding:2vmin 5vw 3vmin; color:var(--faint); font-size:clamp(.8rem,2vw,1.2rem);
     display:flex; gap:1.5em}
   footer b{color:var(--muted)}
@@ -62,6 +102,10 @@
 </style>
 </head>
 <body>
+  <div id="sky">
+    <div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div>
+    <div id="stars"></div>
+  </div>
   <header>
     <span class="tag">✈ Nearest flight</span>
     <span class="clock" id="clock">—</span>
@@ -73,12 +117,26 @@
     <div class="empty pulse" id="loading">Scanning the sky…</div>
 
     <div id="flight" style="display:none">
-      <div class="dist" id="dist"></div>
-      <div class="airline" id="airline"></div>
-      <div class="flight" id="flightno"></div>
-      <div class="route" id="route"></div>
-      <div class="subcity" id="subcity"></div>
-      <div class="status" id="status"></div>
+      <div class="txt">
+        <div class="dist" id="dist"></div>
+        <div class="airline" id="airline"></div>
+        <div class="flight" id="flightno"></div>
+        <div class="route" id="route"></div>
+        <div class="subcity" id="subcity"></div>
+        <svg id="arcSvg" viewBox="0 0 1000 200" aria-hidden="true">
+          <path class="base" id="arcBase" pathLength="1" d=""/>
+          <path class="done" id="arcDone" pathLength="1" d=""/>
+          <circle class="endpt" id="arcO" r="7"/><circle class="endpt" id="arcD" r="7"/>
+          <text id="arcOLbl" text-anchor="start"></text>
+          <text id="arcDLbl" text-anchor="end"></text>
+          <g id="arcPlane"><path d="M0,-13 L3,-2 L13,3 L13,6 L2,4 L2,10 L6,13 L6,15 L0,13.5 L-6,15 L-6,13 L-2,10 L-2,4 L-13,6 L-13,3 L-3,-2 Z"/></g>
+        </svg>
+        <div class="status" id="status"></div>
+      </div>
+      <figure class="photo" id="photoWrap" style="display:none">
+        <img id="photo" alt="Photo of this aircraft" />
+        <figcaption><a id="photoCredit" target="_blank" rel="noopener"></a></figcaption>
+      </figure>
     </div>
   </main>
 
@@ -133,6 +191,87 @@ async function lookupRoute(callsign){
   }catch(e){ routeCache[callsign]={ t:Date.now(), v:null }; return null; }
 }
 
+/* ---- aircraft photo (planespotters.net public API, by ADS-B hex) ---- */
+const photoCache = (function(){ try{ return JSON.parse(localStorage.getItem("nightmode.photos")||"{}"); }catch(e){ return {}; } })();
+function savePhotoCache(){ try{ localStorage.setItem("nightmode.photos", JSON.stringify(photoCache)); }catch(e){} }
+async function lookupPhoto(hex){
+  if(!hex) return null;
+  const hit=photoCache[hex];
+  if(hit && Date.now()-hit.t < 864e5) return hit.v;            // cache 24h
+  let v=null;
+  try{
+    const d=await getJSON(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
+    const p=d && d.photos && d.photos[0];
+    if(p) v={ src:(p.thumbnail_large||p.thumbnail||{}).src||"", link:p.link||"", cred:p.photographer||"" };
+  }catch(e){}
+  photoCache[hex]={ t:Date.now(), v }; savePhotoCache();
+  return v;
+}
+/* ---- route progress arc (origin -> plane -> destination) ---- */
+const ARC={P0:[40,160], P1:[500,20], P2:[960,160]};
+function arcPoint(t){
+  const {P0,P1,P2}=ARC, u=1-t;
+  return [u*u*P0[0]+2*u*t*P1[0]+t*t*P2[0], u*u*P0[1]+2*u*t*P1[1]+t*t*P2[1]];
+}
+function arcAngle(t){
+  const {P0,P1,P2}=ARC;
+  const dx=2*(1-t)*(P1[0]-P0[0])+2*t*(P2[0]-P1[0]), dy=2*(1-t)*(P1[1]-P0[1])+2*t*(P2[1]-P1[1]);
+  return Math.atan2(dy,dx)*180/Math.PI;
+}
+let arcInit=false;
+function renderArc(route, a){
+  const svg=$("#arcSvg");
+  if(!(route && route.origin && route.destination
+      && typeof route.origin.latitude==="number" && typeof route.destination.latitude==="number")){
+    svg.style.display="none"; return;
+  }
+  if(!arcInit){
+    const d=`M ${ARC.P0} Q ${ARC.P1} ${ARC.P2}`;
+    $("#arcBase").setAttribute("d", d); $("#arcDone").setAttribute("d", d);
+    $("#arcO").setAttribute("cx",ARC.P0[0]); $("#arcO").setAttribute("cy",ARC.P0[1]);
+    $("#arcD").setAttribute("cx",ARC.P2[0]); $("#arcD").setAttribute("cy",ARC.P2[1]);
+    $("#arcOLbl").setAttribute("x",ARC.P0[0]-4); $("#arcOLbl").setAttribute("y",195);
+    $("#arcDLbl").setAttribute("x",ARC.P2[0]+4); $("#arcDLbl").setAttribute("y",195);
+    arcInit=true;
+  }
+  const o={lat:route.origin.latitude, lon:route.origin.longitude};
+  const d2={lat:route.destination.latitude, lon:route.destination.longitude};
+  const p={lat:a.lat, lon:a.lon};
+  const flown=haversineNm(o,p), left=haversineNm(p,d2);
+  const f=Math.min(.98, Math.max(.02, flown/(flown+left||1)));
+  $("#arcDone").style.strokeDasharray=`${f} 1`;
+  const [x,y]=arcPoint(f);
+  $("#arcPlane").style.transform=`translate(${x}px,${y}px) rotate(${arcAngle(f)+90}deg) scale(1.6)`;
+  $("#arcOLbl").textContent=route.origin.iata_code||"";
+  $("#arcDLbl").textContent=route.destination.iata_code||"";
+  svg.style.display="block";
+}
+
+/* twinkling stars */
+function makeStars(){
+  const holder=$("#stars"); if(!holder || holder.children.length) return;
+  for(let i=0;i<110;i++){
+    const s=document.createElement("div"); s.className="star";
+    const sz=Math.random()<.85?2:3;
+    s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;width:${sz}px;height:${sz}px;`+
+      `--tw:${(2.5+Math.random()*5).toFixed(1)}s;--td:${(-Math.random()*6).toFixed(1)}s;`;
+    holder.appendChild(s);
+  }
+}
+
+let photoShownFor=null;
+async function updatePhoto(hex){
+  const wrap=$("#photoWrap");
+  if(photoShownFor===hex) return;                              // same plane — keep photo
+  const v=await lookupPhoto(hex);
+  photoShownFor=hex;
+  if(v && v.src){
+    $("#photo").src=v.src;
+    const a=$("#photoCredit"); a.href=v.link||"#"; a.textContent=v.cred?`photo © ${v.cred} · planespotters.net`:"planespotters.net";
+    wrap.style.display="";
+  } else wrap.style.display="none";
+}
+
 /* pick the nearest airborne flight that has a resolvable airline route;
    fall back to the nearest airborne aircraft overall. */
 async function pickFlight(planes){
@@ -171,8 +310,13 @@ function render(pick){
     $("#flight").style.display="none"; return;
   }
   $("#loading").style.display="none";
-  $("#flight").style.display="";
+  const fl=$("#flight"); fl.style.display="";
   const {a, nm, route}=pick;
+  if(photoShownFor!==null && photoShownFor!==a.hex){   // a new plane became nearest
+    fl.classList.remove("swap"); void fl.offsetWidth; fl.classList.add("swap");
+  }
+  updatePhoto(a.hex);
+  renderArc(route, a);
   const dir=bearingFrom(loc,{lat:a.lat,lon:a.lon});
   $("#dist").textContent = `${nm.toFixed(1)} nm ${dir}${typeof a.alt_baro==="number"?` · ${a.alt_baro.toLocaleString()} ft`:""}`;
   $("#airline").textContent = airlineName(route, a);
@@ -250,6 +394,7 @@ function initFullscreen(){
 
 function boot(){
   initFullscreen();
+  makeStars();
   $("#radlbl").textContent = CFG.radiusNm+" nm";
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
