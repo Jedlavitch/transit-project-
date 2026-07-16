@@ -104,6 +104,12 @@
   #setup button{flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
     background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
   #setup button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
+  #setup .accent-lbl{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; margin-top:14px}
+  #setup .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:9px}
+  #setup .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
+  #setup .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.2)}
+  #setup .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a); position:relative; overflow:hidden}
+  #setup .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
 
   /* Narrower screens: stack map on top, cards fill the rest — still fits the
      screen with no page scroll (cards trim themselves to fit via fitList). */
@@ -201,6 +207,9 @@
     <p style="font-size:12px">Stored only in this browser (localStorage). Planes &amp; Amtrak work without it.</p>
 
     <p style="font-size:12px">MARC &amp; Ride On show <b>scheduled</b> times with no setup (built in) — MARC trains are placed on the map from their schedule.</p>
+
+    <div class="accent-lbl">Accent color</div>
+    <div class="swatches" id="accentSwatches"></div>
 
     <details style="margin-top:6px">
       <summary style="cursor:pointer;color:var(--accent);font-size:13px">Advanced: real-time MARC positions</summary>
@@ -1046,8 +1055,24 @@ document.addEventListener("keydown", e=>{
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
 onFsChange();   // set initial icon
 
+/* ---------- accent color customization ---------- */
+const ACCENTS=["#4ea1ff","#ffb454","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
+function setBoardAccent(hex){
+  document.documentElement.style.setProperty("--accent", hex);
+  localStorage.setItem("transitboard.accent", hex);
+  document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
+}
+function buildAccentSwatches(){
+  const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
+  ACCENTS.forEach(hex=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.style.background=hex; b.title=hex; b.onclick=()=>setBoardAccent(hex); wrap.appendChild(b); });
+  const c=document.createElement("label"); c.className="sw custom"; c.title="Custom color";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("transitboard.accent")||"#4ea1ff";
+  inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
+}
+
 /* ---------- boot ---------- */
 function boot(){
+  setBoardAccent(localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
   loadSavedLoc(); applyLoc(state.loc); initMap();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
