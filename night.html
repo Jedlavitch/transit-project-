@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#000000" />
+<meta name="theme-color" content="#010409" />
 <title>Night Mode — Nearest Flight</title>
 <style>
   :root{
-    --bg:#000; --amber:#ffb454; --amber-dim:#c98a3a; --muted:#6b5636; --faint:#3a2f1e;
-    --good:#5ad17a; --late:#ff6b5a;
+    --bg:#010409; --amber:#7db8ff; --amber-dim:#4a7fc4; --muted:#35567e; --faint:#16263c;
+    --good:#5ad1a0; --late:#ff6b5a;
   }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
@@ -38,7 +38,7 @@
   .flight{font-size:clamp(1.3rem,4vw,3.4rem); color:var(--amber-dim); font-weight:700; margin-top:.1em}
 
   .route{display:flex; align-items:baseline; gap:2.5vw; flex-wrap:wrap; margin-top:1vmin}
-  .route .city{font-size:clamp(2rem,7vw,7rem); font-weight:800; line-height:1; color:#ffe6c2}
+  .route .city{font-size:clamp(2rem,7vw,7rem); font-weight:800; line-height:1; color:#dcebff}
   .route .code{font-size:clamp(1rem,2.6vw,2.4rem); color:var(--muted); font-weight:700}
   .route .arrow{font-size:clamp(2rem,6vw,6rem); color:var(--amber-dim); font-weight:400}
   .subcity{font-size:clamp(.95rem,2.4vw,1.9rem); color:var(--muted); font-weight:600; margin-top:.3em}
@@ -53,6 +53,17 @@
   .status .badge.na{color:var(--muted); border:1px solid var(--faint)}
 
   .empty{font-size:clamp(2rem,7vw,6rem); font-weight:800; color:var(--amber-dim); text-align:center}
+
+  #flight{display:grid; grid-template-columns:1.5fr 1fr; gap:4vw; align-items:center}
+  .photo{margin:0; min-width:0}
+  .photo img{width:100%; max-height:56vh; object-fit:cover; border-radius:1.6vmin;
+    border:1px solid var(--faint); box-shadow:0 8px 40px rgba(60,130,255,.12); display:block}
+  .photo figcaption{margin-top:.5em; text-align:right}
+  .photo a{color:var(--muted); font-size:clamp(.7rem,1.6vw,1rem); text-decoration:none}
+  @media (max-width:760px), (orientation:portrait){
+    #flight{grid-template-columns:1fr; gap:3vmin}
+    .photo img{max-height:30vh}
+  }
 
   footer{padding:2vmin 5vw 3vmin; color:var(--faint); font-size:clamp(.8rem,2vw,1.2rem);
     display:flex; gap:1.5em}
@@ -73,12 +84,18 @@
     <div class="empty pulse" id="loading">Scanning the sky…</div>
 
     <div id="flight" style="display:none">
-      <div class="dist" id="dist"></div>
-      <div class="airline" id="airline"></div>
-      <div class="flight" id="flightno"></div>
-      <div class="route" id="route"></div>
-      <div class="subcity" id="subcity"></div>
-      <div class="status" id="status"></div>
+      <div class="txt">
+        <div class="dist" id="dist"></div>
+        <div class="airline" id="airline"></div>
+        <div class="flight" id="flightno"></div>
+        <div class="route" id="route"></div>
+        <div class="subcity" id="subcity"></div>
+        <div class="status" id="status"></div>
+      </div>
+      <figure class="photo" id="photoWrap" style="display:none">
+        <img id="photo" alt="Photo of this aircraft" />
+        <figcaption><a id="photoCredit" target="_blank" rel="noopener"></a></figcaption>
+      </figure>
     </div>
   </main>
 
@@ -133,6 +150,35 @@ async function lookupRoute(callsign){
   }catch(e){ routeCache[callsign]={ t:Date.now(), v:null }; return null; }
 }
 
+/* ---- aircraft photo (planespotters.net public API, by ADS-B hex) ---- */
+const photoCache = (function(){ try{ return JSON.parse(localStorage.getItem("nightmode.photos")||"{}"); }catch(e){ return {}; } })();
+function savePhotoCache(){ try{ localStorage.setItem("nightmode.photos", JSON.stringify(photoCache)); }catch(e){} }
+async function lookupPhoto(hex){
+  if(!hex) return null;
+  const hit=photoCache[hex];
+  if(hit && Date.now()-hit.t < 864e5) return hit.v;            // cache 24h
+  let v=null;
+  try{
+    const d=await getJSON(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
+    const p=d && d.photos && d.photos[0];
+    if(p) v={ src:(p.thumbnail_large||p.thumbnail||{}).src||"", link:p.link||"", cred:p.photographer||"" };
+  }catch(e){}
+  photoCache[hex]={ t:Date.now(), v }; savePhotoCache();
+  return v;
+}
+let photoShownFor=null;
+async function updatePhoto(hex){
+  const wrap=$("#photoWrap");
+  if(photoShownFor===hex) return;                              // same plane — keep photo
+  const v=await lookupPhoto(hex);
+  photoShownFor=hex;
+  if(v && v.src){
+    $("#photo").src=v.src;
+    const a=$("#photoCredit"); a.href=v.link||"#"; a.textContent=v.cred?`photo © ${v.cred} · planespotters.net`:"planespotters.net";
+    wrap.style.display="";
+  } else wrap.style.display="none";
+}
+
 /* pick the nearest airborne flight that has a resolvable airline route;
    fall back to the nearest airborne aircraft overall. */
 async function pickFlight(planes){
@@ -173,6 +219,7 @@ function render(pick){
   $("#loading").style.display="none";
   $("#flight").style.display="";
   const {a, nm, route}=pick;
+  updatePhoto(a.hex);
   const dir=bearingFrom(loc,{lat:a.lat,lon:a.lon});
   $("#dist").textContent = `${nm.toFixed(1)} nm ${dir}${typeof a.alt_baro==="number"?` · ${a.alt_baro.toLocaleString()} ft`:""}`;
   $("#airline").textContent = airlineName(route, a);
