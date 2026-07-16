@@ -8,7 +8,7 @@
 <style>
   :root{
     --bg:#010409; --amber:#7db8ff; --amber-dim:#4a7fc4; --muted:#35567e; --faint:#16263c;
-    --good:#5ad1a0; --late:#ff6b5a;
+    --city:#dcebff; --glow:#123c78; --good:#5ad1a0; --late:#ff6b5a;
   }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
@@ -30,21 +30,22 @@
     cursor:pointer; display:inline-flex; align-items:center; font-family:inherit}
   header a:hover, header button:hover{color:var(--amber-dim); border-color:var(--amber-dim)}
 
-  main{flex:1; display:flex; flex-direction:column; justify-content:center; gap:2.4vmin;
-    padding:2vmin 5vw; min-height:0}
+  main{flex:1; display:flex; flex-direction:column; justify-content:center; gap:1.2vmin;
+    padding:1.4vmin 5vw; min-height:0; overflow:hidden}
 
-  .dist{font-size:clamp(1rem,3vw,2.2rem); color:var(--amber-dim); font-weight:600}
-  .airline{font-size:clamp(2.4rem,8.5vw,8.5rem); font-weight:800; line-height:.98; color:var(--amber)}
-  .flight{font-size:clamp(1.3rem,4vw,3.4rem); color:var(--amber-dim); font-weight:700; margin-top:.1em}
+  /* sizes are height-aware (min of vw and vh) so the page always fits the screen */
+  .dist{font-size:clamp(.8rem,min(2.4vw,2.5vh),1.6rem); color:var(--amber-dim); font-weight:600}
+  .airline{font-size:clamp(1.7rem,min(7.4vw,8.8vh),5.4rem); font-weight:800; line-height:1; color:var(--amber)}
+  .flight{font-size:clamp(1rem,min(3.1vw,3.5vh),2.3rem); color:var(--amber-dim); font-weight:700; margin-top:.15em}
 
-  .route{display:flex; align-items:baseline; gap:2.5vw; flex-wrap:wrap; margin-top:1vmin}
-  .route .city{font-size:clamp(2rem,7vw,7rem); font-weight:800; line-height:1; color:#dcebff}
+  .route{display:flex; align-items:baseline; gap:2.5vw; flex-wrap:wrap; margin-top:.5vmin}
+  .route .city{font-size:clamp(1.4rem,min(6.4vw,7.8vh),4.9rem); font-weight:800; line-height:1; color:var(--city)}
   .route .code{font-size:clamp(1rem,2.6vw,2.4rem); color:var(--muted); font-weight:700}
-  .route .arrow{font-size:clamp(2rem,6vw,6rem); color:var(--amber-dim); font-weight:400}
-  .subcity{font-size:clamp(.95rem,2.4vw,1.9rem); color:var(--muted); font-weight:600; margin-top:.3em}
+  .route .arrow{font-size:clamp(1.3rem,min(5vw,6vh),3.8rem); color:var(--amber-dim); font-weight:400}
+  .subcity{font-size:clamp(.78rem,min(2.1vw,2.4vh),1.45rem); color:var(--muted); font-weight:600; margin-top:.3em}
 
-  .status{display:flex; align-items:center; gap:1.2em; flex-wrap:wrap; margin-top:2vmin;
-    font-size:clamp(1.2rem,3.4vw,3rem); font-weight:800}
+  .status{display:flex; align-items:center; gap:1em; flex-wrap:wrap; margin-top:1vmin;
+    font-size:clamp(1rem,min(3vw,3.3vh),2.2rem); font-weight:800}
   .status .phase{color:var(--amber)}
   .status .alt{color:var(--amber-dim); font-weight:700}
   .status .badge{padding:.12em .5em; border-radius:.3em; font-weight:800}
@@ -54,15 +55,21 @@
 
   .empty{font-size:clamp(2rem,7vw,6rem); font-weight:800; color:var(--amber-dim); text-align:center}
 
+  #fsHint{position:fixed; top:0; left:50%; transform:translate(-50%,-120%); z-index:80;
+    background:#0d1728; color:var(--city); border:1px solid var(--faint); border-radius:0 0 12px 12px;
+    padding:12px 20px; font-size:14px; max-width:90vw; text-align:center; transition:transform .35s ease;
+    box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  #fsHint.show{transform:translate(-50%,0)}
+
   /* ---- animated night sky background ---- */
   #sky{position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none}
   #sky .glow{position:absolute; border-radius:50%; filter:blur(70px); opacity:.28;
     animation:drift 30s ease-in-out infinite alternate}
-  #sky .g1{width:60vmax;height:60vmax; left:-18vmax; top:-24vmax; background:radial-gradient(circle,#123c78,transparent 65%)}
-  #sky .g2{width:48vmax;height:48vmax; right:-14vmax; bottom:-18vmax; background:radial-gradient(circle,#0a2a55,transparent 65%); animation-delay:-11s}
-  #sky .g3{width:32vmax;height:32vmax; left:38vw; top:58vh; background:radial-gradient(circle,#0e3c6e,transparent 60%); animation-delay:-20s; opacity:.18}
+  #sky .g1{width:60vmax;height:60vmax; left:-18vmax; top:-24vmax; background:radial-gradient(circle,var(--glow),transparent 65%)}
+  #sky .g2{width:48vmax;height:48vmax; right:-14vmax; bottom:-18vmax; background:radial-gradient(circle,var(--glow),transparent 65%); animation-delay:-11s; opacity:.2}
+  #sky .g3{width:32vmax;height:32vmax; left:38vw; top:58vh; background:radial-gradient(circle,var(--glow),transparent 60%); animation-delay:-20s; opacity:.16}
   @keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(6vmax,3vmax,0) scale(1.12)}}
-  .star{position:absolute; border-radius:50%; background:#9ec4ff;
+  .star{position:absolute; border-radius:50%; background:var(--city);
     animation:twinkle var(--tw,4s) ease-in-out var(--td,0s) infinite}
   @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.85}}
 
@@ -74,7 +81,7 @@
   }
 
   /* ---- route progress arc ---- */
-  #arcSvg{width:100%; max-width:920px; height:auto; margin-top:1.6vmin; display:none; overflow:visible}
+  #arcSvg{width:100%; max-width:920px; aspect-ratio:5/1; height:auto; max-height:15vh; margin-top:.6vmin; display:none; overflow:visible}
   #arcSvg text{fill:var(--muted); font:700 30px -apple-system,system-ui,sans-serif; letter-spacing:2px}
   #arcSvg .base{stroke:var(--faint); stroke-width:4; fill:none; stroke-dasharray:.012 .012}
   #arcSvg .done{stroke:var(--amber-dim); stroke-width:5; fill:none;
@@ -83,15 +90,42 @@
   #arcPlane{transition:transform 1.2s ease}
   #arcPlane path{fill:#bcd9ff; filter:drop-shadow(0 0 8px rgba(120,180,255,.9))}
 
-  #flight{display:grid; grid-template-columns:1.5fr 1fr; gap:4vw; align-items:center}
-  .photo{margin:0; min-width:0}
-  .photo img{width:100%; max-height:56vh; object-fit:cover; border-radius:1.6vmin;
+  /* ---- settings panel ---- */
+  #settings{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
+  #settings.show{display:flex}
+  #settings .panel{background:#0a1220; border:1px solid var(--faint); border-radius:18px;
+    padding:26px; max-width:460px; width:100%; box-shadow:0 20px 80px rgba(0,0,0,.6)}
+  #settings h3{color:var(--amber); font-size:20px; margin-bottom:4px}
+  #settings .lbl{color:var(--muted); font-size:13px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.15em; margin:20px 0 9px}
+  .seg{display:flex; gap:8px}
+  .seg button{flex:1; padding:14px 6px; border-radius:12px; border:1px solid var(--faint);
+    background:#0d1728; color:var(--muted); font-size:15px; font-weight:700; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:4px; font-family:inherit}
+  .seg button .ic{font-size:22px}
+  .seg button.active{border-color:var(--amber); color:var(--amber); background:rgba(125,184,255,.08)}
+  .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .sw{width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer;
+    padding:0; outline:none}
+  .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+  .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a);
+    position:relative; overflow:hidden}
+  .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
+  #settings .done{margin-top:24px; width:100%; padding:13px; border-radius:12px; border:none;
+    background:var(--amber); color:#06121f; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
+
+  #flight{display:grid; grid-template-columns:1.5fr 1fr; gap:4vw; align-items:center;
+    min-height:0; max-height:100%; width:100%}
+  #flight .txt{min-width:0}
+  .photo{margin:0; min-width:0; display:flex; flex-direction:column; min-height:0}
+  .photo img{width:100%; max-height:min(46vh,100%); object-fit:cover; border-radius:1.6vmin;
     border:1px solid var(--faint); box-shadow:0 8px 40px rgba(60,130,255,.12); display:block}
-  .photo figcaption{margin-top:.5em; text-align:right}
+  .photo figcaption{margin-top:.4em; text-align:right}
   .photo a{color:var(--muted); font-size:clamp(.7rem,1.6vw,1rem); text-decoration:none}
   @media (max-width:760px), (orientation:portrait){
-    #flight{grid-template-columns:1fr; gap:3vmin}
-    .photo img{max-height:30vh}
+    #flight{grid-template-columns:1fr; gap:2vmin}
+    .photo img{max-height:26vh}
   }
 
   footer{padding:2vmin 5vw 3vmin; color:var(--faint); font-size:clamp(.8rem,2vw,1.2rem);
@@ -107,11 +141,27 @@
     <div id="stars"></div>
   </div>
   <header>
-    <span class="tag">✈ Nearest flight</span>
+    <span class="tag" id="tag">✈ Nearest flight</span>
     <span class="clock" id="clock">—</span>
+    <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)"></button>
     <a href="index.html" title="Back to the board">‹ board</a>
   </header>
+
+  <div id="settings">
+    <div class="panel">
+      <h3>Customize night mode</h3>
+      <div class="lbl">Show the nearest…</div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="planes"><span class="ic">✈</span>Plane</button>
+        <button data-mode="trains"><span class="ic">🚆</span>Train</button>
+        <button data-mode="buses"><span class="ic">🚌</span>Bus</button>
+      </div>
+      <div class="lbl">Color</div>
+      <div class="swatches" id="swatches"></div>
+      <button class="done" id="setDone">Done</button>
+    </div>
+  </div>
 
   <main id="main">
     <div class="empty pulse" id="loading">Scanning the sky…</div>
@@ -141,7 +191,7 @@
   </main>
 
   <footer>
-    <span>overhead within <b id="radlbl">30 nm</b></span>
+    <span id="rangeLbl">aircraft within 30 nm</span>
     <span id="loclbl"></span>
     <span id="updated"></span>
   </footer>
@@ -219,12 +269,9 @@ function arcAngle(t){
   return Math.atan2(dy,dx)*180/Math.PI;
 }
 let arcInit=false;
-function renderArc(route, a){
+function renderArc(oLL, dLL, posLL, oCode, dCode){
   const svg=$("#arcSvg");
-  if(!(route && route.origin && route.destination
-      && typeof route.origin.latitude==="number" && typeof route.destination.latitude==="number")){
-    svg.style.display="none"; return;
-  }
+  if(!oLL || !dLL || !posLL){ svg.style.display="none"; return; }
   if(!arcInit){
     const d=`M ${ARC.P0} Q ${ARC.P1} ${ARC.P2}`;
     $("#arcBase").setAttribute("d", d); $("#arcDone").setAttribute("d", d);
@@ -234,16 +281,13 @@ function renderArc(route, a){
     $("#arcDLbl").setAttribute("x",ARC.P2[0]+4); $("#arcDLbl").setAttribute("y",195);
     arcInit=true;
   }
-  const o={lat:route.origin.latitude, lon:route.origin.longitude};
-  const d2={lat:route.destination.latitude, lon:route.destination.longitude};
-  const p={lat:a.lat, lon:a.lon};
-  const flown=haversineNm(o,p), left=haversineNm(p,d2);
+  const flown=haversineNm(oLL,posLL), left=haversineNm(posLL,dLL);
   const f=Math.min(.98, Math.max(.02, flown/(flown+left||1)));
   $("#arcDone").style.strokeDasharray=`${f} 1`;
   const [x,y]=arcPoint(f);
   $("#arcPlane").style.transform=`translate(${x}px,${y}px) rotate(${arcAngle(f)+90}deg) scale(1.6)`;
-  $("#arcOLbl").textContent=route.origin.iata_code||"";
-  $("#arcDLbl").textContent=route.destination.iata_code||"";
+  $("#arcOLbl").textContent=oCode||"";
+  $("#arcDLbl").textContent=dCode||"";
   svg.style.display="block";
 }
 
@@ -272,20 +316,93 @@ async function updatePhoto(hex){
   } else wrap.style.display="none";
 }
 
-/* pick the nearest airborne flight that has a resolvable airline route;
-   fall back to the nearest airborne aircraft overall. */
-async function pickFlight(planes){
-  const air=planes.filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
-    .map(a=>({a, nm: a.dst!=null? a.dst : haversineNm(loc,{lat:a.lat,lon:a.lon})}))
-    .sort((x,y)=>x.nm-y.nm);
+/* ===== subject producers: each returns a normalized subject or null ===== */
+let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses"].includes(m)?m:"planes"; })();
+const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:"🚌 Nearest bus" };
+const RANGE = { planes:"aircraft within 30 nm", trains:"Amtrak trains", buses:"Metrobus within 3 km" };
+
+/* ---- PLANES ---- */
+async function producePlane(){
+  const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
+  const air=(data.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
+    .map(a=>({a, nm: a.dst!=null? a.dst : haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
-  const airliners=air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,4);
-  for(const x of airliners){
+  let pick=null;
+  for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,4)){
     const route=await lookupRoute((x.a.flight||"").trim());
-    if(route && route.origin && route.destination) return { ...x, route };
+    if(route && route.origin && route.destination){ pick={...x, route}; break; }
   }
-  return { ...air[0], route:null };
+  if(!pick) pick={...air[0], route:null};
+  const {a, nm, route}=pick, spd=a.gs?Math.round(a.gs):null;
+  const oLL=route&&route.origin&&typeof route.origin.latitude==="number"?{lat:route.origin.latitude,lon:route.origin.longitude}:null;
+  const dLL=route&&route.destination&&typeof route.destination.latitude==="number"?{lat:route.destination.latitude,lon:route.destination.longitude}:null;
+  let eta=`<span class="badge na">en route</span>`;
+  if(dLL && a.gs>40){ const mins=Math.round(haversineNm({lat:a.lat,lon:a.lon},dLL)/a.gs*60);
+    if(mins>=0&&mins<600){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+      eta=mins<=1?`<span class="badge ok">landing now</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
+  return { id:"p"+a.hex, nm, unit:"nm", dir:bearingFrom(loc,{lat:a.lat,lon:a.lon}),
+    altText: typeof a.alt_baro==="number"?`${a.alt_baro.toLocaleString()} ft`:"",
+    title: airlineName(route,a), sub:[(a.flight||"").trim(), a.desc||a.t].filter(Boolean).join("  ·  "),
+    oCity: route?(route.origin.municipality||route.origin.iata_code):null,
+    dCity: route?(route.destination.municipality||route.destination.iata_code):null,
+    subline: route?`${route.origin.iata_code||""} ${route.origin.name||""}  →  ${route.destination.iata_code||""} ${route.destination.name||""}`.trim():(a.ownOp||"General aviation — no scheduled route"),
+    oLL, dLL, posLL:{lat:a.lat,lon:a.lon}, oCode:route?route.origin.iata_code:"", dCode:route?route.destination.iata_code:"",
+    statusHtml:`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")+eta, photoHex:a.hex };
 }
+
+/* ---- TRAINS (Amtrak) ---- */
+let amStations=null;
+async function ensureAmStations(){
+  if(amStations) return amStations;
+  try{ const d=await getJSON("https://api-v3.amtraker.com/v3/stations",12000); const m={};
+    for(const c in d){ const s=d[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }catch(e){ amStations={}; }
+  return amStations;
+}
+async function produceTrain(){
+  const data=await getJSON("https://api-v3.amtraker.com/v3/trains",12000), st=await ensureAmStations(), list=[];
+  for(const arr of Object.values(data)) for(const t of (arr||[])){
+    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+    if(t.trainState && t.trainState!=="Active") continue;
+    list.push({t, mi: haversineNm(loc,{lat:t.lat,lon:t.lon})*1.15078});
+  }
+  list.sort((x,y)=>x.mi-y.mi);
+  if(!list.length) return null;
+  const {t, mi}=list[0];
+  const oLL=st[t.origCode]?{lat:st[t.origCode][0],lon:st[t.origCode][1]}:null;
+  const dLL=st[t.destCode]?{lat:st[t.destCode][0],lon:st[t.destCode][1]}:null;
+  let eta="";
+  if(dLL && t.velocity>20){ const mins=Math.round(haversineNm({lat:t.lat,lon:t.lon},dLL)*1.15078/t.velocity*60);
+    if(mins>=0&&mins<900){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+      eta=mins<=1?`<span class="badge ok">arriving</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
+  const late=(t.trainTimely||"").trim();
+  return { id:"t"+(t.trainID||t.trainNum), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:t.lat,lon:t.lon}),
+    altText:`${Math.round(t.velocity||0)} mph`, title:t.routeName||"Amtrak",
+    sub:`Train ${t.trainNum} · Amtrak${late?"  ·  "+late:""}`,
+    oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
+    subline:`${t.origCode||""} ${t.origName||""}  →  ${t.destCode||""} ${t.destName||""}`.trim(),
+    oLL, dLL, posLL:{lat:t.lat,lon:t.lon}, oCode:t.origCode||"", dCode:t.destCode||"",
+    statusHtml:`<span class="phase">en route</span>`+eta, photoHex:null };
+}
+
+/* ---- BUSES (WMATA Metrobus; uses the board's saved key) ---- */
+async function produceBus(){
+  const key=localStorage.getItem("transitboard.wmataKey")||"";
+  if(!key) return {needKey:true};
+  const data=await getJSON(`https://api.wmata.com/Bus.svc/json/jBusPositions?Lat=${loc.lat}&Lon=${loc.lon}&Radius=3000&api_key=${encodeURIComponent(key)}`);
+  const buses=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null)
+    .map(v=>({v, nm:haversineNm(loc,{lat:v.Lat,lon:v.Lon})})).sort((a,b)=>a.nm-b.nm);
+  if(!buses.length) return null;
+  const {v, nm}=buses[0], dev=v.Deviation;
+  let devHtml = dev==null?`<span class="badge na">in service</span>`
+    : dev>1?`<span class="badge late">${dev} min late</span>`
+    : dev<-1?`<span class="badge ok">${-dev} min early</span>`:`<span class="badge ok">on time</span>`;
+  return { id:"b"+(v.VehicleID||v.RouteID), nm, unit:"nm", dir:bearingFrom(loc,{lat:v.Lat,lon:v.Lon}),
+    altText:"", title:`Route ${v.RouteID}`, sub:"Metrobus",
+    oCity:null, dCity:v.TripHeadsign||v.DirectionText||"", subline:v.DirectionText||"",
+    oLL:null, dLL:null, posLL:null, oCode:"", dCode:"",
+    statusHtml:`<span class="phase">in service</span>`+devHtml, photoHex:null };
+}
+const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus };
 
 function phaseOf(a){
   const alt=typeof a.alt_baro==="number"?a.alt_baro:null, rate=a.baro_rate||0;
@@ -303,66 +420,81 @@ function airlineName(route, a){
   return cs || a.r || "Unknown aircraft";
 }
 
-function render(pick){
+let lastId=null;
+function render(s){
   $("#updated").textContent = "updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-  if(!pick){
-    $("#loading").style.display=""; $("#loading").textContent="No aircraft overhead"; $("#loading").classList.remove("pulse");
-    $("#flight").style.display="none"; return;
+  const L=$("#loading");
+  if(s && s.needKey){
+    $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
+    L.textContent="Add a WMATA key on the board to track buses"; renderArc(); return;
   }
-  $("#loading").style.display="none";
+  if(!s){
+    $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
+    L.textContent = mode==="planes"?"No aircraft overhead":mode==="trains"?"No trains nearby":"No buses nearby";
+    return;
+  }
+  L.style.display="none";
   const fl=$("#flight"); fl.style.display="";
-  const {a, nm, route}=pick;
-  if(photoShownFor!==null && photoShownFor!==a.hex){   // a new plane became nearest
-    fl.classList.remove("swap"); void fl.offsetWidth; fl.classList.add("swap");
-  }
-  updatePhoto(a.hex);
-  renderArc(route, a);
-  const dir=bearingFrom(loc,{lat:a.lat,lon:a.lon});
-  $("#dist").textContent = `${nm.toFixed(1)} nm ${dir}${typeof a.alt_baro==="number"?` · ${a.alt_baro.toLocaleString()} ft`:""}`;
-  $("#airline").textContent = airlineName(route, a);
-  const cs=(a.flight||"").trim();
-  $("#flightno").textContent = [cs, a.desc||a.t].filter(Boolean).join("  ·  ");
-
-  const routeEl=$("#route"), subEl=$("#subcity");
-  if(route && route.origin && route.destination){
-    const o=route.origin, d=route.destination;
-    routeEl.innerHTML =
-      `<span class="city">${escapeHtml(o.municipality||o.iata_code||"?")}</span>`+
-      `<span class="arrow">→</span>`+
-      `<span class="city">${escapeHtml(d.municipality||d.iata_code||"?")}</span>`;
-    subEl.textContent = `${o.iata_code||""} ${o.name||""}  →  ${d.iata_code||""} ${d.name||""}`.trim();
-    routeEl.style.display=""; subEl.style.display="";
-  } else {
-    routeEl.style.display="none";
-    subEl.textContent = a.ownOp ? a.ownOp : "General aviation — no scheduled route";
-    subEl.style.display="";
-  }
-
-  // Status: live flight phase + estimated arrival (distance to destination ÷ ground speed).
-  // This is a live estimate, not an airline's official on-time/late (that needs a paid API).
-  const spd = a.gs ? `${Math.round(a.gs)} kt` : "";
-  let etaHtml = `<span class="badge na">en route</span>`;
-  if(route && route.destination && typeof route.destination.latitude==="number" && a.gs>40){
-    const dNm=haversineNm({lat:a.lat,lon:a.lon},{lat:route.destination.latitude,lon:route.destination.longitude});
-    const mins=Math.round(dNm/a.gs*60);
-    if(mins>=0 && mins<24*60){
-      const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-      etaHtml = mins<=1 ? `<span class="badge ok">landing now</span>`
-        : `<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`;
-    }
-  }
-  $("#status").innerHTML =
-    `<span class="phase">${phaseOf(a)}</span>`+
-    (spd?`<span class="alt">${spd}</span>`:"")+ etaHtml;
+  if(lastId!==null && lastId!==s.id){ fl.classList.remove("swap"); void fl.offsetWidth; fl.classList.add("swap"); }
+  lastId=s.id;
+  if(s.photoHex) updatePhoto(s.photoHex);
+  else { $("#photoWrap").style.display="none"; photoShownFor=null; }
+  renderArc(s.oLL, s.dLL, s.posLL, s.oCode, s.dCode);
+  $("#dist").textContent = `${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`;
+  $("#airline").textContent = s.title;
+  $("#flightno").textContent = s.sub;
+  const routeEl=$("#route");
+  if(s.dCity){
+    routeEl.innerHTML = (s.oCity?`<span class="city">${escapeHtml(s.oCity)}</span><span class="arrow">→</span>`:`<span class="arrow">→</span>`)
+      + `<span class="city">${escapeHtml(s.dCity)}</span>`;
+    routeEl.style.display="";
+  } else routeEl.style.display="none";
+  const subEl=$("#subcity"); subEl.textContent=s.subline||""; subEl.style.display=s.subline?"":"none";
+  $("#status").innerHTML = s.statusHtml;
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 async function tick(){
-  try{
-    const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
-    const pick=await pickFlight(data.ac||[]);
-    render(pick);
-  }catch(e){ /* keep last render */ }
+  const fn=PRODUCERS[mode]; if(!fn) return;
+  try{ render(await fn()); }catch(e){ /* keep last render */ }
+}
+
+/* ---- theme (color) + mode selection + settings panel ---- */
+const PRESETS=[["#7db8ff","Blue"],["#ffb454","Amber"],["#3ad0c8","Teal"],["#5ad17a","Green"],["#b39dff","Violet"],["#ff8fab","Rose"]];
+function hexToRgb(h){ h=(h||"").replace("#",""); if(h.length===3)h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function rgbStr(a){ return "rgb("+a.map(v=>Math.max(0,Math.min(255,Math.round(v)))).join(",")+")"; }
+function setTheme(hex){
+  const a=hexToRgb(hex), R=document.documentElement.style, sc=(f)=>a.map(v=>v*f), mw=(t)=>a.map(v=>v+(255-v)*t);
+  R.setProperty("--amber",rgbStr(a)); R.setProperty("--amber-dim",rgbStr(sc(.62)));
+  R.setProperty("--muted",rgbStr(sc(.42))); R.setProperty("--faint",rgbStr(sc(.20)));
+  R.setProperty("--city",rgbStr(mw(.72))); R.setProperty("--glow",rgbStr(sc(.34)));
+  R.setProperty("--bg",rgbStr(sc(.035)));
+  localStorage.setItem("nightmode.accent", hex);
+  const mt=document.querySelector('meta[name="theme-color"]'); if(mt) mt.setAttribute("content", rgbStr(sc(.035)));
+  document.querySelectorAll("#swatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
+}
+function buildSwatches(){
+  const wrap=$("#swatches"); wrap.innerHTML="";
+  PRESETS.forEach(([hex,name])=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.title=name; b.style.background=hex; b.onclick=()=>setTheme(hex); wrap.appendChild(b); });
+  const custom=document.createElement("label"); custom.className="sw custom"; custom.title="Custom color";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("nightmode.accent")||"#7db8ff";
+  inp.oninput=()=>setTheme(inp.value); custom.appendChild(inp); wrap.appendChild(custom);
+}
+function setMode(m){
+  mode=m; localStorage.setItem("nightmode.subject", m);
+  $("#tag").textContent=TAGS[m]; $("#rangeLbl").textContent=RANGE[m];
+  document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.mode===m));
+  lastId=null; photoShownFor=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
+  const L=$("#loading"); L.style.display=""; L.classList.add("pulse");
+  L.textContent = m==="planes"?"Scanning the sky…":m==="trains"?"Finding trains…":"Finding buses…";
+  tick();
+}
+function initSettings(){
+  buildSwatches();
+  $("#setBtn").onclick=()=>$("#settings").classList.add("show");
+  $("#setDone").onclick=()=>$("#settings").classList.remove("show");
+  $("#settings").addEventListener("click",e=>{ if(e.target.id==="settings") $("#settings").classList.remove("show"); });
+  $("#modeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setMode(b.dataset.mode); });
 }
 function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
 
@@ -375,8 +507,18 @@ async function releaseWake(){ try{ if(wakeLock) await wakeLock.release(); }catch
 function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
 function toggleFullscreen(){
   const el=document.documentElement;
-  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }
-  else { const req=el.requestFullscreen||el.webkitRequestFullscreen; if(req){ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); } }
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  const req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!req){ hintFS(); return; }
+  try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>hintFS()); }catch(e){ hintFS(); }
+}
+let hintTimer=null;
+function hintFS(){
+  let t=$("#fsHint");
+  if(!t){ t=document.createElement("div"); t.id="fsHint"; document.body.appendChild(t); }
+  t.textContent="Full screen is blocked here. Open this page in its own browser tab (or your deployed link) to go full screen.";
+  t.style.transform="translate(-50%,0)"; clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>{ t.style.transform="translate(-50%,-120%)"; }, 4500);
 }
 function onFsChange(){
   const on=!!fsElement(), b=$("#fsBtn");
@@ -394,11 +536,12 @@ function initFullscreen(){
 
 function boot(){
   initFullscreen();
+  setTheme(localStorage.getItem("nightmode.accent")||"#7db8ff");
+  initSettings();
   makeStars();
-  $("#radlbl").textContent = CFG.radiusNm+" nm";
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
-  tick(); setInterval(tick, CFG.refreshMs);
+  setMode(mode); setInterval(tick, CFG.refreshMs);
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(p=>{
       loc={ lat:p.coords.latitude, lon:p.coords.longitude, label:"your location" };
