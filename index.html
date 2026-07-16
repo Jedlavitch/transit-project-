@@ -200,13 +200,13 @@
     <input id="keyInput" type="text" placeholder="Paste WMATA Primary key…" autocomplete="off" spellcheck="false" />
     <p style="font-size:12px">Stored only in this browser (localStorage). Planes &amp; Amtrak work without it.</p>
 
+    <p style="font-size:12px">MARC &amp; Ride On show <b>scheduled</b> times with no setup (built in) — MARC trains are placed on the map from their schedule.</p>
+
     <details style="margin-top:6px">
-      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional extras: live MARC map, Ride On schedule</summary>
-      <p style="margin-top:10px"><b>MARC schedule works with no setup</b> (built in). Only if you also want live MARC
-        <b>trains moving on the map</b>, paste a free Cloudflare Worker URL (see <code>marc-worker.js</code> / README):</p>
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Advanced: real-time MARC positions</summary>
+      <p style="margin-top:10px">MARC on the map is <b>scheduled</b> by default (no setup). Only if you want the exact <b>live</b>
+        positions, paste a free Cloudflare Worker URL (see <code>marc-worker.js</code> / README):</p>
       <input id="marcInput" type="text" placeholder="https://marc.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
-      <p><b>Ride On scheduled times</b> — paste a free <a href="https://www.transit.land/documentation#api-keys" target="_blank" rel="noopener">Transitland API key</a> (live Ride On isn't public, schedule only):</p>
-      <input id="tlInput" type="text" placeholder="Transitland API key…" autocomplete="off" spellcheck="false" />
     </details>
 
     <div class="btns">
@@ -316,7 +316,7 @@ function requestGeo(){
       applyLoc(loc);
       if(state.map) state.map.setView([loc.lat,loc.lon], 12);
       state.busStops=[]; // force re-scan of nearby stops
-      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); fetchMarc(); refreshMarc(); fetchRideOn();
+      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn();
     },
     _err => {/* keep default */},
     { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
@@ -836,12 +836,16 @@ function drawMarc(veh){
 /* MARC card from the bundled GTFS schedule (marc-schedule.json) — no key,
    no Worker, no proxy. Shows the next scheduled trains at nearby stations. */
 function marcYmd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
-function marcHM(t){ const p=t.split(":"); return (+p[0])*60+(+p[1]||0); }
-function marcClock(t){ let [h,m]=t.split(":").map(Number); h=h%24; const ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
+function marcClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
 function marcStationName(n){ return (n||"").replace(/\bMARC\b/ig,"").replace(/\b(eb|wb|nb|sb)\b/ig,"").replace(/\s+/g," ").trim(); }
 async function ensureMarcSchedule(){
   if(state.marcSched) return state.marcSched;
-  try{ state.marcSched=await getJSON("marc-schedule.json", 15000); }catch(e){}
+  try{ const s=await getJSON("marc-schedule.json", 15000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
+    s._dep={};                                                                          // stop_id -> departures (for the card)
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    state.marcSched=s;
+  }catch(e){}
   return state.marcSched;
 }
 function marcActiveServices(s, date){
@@ -860,7 +864,7 @@ async function refreshMarc(){
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(used>=2) break;
-    const deps=(s.dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:marcHM(d.t)}))
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
     if(!deps.length) continue;
     used++;
@@ -883,58 +887,82 @@ async function refreshMarc(){
   $("#marcCount").textContent="scheduled";
   fitList(box);
 }
-
-/* ---------- RIDE ON (scheduled only, via Transitland) ---------- */
-function fmtClock(t){
-  if(!t) return "—";
-  if(/^\d{1,2}:\d{2}/.test(t)){ let [h,m]=t.split(":"); h=((+h)%24); const ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${m} ${ap}`; }
-  const d=new Date(t); return isNaN(d)?t:d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+/* Place MARC trains on the map by interpolating each running trip's position
+   between the two stations its schedule puts it between right now. */
+async function drawMarcScheduledMap(){
+  const s=await ensureMarcSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){                 // also catch after-midnight trips
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      items.push({ id:"ms"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(MARC_COL[tr.line]||"#e8792b", `${tr.line} → ${marcStationName(tr.hs)}`),
+        ik:"ms-"+tr.line+"-"+i, tip:`MARC ${tr.line} → ${tr.hs} (scheduled)` });
+      break;
+    }
+  });
+  updateFleet("marc", items, CFG.marcEveryMs);
 }
-async function fetchRideOn(){
-  if(!state.tlKey){ return; }
-  const base="https://transit.land/api/v2/rest", key=encodeURIComponent(state.tlKey);
-  let stopsData;
-  try{ stopsData=await getJSON(`${base}/stops?lat=${state.loc.lat}&lon=${state.loc.lon}&radius=${CFG.rideonRadius}&feed_onestop_id=${CFG.tlFeed}&limit=${CFG.rideonStops}&apikey=${key}`); }
-  catch(e){ rideonMsg("Transitland error — check your API key."); return; }
-  const stops=(stopsData.stops||[]);
-  if(!stops.length){ rideonMsg("No Ride On stops within range."); $("#rideonCount").textContent=""; return; }
-  const box=$("#rideonList"); box.innerHTML=""; let any=false;
-  for(const s of stops){
-    let dep;
-    try{ dep=await getJSON(`${base}/stops/${encodeURIComponent(s.onestop_id)}/departures?limit=6&apikey=${key}`); }
-    catch(e){ continue; }
-    const stopObj=(dep.stops&&dep.stops[0])||{};
-    const departures=(stopObj.departures||[]);
-    if(!departures.length) continue;
-    any=true;
-    box.appendChild(el("div","stop-label","◼ "+(s.stop_name||s.onestop_id)));
-    departures.slice(0,5).forEach(d=>{
-      const route=(d.trip&&d.trip.route)||{};
-      const rt=route.route_short_name||route.route_long_name||"?";
-      const schIso=(d.departure&&(d.departure.scheduled||d.departure.scheduled_utc))||d.departure_time||"";
-      const estIso=(d.departure&&(d.departure.estimated||d.departure.estimated_utc))||"";
+// MARC on the map: live via the optional Worker if configured, else scheduled interpolation.
+function marcMapTick(){ if(state.marcUrl) fetchMarc(); else drawMarcScheduledMap(); }
+
+/* ---------- RIDE ON (scheduled — bundled nearby timetable, no key/Worker) ----------
+   Ride On has no public real-time feed, so this shows the next scheduled
+   departures at your nearest stops from a trimmed copy of its GTFS. */
+async function ensureRideOnSchedule(){
+  if(state.roSched) return state.roSched;
+  try{ const s=await getJSON("rideon-schedule.json", 15000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    state.roSched=s;
+  }catch(e){}
+  return state.roSched;
+}
+async function refreshRideOn(){
+  const s=await ensureRideOnSchedule(); const box=$("#rideonList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Ride On schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);                 // same calendar logic (svc/exc)
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(used>=2) break;
+    const deps=(s.dep[st.id]||[])
+      .filter(d=>active.has(s.svcList[d[2]]))
+      .map(d=>({rt:s.routes[d[0]], min:d[1]}))
+      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+(st.name||st.id)+`  ·  ${mi.toFixed(1)} mi`));
+    deps.forEach(d=>{
       const row=el("div","row");
-      const b=el("div","badge", rt); b.style.background="#3b527d";
+      const b=el("div","badge", d.rt); b.style.background="#3b527d";
       const mid=el("div");
-      mid.appendChild(el("div","dest", (d.trip&&d.trip.trip_headsign)||route.route_long_name||"—"));
-      mid.appendChild(el("div","sub", estIso?"live estimate":"scheduled"));
+      mid.appendChild(el("div","dest", "Route "+d.rt));
+      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+      mid.appendChild(el("div","sub", "Ride On · "+relTxt));
       const times=el("div","times");
-      if(estIso){ times.appendChild(el("div","live", fmtClock(estIso))); }
-      const s2=el("div","sched"); s2.innerHTML=`sched <b>${fmtClock(schIso)}</b>`; times.appendChild(s2);
+      const t=el("div","live"); t.style.color="#8ab4ff"; t.textContent=marcClock(d.min);
+      times.append(t, el("div","sched","scheduled"));
       row.append(b, mid, el("div"), times);
-      box.appendChild(row);
+      box.appendChild(row); shown++;
     });
   }
-  if(!any) rideonMsg("No upcoming scheduled Ride On departures.");
-  $("#rideonCount").textContent = `${stops.length} stops nearby`;
+  if(!shown) box.appendChild(el("div","empty","No more Ride On trips today at nearby stops."));
+  $("#rideonCount").textContent="scheduled";
   fitList(box);
 }
-function rideonMsg(m){ const box=$("#rideonList"); box.innerHTML=""; box.appendChild(el("div","empty",m)); }
 
 /* show/hide the optional cards based on whether their source is configured */
 function applyOptionalCards(){
-  document.getElementById("marcCard").style.display   = "flex";           // schedule works with zero setup
-  document.getElementById("rideonCard").style.display = state.tlKey   ? "flex" : "none";
+  document.getElementById("marcCard").style.display   = "flex";   // bundled schedule — zero setup
+  document.getElementById("rideonCard").style.display = "flex";   // bundled schedule — zero setup
 }
 
 /* ---------- refresh orchestration ---------- */
@@ -960,7 +988,6 @@ async function refreshPlanes(){
 function openSetup(){
   $("#keyInput").value=state.wmataKey;
   $("#marcInput").value=state.marcUrl;
-  $("#tlInput").value=state.tlKey;
   $("#setup").classList.add("show"); $("#keyInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
@@ -968,13 +995,11 @@ $("#settingsBtn").onclick=openSetup;
 $("#saveKey").onclick=()=>{
   state.wmataKey=$("#keyInput").value.trim();
   state.marcUrl =$("#marcInput").value.trim().replace(/\/+$/,"");
-  state.tlKey   =$("#tlInput").value.trim();
   localStorage.setItem(LS.key, state.wmataKey);
   localStorage.setItem(LS.marc, state.marcUrl);
-  localStorage.setItem(LS.tlkey, state.tlKey);
   closeSetup(); applyOptionalCards();
   state.busStops=[]; refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); refreshPlanes();
 };
 $("#skipKey").onclick=()=>{ closeSetup(); };
 $("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
@@ -1032,15 +1057,15 @@ function boot(){
   applyOptionalCards();
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshTransit(); refreshPlanes(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); fetchMarc(); refreshMarc(); fetchRideOn();
+  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn();
   setInterval(refreshTransit, CFG.transitEveryMs);
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(fetchBusPositions, CFG.busPosEveryMs);
   setInterval(fetchMetroTrains, CFG.metroEveryMs);
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
-  setInterval(fetchMarc, CFG.marcEveryMs);
-  setInterval(refreshMarc, 30000);       // recompute next scheduled MARC trains
-  setInterval(fetchRideOn, CFG.rideonEveryMs);
+  setInterval(marcMapTick, CFG.marcEveryMs);   // MARC positions on the map (live or scheduled)
+  setInterval(refreshMarc, 30000);             // recompute next scheduled MARC trains (card)
+  setInterval(refreshRideOn, 60000);           // recompute next scheduled Ride On (card)
   setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
   // re-fit cards to the new layout when the window/display changes size
@@ -1049,7 +1074,7 @@ function boot(){
     fitAll();                              // instant: never clip/scroll while shrinking
     clearTimeout(rzT); rzT=setTimeout(()=>{ // then reload data to refill rows if we grew
       if(state.map) state.map.invalidateSize();
-      refreshTransit(); fetchAmtrak(); fetchMarc(); fetchRideOn(); refreshPlanes();
+      refreshTransit(); fetchAmtrak(); refreshMarc(); refreshRideOn(); refreshPlanes();
     }, 350);
   });
 
