@@ -12,7 +12,8 @@ location" — open whichever one matches where you are:
 
 - **`index.html`** — Bethesda / DC area: Metrorail, Metrobus, MARC, Ride On (routes 23 & 29), Amtrak, planes.
 - **`philadelphia.html`** — Philadelphia: SEPTA Regional Rail, SEPTA Subway (Market-Frankford + Broad
-  Street Line), PATCO, Amtrak, planes. (No Metro/MARC/Ride On — those are DC-specific.)
+  Street Line), SEPTA Bus (routes 3, 4 & 16 — Cecil B. Moore Ave and North Broad St near Temple
+  University), PATCO, Amtrak, planes. (No Metro/MARC/Ride On — those are DC-specific.)
 
 Both pages have their own **"Location"** setting (type any address, city, or zip — see below) and
 their own saved settings (independent `localStorage` namespaces), so switching between them, or
@@ -26,6 +27,7 @@ to jump to the other one, plus **"🌙 Night"** (shared night mode — see below
 - **🚌 Ride On** *(Bethesda board;* routes **23** and **29** — edit `ROUTES` in `gen-rideon-schedule.py` to track others) — next **scheduled** departures at nearby stops **and buses placed on the map**, interpolated from a bundled copy of Ride On's own timetable. **Zero setup — no key, no Worker.** Ride On is Montgomery County's own bus system (a *different* agency from WMATA Metrobus above) and publishes **no public real-time feed at all** — only a private, key-gated API the county doesn't hand out — so scheduled interpolation is the honest best available to anyone.
 - **🚆 SEPTA Regional Rail** *(Philadelphia board)* — next **scheduled** trains at nearby stations across **all 13 lines**, **and** trains placed on the map (interpolated from the schedule). **Zero setup — no key, no Worker.** *(Optional: exact real-time Regional Rail + live SEPTA buses/trolleys via the free Worker below.)*
 - **🚇 SEPTA Subway** *(Philadelphia board)* — next scheduled trains **and** trains on the map for the **Market-Frankford Line** and **Broad Street Line**, the two rapid-transit spines useful regardless of exactly where in Philly you live. **Zero setup — no key, no Worker.** (Surface trolleys aren't bundled yet — add specific ones once you know your school/dorm; see `gen-septa-subway-schedule.py`.)
+- **🚌 SEPTA Bus** *(Philadelphia board;* routes **3**, **4** & **16** — Cecil B. Moore Ave and North Broad St near Temple University) — next scheduled buses **and** buses placed on the map, plus route lines. **Zero setup — no key, no Worker.** SEPTA's full bus network is huge (~20MB, hundreds of routes) so only these are bundled; edit `ROUTES` in `gen-septa-bus-schedule.py` to track others. *(Optional: exact live positions for these routes, or live system-wide buses/trolleys, via the free Worker below.)*
 - **🚆 PATCO** *(Philadelphia board;* Philadelphia ↔ Camden, NJ) — next scheduled trains **and** trains on the map for the whole high-speed line (all 14 stations). **Zero setup — no key, no Worker** (PATCO doesn't publish a real-time API at all, so scheduled is the only option for anyone).
 - **🚄 Amtrak** *(both boards)* — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
 - **✈️ Planes overhead** *(both boards)* — live ADS-B aircraft within ~12 nm (altitude, airline, speed, climbing/descending), plotted on a live map
@@ -45,6 +47,7 @@ Everything works with **zero setup except the WMATA key** (Bethesda board only, 
 | Ride On | bundled `rideon-schedule.json` (Montgomery County GTFS) | ❌ none | Free |
 | SEPTA Regional Rail | bundled `septa-rail-schedule.json` (SEPTA GTFS) | ❌ none | Free |
 | SEPTA Subway (MFL/BSL) | bundled `septa-subway-schedule.json` (SEPTA GTFS) | ❌ none | Free |
+| SEPTA Bus (3/4/16) | bundled `septa-bus-schedule.json` (SEPTA GTFS) | ❌ none | Free |
 | PATCO | bundled `patco-schedule.json` (PATCO GTFS via National RTAP) | ❌ none | Free |
 | Planes | [airplanes.live](https://airplanes.live) | ❌ none | Free |
 | Address search | [Nominatim](https://nominatim.openstreetmap.org) (OpenStreetMap) | ❌ none | Free |
@@ -81,7 +84,8 @@ python3 -m http.server 4173
 1. Create a new GitHub repo (e.g. `bethesda-transit`).
 2. Upload `index.html`, `philadelphia.html`, and `night.html`, plus the bundled `*.json` schedule
    files (`marc-schedule.json`, `rideon-schedule.json`, `septa-rail-schedule.json`,
-   `septa-subway-schedule.json`, `patco-schedule.json`) — everything the boards read at runtime.
+   `septa-subway-schedule.json`, `septa-bus-schedule.json`, `patco-schedule.json`) — everything the
+   boards read at runtime.
 3. Repo **Settings → Pages → Build and deployment → Source: Deploy from a branch → `main` / `root`**.
 4. Wait ~1 minute. Your boards are live forever at:
    `https://<your-username>.github.io/bethesda-transit/` (Bethesda)
@@ -106,8 +110,8 @@ anyone who clicks the link opens the live board in their browser.
 - Metrorail predictions are live estimates (the Metro runs on frequencies, so trains don't have a
   fixed per-train published timetable the way buses do — buses show both live and scheduled).
 - If trains/buses stay empty, re-check the WMATA key in ⚙︎ (the status bar will say "transit stale").
-## MARC, Ride On, SEPTA (Regional Rail + Subway) & PATCO — built in, no setup
-All five work out of the box from bundled copies of their published GTFS timetables, using the same
+## MARC, Ride On, SEPTA (Regional Rail + Subway + Bus) & PATCO — built in, no setup
+All six work out of the box from bundled copies of their published GTFS timetables, using the same
 trick: since none of them publish a real-time feed a browser can read, each running trip's position is
 **interpolated between stops using its scheduled time** — good enough to glide realistically on the
 map and show genuinely accurate next-departure times.
@@ -127,6 +131,11 @@ map and show genuinely accurate next-departure times.
   `gen-septa-subway-schedule.py` (currently **L1** Market-Frankford Line + **B1/B2/B3** Broad Street
   Line — the two rapid-transit spines useful regardless of exactly where in Philly you live). Add
   specific surface trolley route IDs there once you know your school/dorm.
+- **`septa-bus-schedule.json`** → the SEPTA Bus card **and** buses + route lines on the map. Same
+  ~20MB-GTFS problem as the subway, so filtered to `ROUTES` inside `gen-septa-bus-schedule.py`
+  (currently **3**, **4**, **16** — determined by directly querying SEPTA's GTFS for which routes
+  actually run *along* Cecil B. Moore Ave and North Broad St near Temple, not just cross them once).
+  Add more route numbers there once you know other routes you actually ride.
 - **`patco-schedule.json`** → the PATCO card **and** trains on the map. PATCO (Philadelphia↔Camden, NJ)
   is a single small line (14 stations, ~525 trips) with no real-time API at all, so it's bundled whole.
 
@@ -137,12 +146,13 @@ python3 gen-marc-schedule.py         # re-downloads MARC's GTFS -> marc-schedule
 python3 gen-rideon-schedule.py       # re-downloads Ride On's GTFS -> rideon-schedule.json
 python3 gen-septa-rail-schedule.py   # re-downloads SEPTA's GTFS -> septa-rail-schedule.json
 python3 gen-septa-subway-schedule.py # re-downloads SEPTA's GTFS -> septa-subway-schedule.json
+python3 gen-septa-bus-schedule.py    # re-downloads SEPTA's GTFS -> septa-bus-schedule.json
 python3 gen-patco-schedule.py        # re-downloads PATCO's GTFS -> patco-schedule.json
 ```
 
 ## Optional: exact real-time MARC / SEPTA positions (free, ~5 min each)
-MARC and SEPTA Regional Rail are *scheduled* on the map by default. For the exact **live** positions
-instead — and, for SEPTA, live **buses/trolleys** too (no schedule fallback exists for those yet) — a
+MARC, SEPTA Regional Rail, and SEPTA Bus (3/4/16) are all *scheduled* on the map by default. For exact
+**live** positions instead — and, for SEPTA, live buses/trolleys **system-wide** (not just 3/4/16) — a
 browser can't call their live feeds directly (MARC: protobuf on S3, no CORS; SEPTA: plain JSON but
 also no CORS), so two tiny [Cloudflare Worker](https://workers.cloudflare.com)s read them server-side
 and re-serve the data with CORS added: **`marc-worker.js`** and **`septa-worker.js`**.
