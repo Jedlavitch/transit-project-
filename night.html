@@ -145,7 +145,7 @@
     <span class="clock" id="clock">—</span>
     <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)"></button>
-    <a href="index.html" title="Back to the board" onclick="window.location.href='index.html'; return false;">‹ board</a>
+    <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
   </header>
 
   <div id="settings">
@@ -212,12 +212,32 @@
 
 <script>
 "use strict";
+/* Night mode is shared by both boards. Which one opened it comes in via
+   ?city=bethesda|philly (each board's "🌙 Night" link sets this) so night
+   mode can use that board's own saved location (same localStorage key the
+   board itself reads/writes) instead of a hardcoded Bethesda default —
+   this is what used to make Philadelphia's night mode show DC stuff. */
+const CITY = new URLSearchParams(location.search).get("city")==="philly" ? "philly" : "bethesda";
+const CITY_CONFIG = {
+  bethesda: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
+    lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
+    busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29" },
+  philly: { defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
+    lsLoc:"transitboardphl.loc", lsManual:"transitboardphl.locManual", board:"philadelphia.html",
+    busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16" },
+};
+const CITY_CFG = CITY_CONFIG[CITY];
 const CFG = {
-  defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
+  defaultLoc: CITY_CFG.defaultLoc,
   radiusNm: 30,
   refreshMs: 12000,
 };
-let loc = CFG.defaultLoc;
+function loadBoardLoc(){
+  try{ const s=JSON.parse(localStorage.getItem(CITY_CFG.lsLoc)); if(s&&s.lat) return s; }catch(e){}
+  return null;
+}
+function boardLocIsManual(){ return localStorage.getItem(CITY_CFG.lsManual)==="1"; }
+let loc = loadBoardLoc() || CFG.defaultLoc;
 const routeCache = loadRouteCache();
 
 const $ = s=>document.querySelector(s);
@@ -334,8 +354,8 @@ async function updatePhoto(hex){
 
 /* ===== subject producers: each returns a normalized subject or null ===== */
 let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses"].includes(m)?m:"planes"; })();
-const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:"🚌 Nearest Ride On bus" };
-const RANGE = { planes:"aircraft within 30 nm", trains:"Amtrak trains", buses:"Ride On routes 23 & 29" };
+const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:CITY_CFG.busTag };
+const RANGE = { planes:"aircraft within 30 nm", trains:"Amtrak trains", buses:CITY_CFG.busRange };
 
 /* ---- PLANES ---- */
 async function producePlane(){
@@ -400,18 +420,18 @@ async function produceTrain(){
     statusHtml:`<span class="phase">en route</span>`+eta, photoHex:null };
 }
 
-/* ---- BUSES (WMATA Metrobus; uses the board's saved key) ---- */
-/* ---- BUSES (Ride On routes 23 & 29 — bundled schedule, same as the main board) ----
-   Ride On publishes no public real-time feed, so — like MARC on the board —
-   this places the nearest bus by interpolating its scheduled trip between
-   stops. Reads the same rideon-schedule.json bundle. */
-let roSchedNight=null;
+/* ---- BUSES (city-appropriate bundled schedule) ----
+   Bethesda -> Ride On routes 23 & 29; Philadelphia -> SEPTA Bus routes 3, 4
+   & 16. Neither publishes a public real-time feed, so -- like MARC on the
+   board -- this places the nearest bus by interpolating its scheduled trip
+   between stops. Reads whichever bundle matches CITY_CFG.busSchedule. */
+let roSchedNight=null, roSchedNightFile=null;
 async function ensureRideOnScheduleNight(){
-  if(roSchedNight) return roSchedNight;
+  if(roSchedNight && roSchedNightFile===CITY_CFG.busSchedule) return roSchedNight;
   try{
-    const s=await getJSON("rideon-schedule.json", 15000);
+    const s=await getJSON(CITY_CFG.busSchedule, 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
-    roSchedNight=s;
+    roSchedNight=s; roSchedNightFile=CITY_CFG.busSchedule;
   }catch(e){}
   return roSchedNight;
 }
@@ -426,6 +446,7 @@ function roActiveServices(s, date){
 async function produceBus(){
   const s=await ensureRideOnScheduleNight();
   if(!s) return null;
+  const busSystem = CITY==="philly" ? "SEPTA" : "Ride On";
   const now=new Date(), active=roActiveServices(s, now);
   let best=null;
   s.trips.forEach((tr,i)=>{
@@ -447,9 +468,9 @@ async function produceBus(){
   if(!best) return null;
   const { tr, lat, lon, nm, first, last } = best;
   return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}),
-    altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · Ride On`,
+    altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · ${busSystem}`,
     oCity: first?first[2]:null, dCity: last?last[2]:tr.hs,
-    subline:"scheduled position (Ride On has no public live feed)",
+    subline:`scheduled position (${busSystem} has no public live feed)`,
     oLL: first?{lat:first[0],lon:first[1]}:null, dLL: last?{lat:last[0],lon:last[1]}:null,
     posLL:{lat,lon}, oCode:"", dCode:"",
     statusHtml:`<span class="phase">in service</span><span class="badge na">scheduled</span>`, photoHex:null };
@@ -591,10 +612,15 @@ function boot(){
   setTheme(localStorage.getItem("nightmode.accent")||"#7db8ff");
   initSettings();
   makeStars();
+  $("#boardBtn").setAttribute("href", CITY_CFG.board);
+  $("#boardBtn").title = CITY==="philly" ? "Back to the Philadelphia board" : "Back to the Bethesda board";
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
   setMode(mode); setInterval(tick, CFG.refreshMs);
-  if(navigator.geolocation){
+  // Only fall back to GPS if the board itself would (i.e. you haven't set a
+  // manual address there) -- otherwise this would silently override the
+  // address you typed into the board with your device's raw location.
+  if(navigator.geolocation && !boardLocIsManual()){
     navigator.geolocation.getCurrentPosition(p=>{
       loc={ lat:p.coords.latitude, lon:p.coords.longitude, label:"your location" };
       $("#loclbl").textContent="near your location"; tick();

@@ -9,23 +9,33 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   :root{
-    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942;
+    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942; --bg-glow:#16203a;
     --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a;
     --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
+    --row-bg:#0d1424; --row-line:#172038; --sched-b:#aab6d8; --scrim:rgba(6,9,16,.86);
     /* WMATA line colors */
     --RD:#BF0D3E; --BL:#009CDE; --YL:#FFD100; --OR:#ED8B00; --GR:#00B140; --SV:#919D9D;
+  }
+  :root[data-theme="black"]{
+    --bg:#000000; --panel:#0a0a0a; --panel2:#000000; --line:#1c1c1c; --bg-glow:#0e0e0e;
+    --text:#f2f2f2; --muted:#8a8a8a; --row-bg:#080808; --row-line:#1a1a1a; --sched-b:#c7c7c7;
+  }
+  :root[data-theme="day"]{
+    --bg:#eef1f8; --panel:#ffffff; --panel2:#f3f5fb; --line:#dde2ee; --bg-glow:#e2e8f7;
+    --text:#161b2e; --muted:#5b6478; --row-bg:#ffffff; --row-line:#e3e7f2; --sched-b:#3d475f;
+    --scrim:rgba(180,190,215,.55);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:radial-gradient(1200px 800px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    background:radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
     color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
   #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
   header{
     display:flex; align-items:center; gap:16px; padding:14px 22px;
-    border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1626,#0b0f1a);
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--panel2),var(--bg));
   }
   header .title{font-size:20px; font-weight:800; letter-spacing:.3px}
   header .title small{color:var(--muted); font-weight:600; margin-left:8px}
@@ -49,6 +59,7 @@
     border:1px solid var(--line); border-radius:14px; padding:11px 13px;
     display:flex; flex-direction:column; min-height:0; overflow:hidden;
   }
+  .card.user-hidden{display:none !important}
   .card h2{margin:0 0 7px; font-size:13px; letter-spacing:.4px; text-transform:uppercase;
     color:var(--muted); display:flex; align-items:center; gap:8px}
   .card h2 .icon{font-size:17px}
@@ -57,7 +68,7 @@
 
   .row{
     display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
-    padding:7px 9px; border-radius:10px; background:#0d1424; border:1px solid #172038;
+    padding:7px 9px; border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
   }
   .row .badge{
     min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
@@ -71,14 +82,15 @@
   .row .live.brd{color:#fff; background:var(--good); padding:1px 7px; border-radius:6px; font-size:13px}
   .row .live.arr{color:#08101f; background:var(--warn); padding:1px 7px; border-radius:6px; font-size:13px}
   .row .sched{font-size:11px; color:var(--sched)}
-  .row .sched b{color:#aab6d8}
+  .row .sched b{color:var(--sched-b)}
   .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
+  .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
   .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
 
-  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:#0d1424}
-  .leaflet-container{background:#0d1424}
+  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
+  .leaflet-container{background:var(--row-bg)}
   .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
   .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
   .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
@@ -90,7 +102,7 @@
   footer .grow{flex:1}
 
   /* Setup overlay */
-  #setup{position:fixed; inset:0; background:rgba(6,9,16,.86); backdrop-filter:blur(6px);
+  #setup{position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(6px);
     display:none; align-items:center; justify-content:center; z-index:9999; padding:20px}
   #setup.show{display:flex}
   #setup .box{background:var(--panel); border:1px solid var(--line); border-radius:18px;
@@ -99,7 +111,7 @@
   #setup p{color:var(--muted); font-size:13px; line-height:1.5; margin:8px 0}
   #setup a{color:var(--accent)}
   #setup input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
-    background:#0d1424; color:var(--text); font-size:14px; margin-top:6px}
+    background:var(--row-bg); color:var(--text); font-size:14px; margin-top:6px}
   #setup .btns{display:flex; gap:10px; margin-top:16px}
   #setup button{flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
     background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
@@ -116,6 +128,13 @@
   #setup .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
   #setup .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.2)}
   #setup .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a); position:relative; overflow:hidden}
+  #setup .theme-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:9px}
+  #setup .theme-btn{flex:1; min-width:70px; padding:9px 6px; border-radius:10px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font-size:12px; font-weight:700; cursor:pointer}
+  #setup .theme-btn.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  #setup .card-toggle{flex:1; min-width:120px; display:flex; align-items:center; gap:7px; padding:8px 10px;
+    border-radius:10px; border:1px solid var(--line); background:var(--row-bg); font-size:12.5px; cursor:pointer}
+  #setup .card-toggle input{margin:0; cursor:pointer}
   #setup .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
 
   /* Narrower screens: stack map on top, cards fill the rest — still fits the
@@ -141,7 +160,7 @@
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
     <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">🎓 Philly</a>
-    <a id="nightBtn" href="night.html" title="Night mode — nearest flight" onclick="window.location.href='night.html'; return false;">🌙 Night</a>
+    <a id="nightBtn" href="night.html?city=bethesda" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=bethesda'; return false;">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
@@ -169,15 +188,15 @@
 
     <div class="col">
       <div class="cards">
-        <div class="card">
+        <div class="card" id="railCard">
           <h2><span class="icon">🚆</span> Trains — Metrorail <span class="count" id="railCount"></span></h2>
           <div class="list" id="railList"><div class="empty">Loading trains…</div></div>
         </div>
-        <div class="card">
+        <div class="card" id="busCard">
           <h2><span class="icon">🚌</span> Buses — Metrobus <span class="count" id="busCount"></span></h2>
           <div class="list" id="busList"><div class="empty">Loading buses…</div></div>
         </div>
-        <div class="card">
+        <div class="card" id="amtrakCard">
           <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
           <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
         </div>
@@ -189,7 +208,7 @@
           <h2><span class="icon">🚌</span> Ride On — 23 &amp; 29 <span class="count" id="rideonCount"></span></h2>
           <div class="list" id="rideonList"><div class="empty">Loading Ride On schedule…</div></div>
         </div>
-        <div class="card">
+        <div class="card" id="planeCard">
           <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>
@@ -230,8 +249,18 @@
 
     <p style="font-size:12px">MARC &amp; Ride On show <b>scheduled</b> times with no setup (built in) — MARC trains are placed on the map from their schedule.</p>
 
+    <div class="accent-lbl">Theme</div>
+    <div class="theme-row" id="themeRow">
+      <button type="button" class="theme-btn" data-theme="dark">Dark</button>
+      <button type="button" class="theme-btn" data-theme="black">Black</button>
+      <button type="button" class="theme-btn" data-theme="day">Day</button>
+    </div>
+
     <div class="accent-lbl">Accent color</div>
     <div class="swatches" id="accentSwatches"></div>
+
+    <div class="accent-lbl">Show on board</div>
+    <div class="theme-row" id="cardToggles"></div>
 
     <details style="margin-top:6px">
       <summary style="cursor:pointer;color:var(--accent);font-size:13px">Advanced: real-time MARC positions</summary>
@@ -409,7 +438,8 @@ function initMap(){
   state.trainLayer  = L.layerGroup().addTo(state.map);
   state.metroLayer  = L.layerGroup().addTo(state.map);
   state.planeLayer  = L.layerGroup().addTo(state.map);
-  L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:1,weight:2}).addTo(state.map);
+  const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
+  L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
   state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
   state.map.on("zoomend", updateLabelVisibility);
 
@@ -575,6 +605,19 @@ function renderRail(trains){
   fitList(box);
 }
 function railKey(m){ return m==="BRD"?-2 : m==="ARR"?-1 : (parseInt(m,10)||99); }
+/* Group a stop's upcoming scheduled departures by headsign so a bundled-
+   schedule card (MARC, Ride On, SEPTA, PATCO) can show both directions'
+   timetables separately instead of one merged, hard-to-scan list. Returns
+   up to maxDirs direction-groups, each an array of up to perDir departures,
+   soonest direction first. */
+function groupDepsByDirection(deps, perDir=2, maxDirs=2){
+  const groups=new Map();
+  deps.forEach(d=>{ const key=d.hs||"—"; if(!groups.has(key)) groups.set(key, []); groups.get(key).push(d); });
+  return [...groups.values()]
+    .map(list=>list.sort((a,b)=>a.min-b.min).slice(0,perDir))
+    .sort((a,b)=>a[0].min-b[0].min)
+    .slice(0,maxDirs);
+}
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
 function fitList(box){
   if(!box || box.clientHeight < 8) return;    // skip only when not laid out yet (height ~0)
@@ -860,13 +903,28 @@ async function fetchAmtrak(){
   state.lastAmtrakOk=Date.now();
   renderAmtrak(out); drawAmtrak(out); drawAmtrakRoutes(out, amSt);
 }
-function drawAmtrakRoutes(list, amSt){
+// Real curved track geometry (from Amtrak's own GTFS shapes.txt, bundled by
+// gen-amtrak-routes.py) keyed by a normalized route name, so drawn routes
+// follow the actual corridor instead of straight-lining between stations.
+function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"").trim(); }
+async function ensureAmtrakRouteShapes(){
+  if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
+  try{
+    const data=await getJSON("amtrak-routes.json", 15000);
+    const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
+    state.amtrakRouteShapes=map;
+  }catch(e){ state.amtrakRouteShapes={}; }
+  return state.amtrakRouteShapes;
+}
+async function drawAmtrakRoutes(list, amSt){
   if(!state.amtrakRouteLayer) return;
+  const shapes=await ensureAmtrakRouteShapes();
   state.amtrakRouteLayer.clearLayers();
   list.forEach(({t})=>{
-    const pts=(t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
+    const shape=shapes[normAmtrakName(t.routeName)];
+    const pts=shape || (t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
     if(pts.length>1) L.polyline(pts, {color:"#3ad0c8", weight:2.5, opacity:.35,
-      lineCap:"round", lineJoin:"round", dashArray:"1 6"}).addTo(state.amtrakRouteLayer);
+      lineCap:"round", lineJoin:"round", dashArray: shape?null:"1 6"}).addTo(state.amtrakRouteLayer);
   });
 }
 function renderAmtrak(list){
@@ -953,22 +1011,25 @@ async function refreshMarc(){
   for(const {st,mi} of near){
     if(used>=2) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+      .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+marcStationName(st.name)+`  ·  ${mi.toFixed(1)} mi`));
-    deps.forEach(d=>{
-      const row=el("div","row");
-      const b=el("div","badge rail", d.line.slice(0,4)); b.style.background=MARC_COL[d.line]||"#e8792b";
-      const mid=el("div");
-      mid.appendChild(el("div","dest", marcStationName(d.hs)||(d.line+" Line")));
-      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", d.line+" Line · "+relTxt));
-      const times=el("div","times");
-      const t=el("div","live"); t.style.color="#e8a34a"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
-      row.append(b, mid, el("div"), times);
-      box.appendChild(row); shown++;
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(marcStationName(group[0].hs)||(group[0].line+" Line"))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail", d.line.slice(0,4)); b.style.background=MARC_COL[d.line]||"#e8792b";
+        const mid=el("div");
+        mid.appendChild(el("div","dest", marcStationName(d.hs)||(d.line+" Line")));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", d.line+" Line · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#e8a34a"; t.textContent=marcClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more MARC trains today at nearby stations."));
@@ -1030,22 +1091,25 @@ async function refreshRideOn(){
   for(const {st,mi} of near){
     if(used>=3) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+      .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+(st.name||st.id)+`  ·  ${mi.toFixed(1)} mi`));
-    deps.forEach(d=>{
-      const row=el("div","row");
-      const b=el("div","badge", d.line); b.style.background=RIDEON_COL[d.line]||"#3b527d";
-      const mid=el("div");
-      mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
-      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
-      const times=el("div","times");
-      const t=el("div","live"); t.style.color="#8ab4ff"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
-      row.append(b, mid, el("div"), times);
-      box.appendChild(row); shown++;
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||("Route "+group[0].line))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge", d.line); b.style.background=RIDEON_COL[d.line]||"#3b527d";
+        const mid=el("div");
+        mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#8ab4ff"; t.textContent=marcClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more Ride On trips today at nearby stops."));
@@ -1182,9 +1246,50 @@ function buildAccentSwatches(){
   inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
 }
 
+/* ---------- theme (dark / black / day) ---------- */
+function setBoardTheme(mode){
+  document.documentElement.setAttribute("data-theme", mode);
+  localStorage.setItem("transitboard.theme", mode);
+  document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
+}
+function buildThemeButtons(){
+  document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
+}
+
+/* ---------- customize: which cards show on the board ---------- */
+const CARD_DEFS=[
+  {id:"railCard", label:"Metrorail"}, {id:"busCard", label:"Metrobus"},
+  {id:"amtrakCard", label:"Amtrak"}, {id:"marcCard", label:"MARC"},
+  {id:"rideonCard", label:"Ride On"}, {id:"planeCard", label:"Planes"},
+];
+function loadHiddenCards(){
+  try{ return new Set(JSON.parse(localStorage.getItem("transitboard.hiddenCards")||"[]")); }catch(e){ return new Set(); }
+}
+function applyCardVis(){
+  const hidden=loadHiddenCards();
+  CARD_DEFS.forEach(({id})=>{ const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id)); });
+}
+function buildCardToggles(){
+  const wrap=document.getElementById("cardToggles"); if(!wrap) return; wrap.innerHTML="";
+  const hidden=loadHiddenCards();
+  CARD_DEFS.forEach(({id,label})=>{
+    const lab=document.createElement("label"); lab.className="card-toggle";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!hidden.has(id);
+    cb.onchange=()=>{
+      const h=loadHiddenCards();
+      if(cb.checked) h.delete(id); else h.add(id);
+      localStorage.setItem("transitboard.hiddenCards", JSON.stringify([...h]));
+      applyCardVis();
+    };
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(label)); wrap.appendChild(lab);
+  });
+}
+
 /* ---------- boot ---------- */
 function boot(){
   setBoardAccent(localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
+  setBoardTheme(localStorage.getItem("transitboard.theme")||"dark"); buildThemeButtons();
+  buildCardToggles(); applyCardVis();
   loadSavedLoc(); applyLoc(state.loc); initMap();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
