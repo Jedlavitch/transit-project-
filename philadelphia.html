@@ -1188,6 +1188,7 @@ async function ensureSeptaRailSchedule(){
   return state.septaSched;
 }
 async function refreshSeptaRail(){
+  if(state.septaUrl) return;   // the live Worker owns this card once configured
   const s=await ensureSeptaRailSchedule(); const box=$("#septaRailList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA Regional Rail schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
@@ -1224,6 +1225,7 @@ async function refreshSeptaRail(){
   fitList(box);
 }
 async function drawSeptaRailScheduledMap(){
+  if(state.septaUrl) return;   // the live Worker owns train positions once configured
   const s=await ensureSeptaRailSchedule(); if(!s || !s.trips) return;
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
@@ -1332,12 +1334,32 @@ async function fetchSeptaLive(){
   const here=state.loc, base=state.septaUrl;
   try{
     const data=await getJSON(`${base}/trainview`, 12000);
-    const items=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon).map(t=>({
+    const trains=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon)
+      .map(t=>({ t, mi: kmToMi(haversine(here,{lat:+t.lat,lon:+t.lon})) }))
+      .sort((a,b)=>a.mi-b.mi);
+    const items=trains.map(({t})=>({
       id:"slt"+t.trainno, lat:+t.lat, lon:+t.lon,
       icon:()=>labelIcon(SEPTA_COL, `${t.line||"?"} → ${t.dest||"?"}`), ik:"slt-"+t.trainno,
       tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${t.late?` · ${t.late} min late`:""} (live)`
     }));
     updateFleet("septaRail", items, CFG.septaEveryMs);
+    $("#septaRailCount").textContent = trains.length ? `${trains.length} nearby` : "";
+    const box=$("#septaRailList");
+    if(box){
+      box.innerHTML="";
+      if(!trains.length) box.appendChild(el("div","empty","No SEPTA Regional Rail trains running right now."));
+      trains.slice(0,10).forEach(({t,mi})=>{
+        const row=el("div","row");
+        const bd=el("div","badge rail", (t.line||"?").slice(0,4)); bd.style.background=SEPTA_COL;
+        const mid=el("div");
+        mid.appendChild(el("div","dest", t.dest||"—"));
+        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}${t.late?` · ${t.late} min late`:""}`));
+        const times=el("div","times"); times.appendChild(el("div","live","live"));
+        row.append(bd, mid, el("div"), times);
+        box.appendChild(row);
+      });
+      fitList(box);
+    }
   }catch(e){}
   try{
     const data=await getJSON(`${base}/transitview`, 12000);
