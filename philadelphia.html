@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0f1a" />
-<title>Bethesda Live Transit Board</title>
+<title>Philadelphia Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
@@ -37,9 +37,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
-  header #nightBtn, header #phillyBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+  header #nightBtn, header #homeBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
     border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
-  header #nightBtn:hover, header #phillyBtn:hover{border-color:var(--accent)}
+  header #nightBtn:hover, header #homeBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -139,8 +139,8 @@
 <body>
 <div id="app">
   <header>
-    <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
-    <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board">🎓 Philly</a>
+    <div class="title">🔔 Philadelphia Live Transit <small id="loclabel">locating…</small></div>
+    <a id="homeBtn" href="index.html" title="Bethesda board">🏠 Bethesda</a>
     <a id="nightBtn" href="night.html" title="Night mode — nearest flight">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
@@ -156,16 +156,10 @@
       <div class="legend">
         <span>✈️ aircraft</span>
         <span>🚆 Amtrak</span>
-        <span style="color:#e8792b">▦ MARC</span>
-        <span><span style="color:#2f9e44">▦</span> Ride On 23 <span style="color:#1c7ed6">▦</span> 29</span>
         <span style="color:#4F758B">▦ SEPTA rail</span>
         <span><span style="color:#1c6bb0">▦</span> SEPTA MFL <span style="color:#f7941d">▦</span> BSL</span>
         <span style="color:#e8a33c">▦ SEPTA bus</span>
         <span style="color:#BC0035">▦ PATCO</span>
-        <span>🔵 live Metrobus</span>
-        <span>◉ Metro train</span>
-        <span>🔴 Metro station</span>
-        <span>━ Metro lines</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
         <span style="opacity:.7">vehicles move live · zoom in for labels</span>
       </div>
@@ -174,24 +168,8 @@
     <div class="col">
       <div class="cards">
         <div class="card">
-          <h2><span class="icon">🚆</span> Trains — Metrorail <span class="count" id="railCount"></span></h2>
-          <div class="list" id="railList"><div class="empty">Loading trains…</div></div>
-        </div>
-        <div class="card">
-          <h2><span class="icon">🚌</span> Buses — Metrobus <span class="count" id="busCount"></span></h2>
-          <div class="list" id="busList"><div class="empty">Loading buses…</div></div>
-        </div>
-        <div class="card">
           <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
           <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
-        </div>
-        <div class="card" id="marcCard" style="display:none">
-          <h2><span class="icon">🚆</span> MARC — commuter rail <span class="count" id="marcCount"></span></h2>
-          <div class="list" id="marcList"><div class="empty">Loading MARC schedule…</div></div>
-        </div>
-        <div class="card" id="rideonCard" style="display:none">
-          <h2><span class="icon">🚌</span> Ride On — 23 &amp; 29 <span class="count" id="rideonCount"></span></h2>
-          <div class="list" id="rideonList"><div class="empty">Loading Ride On schedule…</div></div>
         </div>
         <div class="card" id="septaRailCard" style="display:none">
           <h2><span class="icon">🚆</span> SEPTA Regional Rail <span class="count" id="septaRailCount"></span></h2>
@@ -219,7 +197,7 @@
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">starting…</span>
+    <span id="statusText">live — SEPTA/PATCO/Amtrak + airplanes.live</span>
     <span class="grow"></span>
     <span id="refreshInfo">next refresh in —</span>
   </footer>
@@ -231,8 +209,8 @@
 
     <div class="section-lbl">Location</div>
     <p style="font-size:12px">This board tracks trains, buses, and planes <b>near one location</b> —
-      <b id="curLocLbl">Bethesda, MD 20816</b> by default. Type any address, city, or zip to move it there instead.
-      Metro/MARC/Ride On only cover the DC–Maryland area, but Amtrak and planes work anywhere in the US.</p>
+      <b id="curLocLbl">Temple University, Philadelphia</b> by default. Type any address, city, or zip to move it there instead.
+      SEPTA/PATCO only cover the Philadelphia area, but Amtrak and planes work anywhere in the US.</p>
     <div class="addr-row">
       <input id="addrInput" type="text" placeholder="Address, city, or zip…" autocomplete="off" spellcheck="false" />
       <button id="addrSetBtn" type="button">Set</button>
@@ -240,37 +218,22 @@
     <div id="addrStatus"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
-    <div class="section-lbl">One-time setup — WMATA API key</div>
-    <p>Train &amp; bus times come from WMATA (Washington Metro). It's <b>free</b>: create an account, then subscribe to the <b>“Default Tier”</b> product and copy your <b>Primary key</b>.</p>
-    <p>→ <a href="https://developer.wmata.com/signup" target="_blank" rel="noopener">developer.wmata.com/signup</a>, then
-       <a href="https://developer.wmata.com/products" target="_blank" rel="noopener">subscribe to Default Tier</a>,
-       then <a href="https://developer.wmata.com/profile" target="_blank" rel="noopener">copy your key here</a>.</p>
-    <input id="keyInput" type="text" placeholder="Paste WMATA Primary key…" autocomplete="off" spellcheck="false" />
-    <p style="font-size:12px">Stored only in this browser (localStorage). Planes &amp; Amtrak work without it.</p>
-
-    <p style="font-size:12px">MARC &amp; Ride On show <b>scheduled</b> times with no setup (built in) — MARC trains are placed on the map from their schedule.</p>
+    <p style="font-size:12px">SEPTA Regional Rail, SEPTA Subway (Market-Frankford + Broad Street Line), and PATCO all show
+      <b>scheduled</b> times with no setup (built in) — trains are placed on the map from their schedule.</p>
 
     <div class="accent-lbl">Accent color</div>
     <div class="swatches" id="accentSwatches"></div>
 
     <details style="margin-top:6px">
-      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Advanced: real-time MARC positions</summary>
-      <p style="margin-top:10px">MARC on the map is <b>scheduled</b> by default (no setup). Only if you want the exact <b>live</b>
-        positions, paste a free Cloudflare Worker URL (see <code>marc-worker.js</code> / README):</p>
-      <input id="marcInput" type="text" placeholder="https://marc.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
-    </details>
-
-    <details style="margin-top:6px">
-      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Philadelphia: SEPTA</summary>
-      <p style="margin-top:10px">SEPTA <b>Regional Rail</b> works with no setup (bundled schedule, shown when you're near Philly).
-        For exact <b>live</b> Regional Rail positions <i>and</i> live buses/trolleys, paste a free Cloudflare Worker URL
-        (see <code>septa-worker.js</code> / README):</p>
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: live SEPTA positions + buses/trolleys</summary>
+      <p style="margin-top:10px">SEPTA Regional Rail and Subway are <b>scheduled</b> by default (no setup). For exact <b>live</b>
+        positions <i>and</i> live buses/trolleys, paste a free Cloudflare Worker URL (see <code>septa-worker.js</code> / README):</p>
       <input id="septaInput" type="text" placeholder="https://septa.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
     </details>
 
     <div class="btns">
-      <button id="saveKey">Save &amp; start</button>
-      <button class="ghost" id="skipKey">Skip (planes only)</button>
+      <button id="saveKey">Save</button>
+      <button class="ghost" id="skipKey">Close</button>
     </div>
   </div>
 </div>
@@ -284,8 +247,8 @@
    Pure client-side. Data: WMATA (rail+bus) + airplanes.live (ADS-B).
    ========================================================================= */
 const CFG = {
-  // Default location = Bethesda 20816 centroid; overridden by device GPS if allowed.
-  defaultLoc: { lat: 38.9582, lon: -77.1080, label: "Bethesda, MD 20816" },
+  // Default location = Temple University Main Campus; overridden by device GPS if allowed.
+  defaultLoc: { lat: 39.9812, lon: -75.1563, label: "Temple University, Philadelphia" },
   railStations: 3,     // nearest rail stations to watch
   busStops: 4,         // nearest bus stops to watch
   busRadius: 1000,     // meters for jStops search
@@ -306,13 +269,14 @@ const CFG = {
   clockEveryMs: 1000,
 };
 const LS = {
-  key:   "transitboard.wmataKey",
-  loc:   "transitboard.loc",
-  stns:  "transitboard.stations",
-  marc:  "transitboard.marcUrl",
-  septa: "transitboard.septaUrl",
+  key:   "transitboardphl.wmataKey",
+  loc:   "transitboardphl.loc",
+  stns:  "transitboardphl.stations",
+  marc:  "transitboardphl.marcUrl",
+  septa: "transitboardphl.septaUrl",
 };
 const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
+const ACCENTS=["#4ea1ff","#ffb454","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
 
 let state = {
   wmataKey: localStorage.getItem(LS.key) || "",
@@ -358,7 +322,7 @@ function tickRefreshInfo(){
 }
 
 /* ---------- location ---------- */
-const LS_LOC_MANUAL = "transitboard.locManual";
+const LS_LOC_MANUAL = "transitboardphl.locManual";
 function loadSavedLoc(){
   try{ const s=JSON.parse(localStorage.getItem(LS.loc)); if(s&&s.lat) state.loc=s; }catch(e){}
 }
@@ -374,10 +338,8 @@ function applyLoc(loc){
 // Re-fetch every near-me data source for the current state.loc. Called after
 // GPS locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
-  state.busStops=[]; // force re-scan of nearby stops
-  refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap();
-  refreshSeptaRail(); refreshSeptaSubway(); septaMapTick(); refreshPatco(); drawPatcoScheduledMap(); refreshPlanes();
+  fetchAmtrak(); refreshSeptaRail(); refreshSeptaSubway(); septaMapTick();
+  refreshPatco(); drawPatcoScheduledMap(); refreshPlanes();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
@@ -608,7 +570,7 @@ function fitList(box){
   }
 }
 /* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
-function fitAll(){ ["#railList","#busList","#amtrakList","#marcList","#rideonList","#septaRailList","#septaSubwayList","#septaBusList","#patcoList","#planeList"].forEach(s=>fitList($(s))); }
+function fitAll(){ ["#amtrakList","#septaRailList","#septaSubwayList","#septaBusList","#patcoList","#planeList"].forEach(s=>fitList($(s))); }
 function renderRailNoKey(){
   $("#railList").innerHTML="";
   $("#railList").appendChild(el("div","empty","Add a free WMATA key (⚙︎) to see live train times."));
@@ -754,7 +716,7 @@ function orderLineStations(st){
 async function fetchRailRoutes(){
   if(!state.wmataKey || !state.routeLayer) return;
   try{
-    const cached=JSON.parse(localStorage.getItem("transitboard.railroutes2")||"null");
+    const cached=JSON.parse(localStorage.getItem("transitboardphl.railroutes2")||"null");
     if(cached && Date.now()-cached.t < 864e5 && cached.lines?.length>=5){ drawRailRoutes(cached.lines); return; }
   }catch(e){}
   let stations;
@@ -765,7 +727,7 @@ async function fetchRailRoutes(){
     if(st.length>1) lines.push({ code, pts:orderLineStations(st).map(s=>[s.Lat,s.Lon]) });
   });
   if(!lines.length) return;
-  if(lines.length>=5){ try{ localStorage.setItem("transitboard.railroutes2", JSON.stringify({t:Date.now(), lines})); }catch(e){} }
+  if(lines.length>=5){ try{ localStorage.setItem("transitboardphl.railroutes2", JSON.stringify({t:Date.now(), lines})); }catch(e){} }
   drawRailRoutes(lines);
 }
 function drawRailRoutes(lines){
@@ -784,7 +746,7 @@ function drawRailRoutes(lines){
 const METRO = { routes:null };
 async function ensureMetroRoutes(){
   if(METRO.routes) return METRO.routes;
-  try{ const c=JSON.parse(localStorage.getItem("transitboard.stdroutes")||"null");
+  try{ const c=JSON.parse(localStorage.getItem("transitboardphl.stdroutes")||"null");
     if(c && Date.now()-c.t < 864e5 && c.routes){ METRO.routes=c.routes; return c.routes; } }catch(e){}
   const data=await getJSON(wmata("TrainPositions/StandardRoutes?contentType=json"));
   const routes={};
@@ -793,7 +755,7 @@ async function ensureMetroRoutes(){
       .map(tc=>({seq:tc.SeqNum, cid:tc.CircuitId, st:tc.StationCode||null}));
   });
   METRO.routes=routes;
-  try{ localStorage.setItem("transitboard.stdroutes", JSON.stringify({t:Date.now(), routes})); }catch(e){}
+  try{ localStorage.setItem("transitboardphl.stdroutes", JSON.stringify({t:Date.now(), routes})); }catch(e){}
   return routes;
 }
 function circuitLatLon(arr, cid, coord){
@@ -857,14 +819,14 @@ function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d
 function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
 async function ensureAmtrakStations(){
   if(state.amStations) return state.amStations;
-  try{ const c=JSON.parse(localStorage.getItem("transitboard.amstations")||"null");
+  try{ const c=JSON.parse(localStorage.getItem("transitboardphl.amstations")||"null");
     if(c && Date.now()-c.t < 864e5 && c.map){ state.amStations=c.map; return c.map; } }catch(e){}
   const data=await getJSON("https://api-v3.amtraker.com/v3/stations", 12000);
   const map={};
   for(const code in data){ const s=data[code];
     if(typeof s.lat==="number" && typeof s.lon==="number") map[code]=[s.lat,s.lon]; }
   state.amStations=map;
-  try{ localStorage.setItem("transitboard.amstations", JSON.stringify({t:Date.now(), map})); }catch(e){}
+  try{ localStorage.setItem("transitboardphl.amstations", JSON.stringify({t:Date.now(), map})); }catch(e){}
   return map;
 }
 async function fetchAmtrak(){
@@ -1370,8 +1332,6 @@ async function drawPatcoScheduledMap(){
 
 /* show/hide the optional cards based on whether their source is configured */
 function applyOptionalCards(){
-  document.getElementById("marcCard").style.display     = "flex";   // bundled schedule — zero setup
-  document.getElementById("rideonCard").style.display   = "flex";   // bundled schedule — zero setup
   document.getElementById("septaRailCard").style.display = "flex"; // bundled schedule — zero setup
   document.getElementById("septaSubwayCard").style.display = "flex"; // bundled schedule — zero setup
   document.getElementById("septaBusCard").style.display  = state.septaUrl ? "flex" : "none"; // needs the Worker (no bundled bus network)
@@ -1399,19 +1359,13 @@ async function refreshPlanes(){
 
 /* ---------- setup overlay ---------- */
 function openSetup(){
-  $("#keyInput").value=state.wmataKey;
-  $("#marcInput").value=state.marcUrl;
   $("#septaInput").value=state.septaUrl;
-  $("#setup").classList.add("show"); $("#keyInput").focus();
+  $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
 $("#settingsBtn").onclick=openSetup;
 $("#saveKey").onclick=()=>{
-  state.wmataKey=$("#keyInput").value.trim();
-  state.marcUrl =$("#marcInput").value.trim().replace(/\/+$/,"");
   state.septaUrl=$("#septaInput").value.trim().replace(/\/+$/,"");
-  localStorage.setItem(LS.key, state.wmataKey);
-  localStorage.setItem(LS.marc, state.marcUrl);
   localStorage.setItem(LS.septa, state.septaUrl);
   closeSetup(); applyOptionalCards();
   refreshEverythingForNewLocation();
@@ -1420,7 +1374,6 @@ $("#skipKey").onclick=()=>{ closeSetup(); };
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
-$("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
 
 /* ---------- full-screen kiosk mode + keep-awake ---------- */
 const SVG_EXPAND=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
@@ -1465,47 +1418,36 @@ document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState=
 onFsChange();   // set initial icon
 
 /* ---------- accent color customization ---------- */
-const ACCENTS=["#4ea1ff","#ffb454","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
 function setBoardAccent(hex){
   document.documentElement.style.setProperty("--accent", hex);
-  localStorage.setItem("transitboard.accent", hex);
+  localStorage.setItem("transitboardphl.accent", hex);
   document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
 }
 function buildAccentSwatches(){
   const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
   ACCENTS.forEach(hex=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.style.background=hex; b.title=hex; b.onclick=()=>setBoardAccent(hex); wrap.appendChild(b); });
   const c=document.createElement("label"); c.className="sw custom"; c.title="Custom color";
-  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("transitboard.accent")||"#4ea1ff";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("transitboardphl.accent")||"#4ea1ff";
   inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
 }
 
 /* ---------- boot ---------- */
 function boot(){
-  setBoardAccent(localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
+  setBoardAccent(localStorage.getItem("transitboardphl.accent")||"#4ea1ff"); buildAccentSwatches();
   loadSavedLoc(); applyLoc(state.loc); initMap();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
 
-  if(!state.wmataKey) openSetup();
-
   applyOptionalCards();
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshEverythingForNewLocation();
-  setInterval(refreshTransit, CFG.transitEveryMs);
   setInterval(refreshPlanes, CFG.planeEveryMs);
-  setInterval(fetchBusPositions, CFG.busPosEveryMs);
-  setInterval(fetchMetroTrains, CFG.metroEveryMs);
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
-  setInterval(marcMapTick, CFG.marcEveryMs);   // MARC positions on the map (live or scheduled)
-  setInterval(refreshMarc, 30000);             // recompute next scheduled MARC trains (card)
-  setInterval(refreshRideOn, 60000);           // recompute next scheduled Ride On (card)
-  setInterval(drawRideOnScheduledMap, CFG.rideonEveryMs); // Ride On positions on the map (scheduled)
   setInterval(refreshSeptaRail, 30000);        // recompute next scheduled SEPTA Regional Rail (card)
   setInterval(refreshSeptaSubway, 30000);      // recompute next scheduled SEPTA Subway (card)
   setInterval(septaMapTick, CFG.septaEveryMs); // SEPTA positions on the map (scheduled, or live via Worker)
   setInterval(refreshPatco, 30000);            // recompute next scheduled PATCO (card)
   setInterval(drawPatcoScheduledMap, CFG.septaEveryMs); // PATCO positions on the map (scheduled)
-  setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
   // re-fit cards to the new layout when the window/display changes size
   let rzT; window.addEventListener("resize", ()=>{

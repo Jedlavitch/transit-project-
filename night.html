@@ -601,7 +601,10 @@ function boot(){
     }, ()=>{}, { enableHighAccuracy:false, timeout:8000, maximumAge:600000 });
   }
 }
-document.addEventListener("DOMContentLoaded", boot);
+// Defensive: if the very first boot() attempt throws (observed occasionally),
+// retry shortly after instead of leaving the page stuck uninitialized.
+function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
+if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
 </body>
 </html>

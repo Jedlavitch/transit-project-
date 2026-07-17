@@ -1,28 +1,40 @@
 # 🚇 Live Transit Board
 
-A self-contained live board for **trains, buses, and planes** — defaults to Bethesda, MD (20816),
-but you can type **any address, city, or zip** to re-center it anywhere (see "Any location" below).
-One HTML file. No build step, no backend, no database. It runs entirely in the browser and
-talks directly to public APIs, so once it's on free hosting it **never expires**.
+A self-contained live board for **trains, buses, and planes**. No build step, no backend, no
+database — it runs entirely in the browser and talks directly to public APIs, so once it's on free
+hosting it **never expires**.
 
 Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Portal.
 
+## Two boards, one codebase
+There are **two separate pages**, each pinned to its own city so they never fight over "current
+location" — open whichever one matches where you are:
+
+- **`index.html`** — Bethesda / DC area: Metrorail, Metrobus, MARC, Ride On (routes 23 & 29), Amtrak, planes.
+- **`philadelphia.html`** — Philadelphia: SEPTA Regional Rail, SEPTA Subway (Market-Frankford + Broad
+  Street Line), PATCO, Amtrak, planes. (No Metro/MARC/Ride On — those are DC-specific.)
+
+Both pages have their own **"Location"** setting (type any address, city, or zip — see below) and
+their own saved settings (independent `localStorage` namespaces), so switching between them, or
+typing a different address on one, never affects the other. Each has a small nav link in the header
+to jump to the other one, plus **"🌙 Night"** (shared night mode — see below).
+
 ## What it shows
-- **🚆 Metrorail** — WMATA live arrival predictions at your nearest stations (Bethesda / Friendship Heights, etc.), the colored **Metro line map**, and (with the TrainPositions product, below) **live trains gliding along the lines**
-- **🚌 Metrobus** — WMATA **live predictions** *and* **scheduled** timetable times at the nearest stops; live buses also plotted on the map and move in real time
-- All map vehicles (Metro, MARC, Amtrak, buses, planes) **animate smoothly** between position updates instead of jumping
-- **🌙 Night mode** (`night.html`, "Night" tab) — a big-letters, dark, low-light page showing just the single **nearest** plane, Amtrak train, or Ride On bus (switchable via the ⚙ gear), with a photo (planes), an animated origin→destination arc, and a live ETA estimate. Also pick a **color theme** (6 presets + a custom color picker) in the same panel. *(True on-time/late status for flights isn't shown — it needs a paid flight-status API.)*
-- **🚄 Amtrak** — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
-- **🚆 MARC** — next **scheduled** commuter-rail trains at your nearest stations **and trains placed on the map** (interpolated from the schedule), from a bundled copy of MARC's timetable. **Zero setup — no key, no Worker.** *(Optional: exact real-time positions via the free Worker below.)*
-- **🚌 Ride On** (routes **23** and **29** — edit `ROUTES` in `gen-rideon-schedule.py` to track others) — next **scheduled** departures at nearby stops **and buses placed on the map**, interpolated from a bundled copy of Ride On's own timetable. **Zero setup — no key, no Worker.** Ride On is Montgomery County's own bus system (a *different* agency from WMATA Metrobus above) and publishes **no public real-time feed at all** — only a private, key-gated API the county doesn't hand out — so scheduled interpolation is the honest best available to anyone.
-- **🚆 SEPTA Regional Rail** (Philadelphia) — next **scheduled** trains at nearby stations across **all 13 lines**, **and** trains placed on the map (interpolated from the schedule). **Zero setup — no key, no Worker.** *(Optional: exact real-time Regional Rail + live SEPTA buses/trolleys via the free Worker below.)*
-- **🚇 SEPTA Subway** (Philadelphia) — next scheduled trains **and** trains on the map for the **Market-Frankford Line** and **Broad Street Line**, the two rapid-transit spines useful regardless of exactly where in Philly you live. **Zero setup — no key, no Worker.** (Surface trolleys aren't bundled yet — add specific ones once you know your school/dorm; see `gen-septa-subway-schedule.py`.)
-- **🚆 PATCO** (Philadelphia ↔ Camden, NJ) — next scheduled trains **and** trains on the map for the whole high-speed line (all 14 stations). **Zero setup — no key, no Worker** (PATCO doesn't publish a real-time API at all, so scheduled is the only option for anyone).
-- **✈️ Planes overhead** — live ADS-B aircraft within ~12 nm (altitude, airline, speed, climbing/descending), plotted on a live map
-- **📍 Any location** — auto-detects your location (with 20816 as the fallback), or type **any address, city, or zip** in ⚙︎ to re-center the whole board there — Metrorail, Metrobus, Amtrak, SEPTA, and planes all re-query around the new spot. (Metrorail/MARC/Ride On only cover DC–Maryland; SEPTA only covers Philadelphia; Amtrak and planes work anywhere in the US — systems far from your location just show an honest "nothing nearby.") The address is geocoded free via [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org) — no key. Your choice is saved and won't be overridden by GPS; click "Use my current location instead" to switch back.
+- **🚆 Metrorail** *(Bethesda board)* — WMATA live arrival predictions at your nearest stations, the colored **Metro line map**, and (with the TrainPositions product, below) **live trains gliding along the lines**
+- **🚌 Metrobus** *(Bethesda board)* — WMATA **live predictions** *and* **scheduled** timetable times at the nearest stops; live buses also plotted on the map and move in real time
+- **🚆 MARC** *(Bethesda board)* — next **scheduled** commuter-rail trains at your nearest stations **and trains placed on the map** (interpolated from the schedule), from a bundled copy of MARC's timetable. **Zero setup — no key, no Worker.** *(Optional: exact real-time positions via the free Worker below.)*
+- **🚌 Ride On** *(Bethesda board;* routes **23** and **29** — edit `ROUTES` in `gen-rideon-schedule.py` to track others) — next **scheduled** departures at nearby stops **and buses placed on the map**, interpolated from a bundled copy of Ride On's own timetable. **Zero setup — no key, no Worker.** Ride On is Montgomery County's own bus system (a *different* agency from WMATA Metrobus above) and publishes **no public real-time feed at all** — only a private, key-gated API the county doesn't hand out — so scheduled interpolation is the honest best available to anyone.
+- **🚆 SEPTA Regional Rail** *(Philadelphia board)* — next **scheduled** trains at nearby stations across **all 13 lines**, **and** trains placed on the map (interpolated from the schedule). **Zero setup — no key, no Worker.** *(Optional: exact real-time Regional Rail + live SEPTA buses/trolleys via the free Worker below.)*
+- **🚇 SEPTA Subway** *(Philadelphia board)* — next scheduled trains **and** trains on the map for the **Market-Frankford Line** and **Broad Street Line**, the two rapid-transit spines useful regardless of exactly where in Philly you live. **Zero setup — no key, no Worker.** (Surface trolleys aren't bundled yet — add specific ones once you know your school/dorm; see `gen-septa-subway-schedule.py`.)
+- **🚆 PATCO** *(Philadelphia board;* Philadelphia ↔ Camden, NJ) — next scheduled trains **and** trains on the map for the whole high-speed line (all 14 stations). **Zero setup — no key, no Worker** (PATCO doesn't publish a real-time API at all, so scheduled is the only option for anyone).
+- **🚄 Amtrak** *(both boards)* — live regional/intercity trains within ~60 mi on the map, with next-stop **scheduled vs. actual** times and delay status
+- **✈️ Planes overhead** *(both boards)* — live ADS-B aircraft within ~12 nm (altitude, airline, speed, climbing/descending), plotted on a live map
+- All map vehicles **animate smoothly** between position updates instead of jumping
+- **🌙 Night mode** (`night.html`, shared by both boards) — a big-letters, dark, low-light page showing just the single **nearest** plane, Amtrak train, or Ride On bus (switchable via the ⚙ gear), with a photo (planes), an animated origin→destination arc, and a live ETA estimate. Also pick a **color theme** (6 presets + a custom color picker) in the same panel. *(True on-time/late status for flights isn't shown — it needs a paid flight-status API.)*
+- **📍 Any location** — each board auto-detects your location (with a per-board default: Bethesda 20816, or Temple University for the Philadelphia board), or type **any address, city, or zip** in ⚙︎ to re-center that board there. The address is geocoded free via [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org) — no key. Your choice is saved (per board) and won't be overridden by GPS; click "Use my current location instead" to switch back. Systems from the *other* city just show an honest "nothing nearby" rather than being hidden by force — e.g. Amtrak/planes work anywhere in the US regardless of which board or address you use.
 - Refreshes transit/Amtrak every 30s and planes every 15s
 
-Everything works with **zero setup except the WMATA key** (which only Metrorail/Metrobus need). MARC, Ride On, and SEPTA Regional Rail are built in. You can also pick an **accent color** and a **custom location** in the ⚙︎ gear.
+Everything works with **zero setup except the WMATA key** (Bethesda board only, for Metrorail/Metrobus). MARC, Ride On, SEPTA, and PATCO are all built in. You can also pick an **accent color** and a **custom location** in the ⚙︎ gear on either board.
 
 ## Data sources
 | Data | Source | Key needed? | Cost |
@@ -38,8 +50,9 @@ Everything works with **zero setup except the WMATA key** (which only Metrorail/
 | Address search | [Nominatim](https://nominatim.openstreetmap.org) (OpenStreetMap) | ❌ none | Free |
 | Map tiles | CARTO / OpenStreetMap | ❌ none | Free |
 
-## One-time setup: free WMATA key (2 minutes)
-Planes work with zero setup. Trains and buses need a **free** WMATA key:
+## One-time setup: free WMATA key (2 minutes) — Bethesda board only
+The Philadelphia board needs no key at all. On the Bethesda board, planes/Amtrak/MARC/Ride On work
+with zero setup; Metrorail and Metrobus need a **free** WMATA key:
 
 1. Create an account → https://developer.wmata.com/signup
 2. Subscribe to the **“Default Tier”** product → https://developer.wmata.com/products
@@ -60,16 +73,20 @@ If the product isn't enabled, everything else still works — Metro trains simpl
 ```bash
 cd "Transit Claude"
 python3 -m http.server 4173
-# then open http://localhost:4173/
+# then open http://localhost:4173/          (Bethesda board)
+# or      http://localhost:4173/philadelphia.html
 ```
 
 ## Deploy so it never expires (free, permanent) — GitHub Pages
 1. Create a new GitHub repo (e.g. `bethesda-transit`).
-2. Upload `index.html` (the only file that matters).
+2. Upload `index.html`, `philadelphia.html`, and `night.html`, plus the bundled `*.json` schedule
+   files (`marc-schedule.json`, `rideon-schedule.json`, `septa-rail-schedule.json`,
+   `septa-subway-schedule.json`, `patco-schedule.json`) — everything the boards read at runtime.
 3. Repo **Settings → Pages → Build and deployment → Source: Deploy from a branch → `main` / `root`**.
-4. Wait ~1 minute. Your board is live forever at:
-   `https://<your-username>.github.io/bethesda-transit/`
-5. Open that URL on your display, enter your WMATA key once, and pin it full-screen.
+4. Wait ~1 minute. Your boards are live forever at:
+   `https://<your-username>.github.io/bethesda-transit/` (Bethesda)
+   `https://<your-username>.github.io/bethesda-transit/philadelphia.html` (Philadelphia)
+5. Open whichever board matches where you are, enter a WMATA key if needed, and pin it full-screen.
 
 Because everything runs client-side against public APIs, there's no server to keep alive and
 nothing to renew — GitHub Pages serves the static file indefinitely for free.
