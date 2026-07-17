@@ -140,8 +140,8 @@
 <div id="app">
   <header>
     <div class="title">🔔 Philadelphia Live Transit <small id="loclabel">locating…</small></div>
-    <a id="homeBtn" href="index.html" title="Bethesda board">🏠 Bethesda</a>
-    <a id="nightBtn" href="night.html" title="Night mode — nearest flight">🌙 Night</a>
+    <a id="homeBtn" href="index.html" title="Bethesda board" onclick="window.location.href='index.html'; return false;">🏠 Bethesda</a>
+    <a id="nightBtn" href="night.html" title="Night mode — nearest flight" onclick="window.location.href='night.html'; return false;">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
@@ -161,6 +161,8 @@
         <span style="color:#e8a33c">▦ SEPTA bus</span>
         <span style="color:#BC0035">▦ PATCO</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
+        <span style="color:#4F758B">━ SEPTA rail lines</span>
+        <span><span style="color:#1c6bb0">━</span> MFL <span style="color:#f7941d">━</span> BSL</span>
         <span style="opacity:.7">vehicles move live · zoom in for labels</span>
       </div>
     </div>
@@ -180,8 +182,8 @@
           <div class="list" id="septaSubwayList"><div class="empty">Loading SEPTA schedule…</div></div>
         </div>
         <div class="card" id="septaBusCard" style="display:none">
-          <h2><span class="icon">🚌</span> SEPTA Bus/Trolley <span class="count" id="septaBusCount"></span></h2>
-          <div class="list" id="septaBusList"><div class="empty">Add a SEPTA helper URL (⚙) for live buses…</div></div>
+          <h2><span class="icon">🚌</span> SEPTA Bus — 3, 4 &amp; 16 <span class="count" id="septaBusCount"></span></h2>
+          <div class="list" id="septaBusList"><div class="empty">Loading SEPTA bus schedule…</div></div>
         </div>
         <div class="card" id="patcoCard" style="display:none">
           <h2><span class="icon">🚆</span> PATCO <span class="count" id="patcoCount"></span></h2>
@@ -225,9 +227,10 @@
     <div class="swatches" id="accentSwatches"></div>
 
     <details style="margin-top:6px">
-      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: live SEPTA positions + buses/trolleys</summary>
-      <p style="margin-top:10px">SEPTA Regional Rail and Subway are <b>scheduled</b> by default (no setup). For exact <b>live</b>
-        positions <i>and</i> live buses/trolleys, paste a free Cloudflare Worker URL (see <code>septa-worker.js</code> / README):</p>
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: exact live SEPTA positions</summary>
+      <p style="margin-top:10px">Regional Rail, Subway, and Bus (routes 3, 4 &amp; 16) all work as <b>scheduled</b> by
+        default (no setup). For exact <b>live</b> positions instead — and live buses/trolleys system-wide, not just
+        3/4/16 — paste a free Cloudflare Worker URL (see <code>septa-worker.js</code> / README):</p>
       <input id="septaInput" type="text" placeholder="https://septa.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
     </details>
 
@@ -338,7 +341,7 @@ function applyLoc(loc){
 // Re-fetch every near-me data source for the current state.loc. Called after
 // GPS locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
-  fetchAmtrak(); refreshSeptaRail(); refreshSeptaSubway(); septaMapTick();
+  fetchAmtrak(); refreshSeptaRail(); refreshSeptaSubway(); refreshSeptaBusScheduled(); septaMapTick();
   refreshPatco(); drawPatcoScheduledMap(); refreshPlanes();
 }
 function requestGeo(){
@@ -396,6 +399,9 @@ function initMap(){
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(state.map);
   state.routeLayer  = L.layerGroup().addTo(state.map);   // Metro rail lines, beneath everything
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
+  state.septaRailRouteLayer = L.layerGroup().addTo(state.map);   // SEPTA Regional Rail lines
+  state.septaSubwayRouteLayer = L.layerGroup().addTo(state.map); // SEPTA Subway (MFL/BSL) lines
+  state.septaBusRouteLayer = L.layerGroup().addTo(state.map);    // SEPTA Bus (3/4/16) lines
   state.stopLayer   = L.layerGroup().addTo(state.map);
   state.busVehLayer = L.layerGroup().addTo(state.map);
   state.marcLayer   = L.layerGroup().addTo(state.map);
@@ -410,6 +416,19 @@ function initMap(){
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:1,weight:2}).addTo(state.map);
   state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
   state.map.on("zoomend", updateLabelVisibility);
+
+  // Leaflet computes its internal size the instant it's created; if the
+  // #map container hasn't finished CSS layout yet (grid/flex reflow, web
+  // fonts, cards populating) the map can end up mis-sized or off-center
+  // until something calls invalidateSize(). Auto-correct whenever the
+  // container's actual size changes so it's never something to click/nudge.
+  if("ResizeObserver" in window){
+    new ResizeObserver(()=>{
+      state.map.invalidateSize();
+      state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom());
+    }).observe(document.getElementById("map"));
+  }
+  setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 // A dot at the exact location + an info chip floating to its right.
@@ -1074,6 +1093,27 @@ async function drawRideOnScheduledMap(){
    bus/trolley network (~20MB GTFS) is too big to bundle and its routes
    aren't scoped yet, so buses only appear once the Worker is configured. */
 const SEPTA_COL = "#4F758B";   // SEPTA's own Regional Rail brand color
+
+/* Draw each line's route as a colored polyline: group trips by line, pick
+   the trip with the most stops per line (fullest run, not a short turnback),
+   and connect its already-correctly-ordered stop sequence. Works for any
+   bundled schedule sharing the {stations,_coord,trips:[{line,st}]} shape. */
+function drawScheduleRouteLines(schedule, layer, colorFn){
+  if(!schedule || !schedule.trips || !layer) return;
+  layer.clearLayers();
+  const bestByLine={};
+  schedule.trips.forEach(tr=>{
+    const cur=bestByLine[tr.line];
+    if(!cur || tr.st.length>cur.st.length) bestByLine[tr.line]=tr;
+  });
+  Object.values(bestByLine).forEach(tr=>{
+    const pts=tr.st.map(([sid])=>schedule._coord[sid]).filter(Boolean);
+    if(pts.length>1) L.polyline(pts, {
+      color:colorFn(tr.line), weight:4, opacity:.5, lineCap:"round", lineJoin:"round"
+    }).addTo(layer);
+  });
+}
+
 async function ensureSeptaRailSchedule(){
   if(state.septaSched) return state.septaSched;
   try{
@@ -1082,6 +1122,7 @@ async function ensureSeptaRailSchedule(){
     s._dep={};
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
     state.septaSched=s;
+    drawScheduleRouteLines(s, state.septaRailRouteLayer, ()=>SEPTA_COL);
   }catch(e){}
   return state.septaSched;
 }
@@ -1139,6 +1180,85 @@ async function drawSeptaRailScheduledMap(){
   });
   updateFleet("septaRail", items, CFG.septaEveryMs);
 }
+/* ---------- SEPTA Bus — routes 3, 4 & 16 (bundled schedule, no key/Worker) ----------
+   SEPTA's bus network is huge (~20MB) and covers hundreds of routes, so
+   only the ones serving Cecil B. Moore Ave (Route 3) and North Broad St
+   (Routes 4 & 16) near Temple's Main Campus are bundled -- same
+   schedule-interpolation technique as Regional Rail/Subway. Add more
+   routes to ROUTES in gen-septa-bus-schedule.py and re-run to track others.
+   If the optional live Worker (below) is configured, live positions take
+   over from scheduled ones automatically. */
+const SEPTA_BUS_COL = "#e8a33c";
+async function ensureSeptaBusSchedule(){
+  if(state.septaBusSched) return state.septaBusSched;
+  try{
+    const s=await getJSON("septa-bus-schedule.json", 15000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._dep={};
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    state.septaBusSched=s;
+    drawScheduleRouteLines(s, state.septaBusRouteLayer, ()=>SEPTA_BUS_COL);
+  }catch(e){}
+  return state.septaBusSched;
+}
+async function refreshSeptaBusScheduled(){
+  if(state.septaUrl) return;   // the live Worker owns this card once configured
+  const s=await ensureSeptaBusSchedule(); const box=$("#septaBusList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA bus schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(mi>10) break;
+    if(used>=2) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
+      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    deps.forEach(d=>{
+      const row=el("div","row");
+      const b=el("div","badge", d.line); b.style.background=SEPTA_BUS_COL; b.style.color="#2a1c00";
+      const mid=el("div");
+      mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
+      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+      mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
+      const times=el("div","times");
+      const t=el("div","live"); t.style.color="#e0b466"; t.textContent=marcClock(d.t);
+      times.append(t, el("div","sched","scheduled"));
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row); shown++;
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No Route 3/4/16 buses nearby (or none scheduled soon)."));
+  $("#septaBusCount").textContent="scheduled";
+  fitList(box);
+}
+async function drawSeptaBusScheduledMap(){
+  if(state.septaUrl) return;   // the live Worker owns bus positions once configured
+  const s=await ensureSeptaBusSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      items.push({ id:"sb"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(SEPTA_BUS_COL, `${tr.line} → ${tr.hs}`),
+        ik:"sb-"+tr.line+"-"+i, tip:`SEPTA Route ${tr.line} → ${tr.hs} (scheduled)` });
+      break;
+    }
+  });
+  updateFleet("septaBus", items, CFG.septaEveryMs);
+  $("#septaBusCard").style.display = "flex";
+}
+
 // Optional Cloudflare Worker: exact live SEPTA Regional Rail + bus/trolley positions.
 async function fetchSeptaLive(){
   if(!state.septaUrl) return;
@@ -1163,7 +1283,7 @@ async function fetchSeptaLive(){
       tip:`SEPTA Route ${b.route_id} → ${b.destination}${b.late?` · ${b.late} min late`:""} (live)`
     }));
     updateFleet("septaBus", items, CFG.septaEveryMs);
-    $("#septaBusCard").style.display = items.length || state.septaUrl ? "flex" : "none";
+    $("#septaBusCard").style.display = "flex";
     $("#septaBusCount").textContent = items.length ? `${items.length} nearby` : "";
     const box=$("#septaBusList");
     if(box){
@@ -1183,7 +1303,10 @@ async function fetchSeptaLive(){
     }
   }catch(e){}
 }
-function septaMapTick(){ drawSeptaRailScheduledMap(); drawSeptaSubwayScheduledMap(); if(state.septaUrl) fetchSeptaLive(); }
+function septaMapTick(){
+  drawSeptaRailScheduledMap(); drawSeptaSubwayScheduledMap(); drawSeptaBusScheduledMap();
+  if(state.septaUrl) fetchSeptaLive();
+}
 
 /* ---------- SEPTA Subway — Market-Frankford Line + Broad Street Line ----------
    Same bundled-schedule technique as Regional Rail, scoped to just the two
@@ -1200,6 +1323,7 @@ async function ensureSeptaSubwaySchedule(){
     s._dep={};
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
     state.septaSubwaySched=s;
+    drawScheduleRouteLines(s, state.septaSubwayRouteLayer, line=>SEPTA_SUBWAY_COL[line]||"#556");
   }catch(e){}
   return state.septaSubwaySched;
 }
@@ -1334,7 +1458,7 @@ async function drawPatcoScheduledMap(){
 function applyOptionalCards(){
   document.getElementById("septaRailCard").style.display = "flex"; // bundled schedule — zero setup
   document.getElementById("septaSubwayCard").style.display = "flex"; // bundled schedule — zero setup
-  document.getElementById("septaBusCard").style.display  = state.septaUrl ? "flex" : "none"; // needs the Worker (no bundled bus network)
+  document.getElementById("septaBusCard").style.display  = "flex"; // bundled schedule (routes 3/4/16) — zero setup
   document.getElementById("patcoCard").style.display     = "flex";   // bundled schedule — zero setup
 }
 
@@ -1445,6 +1569,7 @@ function boot(){
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
   setInterval(refreshSeptaRail, 30000);        // recompute next scheduled SEPTA Regional Rail (card)
   setInterval(refreshSeptaSubway, 30000);      // recompute next scheduled SEPTA Subway (card)
+  setInterval(refreshSeptaBusScheduled, 30000);// recompute next scheduled SEPTA bus (card, if not using live Worker)
   setInterval(septaMapTick, CFG.septaEveryMs); // SEPTA positions on the map (scheduled, or live via Worker)
   setInterval(refreshPatco, 30000);            // recompute next scheduled PATCO (card)
   setInterval(drawPatcoScheduledMap, CFG.septaEveryMs); // PATCO positions on the map (scheduled)
