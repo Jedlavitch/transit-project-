@@ -149,6 +149,7 @@
         <span>✈️ aircraft</span>
         <span>🚆 Amtrak</span>
         <span style="color:#e8792b">▦ MARC</span>
+        <span><span style="color:#2f9e44">▦</span> Ride On 23 <span style="color:#1c7ed6">▦</span> 29</span>
         <span>🔵 live Metrobus</span>
         <span>◉ Metro train</span>
         <span>🔴 Metro station</span>
@@ -174,11 +175,11 @@
         </div>
         <div class="card" id="marcCard" style="display:none">
           <h2><span class="icon">🚆</span> MARC — commuter rail <span class="count" id="marcCount"></span></h2>
-          <div class="list" id="marcList"><div class="empty">Waiting for MARC helper…</div></div>
+          <div class="list" id="marcList"><div class="empty">Loading MARC schedule…</div></div>
         </div>
         <div class="card" id="rideonCard" style="display:none">
-          <h2><span class="icon">🚌</span> Ride On — scheduled <span class="count" id="rideonCount"></span></h2>
-          <div class="list" id="rideonList"><div class="empty">Waiting for Transitland key…</div></div>
+          <h2><span class="icon">🚌</span> Ride On — 23 &amp; 29 <span class="count" id="rideonCount"></span></h2>
+          <div class="list" id="rideonList"><div class="empty">Loading Ride On schedule…</div></div>
         </div>
         <div class="card">
           <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
@@ -243,9 +244,6 @@ const CFG = {
   planeRadiusNm: 12,   // nautical miles for "overhead"
   amtrakRadiusMi: 60,  // miles: Amtrak trains to show as "regional"
   marcRadiusMi: 60,    // miles: MARC trains to list in the card (all still drawn on map)
-  rideonRadius: 1200,  // meters: nearby Ride On stops (Transitland)
-  rideonStops: 3,      // how many nearby Ride On stops to show
-  tlFeed: "f-dqcn-montgomerycountymdrideon", // Transitland onestop id for Ride On
   transitEveryMs: 30000,
   planeEveryMs: 15000,
   metroEveryMs: 10000,   // live Metrorail train positions (track-circuit based)
@@ -253,7 +251,7 @@ const CFG = {
   busPosEveryMs: 15000,  // live Metrobus positions (markers glide between updates)
   amtrakEveryMs: 20000,
   marcEveryMs: 15000,
-  rideonEveryMs: 120000, // schedule changes slowly; be gentle on Transitland quota
+  rideonEveryMs: 20000,  // Ride On (routes 23 & 29) scheduled positions on the map
   routesEveryMs: 21600000, // Metrorail line geometry (rarely changes) — 6h
   clockEveryMs: 1000,
 };
@@ -262,14 +260,12 @@ const LS = {
   loc:   "transitboard.loc",
   stns:  "transitboard.stations",
   marc:  "transitboard.marcUrl",
-  tlkey: "transitboard.tlKey",
 };
 const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
 
 let state = {
   wmataKey: localStorage.getItem(LS.key) || "",
   marcUrl: localStorage.getItem(LS.marc) || "",
-  tlKey: localStorage.getItem(LS.tlkey) || "",
   loc: CFG.defaultLoc,
   nearRail: [],     // [{Code,Name,Lat,Lon,dist,lines:[]}]
   busStops: [],     // [{StopID,Name,Lat,Lon,dist,Routes:[]}]
@@ -325,7 +321,7 @@ function requestGeo(){
       applyLoc(loc);
       if(state.map) state.map.setView([loc.lat,loc.lon], 12);
       state.busStops=[]; // force re-scan of nearby stops
-      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn();
+      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap();
     },
     _err => {/* keep default */},
     { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
@@ -342,6 +338,7 @@ function initMap(){
   state.stopLayer   = L.layerGroup().addTo(state.map);
   state.busVehLayer = L.layerGroup().addTo(state.map);
   state.marcLayer   = L.layerGroup().addTo(state.map);
+  state.rideonLayer = L.layerGroup().addTo(state.map);
   state.trainLayer  = L.layerGroup().addTo(state.map);
   state.metroLayer  = L.layerGroup().addTo(state.map);
   state.planeLayer  = L.layerGroup().addTo(state.map);
@@ -378,9 +375,9 @@ function planeIcon(track, label){
 /* ---------- animated vehicle markers (smooth "live" movement) ----------
    Markers persist by id and glide from their last position to each new
    fix over `dur` ms, so trains/buses/planes visibly move between updates. */
-state.fleets = { bus:{}, marc:{}, amtrak:{}, metro:{}, plane:{} };
+state.fleets = { bus:{}, marc:{}, rideon:{}, amtrak:{}, metro:{}, plane:{} };
 function fleetLayer(f){
-  return { bus:state.busVehLayer, marc:state.marcLayer, amtrak:state.trainLayer,
+  return { bus:state.busVehLayer, marc:state.marcLayer, rideon:state.rideonLayer, amtrak:state.trainLayer,
            metro:state.metroLayer, plane:state.planeLayer }[f];
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
@@ -922,13 +919,21 @@ async function drawMarcScheduledMap(){
 // MARC on the map: live via the optional Worker if configured, else scheduled interpolation.
 function marcMapTick(){ if(state.marcUrl) fetchMarc(); else drawMarcScheduledMap(); }
 
-/* ---------- RIDE ON (scheduled — bundled nearby timetable, no key/Worker) ----------
-   Ride On has no public real-time feed, so this shows the next scheduled
-   departures at your nearest stops from a trimmed copy of its GTFS. */
+/* ---------- RIDE ON (bundled schedule, no key/Worker/proxy) ----------
+   Montgomery County's Ride On publishes NO public real-time feed at all (only
+   a private, key-gated Swiftly API) — so exactly like MARC, this uses a
+   bundled copy of Ride On's own GTFS (rideon-schedule.json, generated by
+   gen-rideon-schedule.py) to show next-departure times AND to place buses
+   on the map by interpolating each running trip between stops. Filtered to
+   routes 23 and 29 only — see ROUTES in the generator script. */
+const RIDEON_COL = { "23":"#2f9e44", "29":"#1c7ed6" };
 async function ensureRideOnSchedule(){
   if(state.roSched) return state.roSched;
-  try{ const s=await getJSON("rideon-schedule.json", 15000);
-    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+  try{
+    const s=await getJSON("rideon-schedule.json", 15000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
+    s._dep={};                                                                          // stop_id -> departures (for the card)
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
     state.roSched=s;
   }catch(e){}
   return state.roSched;
@@ -937,27 +942,25 @@ async function refreshRideOn(){
   const s=await ensureRideOnSchedule(); const box=$("#rideonList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Ride On schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
-  const active=marcActiveServices(s, now);                 // same calendar logic (svc/exc)
+  const active=marcActiveServices(s, now);                 // same calendar logic (svc/exc) as MARC
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
-    if(used>=2) break;
-    const deps=(s.dep[st.id]||[])
-      .filter(d=>active.has(s.svcList[d[2]]))
-      .map(d=>({rt:s.routes[d[0]], min:d[1]}))
+    if(used>=3) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+(st.name||st.id)+`  ·  ${mi.toFixed(1)} mi`));
     deps.forEach(d=>{
       const row=el("div","row");
-      const b=el("div","badge", d.rt); b.style.background="#3b527d";
+      const b=el("div","badge", d.line); b.style.background=RIDEON_COL[d.line]||"#3b527d";
       const mid=el("div");
-      mid.appendChild(el("div","dest", "Route "+d.rt));
+      mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
       const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", "Ride On · "+relTxt));
+      mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
       const times=el("div","times");
-      const t=el("div","live"); t.style.color="#8ab4ff"; t.textContent=marcClock(d.min);
+      const t=el("div","live"); t.style.color="#8ab4ff"; t.textContent=marcClock(d.t);
       times.append(t, el("div","sched","scheduled"));
       row.append(b, mid, el("div"), times);
       box.appendChild(row); shown++;
@@ -966,6 +969,30 @@ async function refreshRideOn(){
   if(!shown) box.appendChild(el("div","empty","No more Ride On trips today at nearby stops."));
   $("#rideonCount").textContent="scheduled";
   fitList(box);
+}
+/* Place Ride On buses (routes 23 & 29) on the map by interpolating each
+   running trip's position between the two stops its schedule puts it
+   between right now — same technique as drawMarcScheduledMap(). */
+async function drawRideOnScheduledMap(){
+  const s=await ensureRideOnSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){                 // also catch after-midnight trips
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      items.push({ id:"ro"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(RIDEON_COL[tr.line]||"#3b527d", `${tr.line} → ${tr.hs}`),
+        ik:"ro-"+tr.line+"-"+i, tip:`Ride On ${tr.line} → ${tr.hs} (scheduled)` });
+      break;
+    }
+  });
+  updateFleet("rideon", items, CFG.rideonEveryMs);
 }
 
 /* show/hide the optional cards based on whether their source is configured */
@@ -1008,7 +1035,7 @@ $("#saveKey").onclick=()=>{
   localStorage.setItem(LS.marc, state.marcUrl);
   closeSetup(); applyOptionalCards();
   state.busStops=[]; refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); refreshPlanes();
+  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap(); refreshPlanes();
 };
 $("#skipKey").onclick=()=>{ closeSetup(); };
 $("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
@@ -1082,7 +1109,7 @@ function boot(){
   applyOptionalCards();
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshTransit(); refreshPlanes(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn();
+  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap();
   setInterval(refreshTransit, CFG.transitEveryMs);
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(fetchBusPositions, CFG.busPosEveryMs);
@@ -1091,6 +1118,7 @@ function boot(){
   setInterval(marcMapTick, CFG.marcEveryMs);   // MARC positions on the map (live or scheduled)
   setInterval(refreshMarc, 30000);             // recompute next scheduled MARC trains (card)
   setInterval(refreshRideOn, 60000);           // recompute next scheduled Ride On (card)
+  setInterval(drawRideOnScheduledMap, CFG.rideonEveryMs); // Ride On positions on the map (scheduled)
   setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
   // re-fit cards to the new layout when the window/display changes size
@@ -1099,7 +1127,7 @@ function boot(){
     fitAll();                              // instant: never clip/scroll while shrinking
     clearTimeout(rzT); rzT=setTimeout(()=>{ // then reload data to refill rows if we grew
       if(state.map) state.map.invalidateSize();
-      refreshTransit(); fetchAmtrak(); refreshMarc(); refreshRideOn(); refreshPlanes();
+      refreshTransit(); fetchAmtrak(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap(); refreshPlanes();
     }, 350);
   });
 
