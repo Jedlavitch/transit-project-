@@ -35,7 +35,7 @@
   #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
   header{
     display:flex; align-items:center; gap:16px; padding:14px 22px;
-    border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1626,#0b0f1a);
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--panel2),var(--bg));
   }
   header .title{font-size:20px; font-weight:800; letter-spacing:.3px}
   header .title small{color:var(--muted); font-weight:600; margin-left:8px}
@@ -59,6 +59,7 @@
     border:1px solid var(--line); border-radius:14px; padding:11px 13px;
     display:flex; flex-direction:column; min-height:0; overflow:hidden;
   }
+  .card.user-hidden{display:none !important}
   .card h2{margin:0 0 7px; font-size:13px; letter-spacing:.4px; text-transform:uppercase;
     color:var(--muted); display:flex; align-items:center; gap:8px}
   .card h2 .icon{font-size:17px}
@@ -67,7 +68,7 @@
 
   .row{
     display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
-    padding:7px 9px; border-radius:10px; background:#0d1424; border:1px solid #172038;
+    padding:7px 9px; border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
   }
   .row .badge{
     min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
@@ -81,14 +82,15 @@
   .row .live.brd{color:#fff; background:var(--good); padding:1px 7px; border-radius:6px; font-size:13px}
   .row .live.arr{color:#08101f; background:var(--warn); padding:1px 7px; border-radius:6px; font-size:13px}
   .row .sched{font-size:11px; color:var(--sched)}
-  .row .sched b{color:#aab6d8}
+  .row .sched b{color:var(--sched-b)}
   .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
+  .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
   .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
 
-  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:#0d1424}
-  .leaflet-container{background:#0d1424}
+  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
+  .leaflet-container{background:var(--row-bg)}
   .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
   .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
   .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
@@ -100,7 +102,7 @@
   footer .grow{flex:1}
 
   /* Setup overlay */
-  #setup{position:fixed; inset:0; background:rgba(6,9,16,.86); backdrop-filter:blur(6px);
+  #setup{position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(6px);
     display:none; align-items:center; justify-content:center; z-index:9999; padding:20px}
   #setup.show{display:flex}
   #setup .box{background:var(--panel); border:1px solid var(--line); border-radius:18px;
@@ -109,7 +111,7 @@
   #setup p{color:var(--muted); font-size:13px; line-height:1.5; margin:8px 0}
   #setup a{color:var(--accent)}
   #setup input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
-    background:#0d1424; color:var(--text); font-size:14px; margin-top:6px}
+    background:var(--row-bg); color:var(--text); font-size:14px; margin-top:6px}
   #setup .btns{display:flex; gap:10px; margin-top:16px}
   #setup button{flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
     background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
@@ -126,6 +128,13 @@
   #setup .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
   #setup .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.2)}
   #setup .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a); position:relative; overflow:hidden}
+  #setup .theme-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:9px}
+  #setup .theme-btn{flex:1; min-width:70px; padding:9px 6px; border-radius:10px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font-size:12px; font-weight:700; cursor:pointer}
+  #setup .theme-btn.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  #setup .card-toggle{flex:1; min-width:120px; display:flex; align-items:center; gap:7px; padding:8px 10px;
+    border-radius:10px; border:1px solid var(--line); background:var(--row-bg); font-size:12.5px; cursor:pointer}
+  #setup .card-toggle input{margin:0; cursor:pointer}
   #setup .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
 
   /* Narrower screens: stack map on top, cards fill the rest — still fits the
@@ -181,7 +190,7 @@
 
     <div class="col">
       <div class="cards">
-        <div class="card">
+        <div class="card" id="amtrakCard">
           <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
           <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
         </div>
@@ -201,7 +210,7 @@
           <h2><span class="icon">🚆</span> PATCO <span class="count" id="patcoCount"></span></h2>
           <div class="list" id="patcoList"><div class="empty">Loading PATCO schedule…</div></div>
         </div>
-        <div class="card">
+        <div class="card" id="planeCard">
           <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>
@@ -235,8 +244,18 @@
     <p style="font-size:12px">SEPTA Regional Rail, SEPTA Subway (Market-Frankford + Broad Street Line), and PATCO all show
       <b>scheduled</b> times with no setup (built in) — trains are placed on the map from their schedule.</p>
 
+    <div class="accent-lbl">Theme</div>
+    <div class="theme-row" id="themeRow">
+      <button type="button" class="theme-btn" data-theme="dark">Dark</button>
+      <button type="button" class="theme-btn" data-theme="black">Black</button>
+      <button type="button" class="theme-btn" data-theme="day">Day</button>
+    </div>
+
     <div class="accent-lbl">Accent color</div>
     <div class="swatches" id="accentSwatches"></div>
+
+    <div class="accent-lbl">Show on board</div>
+    <div class="theme-row" id="cardToggles"></div>
 
     <details style="margin-top:6px">
       <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: exact live SEPTA positions</summary>
@@ -594,6 +613,19 @@ function renderRail(trains){
   fitList(box);
 }
 function railKey(m){ return m==="BRD"?-2 : m==="ARR"?-1 : (parseInt(m,10)||99); }
+/* Group a stop's upcoming scheduled departures by headsign so a bundled-
+   schedule card (SEPTA, PATCO) can show both directions' timetables
+   separately instead of one merged, hard-to-scan list. Returns up to
+   maxDirs direction-groups, each an array of up to perDir departures,
+   soonest direction first. */
+function groupDepsByDirection(deps, perDir=2, maxDirs=2){
+  const groups=new Map();
+  deps.forEach(d=>{ const key=d.hs||"—"; if(!groups.has(key)) groups.set(key, []); groups.get(key).push(d); });
+  return [...groups.values()]
+    .map(list=>list.sort((a,b)=>a.min-b.min).slice(0,perDir))
+    .sort((a,b)=>a[0].min-b[0].min)
+    .slice(0,maxDirs);
+}
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
 function fitList(box){
   if(!box || box.clientHeight < 8) return;    // skip only when not laid out yet (height ~0)
@@ -1166,22 +1198,25 @@ async function refreshSeptaRail(){
     if(mi>40) break;         // Regional Rail spans a wide area; skip stations far from wherever you are
     if(used>=2) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+      .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    deps.forEach(d=>{
-      const row=el("div","row");
-      const b=el("div","badge rail", d.line); b.style.background=SEPTA_COL;
-      const mid=el("div");
-      mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
-      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", d.line+" · "+relTxt));
-      const times=el("div","times");
-      const t=el("div","live"); t.style.color="#8fb3c7"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
-      row.append(b, mid, el("div"), times);
-      box.appendChild(row); shown++;
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail", d.line); b.style.background=SEPTA_COL;
+        const mid=el("div");
+        mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", d.line+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#8fb3c7"; t.textContent=marcClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No SEPTA Regional Rail nearby (or none scheduled soon)."));
@@ -1242,22 +1277,25 @@ async function refreshSeptaBusScheduled(){
     if(mi>10) break;
     if(used>=2) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+      .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    deps.forEach(d=>{
-      const row=el("div","row");
-      const b=el("div","badge", d.line); b.style.background=SEPTA_BUS_COL; b.style.color="#2a1c00";
-      const mid=el("div");
-      mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
-      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
-      const times=el("div","times");
-      const t=el("div","live"); t.style.color="#e0b466"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
-      row.append(b, mid, el("div"), times);
-      box.appendChild(row); shown++;
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||("Route "+group[0].line))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge", d.line); b.style.background=SEPTA_BUS_COL; b.style.color="#2a1c00";
+        const mid=el("div");
+        mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#e0b466"; t.textContent=marcClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No Route 3/4/16 buses nearby (or none scheduled soon)."));
@@ -1367,22 +1405,25 @@ async function refreshSeptaSubway(){
     if(mi>15) break;         // subway stations only matter if genuinely nearby
     if(used>=2) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+      .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    deps.forEach(d=>{
-      const row=el("div","row");
-      const b=el("div","badge rail", d.line); b.style.background=SEPTA_SUBWAY_COL[d.line]||"#556";
-      const mid=el("div");
-      mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
-      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", d.line+" · "+relTxt));
-      const times=el("div","times");
-      const t=el("div","live"); t.style.color="#7fb0e0"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
-      row.append(b, mid, el("div"), times);
-      box.appendChild(row); shown++;
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail", d.line); b.style.background=SEPTA_SUBWAY_COL[d.line]||"#556";
+        const mid=el("div");
+        mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", d.line+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#7fb0e0"; t.textContent=marcClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No SEPTA subway nearby (or none scheduled soon)."));
@@ -1440,22 +1481,25 @@ async function refreshPatco(){
     if(mi>15) break;
     if(used>=2) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+      .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    deps.forEach(d=>{
-      const row=el("div","row");
-      const b=el("div","badge rail", "P"); b.style.background=PATCO_COL;
-      const mid=el("div");
-      mid.appendChild(el("div","dest", d.hs||"PATCO"));
-      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-      mid.appendChild(el("div","sub", "PATCO · "+relTxt));
-      const times=el("div","times");
-      const t=el("div","live"); t.style.color="#e0708a"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
-      row.append(b, mid, el("div"), times);
-      box.appendChild(row); shown++;
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||"PATCO")));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail", "P"); b.style.background=PATCO_COL;
+        const mid=el("div");
+        mid.appendChild(el("div","dest", d.hs||"PATCO"));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", "PATCO · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#e0708a"; t.textContent=marcClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No PATCO nearby (or none scheduled soon)."));
@@ -1585,9 +1629,50 @@ function buildAccentSwatches(){
   inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
 }
 
+/* ---------- theme (dark / black / day) ---------- */
+function setBoardTheme(mode){
+  document.documentElement.setAttribute("data-theme", mode);
+  localStorage.setItem("transitboardphl.theme", mode);
+  document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
+}
+function buildThemeButtons(){
+  document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
+}
+
+/* ---------- customize: which cards show on the board ---------- */
+const CARD_DEFS=[
+  {id:"amtrakCard", label:"Amtrak"}, {id:"septaRailCard", label:"SEPTA Rail"},
+  {id:"septaSubwayCard", label:"SEPTA Subway"}, {id:"septaBusCard", label:"SEPTA Bus"},
+  {id:"patcoCard", label:"PATCO"}, {id:"planeCard", label:"Planes"},
+];
+function loadHiddenCards(){
+  try{ return new Set(JSON.parse(localStorage.getItem("transitboardphl.hiddenCards")||"[]")); }catch(e){ return new Set(); }
+}
+function applyCardVis(){
+  const hidden=loadHiddenCards();
+  CARD_DEFS.forEach(({id})=>{ const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id)); });
+}
+function buildCardToggles(){
+  const wrap=document.getElementById("cardToggles"); if(!wrap) return; wrap.innerHTML="";
+  const hidden=loadHiddenCards();
+  CARD_DEFS.forEach(({id,label})=>{
+    const lab=document.createElement("label"); lab.className="card-toggle";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!hidden.has(id);
+    cb.onchange=()=>{
+      const h=loadHiddenCards();
+      if(cb.checked) h.delete(id); else h.add(id);
+      localStorage.setItem("transitboardphl.hiddenCards", JSON.stringify([...h]));
+      applyCardVis();
+    };
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(label)); wrap.appendChild(lab);
+  });
+}
+
 /* ---------- boot ---------- */
 function boot(){
   setBoardAccent(localStorage.getItem("transitboardphl.accent")||"#4ea1ff"); buildAccentSwatches();
+  setBoardTheme(localStorage.getItem("transitboardphl.theme")||"dark"); buildThemeButtons();
+  buildCardToggles(); applyCardVis();
   loadSavedLoc(); applyLoc(state.loc); initMap();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
