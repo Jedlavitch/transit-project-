@@ -87,8 +87,8 @@
   #arcSvg .done{stroke:var(--amber-dim); stroke-width:5; fill:none;
     filter:drop-shadow(0 0 6px rgba(90,150,255,.6)); transition:stroke-dasharray 1.2s ease}
   #arcSvg .endpt{fill:var(--muted)}
-  #arcPlane{transition:transform 1.2s ease}
-  #arcPlane path{fill:#bcd9ff; filter:drop-shadow(0 0 8px rgba(120,180,255,.9))}
+  .arcVeh{transition:transform 1.2s ease}
+  .arcVeh path, .arcVeh rect, .arcVeh circle{fill:#bcd9ff; filter:drop-shadow(0 0 8px rgba(120,180,255,.9))}
 
   /* ---- settings panel ---- */
   #settings{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
@@ -179,7 +179,21 @@
           <circle class="endpt" id="arcO" r="7"/><circle class="endpt" id="arcD" r="7"/>
           <text id="arcOLbl" text-anchor="start"></text>
           <text id="arcDLbl" text-anchor="end"></text>
-          <g id="arcPlane"><path d="M0,-13 L3,-2 L13,3 L13,6 L2,4 L2,10 L6,13 L6,15 L0,13.5 L-6,15 L-6,13 L-2,10 L-2,4 L-13,6 L-13,3 L-3,-2 Z"/></g>
+          <g id="arcPlane" class="arcVeh"><path d="M0,-13 L3,-2 L13,3 L13,6 L2,4 L2,10 L6,13 L6,15 L0,13.5 L-6,15 L-6,13 L-2,10 L-2,4 L-13,6 L-13,3 L-3,-2 Z"/></g>
+          <g id="arcTrain" class="arcVeh" style="display:none">
+            <path d="M0,-13 C5,-13 7,-9.5 7,-6 L7,9 C7,11.8 5,13 2,13 L-2,13 C-5,13 -7,11.8 -7,9 L-7,-6 C-7,-9.5 -5,-13 0,-13 Z"/>
+            <rect x="-4.2" y="-6.5" width="3.4" height="4.4" rx="1"/>
+            <rect x="0.8" y="-6.5" width="3.4" height="4.4" rx="1"/>
+            <rect x="-5" y="10.2" width="10" height="1.8" rx="0.9"/>
+          </g>
+          <g id="arcBus" class="arcVeh" style="display:none">
+            <path d="M-7,-9.5 C-7,-11.8 -5,-13 -2.5,-13 L2.5,-13 C5,-13 7,-11.8 7,-9.5 L7,10 C7,11.8 5,13 3,13 L-3,13 C-5,13 -7,11.8 -7,10 Z"/>
+            <rect x="-5" y="-10.6" width="10" height="4" rx="1"/>
+            <rect x="-5" y="-4.8" width="4" height="4.2" rx="0.8"/>
+            <rect x="1" y="-4.8" width="4" height="4.2" rx="0.8"/>
+            <circle cx="-4.3" cy="12.3" r="1.5"/>
+            <circle cx="4.3" cy="12.3" r="1.5"/>
+          </g>
         </svg>
         <div class="status" id="status"></div>
       </div>
@@ -285,7 +299,9 @@ function renderArc(oLL, dLL, posLL, oCode, dCode){
   const f=Math.min(.98, Math.max(.02, flown/(flown+left||1)));
   $("#arcDone").style.strokeDasharray=`${f} 1`;
   const [x,y]=arcPoint(f);
-  $("#arcPlane").style.transform=`translate(${x}px,${y}px) rotate(${arcAngle(f)+90}deg) scale(1.6)`;
+  const iconId = mode==="trains" ? "arcTrain" : mode==="buses" ? "arcBus" : "arcPlane";
+  ["arcPlane","arcTrain","arcBus"].forEach(id=>{ $("#"+id).style.display = id===iconId ? "" : "none"; });
+  $("#"+iconId).style.transform=`translate(${x}px,${y}px) rotate(${arcAngle(f)+90}deg) scale(1.6)`;
   $("#arcOLbl").textContent=oCode||"";
   $("#arcDLbl").textContent=dCode||"";
   svg.style.display="block";
@@ -318,8 +334,8 @@ async function updatePhoto(hex){
 
 /* ===== subject producers: each returns a normalized subject or null ===== */
 let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses"].includes(m)?m:"planes"; })();
-const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:"🚌 Nearest bus" };
-const RANGE = { planes:"aircraft within 30 nm", trains:"Amtrak trains", buses:"Metrobus within 3 km" };
+const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:"🚌 Nearest Ride On bus" };
+const RANGE = { planes:"aircraft within 30 nm", trains:"Amtrak trains", buses:"Ride On routes 23 & 29" };
 
 /* ---- PLANES ---- */
 async function producePlane(){
@@ -385,22 +401,58 @@ async function produceTrain(){
 }
 
 /* ---- BUSES (WMATA Metrobus; uses the board's saved key) ---- */
+/* ---- BUSES (Ride On routes 23 & 29 — bundled schedule, same as the main board) ----
+   Ride On publishes no public real-time feed, so — like MARC on the board —
+   this places the nearest bus by interpolating its scheduled trip between
+   stops. Reads the same rideon-schedule.json bundle. */
+let roSchedNight=null;
+async function ensureRideOnScheduleNight(){
+  if(roSchedNight) return roSchedNight;
+  try{
+    const s=await getJSON("rideon-schedule.json", 15000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
+    roSchedNight=s;
+  }catch(e){}
+  return roSchedNight;
+}
+function roYmd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
+function roActiveServices(s, date){
+  const y=roYmd(date), dow=(date.getDay()+6)%7;
+  const act=new Set();
+  for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
+  const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  return act;
+}
 async function produceBus(){
-  const key=localStorage.getItem("transitboard.wmataKey")||"";
-  if(!key) return {needKey:true};
-  const data=await getJSON(`https://api.wmata.com/Bus.svc/json/jBusPositions?Lat=${loc.lat}&Lon=${loc.lon}&Radius=3000&api_key=${encodeURIComponent(key)}`);
-  const buses=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null)
-    .map(v=>({v, nm:haversineNm(loc,{lat:v.Lat,lon:v.Lon})})).sort((a,b)=>a.nm-b.nm);
-  if(!buses.length) return null;
-  const {v, nm}=buses[0], dev=v.Deviation;
-  let devHtml = dev==null?`<span class="badge na">in service</span>`
-    : dev>1?`<span class="badge late">${dev} min late</span>`
-    : dev<-1?`<span class="badge ok">${-dev} min early</span>`:`<span class="badge ok">on time</span>`;
-  return { id:"b"+(v.VehicleID||v.RouteID), nm, unit:"nm", dir:bearingFrom(loc,{lat:v.Lat,lon:v.Lon}),
-    altText:"", title:`Route ${v.RouteID}`, sub:"Metrobus",
-    oCity:null, dCity:v.TripHeadsign||v.DirectionText||"", subline:v.DirectionText||"",
-    oLL:null, dLL:null, posLL:null, oCode:"", dCode:"",
-    statusHtml:`<span class="phase">in service</span>`+devHtml, photoHex:null };
+  const s=await ensureRideOnScheduleNight();
+  if(!s) return null;
+  const now=new Date(), active=roActiveServices(s, now);
+  let best=null;
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nowMin of [now.getHours()*60+now.getMinutes(), now.getHours()*60+now.getMinutes()+1440]){
+      if(nowMin < seq[0][1] || nowMin > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nowMin) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nowMin-a[1])/(b[1]-a[1]) : 0;
+      const lat=ca[0]+(cb[0]-ca[0])*f, lon=ca[1]+(cb[1]-ca[1])*f;
+      const nm=haversineNm(loc,{lat,lon});
+      const first=s._coord[seq[0][0]], last=s._coord[seq[seq.length-1][0]];
+      if(!best || nm<best.nm) best={ i, tr, lat, lon, nm, first, last };
+      break;
+    }
+  });
+  if(!best) return null;
+  const { tr, lat, lon, nm, first, last } = best;
+  return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}),
+    altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · Ride On`,
+    oCity: first?first[2]:null, dCity: last?last[2]:tr.hs,
+    subline:"scheduled position (Ride On has no public live feed)",
+    oLL: first?{lat:first[0],lon:first[1]}:null, dLL: last?{lat:last[0],lon:last[1]}:null,
+    posLL:{lat,lon}, oCode:"", dCode:"",
+    statusHtml:`<span class="phase">in service</span><span class="badge na">scheduled</span>`, photoHex:null };
 }
 const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus };
 
