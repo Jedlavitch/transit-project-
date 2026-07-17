@@ -1190,8 +1190,13 @@ async function ensureSeptaRailSchedule(){
   return state.septaSched;
 }
 async function refreshSeptaRail(){
+  // ensureSeptaRailSchedule() also draws the route line on the map as a side
+  // effect the first time it loads, so it must always run even when the live
+  // Worker owns the departures list below -- otherwise the route line never
+  // gets drawn at all when live tracking is on.
+  const s=await ensureSeptaRailSchedule();
   if(state.septaUrl) return;   // the live Worker owns this card once configured
-  const s=await ensureSeptaRailSchedule(); const box=$("#septaRailList"); if(!box) return;
+  const box=$("#septaRailList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA Regional Rail schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
@@ -1270,8 +1275,13 @@ async function ensureSeptaBusSchedule(){
   return state.septaBusSched;
 }
 async function refreshSeptaBusScheduled(){
+  // ensureSeptaBusSchedule() also draws the route line on the map as a side
+  // effect the first time it loads, so it must always run even when the live
+  // Worker owns the departures list below -- otherwise the route line never
+  // gets drawn at all when live tracking is on.
+  const s=await ensureSeptaBusSchedule();
   if(state.septaUrl) return;   // the live Worker owns this card once configured
-  const s=await ensureSeptaBusSchedule(); const box=$("#septaBusList"); if(!box) return;
+  const box=$("#septaBusList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA bus schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
