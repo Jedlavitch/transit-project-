@@ -151,4 +151,5 @@ and re-serve the data with CORS added: **`marc-worker.js`** and **`septa-worker.
 2. Name it (e.g. `marc` or `septa`), **Deploy**, then **Edit code**.
 3. Delete the starter code, **paste in all of `marc-worker.js`** (or `septa-worker.js`), **Deploy** again.
 4. Copy your Worker URL (`https://marc.YOUR-NAME.workers.dev` / `https://septa.YOUR-NAME.workers.dev`).
-5. In the board: **⚙︎ → "Advanced: real-time MARC positions"** or **"Philadelphia: SEPTA"**, paste the URL, Save.
+5. On the Bethesda board: **⚙︎ → "Advanced: real-time MARC positions"**, paste the URL, Save.
+   On the Philadelphia board: **⚙︎ → "Optional: live SEPTA positions + buses/trolleys"**, paste the URL, Save.
