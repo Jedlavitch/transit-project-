@@ -160,6 +160,7 @@
         <span style="color:#4F758B">▦ SEPTA rail</span>
         <span><span style="color:#1c6bb0">▦</span> SEPTA MFL <span style="color:#f7941d">▦</span> BSL</span>
         <span style="color:#e8a33c">▦ SEPTA bus</span>
+        <span style="color:#BC0035">▦ PATCO</span>
         <span>🔵 live Metrobus</span>
         <span>◉ Metro train</span>
         <span>🔴 Metro station</span>
@@ -202,6 +203,10 @@
         <div class="card" id="septaBusCard" style="display:none">
           <h2><span class="icon">🚌</span> SEPTA Bus/Trolley <span class="count" id="septaBusCount"></span></h2>
           <div class="list" id="septaBusList"><div class="empty">Add a SEPTA helper URL (⚙) for live buses…</div></div>
+        </div>
+        <div class="card" id="patcoCard" style="display:none">
+          <h2><span class="icon">🚆</span> PATCO <span class="count" id="patcoCount"></span></h2>
+          <div class="list" id="patcoList"><div class="empty">Loading PATCO schedule…</div></div>
         </div>
         <div class="card">
           <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
@@ -371,7 +376,7 @@ function refreshEverythingForNewLocation(){
   state.busStops=[]; // force re-scan of nearby stops
   refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
   fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap();
-  refreshSeptaRail(); refreshSeptaSubway(); septaMapTick(); refreshPlanes();
+  refreshSeptaRail(); refreshSeptaSubway(); septaMapTick(); refreshPatco(); drawPatcoScheduledMap(); refreshPlanes();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
@@ -434,6 +439,7 @@ function initMap(){
   state.rideonLayer = L.layerGroup().addTo(state.map);
   state.septaRailLayer = L.layerGroup().addTo(state.map);
   state.septaSubwayLayer = L.layerGroup().addTo(state.map);
+  state.patcoLayer = L.layerGroup().addTo(state.map);
   state.septaBusLayer  = L.layerGroup().addTo(state.map);
   state.trainLayer  = L.layerGroup().addTo(state.map);
   state.metroLayer  = L.layerGroup().addTo(state.map);
@@ -471,11 +477,11 @@ function planeIcon(track, label){
 /* ---------- animated vehicle markers (smooth "live" movement) ----------
    Markers persist by id and glide from their last position to each new
    fix over `dur` ms, so trains/buses/planes visibly move between updates. */
-state.fleets = { bus:{}, marc:{}, rideon:{}, septaRail:{}, septaSubway:{}, septaBus:{}, amtrak:{}, metro:{}, plane:{} };
+state.fleets = { bus:{}, marc:{}, rideon:{}, septaRail:{}, septaSubway:{}, septaBus:{}, patco:{}, amtrak:{}, metro:{}, plane:{} };
 function fleetLayer(f){
   return { bus:state.busVehLayer, marc:state.marcLayer, rideon:state.rideonLayer,
            septaRail:state.septaRailLayer, septaSubway:state.septaSubwayLayer, septaBus:state.septaBusLayer,
-           amtrak:state.trainLayer, metro:state.metroLayer, plane:state.planeLayer }[f];
+           patco:state.patcoLayer, amtrak:state.trainLayer, metro:state.metroLayer, plane:state.planeLayer }[f];
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
 function updateFleet(fleet, items, dur){
@@ -601,7 +607,7 @@ function fitList(box){
   }
 }
 /* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
-function fitAll(){ ["#railList","#busList","#amtrakList","#marcList","#rideonList","#septaRailList","#septaSubwayList","#septaBusList","#planeList"].forEach(s=>fitList($(s))); }
+function fitAll(){ ["#railList","#busList","#amtrakList","#marcList","#rideonList","#septaRailList","#septaSubwayList","#septaBusList","#patcoList","#planeList"].forEach(s=>fitList($(s))); }
 function renderRailNoKey(){
   $("#railList").innerHTML="";
   $("#railList").appendChild(el("div","empty","Add a free WMATA key (⚙︎) to see live train times."));
@@ -1289,6 +1295,78 @@ async function drawSeptaSubwayScheduledMap(){
   updateFleet("septaSubway", items, CFG.septaEveryMs);
 }
 
+/* ---------- PATCO — Philadelphia <-> Camden, NJ high-speed line ----------
+   PATCO (run by the Delaware River Port Authority) publishes NO real-time
+   API at all — not even a CORS-blocked one like MARC/SEPTA. It's also tiny
+   (one line, 14 stations), so the whole system is bundled: same
+   schedule-interpolation technique, no optional live Worker exists for it. */
+const PATCO_COL = "#BC0035";   // PATCO's own brand color
+async function ensurePatcoSchedule(){
+  if(state.patcoSched) return state.patcoSched;
+  try{
+    const s=await getJSON("patco-schedule.json", 15000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._dep={};
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    state.patcoSched=s;
+  }catch(e){}
+  return state.patcoSched;
+}
+async function refreshPatco(){
+  const s=await ensurePatcoSchedule(); const box=$("#patcoList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","PATCO schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(mi>15) break;
+    if(used>=2) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
+      .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    deps.forEach(d=>{
+      const row=el("div","row");
+      const b=el("div","badge rail", "P"); b.style.background=PATCO_COL;
+      const mid=el("div");
+      mid.appendChild(el("div","dest", d.hs||"PATCO"));
+      const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+      mid.appendChild(el("div","sub", "PATCO · "+relTxt));
+      const times=el("div","times");
+      const t=el("div","live"); t.style.color="#e0708a"; t.textContent=marcClock(d.t);
+      times.append(t, el("div","sched","scheduled"));
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row); shown++;
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No PATCO nearby (or none scheduled soon)."));
+  $("#patcoCount").textContent="scheduled";
+  fitList(box);
+}
+async function drawPatcoScheduledMap(){
+  const s=await ensurePatcoSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      items.push({ id:"pt"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(PATCO_COL, `PATCO → ${tr.hs}`),
+        ik:"pt-"+i, tip:`PATCO → ${tr.hs} (scheduled)` });
+      break;
+    }
+  });
+  updateFleet("patco", items, CFG.septaEveryMs);
+}
+
 /* show/hide the optional cards based on whether their source is configured */
 function applyOptionalCards(){
   document.getElementById("marcCard").style.display     = "flex";   // bundled schedule — zero setup
@@ -1296,6 +1374,7 @@ function applyOptionalCards(){
   document.getElementById("septaRailCard").style.display = "flex"; // bundled schedule — zero setup
   document.getElementById("septaSubwayCard").style.display = "flex"; // bundled schedule — zero setup
   document.getElementById("septaBusCard").style.display  = state.septaUrl ? "flex" : "none"; // needs the Worker (no bundled bus network)
+  document.getElementById("patcoCard").style.display     = "flex";   // bundled schedule — zero setup
 }
 
 /* ---------- refresh orchestration ---------- */
@@ -1423,6 +1502,8 @@ function boot(){
   setInterval(refreshSeptaRail, 30000);        // recompute next scheduled SEPTA Regional Rail (card)
   setInterval(refreshSeptaSubway, 30000);      // recompute next scheduled SEPTA Subway (card)
   setInterval(septaMapTick, CFG.septaEveryMs); // SEPTA positions on the map (scheduled, or live via Worker)
+  setInterval(refreshPatco, 30000);            // recompute next scheduled PATCO (card)
+  setInterval(drawPatcoScheduledMap, CFG.septaEveryMs); // PATCO positions on the map (scheduled)
   setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
   // re-fit cards to the new layout when the window/display changes size
