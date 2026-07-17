@@ -434,6 +434,7 @@ function initMap(){
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(state.map);
   state.routeLayer  = L.layerGroup().addTo(state.map);   // Metro rail lines, beneath everything
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
+  state.marcRouteLayer = L.layerGroup().addTo(state.map); // MARC line routes
   state.stopLayer   = L.layerGroup().addTo(state.map);
   state.busVehLayer = L.layerGroup().addTo(state.map);
   state.marcLayer   = L.layerGroup().addTo(state.map);
@@ -1008,6 +1009,24 @@ function drawMarc(veh){
 function marcYmd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
 function marcClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
 function marcStationName(n){ return (n||"").replace(/\bMARC\b/ig,"").replace(/\b(eb|wb|nb|sb)\b/ig,"").replace(/\s+/g," ").trim(); }
+/* Draws each line's longest trip (by stop count, to avoid a short turnback)
+   as a colored polyline connecting its already-ordered stops -- same
+   technique already used for SEPTA/PATCO's route lines on the Philly board. */
+function drawScheduleRouteLines(schedule, layer, colorFn){
+  if(!schedule || !schedule.trips || !layer) return;
+  layer.clearLayers();
+  const bestByLine={};
+  schedule.trips.forEach(tr=>{
+    const cur=bestByLine[tr.line];
+    if(!cur || tr.st.length>cur.st.length) bestByLine[tr.line]=tr;
+  });
+  Object.values(bestByLine).forEach(tr=>{
+    const pts=tr.st.map(([sid])=>schedule._coord[sid]).filter(Boolean);
+    if(pts.length>1) L.polyline(pts, {
+      color:colorFn(tr.line), weight:4, opacity:.5, lineCap:"round", lineJoin:"round"
+    }).addTo(layer);
+  });
+}
 async function ensureMarcSchedule(){
   if(state.marcSched) return state.marcSched;
   try{ const s=await getJSON("marc-schedule.json", 15000);
@@ -1015,6 +1034,7 @@ async function ensureMarcSchedule(){
     s._dep={};                                                                          // stop_id -> departures (for the card)
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
     state.marcSched=s;
+    drawScheduleRouteLines(s, state.marcRouteLayer, l=>MARC_COL[l]||"#e8792b");
   }catch(e){}
   return state.marcSched;
 }
@@ -1026,8 +1046,13 @@ function marcActiveServices(s, date){
   return act;
 }
 async function refreshMarc(){
+  // ensureMarcSchedule() also draws the route line on the map as a side
+  // effect the first time it loads, so it must always run even when the live
+  // Worker owns the departures list below -- otherwise the route line never
+  // gets drawn at all when live tracking is on (same bug fixed for SEPTA).
+  const s=await ensureMarcSchedule();
   if(state.marcUrl) return;   // the live Worker owns this card once configured
-  const s=await ensureMarcSchedule(); const box=$("#marcList"); if(!box) return;
+  const box=$("#marcList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","MARC schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
