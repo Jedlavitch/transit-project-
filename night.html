@@ -230,14 +230,21 @@
    this is what used to make Philadelphia's night mode show DC stuff. */
 const CITY = new URLSearchParams(location.search).get("city")==="philly" ? "philly" : "bethesda";
 const CITY_CONFIG = {
+  // lsMarcUrl/lsSeptaUrl mirror the board's own live-Worker settings so night
+  // mode can pick up the SAME live positions once you've configured one there
+  // -- nothing to set up twice. Ride On has no live source at all (see memory:
+  // no public API/GTFS-RT feed exists), so Bethesda's buses stay schedule-only.
   bethesda: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
     lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
-    busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29" },
+    busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
+    lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, localRailSystem:"MARC" },
   philly: { defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
     lsLoc:"transitboardphl.loc", lsManual:"transitboardphl.locManual", board:"philadelphia.html",
-    busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16" },
+    busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16",
+    lsMarcUrl:null, lsSeptaUrl:"transitboardphl.septaUrl", localRailSystem:"SEPTA" },
 };
 const CITY_CFG = CITY_CONFIG[CITY];
+function loadLiveUrl(key){ return key ? (localStorage.getItem(key)||"") : ""; }
 const CFG = {
   defaultLoc: CITY_CFG.defaultLoc,
   radiusNm: 30,
@@ -423,7 +430,11 @@ async function updatePhoto(key, representative, fallbackQuery){
 /* ===== subject producers: each returns a normalized subject or null ===== */
 let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses"].includes(m)?m:"planes"; })();
 const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:CITY_CFG.busTag };
-const RANGE = { planes:"aircraft within 30 nm", trains:"Amtrak trains", buses:CITY_CFG.busRange };
+const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.localRailSystem} trains`, buses:CITY_CFG.busRange };
+/* SEPTA's live feeds occasionally send phantom vehicles with nonsense
+   sentinel lateness (e.g. late:998) instead of omitting the field --
+   matching the same guard used on the boards. */
+function isRealLateNight(late){ return typeof late==="number" && isFinite(late) && late>0 && Math.abs(late)<=90; }
 
 /* ---- PLANES ---- */
 async function producePlane(){
@@ -462,7 +473,7 @@ async function ensureAmStations(){
     for(const c in d){ const s=d[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }catch(e){ amStations={}; }
   return amStations;
 }
-async function produceTrain(){
+async function produceAmtrakTrain(){
   const data=await getJSON("https://api-v3.amtraker.com/v3/trains",12000), st=await ensureAmStations(), list=[];
   for(const arr of Object.values(data)) for(const t of (arr||[])){
     if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
@@ -488,6 +499,52 @@ async function produceTrain(){
     statusHtml:`<span class="phase">en route</span>`+eta,
     photoQuery:`Amtrak ${t.routeName||"train"} train`, photoFallback:"Amtrak train exterior" };
 }
+/* ---- local live rail (MARC on Bethesda, SEPTA Regional Rail on Philly) --
+   reads the SAME live-Worker URL the board itself uses, so nothing needs to
+   be configured twice. Falls back to null (Amtrak-only) if no Worker URL is
+   saved on the board yet. */
+async function produceLiveLocalTrain(){
+  if(CITY_CFG.lsMarcUrl){
+    const url=loadLiveUrl(CITY_CFG.lsMarcUrl); if(!url) return null;
+    let data; try{ data=await getJSON(url,12000); }catch(e){ return null; }
+    const veh=(data.vehicles||[]).filter(v=>typeof v.lat==="number"&&typeof v.lon==="number");
+    if(!veh.length) return null;
+    const list=veh.map(v=>({v, mi:haversineNm(loc,{lat:v.lat,lon:v.lon})*1.15078})).sort((a,b)=>a.mi-b.mi);
+    const {v,mi}=list[0];
+    return { id:"lm"+(v.id||v.train), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}),
+      altText: v.mph!=null?`${v.mph} mph`:"", title:v.line?`${v.line} Line`:"MARC",
+      sub:`Train ${v.train||"?"} · MARC`, oCity:null, dCity:null, subline:"",
+      oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
+      statusHtml:`<span class="phase">en route</span><span class="badge na">live</span>`,
+      photoQuery:`MARC ${v.line||"train"} train Maryland`, photoFallback:"MARC train Maryland" };
+  }
+  if(CITY_CFG.lsSeptaUrl){
+    const url=loadLiveUrl(CITY_CFG.lsSeptaUrl); if(!url) return null;
+    let data; try{ data=await getJSON(`${url}/trainview`,12000); }catch(e){ return null; }
+    const trains=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon);
+    if(!trains.length) return null;
+    const list=trains.map(t=>({t, mi:haversineNm(loc,{lat:+t.lat,lon:+t.lon})*1.15078})).sort((a,b)=>a.mi-b.mi);
+    const {t,mi}=list[0], late=isRealLateNight(t.late);
+    return { id:"ls"+t.trainno, nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:+t.lat,lon:+t.lon}),
+      altText:"", title:t.line||"SEPTA Regional Rail",
+      sub:`Train ${t.trainno} · SEPTA`, oCity:t.currentstop||null, dCity:t.dest||null,
+      subline: t.currentstop&&t.nextstop ? `${t.currentstop} → ${t.nextstop}` : (t.dest?`→ ${t.dest}`:""),
+      oLL:null, dLL:null, posLL:{lat:+t.lat,lon:+t.lon}, oCode:"", dCode:"",
+      statusHtml:`<span class="phase">en route</span>`+(late?`<span class="badge late">+${t.late} min late</span>`:`<span class="badge ok">on time</span>`),
+      photoQuery:"SEPTA Regional Rail train", photoFallback:"SEPTA train Philadelphia" };
+  }
+  return null;
+}
+/* "Nearest train" should mean nearest across every rail system that's
+   available, not just Amtrak -- pick whichever candidate is actually closer. */
+async function produceTrain(){
+  const [amtrak, local] = await Promise.all([
+    produceAmtrakTrain().catch(()=>null),
+    produceLiveLocalTrain().catch(()=>null),
+  ]);
+  if(amtrak && local) return amtrak.nm<=local.nm ? amtrak : local;
+  return amtrak || local;
+}
 
 /* ---- BUSES (city-appropriate bundled schedule) ----
    Bethesda -> Ride On routes 23 & 29; Philadelphia -> SEPTA Bus routes 3, 4
@@ -512,7 +569,26 @@ function roActiveServices(s, date){
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
   return act;
 }
+/* Live SEPTA bus, via the same Worker URL the board uses (Ride On has no
+   live source at all, so Bethesda always falls through to the schedule). */
+async function produceLiveBus(){
+  if(!CITY_CFG.lsSeptaUrl) return null;
+  const url=loadLiveUrl(CITY_CFG.lsSeptaUrl); if(!url) return null;
+  let data; try{ data=await getJSON(`${url}/transitview`,12000); }catch(e){ return null; }
+  const buses=(data.bus||[]).filter(b=>b.lat&&b.lng);
+  if(!buses.length) return null;
+  const list=buses.map(b=>({b, nm:haversineNm(loc,{lat:+b.lat,lon:+b.lng})})).sort((a,c)=>a.nm-c.nm);
+  const {b,nm}=list[0], late=isRealLateNight(b.late);
+  return { id:"lb"+(b.VehicleID||b.route_id), nm, unit:"nm", dir:bearingFrom(loc,{lat:+b.lat,lon:+b.lng}),
+    altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · SEPTA`,
+    oCity:null, dCity:b.destination||null, subline: b.Direction||"",
+    oLL:null, dLL:null, posLL:{lat:+b.lat,lon:+b.lng}, oCode:"", dCode:"",
+    statusHtml:`<span class="phase">in service</span>`+(late?`<span class="badge late">+${b.late} min late</span>`:`<span class="badge ok">on time</span>`),
+    photoQuery:"SEPTA bus Philadelphia", photoFallback:"transit bus exterior" };
+}
 async function produceBus(){
+  const live=await produceLiveBus().catch(()=>null);
+  if(live) return live;
   const s=await ensureRideOnScheduleNight();
   if(!s) return null;
   const busSystem = CITY==="philly" ? "SEPTA" : "Ride On";
