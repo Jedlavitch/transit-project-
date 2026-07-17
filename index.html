@@ -9,23 +9,33 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   :root{
-    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942;
+    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942; --bg-glow:#16203a;
     --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a;
     --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
+    --row-bg:#0d1424; --row-line:#172038; --sched-b:#aab6d8; --scrim:rgba(6,9,16,.86);
     /* WMATA line colors */
     --RD:#BF0D3E; --BL:#009CDE; --YL:#FFD100; --OR:#ED8B00; --GR:#00B140; --SV:#919D9D;
+  }
+  :root[data-theme="black"]{
+    --bg:#000000; --panel:#0a0a0a; --panel2:#000000; --line:#1c1c1c; --bg-glow:#0e0e0e;
+    --text:#f2f2f2; --muted:#8a8a8a; --row-bg:#080808; --row-line:#1a1a1a; --sched-b:#c7c7c7;
+  }
+  :root[data-theme="day"]{
+    --bg:#eef1f8; --panel:#ffffff; --panel2:#f3f5fb; --line:#dde2ee; --bg-glow:#e2e8f7;
+    --text:#161b2e; --muted:#5b6478; --row-bg:#ffffff; --row-line:#e3e7f2; --sched-b:#3d475f;
+    --scrim:rgba(180,190,215,.55);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:radial-gradient(1200px 800px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    background:radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
     color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
   #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
   header{
     display:flex; align-items:center; gap:16px; padding:14px 22px;
-    border-bottom:1px solid var(--line); background:linear-gradient(180deg,#0f1626,#0b0f1a);
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--panel2),var(--bg));
   }
   header .title{font-size:20px; font-weight:800; letter-spacing:.3px}
   header .title small{color:var(--muted); font-weight:600; margin-left:8px}
@@ -57,7 +67,7 @@
 
   .row{
     display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
-    padding:7px 9px; border-radius:10px; background:#0d1424; border:1px solid #172038;
+    padding:7px 9px; border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
   }
   .row .badge{
     min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
@@ -141,7 +151,7 @@
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
     <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">🎓 Philly</a>
-    <a id="nightBtn" href="night.html" title="Night mode — nearest flight" onclick="window.location.href='night.html'; return false;">🌙 Night</a>
+    <a id="nightBtn" href="night.html?city=bethesda" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=bethesda'; return false;">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
@@ -409,7 +419,8 @@ function initMap(){
   state.trainLayer  = L.layerGroup().addTo(state.map);
   state.metroLayer  = L.layerGroup().addTo(state.map);
   state.planeLayer  = L.layerGroup().addTo(state.map);
-  L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:1,weight:2}).addTo(state.map);
+  const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
+  L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
   state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
   state.map.on("zoomend", updateLabelVisibility);
 
@@ -860,13 +871,28 @@ async function fetchAmtrak(){
   state.lastAmtrakOk=Date.now();
   renderAmtrak(out); drawAmtrak(out); drawAmtrakRoutes(out, amSt);
 }
-function drawAmtrakRoutes(list, amSt){
+// Real curved track geometry (from Amtrak's own GTFS shapes.txt, bundled by
+// gen-amtrak-routes.py) keyed by a normalized route name, so drawn routes
+// follow the actual corridor instead of straight-lining between stations.
+function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"").trim(); }
+async function ensureAmtrakRouteShapes(){
+  if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
+  try{
+    const data=await getJSON("amtrak-routes.json", 15000);
+    const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
+    state.amtrakRouteShapes=map;
+  }catch(e){ state.amtrakRouteShapes={}; }
+  return state.amtrakRouteShapes;
+}
+async function drawAmtrakRoutes(list, amSt){
   if(!state.amtrakRouteLayer) return;
+  const shapes=await ensureAmtrakRouteShapes();
   state.amtrakRouteLayer.clearLayers();
   list.forEach(({t})=>{
-    const pts=(t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
+    const shape=shapes[normAmtrakName(t.routeName)];
+    const pts=shape || (t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
     if(pts.length>1) L.polyline(pts, {color:"#3ad0c8", weight:2.5, opacity:.35,
-      lineCap:"round", lineJoin:"round", dashArray:"1 6"}).addTo(state.amtrakRouteLayer);
+      lineCap:"round", lineJoin:"round", dashArray: shape?null:"1 6"}).addTo(state.amtrakRouteLayer);
   });
 }
 function renderAmtrak(list){
