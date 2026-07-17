@@ -969,6 +969,25 @@ async function fetchMarc(){
   try{ data=await getJSON(state.marcUrl, 12000); }catch(e){ return; }
   const veh=(data.vehicles||[]).filter(v=>typeof v.lat==="number"&&typeof v.lon==="number");
   drawMarc(veh);
+  const here=state.loc;
+  const trains=veh.map(v=>({ v, mi: kmToMi(haversine(here,{lat:v.lat,lon:v.lon})) })).sort((a,b)=>a.mi-b.mi);
+  $("#marcCount").textContent = trains.length ? `${trains.length} nearby` : "";
+  const box=$("#marcList");
+  if(box){
+    box.innerHTML="";
+    if(!trains.length) box.appendChild(el("div","empty","No MARC trains running right now."));
+    trains.slice(0,10).forEach(({v,mi})=>{
+      const row=el("div","row");
+      const b=el("div","badge rail", (v.line||"MARC").slice(0,4)); b.style.background=MARC_COL[v.line]||"#e8792b";
+      const mid=el("div");
+      mid.appendChild(el("div","dest", v.line?`${v.line} Line`:"MARC"));
+      mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.train?` · Train ${v.train}`:""}${v.mph!=null?` · ${v.mph} mph`:""}`));
+      const times=el("div","times"); times.appendChild(el("div","live","live"));
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row);
+    });
+    fitList(box);
+  }
 }
 function drawMarc(veh){
   const items=veh.map(v=>({
@@ -1002,6 +1021,7 @@ function marcActiveServices(s, date){
   return act;
 }
 async function refreshMarc(){
+  if(state.marcUrl) return;   // the live Worker owns this card once configured
   const s=await ensureMarcSchedule(); const box=$("#marcList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","MARC schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
