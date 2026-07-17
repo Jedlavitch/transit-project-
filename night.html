@@ -5,11 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#010409" />
 <title>Night Mode — Nearest Flight</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   :root{
     --bg:#010409; --amber:#7db8ff; --amber-dim:#4a7fc4; --muted:#35567e; --faint:#16263c;
     --city:#dcebff; --glow:#123c78; --good:#5ad1a0; --late:#ff6b5a;
+    --panel:#0d1728; --panel2:#0a1220; --btn-text:#06121f;
   }
+  /* Black/Day are picked in Settings alongside the existing accent-color swatches
+     (same three-way Dark/Black/Day choice as the two boards). Day trades the
+     accent-derived night-sky palette for a fixed light one -- the picked accent
+     hex still tints buttons/borders, but structural text/bg stay fixed so they
+     stay readable on a light background; see setTheme()'s "day" branch. */
+  :root[data-theme="day"]{
+    --bg:#eef1f8; --amber:#1c3a63; --amber-dim:#3d5a82; --muted:#5b6478; --faint:#c7ccd9;
+    --city:#161b2e; --glow:#c7d6f2; --good:#1f8f5f; --late:#c23b2b;
+    --panel:#ffffff; --panel2:#f3f5fb; --btn-text:#ffffff;
+  }
+  :root[data-theme="day"] #sky{display:none}
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
   body{
@@ -56,7 +70,7 @@
   .empty{font-size:clamp(2rem,7vw,6rem); font-weight:800; color:var(--amber-dim); text-align:center}
 
   #fsHint{position:fixed; top:0; left:50%; transform:translate(-50%,-120%); z-index:80;
-    background:#0d1728; color:var(--city); border:1px solid var(--faint); border-radius:0 0 12px 12px;
+    background:var(--panel); color:var(--city); border:1px solid var(--faint); border-radius:0 0 12px 12px;
     padding:12px 20px; font-size:14px; max-width:90vw; text-align:center; transition:transform .35s ease;
     box-shadow:0 10px 30px rgba(0,0,0,.5)}
   #fsHint.show{transform:translate(-50%,0)}
@@ -80,28 +94,27 @@
     to{opacity:1; transform:none; filter:none}
   }
 
-  /* ---- route progress arc ---- */
-  #arcSvg{width:100%; max-width:920px; aspect-ratio:5/1; height:auto; max-height:15vh; margin-top:.6vmin; display:none; overflow:visible}
-  #arcSvg text{fill:var(--muted); font:700 30px -apple-system,system-ui,sans-serif; letter-spacing:2px}
-  #arcSvg .base{stroke:var(--faint); stroke-width:4; fill:none; stroke-dasharray:.012 .012}
-  #arcSvg .done{stroke:var(--amber-dim); stroke-width:5; fill:none;
-    filter:drop-shadow(0 0 6px rgba(90,150,255,.6)); transition:stroke-dasharray 1.2s ease}
-  #arcSvg .endpt{fill:var(--muted)}
-  .arcVeh{transition:transform 1.2s ease}
-  .arcVeh path, .arcVeh rect, .arcVeh circle{fill:#bcd9ff; filter:drop-shadow(0 0 8px rgba(120,180,255,.9))}
+  /* ---- mini live map (real position, not just an abstract progress bar) ---- */
+  #miniMap{width:100%; max-width:920px; height:min(13vh,160px); margin-top:.6vmin; flex-shrink:0;
+    border-radius:1.4vmin; border:1px solid var(--faint); display:none; overflow:hidden}
+  #miniMap .leaflet-container{background:var(--panel2)}
+  .mini-veh-icon svg{overflow:visible; filter:drop-shadow(0 0 6px rgba(120,180,255,.9))}
+  .mini-veh-icon path, .mini-veh-icon rect{fill:#bcd9ff}
+  .mini-veh-icon{transition:transform 1.4s linear}
+  .mini-endpt{width:9px; height:9px; border-radius:50%; background:var(--muted); border:2px solid var(--panel2)}
 
   /* ---- settings panel ---- */
   #settings{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
     display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
   #settings.show{display:flex}
-  #settings .panel{background:#0a1220; border:1px solid var(--faint); border-radius:18px;
+  #settings .panel{background:var(--panel2); border:1px solid var(--faint); border-radius:18px;
     padding:26px; max-width:460px; width:100%; box-shadow:0 20px 80px rgba(0,0,0,.6)}
   #settings h3{color:var(--amber); font-size:20px; margin-bottom:4px}
   #settings .lbl{color:var(--muted); font-size:13px; font-weight:700; text-transform:uppercase;
     letter-spacing:.15em; margin:20px 0 9px}
   .seg{display:flex; gap:8px}
   .seg button{flex:1; padding:14px 6px; border-radius:12px; border:1px solid var(--faint);
-    background:#0d1728; color:var(--muted); font-size:15px; font-weight:700; cursor:pointer;
+    background:var(--panel); color:var(--muted); font-size:15px; font-weight:700; cursor:pointer;
     display:flex; flex-direction:column; align-items:center; gap:4px; font-family:inherit}
   .seg button .ic{font-size:22px}
   .seg button.active{border-color:var(--amber); color:var(--amber); background:rgba(125,184,255,.08)}
@@ -113,7 +126,7 @@
     position:relative; overflow:hidden}
   .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
   #settings .done{margin-top:24px; width:100%; padding:13px; border-radius:12px; border:none;
-    background:var(--amber); color:#06121f; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
+    background:var(--amber); color:var(--btn-text); font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
 
   #flight{display:grid; grid-template-columns:1.5fr 1fr; gap:4vw; align-items:center;
     min-height:0; max-height:100%; width:100%}
@@ -157,6 +170,12 @@
         <button data-mode="trains"><span class="ic">🚆</span>Train</button>
         <button data-mode="buses"><span class="ic">🚌</span>Bus</button>
       </div>
+      <div class="lbl">Theme</div>
+      <div class="seg" id="themeSeg">
+        <button data-theme="dark"><span class="ic">🌘</span>Dark</button>
+        <button data-theme="black"><span class="ic">⬛</span>Black</button>
+        <button data-theme="day"><span class="ic">☀️</span>Day</button>
+      </div>
       <div class="lbl">Color</div>
       <div class="swatches" id="swatches"></div>
       <button class="done" id="setDone">Done</button>
@@ -173,28 +192,7 @@
         <div class="flight" id="flightno"></div>
         <div class="route" id="route"></div>
         <div class="subcity" id="subcity"></div>
-        <svg id="arcSvg" viewBox="0 0 1000 200" aria-hidden="true">
-          <path class="base" id="arcBase" pathLength="1" d=""/>
-          <path class="done" id="arcDone" pathLength="1" d=""/>
-          <circle class="endpt" id="arcO" r="7"/><circle class="endpt" id="arcD" r="7"/>
-          <text id="arcOLbl" text-anchor="start"></text>
-          <text id="arcDLbl" text-anchor="end"></text>
-          <g id="arcPlane" class="arcVeh"><path d="M0,-13 L3,-2 L13,3 L13,6 L2,4 L2,10 L6,13 L6,15 L0,13.5 L-6,15 L-6,13 L-2,10 L-2,4 L-13,6 L-13,3 L-3,-2 Z"/></g>
-          <g id="arcTrain" class="arcVeh" style="display:none">
-            <path d="M0,-13 C5,-13 7,-9.5 7,-6 L7,9 C7,11.8 5,13 2,13 L-2,13 C-5,13 -7,11.8 -7,9 L-7,-6 C-7,-9.5 -5,-13 0,-13 Z"/>
-            <rect x="-4.2" y="-6.5" width="3.4" height="4.4" rx="1"/>
-            <rect x="0.8" y="-6.5" width="3.4" height="4.4" rx="1"/>
-            <rect x="-5" y="10.2" width="10" height="1.8" rx="0.9"/>
-          </g>
-          <g id="arcBus" class="arcVeh" style="display:none">
-            <path d="M-7,-9.5 C-7,-11.8 -5,-13 -2.5,-13 L2.5,-13 C5,-13 7,-11.8 7,-9.5 L7,10 C7,11.8 5,13 3,13 L-3,13 C-5,13 -7,11.8 -7,10 Z"/>
-            <rect x="-5" y="-10.6" width="10" height="4" rx="1"/>
-            <rect x="-5" y="-4.8" width="4" height="4.2" rx="0.8"/>
-            <rect x="1" y="-4.8" width="4" height="4.2" rx="0.8"/>
-            <circle cx="-4.3" cy="12.3" r="1.5"/>
-            <circle cx="4.3" cy="12.3" r="1.5"/>
-          </g>
-        </svg>
+        <div id="miniMap"></div>
         <div class="status" id="status"></div>
       </div>
       <figure class="photo" id="photoWrap" style="display:none">
@@ -210,6 +208,8 @@
     <span id="updated"></span>
   </footer>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 "use strict";
 /* Night mode is shared by both boards. Which one opened it comes in via
@@ -291,40 +291,83 @@ async function lookupPhoto(hex){
   photoCache[hex]={ t:Date.now(), v }; savePhotoCache();
   return v;
 }
-/* ---- route progress arc (origin -> plane -> destination) ---- */
-const ARC={P0:[40,160], P1:[500,20], P2:[960,160]};
-function arcPoint(t){
-  const {P0,P1,P2}=ARC, u=1-t;
-  return [u*u*P0[0]+2*u*t*P1[0]+t*t*P2[0], u*u*P0[1]+2*u*t*P1[1]+t*t*P2[1]];
+/* ---- representative train/bus photos (Wikimedia Commons search, CORS-open
+   via origin=*, no key needed). Unlike the plane photo above, this is NOT a
+   photo of the exact vehicle -- there's no public per-vehicle photo lookup for
+   MARC/Ride On/SEPTA/PATCO/Amtrak the way planespotters covers aircraft by ADS-B
+   hex -- so it's a representative photo of that line/system, clearly labeled
+   as such and cached for a month since the "right" photo for a line doesn't
+   change. */
+async function fetchWikiPhoto(query){
+  try{
+    const url=`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=1&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1000&format=json&origin=*`;
+    const d=await getJSON(url, 10000);
+    const pages=d && d.query && d.query.pages;
+    const page=pages && Object.values(pages)[0];
+    const info=page && page.imageinfo && page.imageinfo[0];
+    if(!info) return null;
+    const artist=(((info.extmetadata||{}).Artist||{}).value||"").replace(/<[^>]+>/g,"").trim();
+    return { src:info.thumburl||info.url, link:info.descriptionurl||"", cred:artist };
+  }catch(e){ return null; }
 }
-function arcAngle(t){
-  const {P0,P1,P2}=ARC;
-  const dx=2*(1-t)*(P1[0]-P0[0])+2*t*(P2[0]-P1[0]), dy=2*(1-t)*(P1[1]-P0[1])+2*t*(P2[1]-P1[1]);
-  return Math.atan2(dy,dx)*180/Math.PI;
+async function lookupWikiPhoto(query, fallbackQuery){
+  const key="wiki:"+query;
+  const hit=photoCache[key];
+  if(hit && Date.now()-hit.t < 30*864e5) return hit.v;          // cache 30 days -- these don't change
+  let v=await fetchWikiPhoto(query);
+  if(!v && fallbackQuery && fallbackQuery!==query) v=await fetchWikiPhoto(fallbackQuery);
+  photoCache[key]={ t:Date.now(), v }; savePhotoCache();
+  return v;
 }
-let arcInit=false;
-function renderArc(oLL, dLL, posLL, oCode, dCode){
-  const svg=$("#arcSvg");
-  if(!oLL || !dLL || !posLL){ svg.style.display="none"; return; }
-  if(!arcInit){
-    const d=`M ${ARC.P0} Q ${ARC.P1} ${ARC.P2}`;
-    $("#arcBase").setAttribute("d", d); $("#arcDone").setAttribute("d", d);
-    $("#arcO").setAttribute("cx",ARC.P0[0]); $("#arcO").setAttribute("cy",ARC.P0[1]);
-    $("#arcD").setAttribute("cx",ARC.P2[0]); $("#arcD").setAttribute("cy",ARC.P2[1]);
-    $("#arcOLbl").setAttribute("x",ARC.P0[0]-4); $("#arcOLbl").setAttribute("y",195);
-    $("#arcDLbl").setAttribute("x",ARC.P2[0]+4); $("#arcDLbl").setAttribute("y",195);
-    arcInit=true;
+/* ---- mini live map: the vehicle's real position, not an abstract progress
+   bar. Small, non-interactive (no zoom/pan/attribution -- it's a glance
+   widget, not a full map like the board's), same dark CartoDB tiles as the
+   board. The marker itself glides between fixes via a plain CSS transition
+   on its icon's transform, since Leaflet re-sets that same transform on
+   every setLatLng() call. */
+const VEH_ICON_SVG = {
+  planes: '<path d="M0,-13 L3,-2 L13,3 L13,6 L2,4 L2,10 L6,13 L6,15 L0,13.5 L-6,15 L-6,13 L-2,10 L-2,4 L-13,6 L-13,3 L-3,-2 Z"/>',
+  trains: '<path d="M0,-13 C5,-13 7,-9.5 7,-6 L7,9 C7,11.8 5,13 2,13 L-2,13 C-5,13 -7,11.8 -7,9 L-7,-6 C-7,-9.5 -5,-13 0,-13 Z"/>'+
+    '<rect x="-4.2" y="-6.5" width="3.4" height="4.4" rx="1"/><rect x="0.8" y="-6.5" width="3.4" height="4.4" rx="1"/>'+
+    '<rect x="-5" y="10.2" width="10" height="1.8" rx="0.9"/>',
+  buses: '<path d="M-7,-9.5 C-7,-11.8 -5,-13 -2.5,-13 L2.5,-13 C5,-13 7,-11.8 7,-9.5 L7,10 C7,11.8 5,13 3,13 L-3,13 C-5,13 -7,11.8 -7,10 Z"/>'+
+    '<rect x="-5" y="-10.6" width="10" height="4" rx="1"/><rect x="-5" y="-4.8" width="4" height="4.2" rx="0.8"/>'+
+    '<rect x="1" y="-4.8" width="4" height="4.2" rx="0.8"/><circle cx="-4.3" cy="12.3" r="1.5"/><circle cx="4.3" cy="12.3" r="1.5"/>',
+};
+function vehDivIcon(kind){
+  return L.divIcon({ className:"mini-veh-icon", iconSize:[26,26], iconAnchor:[13,13],
+    html:`<svg viewBox="-14 -15 28 30" width="26" height="26">${VEH_ICON_SVG[kind]||VEH_ICON_SVG.planes}</svg>` });
+}
+let miniMap=null, miniRouteLayer=null, miniVehLayer=null, miniVeh=null, miniVehKind=null;
+function initMiniMap(){
+  if(miniMap) return;
+  miniMap=L.map("miniMap",{ zoomControl:false, attributionControl:false, dragging:false,
+    scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, fadeAnimation:false })
+    .setView([0,0], 3);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(miniMap);
+  miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
+  miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng
+}
+function renderMiniMap(oLL, dLL, posLL){
+  const wrap=$("#miniMap");
+  if(!posLL){ wrap.style.display="none"; return; }
+  wrap.style.display="block";
+  initMiniMap();
+  miniMap.invalidateSize();
+  miniRouteLayer.clearLayers();
+  const pts=[[posLL.lat,posLL.lon]];
+  if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([oLL.lat,oLL.lon]); }
+  if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([dLL.lat,dLL.lon]); }
+  if(oLL && dLL) L.polyline([[oLL.lat,oLL.lon],[dLL.lat,dLL.lon]], {color:"#7d95c9", weight:2, opacity:.45, dashArray:"1 8"}).addTo(miniRouteLayer);
+  if(!miniVeh || miniVehKind!==mode){
+    if(miniVeh) miniVehLayer.removeLayer(miniVeh);
+    miniVeh=L.marker([posLL.lat,posLL.lon], {icon:vehDivIcon(mode)}).addTo(miniVehLayer);
+    miniVehKind=mode;
+  } else {
+    miniVeh.setLatLng([posLL.lat,posLL.lon]);
   }
-  const flown=haversineNm(oLL,posLL), left=haversineNm(posLL,dLL);
-  const f=Math.min(.98, Math.max(.02, flown/(flown+left||1)));
-  $("#arcDone").style.strokeDasharray=`${f} 1`;
-  const [x,y]=arcPoint(f);
-  const iconId = mode==="trains" ? "arcTrain" : mode==="buses" ? "arcBus" : "arcPlane";
-  ["arcPlane","arcTrain","arcBus"].forEach(id=>{ $("#"+id).style.display = id===iconId ? "" : "none"; });
-  $("#"+iconId).style.transform=`translate(${x}px,${y}px) rotate(${arcAngle(f)+90}deg) scale(1.6)`;
-  $("#arcOLbl").textContent=oCode||"";
-  $("#arcDLbl").textContent=dCode||"";
-  svg.style.display="block";
+  if(pts.length>1) miniMap.fitBounds(pts, {padding:[26,26], maxZoom:11});
+  else miniMap.setView([posLL.lat,posLL.lon], 10);
 }
 
 /* twinkling stars */
@@ -340,14 +383,18 @@ function makeStars(){
 }
 
 let photoShownFor=null;
-async function updatePhoto(hex){
+async function updatePhoto(key, representative, fallbackQuery){
   const wrap=$("#photoWrap");
-  if(photoShownFor===hex) return;                              // same plane — keep photo
-  const v=await lookupPhoto(hex);
-  photoShownFor=hex;
+  if(photoShownFor===key) return;                              // same subject — keep photo
+  const v = representative ? await lookupWikiPhoto(key, fallbackQuery) : await lookupPhoto(key);
+  photoShownFor=key;
   if(v && v.src){
     $("#photo").src=v.src;
-    const a=$("#photoCredit"); a.href=v.link||"#"; a.textContent=v.cred?`photo © ${v.cred} · planespotters.net`:"planespotters.net";
+    $("#photo").alt = representative ? "Representative photo of this line" : "Photo of this aircraft";
+    const a=$("#photoCredit"); a.href=v.link||"#";
+    a.textContent = representative
+      ? (v.cred?`${v.cred} · Wikimedia Commons`:"Wikimedia Commons")+" (representative photo)"
+      : (v.cred?`photo © ${v.cred} · planespotters.net`:"planespotters.net");
     wrap.style.display="";
   } else wrap.style.display="none";
 }
@@ -417,7 +464,8 @@ async function produceTrain(){
     oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
     subline:`${t.origCode||""} ${t.origName||""}  →  ${t.destCode||""} ${t.destName||""}`.trim(),
     oLL, dLL, posLL:{lat:t.lat,lon:t.lon}, oCode:t.origCode||"", dCode:t.destCode||"",
-    statusHtml:`<span class="phase">en route</span>`+eta, photoHex:null };
+    statusHtml:`<span class="phase">en route</span>`+eta,
+    photoQuery:`Amtrak ${t.routeName||"train"} train`, photoFallback:"Amtrak train exterior" };
 }
 
 /* ---- BUSES (city-appropriate bundled schedule) ----
@@ -473,7 +521,9 @@ async function produceBus(){
     subline:`scheduled position (${busSystem} has no public live feed)`,
     oLL: first?{lat:first[0],lon:first[1]}:null, dLL: last?{lat:last[0],lon:last[1]}:null,
     posLL:{lat,lon}, oCode:"", dCode:"",
-    statusHtml:`<span class="phase">in service</span><span class="badge na">scheduled</span>`, photoHex:null };
+    statusHtml:`<span class="phase">in service</span><span class="badge na">scheduled</span>`,
+    photoQuery: CITY==="philly" ? "SEPTA bus Philadelphia" : "Ride On bus Montgomery County Maryland",
+    photoFallback:"transit bus exterior" };
 }
 const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus };
 
@@ -499,7 +549,7 @@ function render(s){
   const L=$("#loading");
   if(s && s.needKey){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
-    L.textContent="Add a WMATA key on the board to track buses"; renderArc(); return;
+    L.textContent="Add a WMATA key on the board to track buses"; renderMiniMap(null,null,null); return;
   }
   if(!s){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
@@ -510,9 +560,10 @@ function render(s){
   const fl=$("#flight"); fl.style.display="";
   if(lastId!==null && lastId!==s.id){ fl.classList.remove("swap"); void fl.offsetWidth; fl.classList.add("swap"); }
   lastId=s.id;
-  if(s.photoHex) updatePhoto(s.photoHex);
+  if(s.photoHex) updatePhoto(s.photoHex, false);
+  else if(s.photoQuery) updatePhoto(s.photoQuery, true, s.photoFallback);
   else { $("#photoWrap").style.display="none"; photoShownFor=null; }
-  renderArc(s.oLL, s.dLL, s.posLL, s.oCode, s.dCode);
+  renderMiniMap(s.oLL, s.dLL, s.posLL);
   $("#dist").textContent = `${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`;
   $("#airline").textContent = s.title;
   $("#flightno").textContent = s.sub;
@@ -537,14 +588,29 @@ const PRESETS=[["#7db8ff","Blue"],["#ffb454","Amber"],["#3ad0c8","Teal"],["#5ad1
 function hexToRgb(h){ h=(h||"").replace("#",""); if(h.length===3)h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; }
 function rgbStr(a){ return "rgb("+a.map(v=>Math.max(0,Math.min(255,Math.round(v)))).join(",")+")"; }
 function setTheme(hex){
-  const a=hexToRgb(hex), R=document.documentElement.style, sc=(f)=>a.map(v=>v*f), mw=(t)=>a.map(v=>v+(255-v)*t);
-  R.setProperty("--amber",rgbStr(a)); R.setProperty("--amber-dim",rgbStr(sc(.62)));
-  R.setProperty("--muted",rgbStr(sc(.42))); R.setProperty("--faint",rgbStr(sc(.20)));
-  R.setProperty("--city",rgbStr(mw(.72))); R.setProperty("--glow",rgbStr(sc(.34)));
-  R.setProperty("--bg",rgbStr(sc(.035)));
   localStorage.setItem("nightmode.accent", hex);
-  const mt=document.querySelector('meta[name="theme-color"]'); if(mt) mt.setAttribute("content", rgbStr(sc(.035)));
   document.querySelectorAll("#swatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
+  const nightTheme=document.documentElement.dataset.theme||"dark";
+  if(nightTheme==="day"){
+    // Day uses its own fixed light palette (CSS above) so text/bg stay readable
+    // on a light background -- the picked accent hex doesn't drive it, unlike
+    // Dark/Black below. Clear any leftover inline overrides from a prior mode.
+    ["--bg","--amber","--amber-dim","--muted","--faint","--city","--glow"].forEach(p=>document.documentElement.style.removeProperty(p));
+  } else {
+    const a=hexToRgb(hex), R=document.documentElement.style, sc=(f)=>a.map(v=>v*f), mw=(t)=>a.map(v=>v+(255-v)*t);
+    R.setProperty("--amber",rgbStr(a)); R.setProperty("--amber-dim",rgbStr(sc(.62)));
+    R.setProperty("--muted",rgbStr(sc(.42))); R.setProperty("--faint",rgbStr(sc(.20)));
+    R.setProperty("--city",rgbStr(mw(.72))); R.setProperty("--glow",rgbStr(sc(.34)));
+    R.setProperty("--bg", nightTheme==="black" ? "#000000" : rgbStr(sc(.035)));
+  }
+  const mt=document.querySelector('meta[name="theme-color"]');
+  if(mt) mt.setAttribute("content", getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#010409");
+}
+function setNightTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem("nightmode.theme", t);
+  document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.theme===t));
+  setTheme(localStorage.getItem("nightmode.accent")||"#7db8ff");
 }
 function buildSwatches(){
   const wrap=$("#swatches"); wrap.innerHTML="";
@@ -558,6 +624,7 @@ function setMode(m){
   $("#tag").textContent=TAGS[m]; $("#rangeLbl").textContent=RANGE[m];
   document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.mode===m));
   lastId=null; photoShownFor=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
+  if(miniVehLayer){ miniVehLayer.clearLayers(); miniVeh=null; miniVehKind=null; }
   const L=$("#loading"); L.style.display=""; L.classList.add("pulse");
   L.textContent = m==="planes"?"Scanning the sky…":m==="trains"?"Finding trains…":"Finding buses…";
   tick();
@@ -568,6 +635,7 @@ function initSettings(){
   $("#setDone").onclick=()=>$("#settings").classList.remove("show");
   $("#settings").addEventListener("click",e=>{ if(e.target.id==="settings") $("#settings").classList.remove("show"); });
   $("#modeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setMode(b.dataset.mode); });
+  $("#themeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setNightTheme(b.dataset.theme); });
 }
 function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
 
@@ -609,8 +677,10 @@ function initFullscreen(){
 
 function boot(){
   initFullscreen();
+  document.documentElement.setAttribute("data-theme", localStorage.getItem("nightmode.theme")||"dark");
   setTheme(localStorage.getItem("nightmode.accent")||"#7db8ff");
   initSettings();
+  document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.theme===(localStorage.getItem("nightmode.theme")||"dark")));
   makeStars();
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
   $("#boardBtn").title = CITY==="philly" ? "Back to the Philadelphia board" : "Back to the Bethesda board";
