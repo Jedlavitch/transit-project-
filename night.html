@@ -94,9 +94,12 @@
     to{opacity:1; transform:none; filter:none}
   }
 
-  /* ---- mini live map (real position, not just an abstract progress bar) ---- */
-  #miniMap{width:100%; max-width:920px; height:min(13vh,160px); margin-top:.6vmin; flex-shrink:0;
-    border-radius:1.4vmin; border:1px solid var(--faint); display:none; overflow:hidden}
+  /* ---- mini live map (real position, not just an abstract progress bar) ----
+     Lives in the .side column next to the photo, not stretched full-width
+     under the text, so it gets a sane (close to square) shape instead of a
+     thin wide letterbox. */
+  #miniMap{width:100%; min-height:0; border-radius:1.4vmin; border:1px solid var(--faint);
+    display:none; overflow:hidden}
   #miniMap .leaflet-container{background:var(--panel2)}
   .mini-veh-icon svg{overflow:visible; filter:drop-shadow(0 0 6px rgba(120,180,255,.9))}
   .mini-veh-icon path, .mini-veh-icon rect{fill:#bcd9ff}
@@ -131,14 +134,20 @@
   #flight{display:grid; grid-template-columns:1.5fr 1fr; gap:4vw; align-items:center;
     min-height:0; max-height:100%; width:100%}
   #flight .txt{min-width:0}
-  .photo{margin:0; min-width:0; display:flex; flex-direction:column; min-height:0}
-  .photo img{width:100%; max-height:min(46vh,100%); object-fit:cover; border-radius:1.6vmin;
-    border:1px solid var(--faint); box-shadow:0 8px 40px rgba(60,130,255,.12); display:block}
-  .photo figcaption{margin-top:.4em; text-align:right}
+  /* .side stacks the photo + mini-map, splitting a shared height budget so
+     the map gets a roughly square shape instead of a thin full-width strip. */
+  .side{margin:0; min-width:0; min-height:0; height:min(50vh,100%); display:flex; flex-direction:column; gap:1.6vmin}
+  .photo{margin:0; min-width:0; min-height:0; flex:1.15; display:flex; flex-direction:column}
+  .photo img{width:100%; height:100%; min-height:0; object-fit:cover; border-radius:1.6vmin;
+    border:1px solid var(--faint); box-shadow:0 8px 40px rgba(60,130,255,.12); display:block; flex:1}
+  .photo figcaption{margin-top:.4em; text-align:right; flex-shrink:0}
   .photo a{color:var(--muted); font-size:clamp(.7rem,1.6vw,1rem); text-decoration:none}
+  #miniMap{flex:1}
   @media (max-width:760px), (orientation:portrait){
     #flight{grid-template-columns:1fr; gap:2vmin}
-    .photo img{max-height:26vh}
+    .side{height:auto; flex-direction:row}
+    .photo{flex:1.15; max-height:26vh}
+    #miniMap{flex:1; max-height:26vh}
   }
 
   footer{padding:2vmin 5vw 3vmin; color:var(--faint); font-size:clamp(.8rem,2vw,1.2rem);
@@ -192,13 +201,15 @@
         <div class="flight" id="flightno"></div>
         <div class="route" id="route"></div>
         <div class="subcity" id="subcity"></div>
-        <div id="miniMap"></div>
         <div class="status" id="status"></div>
       </div>
-      <figure class="photo" id="photoWrap" style="display:none">
-        <img id="photo" alt="Photo of this aircraft" />
-        <figcaption><a id="photoCredit" target="_blank" rel="noopener"></a></figcaption>
-      </figure>
+      <div class="side">
+        <figure class="photo" id="photoWrap" style="display:none">
+          <img id="photo" alt="Photo of this aircraft" />
+          <figcaption><a id="photoCredit" target="_blank" rel="noopener"></a></figcaption>
+        </figure>
+        <div id="miniMap"></div>
+      </div>
     </div>
   </main>
 
@@ -348,26 +359,36 @@ function initMiniMap(){
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
   miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng
 }
-function renderMiniMap(oLL, dLL, posLL){
+let miniMapFor=null;
+function renderMiniMap(id, oLL, dLL, posLL){
   const wrap=$("#miniMap");
-  if(!posLL){ wrap.style.display="none"; return; }
+  if(!posLL){ wrap.style.display="none"; miniMapFor=null; return; }
   wrap.style.display="block";
   initMiniMap();
   miniMap.invalidateSize();
-  miniRouteLayer.clearLayers();
-  const pts=[[posLL.lat,posLL.lon]];
-  if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([oLL.lat,oLL.lon]); }
-  if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([dLL.lat,dLL.lon]); }
-  if(oLL && dLL) L.polyline([[oLL.lat,oLL.lon],[dLL.lat,dLL.lon]], {color:"#7d95c9", weight:2, opacity:.45, dashArray:"1 8"}).addTo(miniRouteLayer);
+  // Only redraw endpoints/route and re-fit the view for a NEW subject (a
+  // different vehicle, or switching plane/train/bus). Re-fitting on every
+  // 12s refresh -- even though the vehicle barely moved -- was what made the
+  // map feel janky (the whole view jumping/rezooming constantly). For the
+  // same subject, just glide the marker and gently pan if it nears the edge.
+  if(miniMapFor!==id){
+    miniRouteLayer.clearLayers();
+    const pts=[[posLL.lat,posLL.lon]];
+    if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([oLL.lat,oLL.lon]); }
+    if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([dLL.lat,dLL.lon]); }
+    if(oLL && dLL) L.polyline([[oLL.lat,oLL.lon],[dLL.lat,dLL.lon]], {color:"#7d95c9", weight:2, opacity:.45, dashArray:"1 8"}).addTo(miniRouteLayer);
+    if(pts.length>1) miniMap.fitBounds(pts, {padding:[26,26], maxZoom:11});
+    else miniMap.setView([posLL.lat,posLL.lon], 11);
+    miniMapFor=id;
+  }
   if(!miniVeh || miniVehKind!==mode){
     if(miniVeh) miniVehLayer.removeLayer(miniVeh);
     miniVeh=L.marker([posLL.lat,posLL.lon], {icon:vehDivIcon(mode)}).addTo(miniVehLayer);
     miniVehKind=mode;
   } else {
     miniVeh.setLatLng([posLL.lat,posLL.lon]);
+    if(!miniMap.getBounds().pad(-.12).contains([posLL.lat,posLL.lon])) miniMap.panTo([posLL.lat,posLL.lon], {animate:true});
   }
-  if(pts.length>1) miniMap.fitBounds(pts, {padding:[26,26], maxZoom:11});
-  else miniMap.setView([posLL.lat,posLL.lon], 10);
 }
 
 /* twinkling stars */
@@ -549,7 +570,7 @@ function render(s){
   const L=$("#loading");
   if(s && s.needKey){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
-    L.textContent="Add a WMATA key on the board to track buses"; renderMiniMap(null,null,null); return;
+    L.textContent="Add a WMATA key on the board to track buses"; renderMiniMap(null,null,null,null); return;
   }
   if(!s){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
@@ -563,7 +584,7 @@ function render(s){
   if(s.photoHex) updatePhoto(s.photoHex, false);
   else if(s.photoQuery) updatePhoto(s.photoQuery, true, s.photoFallback);
   else { $("#photoWrap").style.display="none"; photoShownFor=null; }
-  renderMiniMap(s.oLL, s.dLL, s.posLL);
+  renderMiniMap(s.id, s.oLL, s.dLL, s.posLL);
   $("#dist").textContent = `${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`;
   $("#airline").textContent = s.title;
   $("#flightno").textContent = s.sub;
@@ -624,7 +645,7 @@ function setMode(m){
   $("#tag").textContent=TAGS[m]; $("#rangeLbl").textContent=RANGE[m];
   document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.mode===m));
   lastId=null; photoShownFor=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
-  if(miniVehLayer){ miniVehLayer.clearLayers(); miniVeh=null; miniVehKind=null; }
+  if(miniVehLayer){ miniVehLayer.clearLayers(); miniVeh=null; miniVehKind=null; miniMapFor=null; }
   const L=$("#loading"); L.style.display=""; L.classList.add("pulse");
   L.textContent = m==="planes"?"Scanning the sky…":m==="trains"?"Finding trains…":"Finding buses…";
   tick();
