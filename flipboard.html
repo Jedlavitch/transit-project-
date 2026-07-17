@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<title>Departure Board</title>
+<style>
+  :root{
+    --bg:#000; --panel:#0c0c0c; --line:#222; --text:#e9e9e2; --muted:#7a7a72;
+    --flap-bg:#151515; --flap-bg2:#0e0e0e; --flap-text:#f2f2ea; --seam:rgba(0,0,0,.65);
+    --accent:#ffb454; --good:#5ad17a; --warn:#ffcc33; --late:#ff5a5a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--text); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    display:flex; flex-direction:column; height:100dvh;
+  }
+  header{
+    display:flex; align-items:center; gap:14px; padding:2vmin 3vw;
+    border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  header .title{font-size:clamp(1rem,2.2vw,1.6rem); font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent)}
+  header .title small{display:block; font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--muted); text-transform:none; margin-top:2px}
+  header .clock{margin-left:auto; font-size:clamp(1rem,2vw,1.5rem); font-variant-numeric:tabular-nums; color:var(--muted)}
+  header a, header button{
+    color:var(--muted); text-decoration:none; font-size:13px; border:1px solid var(--line);
+    border-radius:8px; padding:.5em .8em; background:none; cursor:pointer; font-family:inherit;
+  }
+  header a:hover, header button:hover{color:var(--accent); border-color:var(--accent)}
+
+  #status{padding:1vmin 3vw; font-size:12px; color:var(--muted); border-bottom:1px solid var(--line); flex-shrink:0; display:flex; gap:1.5em}
+
+  main{flex:1; min-height:0; overflow:hidden; padding:1.4vmin 3vw; display:flex; flex-direction:column}
+  .board-head{
+    display:grid; grid-template-columns:var(--cols); gap:1.4vw; padding:0 .3vw 1vmin;
+    font-size:11px; font-weight:700; letter-spacing:.12em; color:var(--muted); flex-shrink:0;
+  }
+  .board-rows{flex:1; min-height:0; display:flex; flex-direction:column; justify-content:flex-start; gap:.5vh}
+  .board-row{
+    display:grid; grid-template-columns:var(--cols); gap:1.4vw; align-items:center;
+    padding:.4vh .3vw; border-bottom:1px solid rgba(255,255,255,.03);
+  }
+  .board-row .dot{width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; flex-shrink:0}
+  .flap-field{display:flex; gap:2px; flex-wrap:nowrap; overflow:hidden}
+  .flap-field.left{justify-content:flex-start}
+  .flap-field.right{justify-content:flex-end}
+
+  .flap{
+    position:relative; flex-shrink:0; width:clamp(14px,1.6vw,22px); height:clamp(20px,2.4vw,32px);
+    background:linear-gradient(180deg,var(--flap-bg),var(--flap-bg2));
+    border-radius:2px; overflow:hidden;
+    box-shadow:inset 0 0 0 1px #000, 0 1px 0 rgba(255,255,255,.05);
+  }
+  .flap::after{
+    content:""; position:absolute; left:0; right:0; top:50%; height:1px;
+    background:var(--seam); transform:translateY(-.5px); z-index:2;
+  }
+  .flap .ch{
+    display:flex; align-items:center; justify-content:center; width:100%; height:100%;
+    font:700 clamp(11px,1.3vw,17px)/1 "Courier New",monospace; color:var(--flap-text);
+    transform-origin:center; backface-visibility:hidden;
+  }
+  .flap.flipping .ch{ animation:flapTurn .11s linear }
+  @keyframes flapTurn{
+    0%{ transform:rotateX(0deg) }
+    50%{ transform:rotateX(-90deg) }
+    100%{ transform:rotateX(0deg) }
+  }
+  .status-tag{font-size:11px; font-weight:800; letter-spacing:.06em; padding:.2em .5em; border-radius:4px; white-space:nowrap}
+  .status-tag.ok{background:rgba(90,209,122,.15); color:var(--good)}
+  .status-tag.warn{background:rgba(255,204,51,.15); color:var(--warn)}
+  .status-tag.late{background:rgba(255,90,90,.15); color:var(--late)}
+  .status-tag.na{color:var(--muted); border:1px solid var(--line)}
+
+  footer{padding:1.2vmin 3vw; border-top:1px solid var(--line); font-size:11px; color:var(--muted); flex-shrink:0; display:flex; gap:1.5em}
+  #fsHint{position:fixed; top:0; left:50%; transform:translate(-50%,-120%); z-index:80;
+    background:#0d0d0d; color:var(--text); border:1px solid var(--line); border-radius:0 0 10px 10px;
+    padding:10px 18px; font-size:13px; max-width:90vw; text-align:center; transition:transform .35s ease}
+  #fsHint.show{transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+  <header>
+    <div class="title" id="titleEl">Departure Board<small id="loclbl"></small></div>
+    <span class="clock" id="clock">—</span>
+    <button id="fsBtn" title="Full screen (F)">⤢</button>
+    <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
+  </header>
+  <div id="status">
+    <span id="statusText">loading…</span>
+    <span id="rowCount"></span>
+  </div>
+  <main>
+    <div class="board-head" id="boardHead">
+      <span>TIME</span><span>DESTINATION</span><span>VIA</span><span>STATUS</span>
+    </div>
+    <div class="board-rows" id="boardRows"></div>
+  </main>
+  <footer>
+    <span id="updated">—</span>
+  </footer>
+
+<script>
+"use strict";
+/* Departure board is shared by both city boards, same as night.html. Which
+   one opened it comes in via ?city=bethesda|philly so it can reuse that
+   board's own saved location / WMATA key / live-Worker URLs / "show on
+   board" toggles -- nothing to set up twice. */
+const CITY = new URLSearchParams(location.search).get("city")==="philly" ? "philly" : "bethesda";
+const CITY_CONFIG = {
+  bethesda: {
+    defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
+    lsLoc:"transitboard.loc", board:"index.html",
+    lsWmataKey:"transitboard.wmataKey", lsHidden:"transitboard.hiddenCards",
+  },
+  philly: {
+    defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
+    lsLoc:"transitboardphl.loc", board:"philadelphia.html",
+    lsWmataKey:null, lsHidden:"transitboardphl.hiddenCards",
+  },
+};
+const CITY_CFG = CITY_CONFIG[CITY];
+const $ = s=>document.querySelector(s);
+
+function loadBoardLoc(){
+  try{ const s=JSON.parse(localStorage.getItem(CITY_CFG.lsLoc)); if(s&&s.lat) return s; }catch(e){}
+  return null;
+}
+const loc = loadBoardLoc() || CITY_CFG.defaultLoc;
+function hiddenCards(){
+  try{ return new Set(JSON.parse(localStorage.getItem(CITY_CFG.lsHidden)||"[]")); }catch(e){ return new Set(); }
+}
+function cardVisible(id){ return !hiddenCards().has(id); }
+function loadUrl(key){ return key ? (localStorage.getItem(key)||"") : ""; }
+
+async function getJSON(url, timeout=12000){
+  const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeout);
+  try{ const r=await fetch(url, {signal:ctrl.signal}); if(!r.ok) throw new Error("http "+r.status); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+function haversineMi(a,b){
+  const R=3958.8, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
+  const x=Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+function clockOf(min){
+  let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"P":"A";
+  return `${((h+11)%12)+1}:${String(m).padStart(2,"0")}${ap}`;
+}
+function ymd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
+function activeServices(s, date){
+  const y=ymd(date), dow=(date.getDay()+6)%7;
+  const act=new Set();
+  for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
+  const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  return act;
+}
+
+/* ===== row collectors -- each returns an array of {sortMin, time, dest, via, status, statusKind, color} ===== */
+
+/* Generic bundled-schedule collector: MARC, Ride On, SEPTA Rail, SEPTA
+   Subway, SEPTA Bus (schedule fallback), PATCO all share the identical
+   {stations, svc, exc, trips:[{line,hs,s,st}]} JSON shape, so one function
+   covers all of them -- same pattern the boards use, just producing rows
+   instead of cards. */
+const scheduleCache={};
+async function collectScheduleRows(cfg){
+  try{
+    let s=scheduleCache[cfg.url];
+    if(!s){
+      s=await getJSON(cfg.url, 15000);
+      s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
+      s._dep={};
+      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+      scheduleCache[cfg.url]=s;
+    }
+    const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=activeServices(s, now);
+    const near=(s.stations||[]).map(st=>({st, mi:haversineMi(loc,{lat:st.lat,lon:st.lon})})).sort((a,b)=>a.mi-b.mi).slice(0, cfg.stationCount||3);
+    const rows=[];
+    near.forEach(({st})=>{
+      const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d,min:d.t})).filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0, cfg.perStation||2);
+      deps.forEach(d=>{
+        rows.push({ sortMin:d.min, time:clockOf(d.min), dest:(d.hs||st.name||"").toUpperCase(),
+          via:`${cfg.label} ${d.line||""}`.trim().toUpperCase(), status:"SCHEDULED", statusKind:"na",
+          color:cfg.colorFn?cfg.colorFn(d.line):cfg.color });
+      });
+    });
+    return rows;
+  }catch(e){ return []; }
+}
+
+/* Amtrak (both cities) -- amtraker is a genuinely live API, so status
+   reflects real on-time/late info instead of "scheduled". TIME is a rough
+   ETA to the train's own destination (speed + great-circle distance, same
+   technique night.html uses), not a station-board departure time. */
+let amStationsCache=null;
+async function ensureAmStations(){
+  if(amStationsCache) return amStationsCache;
+  try{
+    const d=await getJSON("https://api-v3.amtraker.com/v3/stations", 12000);
+    const m={}; for(const c in d){ const s=d[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; }
+    amStationsCache=m;
+  }catch(e){ amStationsCache={}; }
+  return amStationsCache;
+}
+async function collectAmtrakRows(count){
+  try{
+    const [data, st] = await Promise.all([getJSON("https://api-v3.amtraker.com/v3/trains", 12000), ensureAmStations()]);
+    const now=new Date(), list=[];
+    for(const arr of Object.values(data)) for(const t of (arr||[])){
+      if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+      if(t.trainState && t.trainState!=="Active") continue;
+      const mi=haversineMi(loc,{lat:t.lat,lon:t.lon});
+      if(mi>150) continue;
+      list.push({t, mi});
+    }
+    list.sort((a,b)=>a.mi-b.mi);
+    return list.slice(0,count).map(({t})=>{
+      const late=(t.trainTimely||"").trim();
+      const lateNorm=late.toLowerCase();
+      const statusKind = !late ? "na" : lateNorm.includes("on time") ? "ok" : /\b([5-9]|[1-9]\d+)\s*min/i.test(late) ? "late" : "warn";
+      const dLL=st[t.destCode];
+      let sortMin=1440, time="EN ROUTE";
+      if(dLL && t.velocity>15){
+        const mins=Math.round(haversineMi({lat:t.lat,lon:t.lon},{lat:dLL[0],lon:dLL[1]})/t.velocity*60);
+        if(mins>=0 && mins<900){
+          sortMin=(now.getHours()*60+now.getMinutes()+mins)%1440;
+          time=mins<=1 ? "ARR" : clockOf(sortMin);
+        }
+      }
+      return { sortMin, time, dest:(t.destName||t.destCode||"?").toUpperCase(),
+        via:(t.routeName||"AMTRAK").toUpperCase(), status:(late||"EN ROUTE").toUpperCase(), statusKind,
+        color:"#3ad0c8" };
+    });
+  }catch(e){ return []; }
+}
+
+/* WMATA Metrorail (Bethesda only, needs the board's own saved key) */
+const RAIL_COLORS={RD:"#BF0D3E",BL:"#009CDE",YL:"#FFD100",OR:"#ED8B00",GR:"#00B140",SV:"#919D9D"};
+const RAIL_NAMES={RD:"RED",BL:"BLUE",YL:"YELLOW",OR:"ORANGE",GR:"GREEN",SV:"SILVER"};
+let wmataStationsCache=null;
+async function ensureWmataStations(key){
+  if(wmataStationsCache) return wmataStationsCache;
+  const data=await getJSON(`https://api.wmata.com/Rail.svc/json/jStations?api_key=${encodeURIComponent(key)}`, 15000);
+  wmataStationsCache=data.Stations||[];
+  return wmataStationsCache;
+}
+async function collectRailRows(count){
+  const key=loadUrl(CITY_CFG.lsWmataKey); if(!key) return [];
+  try{
+    const stations=await ensureWmataStations(key);
+    const near=stations.map(s=>({s, mi:haversineMi(loc,{lat:s.Lat,lon:s.Lon})})).sort((a,b)=>a.mi-b.mi).slice(0,3);
+    const codes=[...new Set(near.flatMap(({s})=>[s.Code, s.StationTogether1, s.StationTogether2].filter(Boolean)))].join(",");
+    if(!codes) return [];
+    const data=await getJSON(`https://api.wmata.com/StationPrediction.svc/json/GetPrediction/${codes}?api_key=${encodeURIComponent(key)}`, 12000);
+    const trains=(data.Trains||[]).filter(t=>t.Line && t.Line!=="--" && t.Min!=="---");
+    return trains.slice(0,count).map(t=>{
+      const min=t.Min==="BRD"?0 : t.Min==="ARR"?0 : parseInt(t.Min,10)||99;
+      return { sortMin:min, time: t.Min==="BRD"?"BRD":t.Min==="ARR"?"ARR":`${min} MIN`,
+        dest:(t.DestinationName||"?").toUpperCase(), via:`${RAIL_NAMES[t.Line]||t.Line} LINE`,
+        status:"LIVE", statusKind:"ok", color:RAIL_COLORS[t.Line]||"#888" };
+    });
+  }catch(e){ return []; }
+}
+/* WMATA Metrobus (Bethesda only) */
+let wmataBusStopsCache=null;
+async function collectBusRows(count){
+  const key=loadUrl(CITY_CFG.lsWmataKey); if(!key) return [];
+  try{
+    if(!wmataBusStopsCache){
+      const data=await getJSON(`https://api.wmata.com/Bus.svc/json/jStops?Lat=${loc.lat}&Lon=${loc.lon}&Radius=1000&api_key=${encodeURIComponent(key)}`, 12000);
+      wmataBusStopsCache=(data.Stops||[]).map(s=>({StopID:s.StopID, Name:s.Name, Lat:s.Lat, Lon:s.Lon, Routes:s.Routes||[],
+        mi:haversineMi(loc,{lat:s.Lat,lon:s.Lon})})).filter(s=>s.StopID && s.Routes.length).sort((a,b)=>a.mi-b.mi).slice(0,4);
+    }
+    const rows=[];
+    for(const stop of wmataBusStopsCache){
+      if(rows.length>=count) break;
+      let pred={}; try{ pred=await getJSON(`https://api.wmata.com/NextBusService.svc/json/jPredictions?StopID=${stop.StopID}&api_key=${encodeURIComponent(key)}`, 10000); }catch(e){}
+      (pred.Predictions||[]).slice(0,3).forEach(p=>{
+        rows.push({ sortMin:p.Minutes<=0?0:p.Minutes, time:p.Minutes<=0?"NOW":`${p.Minutes} MIN`,
+          dest:(p.DirectionText||"?").toUpperCase(), via:`ROUTE ${p.RouteID}`, status:"LIVE", statusKind:"ok", color:"#6aa9ff" });
+      });
+    }
+    return rows;
+  }catch(e){ return []; }
+}
+
+/* Planes overhead -- doesn't map to "departure time" as naturally as
+   ground transit, so TIME shows altitude and VIA shows aircraft type. */
+async function collectPlaneRows(count){
+  try{
+    const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/30`, 10000);
+    const air=(data.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number")
+      .map(a=>({a, mi:haversineMi(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.mi-y.mi).slice(0,count);
+    return air.map(({a})=>{
+      const rate=a.baro_rate||0, alt=typeof a.alt_baro==="number"?a.alt_baro:null;
+      const phase = alt==null?"EN ROUTE" : rate<-350?"DESCENDING" : rate>350?"CLIMBING" : alt>=28000?"CRUISING":"EN ROUTE";
+      return { sortMin:Math.round(a.mi*10), time: alt!=null?`${alt.toLocaleString()}FT`:"—",
+        dest:(a.flight||a.r||"UNKNOWN").trim().toUpperCase(), via:(a.desc||a.t||"AIRCRAFT").toUpperCase(),
+        status:phase, statusKind:"na", color:"#ffd166" };
+    });
+  }catch(e){ return []; }
+}
+
+async function collectAllRows(){
+  const jobs=[];
+  if(cardVisible("amtrakCard")) jobs.push(collectAmtrakRows(6));
+  if(cardVisible("planeCard")) jobs.push(collectPlaneRows(6));
+  if(CITY==="bethesda"){
+    if(cardVisible("railCard")) jobs.push(collectRailRows(6));
+    if(cardVisible("busCard")) jobs.push(collectBusRows(6));
+    if(cardVisible("marcCard")) jobs.push(collectScheduleRows({url:"marc-schedule.json", label:"MARC", stationCount:2, perStation:2,
+      colorFn:l=>({Brunswick:"#e8792b",Penn:"#d1495b",Camden:"#e0a800"}[l])||"#e8792b"}));
+    if(cardVisible("rideonCard")) jobs.push(collectScheduleRows({url:"rideon-schedule.json", label:"RIDE ON", stationCount:3, perStation:2, color:"#6aa9ff"}));
+  } else {
+    if(cardVisible("septaRailCard")) jobs.push(collectScheduleRows({url:"septa-rail-schedule.json", label:"SEPTA", stationCount:2, perStation:2, color:"#4F758B"}));
+    if(cardVisible("septaSubwayCard")) jobs.push(collectScheduleRows({url:"septa-subway-schedule.json", label:"SEPTA", stationCount:2, perStation:2,
+      colorFn:l=>({L1:"#1c6bb0",B1:"#f7941d",B2:"#f7941d",B3:"#f7941d"}[l])||"#556"}));
+    if(cardVisible("septaBusCard")) jobs.push(collectScheduleRows({url:"septa-bus-schedule.json", label:"SEPTA BUS", stationCount:2, perStation:2, color:"#e8a33c"}));
+    if(cardVisible("patcoCard")) jobs.push(collectScheduleRows({url:"patco-schedule.json", label:"PATCO", stationCount:2, perStation:2, color:"#BC0035"}));
+  }
+  const results=await Promise.all(jobs);
+  const rows=results.flat().sort((a,b)=>a.sortMin-b.sortMin);
+  return rows.slice(0, ROW_COUNT);
+}
+
+/* ===== split-flap rendering engine ===== */
+const CHARS=" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:'&-/,";
+function randChar(){ return CHARS[Math.floor(Math.random()*CHARS.length)]; }
+
+class FlapField{
+  constructor(container, width, align){
+    this.width=width; this.cells=[];
+    container.className="flap-field "+(align||"left");
+    for(let i=0;i<width;i++){
+      const flap=document.createElement("span"); flap.className="flap";
+      const ch=document.createElement("span"); ch.className="ch"; ch.textContent=" ";
+      flap.appendChild(ch); container.appendChild(flap);
+      this.cells.push({flap, ch, current:" "});
+    }
+  }
+  setText(str){
+    const padded=(str||"").toUpperCase().slice(0,this.width).padEnd(this.width," ");
+    for(let i=0;i<this.width;i++){
+      const target=padded[i], cell=this.cells[i];
+      if(cell.current===target) continue;
+      this._flip(cell, target, i*14);
+    }
+  }
+  _flip(cell, target, delay){
+    const steps=[randChar(), target];
+    let i=0;
+    const runStep=()=>{
+      const c=steps[i];
+      cell.flap.classList.remove("flipping"); void cell.flap.offsetWidth;
+      cell.flap.classList.add("flipping");
+      setTimeout(()=>{ cell.ch.textContent=c; }, 55);
+      i++;
+      if(i<steps.length) setTimeout(runStep, 90);
+      else cell.current=target;
+    };
+    setTimeout(runStep, delay);
+  }
+}
+
+const ROW_COUNT=16;
+const COLS="52px minmax(0,1.9fr) minmax(0,1.3fr) 96px";
+$("#boardHead").style.setProperty("--cols", COLS);
+const rowFields=[]; // [{el, dot, time:FlapField, dest:FlapField, via:FlapField, status:el}]
+function buildRows(){
+  const wrap=$("#boardRows"); wrap.innerHTML="";
+  for(let i=0;i<ROW_COUNT;i++){
+    const row=document.createElement("div"); row.className="board-row"; row.style.setProperty("--cols", COLS);
+    const timeWrap=document.createElement("div"); row.appendChild(timeWrap);
+    const destWrap=document.createElement("div"); row.appendChild(destWrap);
+    const viaOuter=document.createElement("div"); viaOuter.style.display="flex"; viaOuter.style.alignItems="center";
+    const dot=document.createElement("span"); dot.className="dot"; dot.style.background="transparent"; viaOuter.appendChild(dot);
+    const viaWrap=document.createElement("div"); viaOuter.appendChild(viaWrap); row.appendChild(viaOuter);
+    const statusWrap=document.createElement("div"); statusWrap.className="status-tag na"; statusWrap.textContent=""; row.appendChild(statusWrap);
+    wrap.appendChild(row);
+    rowFields.push({
+      el:row, dot,
+      time:new FlapField(timeWrap, 7, "left"),
+      dest:new FlapField(destWrap, 22, "left"),
+      via:new FlapField(viaWrap, 16, "left"),
+      statusEl:statusWrap,
+    });
+  }
+}
+function renderRows(rows){
+  $("#rowCount").textContent = rows.length ? `${rows.length} shown` : "";
+  for(let i=0;i<ROW_COUNT;i++){
+    const f=rowFields[i], r=rows[i];
+    if(!r){
+      f.time.setText(""); f.dest.setText(""); f.via.setText("");
+      f.statusEl.textContent=""; f.statusEl.className="status-tag na"; f.dot.style.background="transparent";
+      continue;
+    }
+    f.time.setText(r.time); f.dest.setText(r.dest); f.via.setText(r.via);
+    f.statusEl.textContent=r.status; f.statusEl.className="status-tag "+(r.statusKind||"na");
+    f.dot.style.background=r.color||"transparent";
+  }
+}
+
+async function tick(){
+  $("#statusText").textContent="updating…";
+  try{
+    const rows=await collectAllRows();
+    renderRows(rows);
+    $("#statusText").textContent="live — "+CITY_CFG.board.replace(".html","");
+  }catch(e){
+    $("#statusText").textContent="update failed, retrying…";
+  }
+  $("#updated").textContent="updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+}
+function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+
+/* ---- full-screen kiosk mode ---- */
+function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+function toggleFullscreen(){
+  const el=document.documentElement;
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  const req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!req){ hintFS(); return; }
+  try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>hintFS()); }catch(e){ hintFS(); }
+}
+let hintTimer=null;
+function hintFS(){
+  let t=$("#fsHint");
+  if(!t){ t=document.createElement("div"); t.id="fsHint"; document.body.appendChild(t); }
+  t.textContent="Full screen is blocked here. Open this page in its own browser tab to go full screen.";
+  t.style.transform="translate(-50%,0)"; clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>{ t.style.transform="translate(-50%,-120%)"; }, 4500);
+}
+function initFullscreen(){
+  $("#fsBtn").onclick=toggleFullscreen;
+  document.addEventListener("keydown", e=>{ if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen(); });
+}
+
+function boot(){
+  initFullscreen();
+  buildRows();
+  $("#boardBtn").setAttribute("href", CITY_CFG.board);
+  $("#boardBtn").title = CITY==="philly" ? "Back to the Philadelphia board" : "Back to the Bethesda board";
+  $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
+  clock(); setInterval(clock, 1000);
+  tick(); setInterval(tick, 20000);
+}
+function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
+if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
+</script>
+</body>
+</html>

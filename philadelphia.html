@@ -47,9 +47,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
-  header #nightBtn, header #homeBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+  header #nightBtn, header #homeBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
     border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
-  header #nightBtn:hover, header #homeBtn:hover{border-color:var(--accent)}
+  header #nightBtn:hover, header #homeBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -163,6 +163,7 @@
     <div class="title">🔔 Philadelphia Live Transit <small id="loclabel">locating…</small></div>
     <a id="homeBtn" href="index.html" title="Bethesda board" onclick="window.location.href='index.html'; return false;">🏠 Bethesda</a>
     <a id="nightBtn" href="night.html?city=philly" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=philly'; return false;">🌙 Night</a>
+    <a id="flipBtn" href="flipboard.html?city=philly" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=philly'; return false;">🚉 Board</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
