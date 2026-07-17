@@ -15,9 +15,10 @@ Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Po
 - **🚆 MARC** — next **scheduled** commuter-rail trains at your nearest stations **and trains placed on the map** (interpolated from the schedule), from a bundled copy of MARC's timetable. **Zero setup — no key, no Worker.** *(Optional: exact real-time positions via the free Worker below.)*
 - **🚌 Ride On** (routes **23** and **29** — edit `ROUTES` in `gen-rideon-schedule.py` to track others) — next **scheduled** departures at nearby stops **and buses placed on the map**, interpolated from a bundled copy of Ride On's own timetable. **Zero setup — no key, no Worker.** Ride On is Montgomery County's own bus system (a *different* agency from WMATA Metrobus above) and publishes **no public real-time feed at all** — only a private, key-gated API the county doesn't hand out — so scheduled interpolation is the honest best available to anyone.
 - **✈️ Planes overhead** — live ADS-B aircraft within ~12 nm (altitude, airline, speed, climbing/descending), plotted on a live map
-- Auto-detects your location (with 20816 as the fallback), refreshes transit/Amtrak every 30s and planes every 15s
+- **📍 Any location** — auto-detects your location (with 20816 as the fallback), or type **any address, city, or zip** in ⚙︎ to re-center the whole board there — Metrorail, Metrobus, Amtrak, and planes all re-query around the new spot. (MARC/Ride On only cover the DC–Maryland area; Amtrak and planes work anywhere in the US.) The address is geocoded free via [Nominatim/OpenStreetMap](https://nominatim.openstreetmap.org) — no key. Your choice is saved and won't be overridden by GPS; click "Use my current location instead" to switch back.
+- Refreshes transit/Amtrak every 30s and planes every 15s
 
-Everything works with **zero setup except the WMATA key** (which only Metrorail/Metrobus need). MARC and Ride On are built in. You can also pick an **accent color** in the ⚙︎ gear.
+Everything works with **zero setup except the WMATA key** (which only Metrorail/Metrobus need). MARC and Ride On are built in. You can also pick an **accent color** and a **custom location** in the ⚙︎ gear.
 
 ## Data sources
 | Data | Source | Key needed? | Cost |
@@ -27,6 +28,7 @@ Everything works with **zero setup except the WMATA key** (which only Metrorail/
 | MARC | bundled `marc-schedule.json` (MTA Maryland GTFS) | ❌ none | Free |
 | Ride On | bundled `rideon-schedule.json` (Montgomery County GTFS) | ❌ none | Free |
 | Planes | [airplanes.live](https://airplanes.live) | ❌ none | Free |
+| Address search | [Nominatim](https://nominatim.openstreetmap.org) (OpenStreetMap) | ❌ none | Free |
 | Map tiles | CARTO / OpenStreetMap | ❌ none | Free |
 
 ## One-time setup: free WMATA key (2 minutes)

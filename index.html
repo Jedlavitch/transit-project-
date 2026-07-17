@@ -104,7 +104,14 @@
   #setup button{flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
     background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
   #setup button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
-  #setup .accent-lbl{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; margin-top:14px}
+  #setup .box{max-height:88vh; overflow:auto}
+  #setup .accent-lbl, #setup .section-lbl{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; margin-top:14px}
+  #setup .addr-row{display:flex; gap:8px; margin-top:6px}
+  #setup .addr-row input{margin-top:0; flex:1}
+  #setup .addr-row button{flex:none; padding:0 14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; font-size:13px}
+  #setup #addrGpsBtn{background:transparent; color:var(--text); white-space:nowrap}
+  #setup #addrStatus{font-size:12px; min-height:16px; margin-top:6px; color:var(--muted)}
   #setup .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:9px}
   #setup .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
   #setup .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.2)}
@@ -199,7 +206,20 @@
 
 <div id="setup">
   <div class="box">
-    <h3>One-time setup — WMATA API key</h3>
+    <h3>Settings</h3>
+
+    <div class="section-lbl">Location</div>
+    <p style="font-size:12px">This board tracks trains, buses, and planes <b>near one location</b> —
+      <b id="curLocLbl">Bethesda, MD 20816</b> by default. Type any address, city, or zip to move it there instead.
+      Metro/MARC/Ride On only cover the DC–Maryland area, but Amtrak and planes work anywhere in the US.</p>
+    <div class="addr-row">
+      <input id="addrInput" type="text" placeholder="Address, city, or zip…" autocomplete="off" spellcheck="false" />
+      <button id="addrSetBtn" type="button">Set</button>
+    </div>
+    <div id="addrStatus"></div>
+    <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
+
+    <div class="section-lbl">One-time setup — WMATA API key</div>
     <p>Train &amp; bus times come from WMATA (Washington Metro). It's <b>free</b>: create an account, then subscribe to the <b>“Default Tier”</b> product and copy your <b>Primary key</b>.</p>
     <p>→ <a href="https://developer.wmata.com/signup" target="_blank" rel="noopener">developer.wmata.com/signup</a>, then
        <a href="https://developer.wmata.com/products" target="_blank" rel="noopener">subscribe to Default Tier</a>,
@@ -306,26 +326,72 @@ function tickRefreshInfo(){
 }
 
 /* ---------- location ---------- */
+const LS_LOC_MANUAL = "transitboard.locManual";
 function loadSavedLoc(){
   try{ const s=JSON.parse(localStorage.getItem(LS.loc)); if(s&&s.lat) state.loc=s; }catch(e){}
 }
+function saveLoc(loc){ try{ localStorage.setItem(LS.loc, JSON.stringify(loc)); }catch(e){} }
+function setManualLoc(isManual){ try{ localStorage.setItem(LS_LOC_MANUAL, isManual?"1":"0"); }catch(e){} }
+function isManualLoc(){ return localStorage.getItem(LS_LOC_MANUAL)==="1"; }
 function applyLoc(loc){
   state.loc = loc;
-  $("#loclabel").textContent = loc.label || `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
+  const label = loc.label || `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
+  $("#loclabel").textContent = label;
+  const curLbl=$("#curLocLbl"); if(curLbl) curLbl.textContent = label;
+}
+// Re-fetch every near-me data source for the current state.loc. Called after
+// GPS locates you, after you set a custom address, and on window resize.
+function refreshEverythingForNewLocation(){
+  state.busStops=[]; // force re-scan of nearby stops
+  refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
+  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap(); refreshPlanes();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
     pos => {
       const loc={ lat:pos.coords.latitude, lon:pos.coords.longitude, label:"Your location" };
-      applyLoc(loc);
+      applyLoc(loc); saveLoc(loc);
       if(state.map) state.map.setView([loc.lat,loc.lon], 12);
-      state.busStops=[]; // force re-scan of nearby stops
-      refreshTransit(); fetchBusPositions(); fetchMetroTrains(); fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap();
+      setAddrStatus("Using your current location.", "good");
+      refreshEverythingForNewLocation();
     },
-    _err => {/* keep default */},
+    _err => { if(!isManualLoc()) setAddrStatus(`Couldn't get your location — using ${state.loc.label||"the default"}.`, "warn"); },
     { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
   );
+}
+
+/* ---------- custom address (geocoded via Nominatim/OpenStreetMap, free, no key) ---------- */
+function setAddrStatus(msg, kind){
+  const el=$("#addrStatus"); if(!el) return;
+  el.textContent=msg||"";
+  el.style.color = kind==="good"?"var(--good)" : kind==="warn"?"var(--warn)" : "var(--muted)";
+}
+async function geocodeAddress(query){
+  const url=`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+  const data=await getJSON(url, 12000);
+  if(!data || !data.length) return null;
+  const r=data[0];
+  const parts=(r.display_name||"").split(",").map(s=>s.trim()).filter(Boolean);
+  return { lat:parseFloat(r.lat), lon:parseFloat(r.lon), label: parts.slice(0, Math.min(3, parts.length)).join(", ") };
+}
+async function handleSetAddress(){
+  const input=$("#addrInput"), q=(input.value||"").trim();
+  if(!q){ setAddrStatus("Type an address, city, or zip first.", "warn"); return; }
+  setAddrStatus("Searching…");
+  try{
+    const loc=await geocodeAddress(q);
+    if(!loc){ setAddrStatus("Couldn't find that place — try adding a city/state.", "warn"); return; }
+    applyLoc(loc); saveLoc(loc); setManualLoc(true);
+    if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat, loc.lon], 12); }
+    setAddrStatus("Now tracking near "+loc.label, "good");
+    refreshEverythingForNewLocation();
+  }catch(e){ setAddrStatus("Search failed — check your connection and try again.", "warn"); }
+}
+function handleUseMyLocation(){
+  setManualLoc(false);
+  setAddrStatus("Finding your location…");
+  requestGeo();
 }
 
 /* ---------- map ---------- */
@@ -1034,10 +1100,12 @@ $("#saveKey").onclick=()=>{
   localStorage.setItem(LS.key, state.wmataKey);
   localStorage.setItem(LS.marc, state.marcUrl);
   closeSetup(); applyOptionalCards();
-  state.busStops=[]; refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap(); refreshPlanes();
+  refreshEverythingForNewLocation();
 };
 $("#skipKey").onclick=()=>{ closeSetup(); };
+$("#addrSetBtn").onclick=handleSetAddress;
+$("#addrGpsBtn").onclick=handleUseMyLocation;
+$("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
 $("#keyInput").addEventListener("keydown",e=>{ if(e.key==="Enter") $("#saveKey").click(); });
 
 /* ---------- full-screen kiosk mode + keep-awake ---------- */
@@ -1108,8 +1176,7 @@ function boot(){
 
   applyOptionalCards();
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
-  refreshTransit(); refreshPlanes(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
-  fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap();
+  refreshEverythingForNewLocation();
   setInterval(refreshTransit, CFG.transitEveryMs);
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(fetchBusPositions, CFG.busPosEveryMs);
@@ -1127,11 +1194,12 @@ function boot(){
     fitAll();                              // instant: never clip/scroll while shrinking
     clearTimeout(rzT); rzT=setTimeout(()=>{ // then reload data to refill rows if we grew
       if(state.map) state.map.invalidateSize();
-      refreshTransit(); fetchAmtrak(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap(); refreshPlanes();
+      refreshEverythingForNewLocation();
     }, 350);
   });
 
-  requestGeo();
+  if(isManualLoc()){ setAddrStatus("Tracking near "+(state.loc.label||"your saved location"), "good"); }
+  else { requestGeo(); }
 }
 document.addEventListener("DOMContentLoaded", boot);
 </script>
