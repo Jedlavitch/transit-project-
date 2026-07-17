@@ -10,7 +10,7 @@
 <style>
   :root{
     --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942; --bg-glow:#16203a;
-    --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a;
+    --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a; --late:#ff5a5a;
     --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
     --row-bg:#0d1424; --row-line:#172038; --sched-b:#aab6d8; --scrim:rgba(6,9,16,.86);
     /* WMATA line colors */
@@ -83,6 +83,8 @@
   .row .live.arr{color:#08101f; background:var(--warn); padding:1px 7px; border-radius:6px; font-size:13px}
   .row .sched{font-size:11px; color:var(--sched)}
   .row .sched b{color:var(--sched-b)}
+  .row .live-eta{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums}
+  .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
   .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
   .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
@@ -1329,6 +1331,24 @@ async function drawSeptaBusScheduledMap(){
 }
 
 // Optional Cloudflare Worker: exact live SEPTA Regional Rail + bus/trolley positions.
+/* Color-code a live vehicle's lateness (minutes behind schedule) instead of
+   just saying "live". SEPTA's feeds occasionally include phantom/placeholder
+   vehicles with nonsense sentinel values (e.g. late:998) instead of omitting
+   the field, so anything wildly out of range is treated as no-data. */
+function isRealLate(late){ return typeof late==="number" && isFinite(late) && late>0 && Math.abs(late)<=90; }
+function liveLateInfo(late){
+  if(typeof late!=="number" || !isFinite(late) || Math.abs(late)>90) return null;
+  const color = late>5 ? "var(--late)" : late>=3 ? "var(--warn)" : "var(--good)";
+  const text = late<=0 ? "on time" : `+${late} min`;
+  return {color, text};
+}
+function appendLiveTimes(row, late){
+  const times=el("div","times");
+  const li=liveLateInfo(late);
+  if(li){ const eta=el("div","live-eta"); eta.style.color=li.color; eta.textContent=li.text; times.appendChild(eta); }
+  times.appendChild(el("div","live-tag","live"));
+  row.appendChild(times);
+}
 async function fetchSeptaLive(){
   if(!state.septaUrl) return;
   const here=state.loc, base=state.septaUrl;
@@ -1340,7 +1360,7 @@ async function fetchSeptaLive(){
     const items=trains.map(({t})=>({
       id:"slt"+t.trainno, lat:+t.lat, lon:+t.lon,
       icon:()=>labelIcon(SEPTA_COL, `${t.line||"?"} → ${t.dest||"?"}`), ik:"slt-"+t.trainno,
-      tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${t.late?` · ${t.late} min late`:""} (live)`
+      tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${isRealLate(t.late)?` · ${t.late} min late`:""} (live)`
     }));
     updateFleet("septaRail", items, CFG.septaEveryMs);
     $("#septaRailCount").textContent = trains.length ? `${trains.length} nearby` : "";
@@ -1353,9 +1373,9 @@ async function fetchSeptaLive(){
         const bd=el("div","badge rail", (t.line||"?").slice(0,4)); bd.style.background=SEPTA_COL;
         const mid=el("div");
         mid.appendChild(el("div","dest", t.dest||"—"));
-        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}${t.late?` · ${t.late} min late`:""}`));
-        const times=el("div","times"); times.appendChild(el("div","live","live"));
-        row.append(bd, mid, el("div"), times);
+        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}${isRealLate(t.late)?` · ${t.late} min late`:""}`));
+        row.append(bd, mid, el("div"));
+        appendLiveTimes(row, t.late);
         box.appendChild(row);
       });
       fitList(box);
@@ -1369,7 +1389,7 @@ async function fetchSeptaLive(){
     const items=buses.map(({b})=>({
       id:"slb"+b.VehicleID, lat:+b.lat, lon:+b.lng,
       icon:()=>labelIcon("#e8a33c", `${b.route_id} → ${b.destination||"?"}`), ik:"slb-"+b.route_id,
-      tip:`SEPTA Route ${b.route_id} → ${b.destination}${b.late?` · ${b.late} min late`:""} (live)`
+      tip:`SEPTA Route ${b.route_id} → ${b.destination}${isRealLate(b.late)?` · ${b.late} min late`:""} (live)`
     }));
     updateFleet("septaBus", items, CFG.septaEveryMs);
     $("#septaBusCard").style.display = "flex";
@@ -1383,9 +1403,9 @@ async function fetchSeptaLive(){
         const bd=el("div","badge", b.route_id); bd.style.background="#e8a33c"; bd.style.color="#2a1c00";
         const mid=el("div");
         mid.appendChild(el("div","dest", b.destination||"—"));
-        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}${b.late?` · ${b.late} min late`:""}`));
-        const times=el("div","times"); times.appendChild(el("div","live","live"));
-        row.append(bd, mid, el("div"), times);
+        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}${isRealLate(b.late)?` · ${b.late} min late`:""}`));
+        row.append(bd, mid, el("div"));
+        appendLiveTimes(row, b.late);
         box.appendChild(row);
       });
       fitList(box);
