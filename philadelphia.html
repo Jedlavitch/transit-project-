@@ -140,8 +140,8 @@
 <div id="app">
   <header>
     <div class="title">🔔 Philadelphia Live Transit <small id="loclabel">locating…</small></div>
-    <a id="homeBtn" href="index.html" title="Bethesda board">🏠 Bethesda</a>
-    <a id="nightBtn" href="night.html" title="Night mode — nearest flight">🌙 Night</a>
+    <a id="homeBtn" href="index.html" title="Bethesda board" onclick="window.location.href='index.html'; return false;">🏠 Bethesda</a>
+    <a id="nightBtn" href="night.html" title="Night mode — nearest flight" onclick="window.location.href='night.html'; return false;">🌙 Night</a>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
@@ -410,6 +410,19 @@ function initMap(){
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:"#4ea1ff",fillColor:"#4ea1ff",fillOpacity:1,weight:2}).addTo(state.map);
   state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
   state.map.on("zoomend", updateLabelVisibility);
+
+  // Leaflet computes its internal size the instant it's created; if the
+  // #map container hasn't finished CSS layout yet (grid/flex reflow, web
+  // fonts, cards populating) the map can end up mis-sized or off-center
+  // until something calls invalidateSize(). Auto-correct whenever the
+  // container's actual size changes so it's never something to click/nudge.
+  if("ResizeObserver" in window){
+    new ResizeObserver(()=>{
+      state.map.invalidateSize();
+      state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom());
+    }).observe(document.getElementById("map"));
+  }
+  setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 // A dot at the exact location + an info chip floating to its right.
