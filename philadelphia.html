@@ -430,7 +430,7 @@ function handleUseMyLocation(){
 function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(state.map);
+  state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
   state.routeLayer  = L.layerGroup().addTo(state.map);   // Metro rail lines, beneath everything
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
   state.septaRailRouteLayer = L.layerGroup().addTo(state.map);   // SEPTA Regional Rail lines
@@ -1687,6 +1687,15 @@ function setBoardTheme(mode){
   document.documentElement.setAttribute("data-theme", mode);
   localStorage.setItem("transitboardphl.theme", mode);
   document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
+  if(state.tileLayer) state.tileLayer.setUrl(tileUrlForTheme(mode));
+}
+// Day is a light UI theme; CartoDB's Positron ("light_all") basemap is the free
+// light counterpart to the Dark Matter ("dark_all") tiles used for Dark/Black,
+// same provider/URL scheme already in use elsewhere in this project, no key needed.
+function tileUrlForTheme(theme){
+  return theme==="day"
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 }
 function buildThemeButtons(){
   document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
@@ -1698,12 +1707,30 @@ const CARD_DEFS=[
   {id:"septaSubwayCard", label:"SEPTA Subway"}, {id:"septaBusCard", label:"SEPTA Bus"},
   {id:"patcoCard", label:"PATCO"}, {id:"planeCard", label:"Planes"},
 ];
+// Which map layer(s) each card's "show on board" toggle also controls -- hiding
+// a card means turning off that whole system, not just its departure-list card.
+const CARD_LAYERS={
+  amtrakCard:      ["trainLayer","amtrakRouteLayer"],
+  septaRailCard:   ["septaRailLayer","septaRailRouteLayer"],
+  septaSubwayCard: ["septaSubwayLayer","septaSubwayRouteLayer"],
+  septaBusCard:    ["septaBusLayer","septaBusRouteLayer"],
+  patcoCard:       ["patcoLayer","patcoRouteLayer"],
+  planeCard:       ["planeLayer"],
+};
 function loadHiddenCards(){
   try{ return new Set(JSON.parse(localStorage.getItem("transitboardphl.hiddenCards")||"[]")); }catch(e){ return new Set(); }
 }
 function applyCardVis(){
   const hidden=loadHiddenCards();
-  CARD_DEFS.forEach(({id})=>{ const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id)); });
+  CARD_DEFS.forEach(({id})=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id));
+    if(!state.map) return;
+    (CARD_LAYERS[id]||[]).forEach(key=>{
+      const layer=state[key]; if(!layer) return;
+      if(hidden.has(id)) state.map.removeLayer(layer);
+      else if(!state.map.hasLayer(layer)) state.map.addLayer(layer);
+    });
+  });
 }
 function buildCardToggles(){
   const wrap=document.getElementById("cardToggles"); if(!wrap) return; wrap.innerHTML="";
@@ -1725,8 +1752,8 @@ function buildCardToggles(){
 function boot(){
   setBoardAccent(localStorage.getItem("transitboardphl.accent")||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(localStorage.getItem("transitboardphl.theme")||"dark"); buildThemeButtons();
-  buildCardToggles(); applyCardVis();
-  loadSavedLoc(); applyLoc(state.loc); initMap();
+  buildCardToggles();
+  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
 
