@@ -47,9 +47,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
-  header #nightBtn, header #phillyBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+  header #nightBtn, header #phillyBtn, header #nycBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
     border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
-  header #nightBtn:hover, header #phillyBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
+  header #nightBtn:hover, header #phillyBtn:hover, header #nycBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -162,6 +162,7 @@
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
     <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">🎓 Philly</a>
+    <a id="nycBtn" href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">🗽 NYC</a>
     <a id="nightBtn" href="night.html?city=bethesda" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=bethesda'; return false;">🌙 Night</a>
     <a id="flipBtn" href="flipboard.html?city=bethesda" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=bethesda'; return false;">🚉 Board</a>
     <button id="fsBtn" title="Full screen (F)"></button>
@@ -431,11 +432,12 @@ function handleUseMyLocation(){
 function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(state.map);
+  state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
   state.routeLayer  = L.layerGroup().addTo(state.map);   // Metro rail lines, beneath everything
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
   state.marcRouteLayer = L.layerGroup().addTo(state.map); // MARC line routes
-  state.stopLayer   = L.layerGroup().addTo(state.map);
+  state.stopLayer    = L.layerGroup().addTo(state.map);  // Metro rail station dots
+  state.busStopLayer = L.layerGroup().addTo(state.map);  // Metrobus stop dots
   state.busVehLayer = L.layerGroup().addTo(state.map);
   state.marcLayer   = L.layerGroup().addTo(state.map);
   state.rideonLayer = L.layerGroup().addTo(state.map);
@@ -745,10 +747,11 @@ function drawPlanes(ac){
 }
 function drawStops(){
   state.stopLayer.clearLayers();
+  state.busStopLayer.clearLayers();
   state.nearRail.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:5,color:"#fff",fillColor:"#BF0D3E",fillOpacity:1,weight:1.5})
     .bindTooltip(s.Name,{direction:"top"}).addTo(state.stopLayer));
   state.busStops.forEach(s=>L.circleMarker([s.Lat,s.Lon],{radius:3,weight:0,fillColor:"#5b6a8c",fillOpacity:.75})
-    .bindTooltip("Stop: "+s.Name,{direction:"top"}).addTo(state.stopLayer));
+    .bindTooltip("Stop: "+s.Name,{direction:"top"}).addTo(state.busStopLayer));
 }
 
 /* ---------- Metrorail route lines (the subway map) ----------
@@ -1301,6 +1304,15 @@ function setBoardTheme(mode){
   document.documentElement.setAttribute("data-theme", mode);
   localStorage.setItem("transitboard.theme", mode);
   document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
+  if(state.tileLayer) state.tileLayer.setUrl(tileUrlForTheme(mode));
+}
+// Day is a light UI theme; CartoDB's Positron ("light_all") basemap is the free
+// light counterpart to the Dark Matter ("dark_all") tiles used for Dark/Black,
+// same provider/URL scheme already in use elsewhere in this project, no key needed.
+function tileUrlForTheme(theme){
+  return theme==="day"
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 }
 function buildThemeButtons(){
   document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
@@ -1312,12 +1324,30 @@ const CARD_DEFS=[
   {id:"amtrakCard", label:"Amtrak"}, {id:"marcCard", label:"MARC"},
   {id:"rideonCard", label:"Ride On"}, {id:"planeCard", label:"Planes"},
 ];
+// Which map layer(s) each card's "show on board" toggle also controls -- hiding
+// a card means turning off that whole system, not just its departure-list card.
+const CARD_LAYERS={
+  railCard:   ["metroLayer","routeLayer","stopLayer"],
+  busCard:    ["busVehLayer","busStopLayer"],
+  amtrakCard: ["trainLayer","amtrakRouteLayer"],
+  marcCard:   ["marcLayer","marcRouteLayer"],
+  rideonCard: ["rideonLayer"],
+  planeCard:  ["planeLayer"],
+};
 function loadHiddenCards(){
   try{ return new Set(JSON.parse(localStorage.getItem("transitboard.hiddenCards")||"[]")); }catch(e){ return new Set(); }
 }
 function applyCardVis(){
   const hidden=loadHiddenCards();
-  CARD_DEFS.forEach(({id})=>{ const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id)); });
+  CARD_DEFS.forEach(({id})=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id));
+    if(!state.map) return;
+    (CARD_LAYERS[id]||[]).forEach(key=>{
+      const layer=state[key]; if(!layer) return;
+      if(hidden.has(id)) state.map.removeLayer(layer);
+      else if(!state.map.hasLayer(layer)) state.map.addLayer(layer);
+    });
+  });
 }
 function buildCardToggles(){
   const wrap=document.getElementById("cardToggles"); if(!wrap) return; wrap.innerHTML="";
@@ -1339,8 +1369,8 @@ function buildCardToggles(){
 function boot(){
   setBoardAccent(localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(localStorage.getItem("transitboard.theme")||"dark"); buildThemeButtons();
-  buildCardToggles(); applyCardVis();
-  loadSavedLoc(); applyLoc(state.loc); initMap();
+  buildCardToggles();
+  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
 
