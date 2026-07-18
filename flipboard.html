@@ -7,17 +7,19 @@
 <title>Departure Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#000; --panel:#0c0c0c; --line:#222; --text:#e9e9e2; --muted:#7a7a72;
     --flap-bg:#151515; --flap-bg2:#0e0e0e; --flap-text:#f2f2ea; --seam:rgba(0,0,0,.65);
     --accent:#ffb454; --good:#5ad17a; --warn:#ffcc33; --late:#ff5a5a;
-    /* board size -- overridden by [data-size="sm"|"lg"] below, set from Settings */
-    --flap-w:22px; --flap-h:32px; --flap-font:17px; --row-gap:.5vh;
+    /* board size -- overridden by [data-size="sm"|"lg"] below, set from Settings.
+       Bumped noticeably bigger across the board (was 22/32/17) plus a clearer,
+       wider-set font (IBM Plex Mono) for easier reading at a glance. */
+    --flap-w:28px; --flap-h:40px; --flap-font:22px; --row-gap:.6vh;
   }
-  :root[data-size="sm"]{ --flap-w:15px; --flap-h:22px; --flap-font:12px; --row-gap:.2vh; }
-  :root[data-size="lg"]{ --flap-w:30px; --flap-h:44px; --flap-font:26px; --row-gap:.9vh; }
+  :root[data-size="sm"]{ --flap-w:19px; --flap-h:27px; --flap-font:15px; --row-gap:.3vh; }
+  :root[data-size="lg"]{ --flap-w:36px; --flap-h:52px; --flap-font:30px; --row-gap:1vh; }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
   body{
@@ -52,9 +54,17 @@
   }
   .op-logo{
     display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
-    font:800 clamp(9px,.85vw,12px)/1 "Space Mono","Courier New",monospace; letter-spacing:.02em;
+    font:800 clamp(9px,.85vw,12px)/1 "IBM Plex Mono","Courier New",monospace; letter-spacing:.02em;
     padding:.4em .5em; border-radius:4px; color:#0a0e08; white-space:nowrap;
   }
+  /* Real operator logo, on its own light chip so brand colors/black marks
+     (WMATA's logo is solid black) stay legible regardless of the row's own
+     accent color or the page's dark theme. */
+  .op-logo-img{
+    display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    background:#fff; border-radius:5px; padding:4px 7px; height:calc(var(--flap-h) * .78);
+  }
+  .op-logo-img img{ display:block; height:100%; width:auto; max-width:100%; object-fit:contain; }
   .flap-field{display:flex; gap:2px; flex-wrap:nowrap; overflow:hidden}
   .flap-field.left{justify-content:flex-start}
   .flap-field.right{justify-content:flex-end}
@@ -71,8 +81,8 @@
   }
   .flap .ch{
     display:flex; align-items:center; justify-content:center; width:100%; height:100%;
-    font:700 var(--flap-font)/1 "Space Mono","Courier New",monospace; color:var(--flap-text);
-    transform-origin:center; backface-visibility:hidden;
+    font:700 var(--flap-font)/1 "IBM Plex Mono","Courier New",monospace; color:var(--flap-text);
+    letter-spacing:.01em; transform-origin:center; backface-visibility:hidden;
   }
   .flap.flipping .ch{ animation:flapTurn .11s linear }
   @keyframes flapTurn{
@@ -129,6 +139,11 @@
         <button data-size="sm">Small</button>
         <button data-size="md">Medium</button>
         <button data-size="lg">Large</button>
+      </div>
+      <div class="lbl">Flip sound</div>
+      <div class="seg" id="soundSeg">
+        <button data-sound="on">On</button>
+        <button data-sound="off">Off</button>
       </div>
       <div class="lbl">Show on board</div>
       <div class="sys-grid" id="sysToggles"></div>
@@ -361,16 +376,42 @@ async function collectPlaneRows(count){
   }catch(e){ return []; }
 }
 
+/* Real operator logos (Wikimedia Commons, freely licensed -- same source
+   already used for night mode's representative vehicle photos), shown on a
+   white chip so WMATA's solid-black mark and every brand color stay legible
+   on the dark board. Planes have no single "operator" (every row is a
+   different airline) so they keep the plain FLIGHT text badge instead.
+   MARC doesn't have one general brand logo on Commons -- what exists is a
+   set of near-identical per-line station icons (same "MARC" wordmark, line
+   name swapped) -- so MARC looks up the right one per row by line instead
+   of using one static image; see logoImgFn below. */
+const LOGO_URLS = {
+  amtrak: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Amtrak_logo.svg/250px-Amtrak_logo.svg.png",
+  metro: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/WMATA_Logo_2025.svg/250px-WMATA_Logo_2025.svg.png",
+  metrobus: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/WMATA_Logo_2025.svg/250px-WMATA_Logo_2025.svg.png",
+  rideon: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Ride_On_logo_-_horizontal.svg/250px-Ride_On_logo_-_horizontal.svg.png",
+  septarail: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/SEPTA_Metro.svg/250px-SEPTA_Metro.svg.png",
+  septasubway: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/SEPTA_Metro.svg/250px-SEPTA_Metro.svg.png",
+  septabus: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/SEPTA_Metro.svg/250px-SEPTA_Metro.svg.png",
+  patco: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/PATCO_Line.svg/250px-PATCO_Line.svg.png",
+};
+const MARC_LOGO_BY_LINE = {
+  BRUNSWICK: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/MARC_Brunswick_Icon.png/250px-MARC_Brunswick_Icon.png",
+  PENN: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/MARC_Penn_Icon.png/250px-MARC_Penn_Icon.png",
+  CAMDEN: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/MARC_Camden_Icon.png/250px-MARC_Camden_Icon.png",
+};
+
 /* Every system this page can show, driving both row collection AND the
-   Settings panel's checkboxes. "logo" is the short operator badge shown on
-   each row; "label" is the fuller name used in the checkbox list (some
-   systems share a logo -- SEPTA Rail/Subway both just say "SEPTA" on the
-   badge -- but need distinct labels to toggle correctly). */
+   Settings panel's checkboxes. "logo" is the short text badge shown when no
+   image logo applies (planes, or an image that fails to load); "label" is
+   the fuller name used in the checkbox list (some systems share a logo --
+   SEPTA Rail/Subway both just say "SEPTA" -- but need distinct labels to
+   toggle correctly). */
 const SYSTEM_DEFS = CITY==="bethesda" ? [
   {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
   {id:"metro", logo:"METRO", label:"Metrorail", collect:()=>collectRailRows(6)},
   {id:"metrobus", logo:"METROBUS", label:"Metrobus", collect:()=>collectBusRows(6)},
-  {id:"marc", logo:"MARC", label:"MARC", collect:()=>collectScheduleRows({url:"marc-schedule.json", stationCount:2, perStation:2,
+  {id:"marc", logo:"MARC", label:"MARC", logoImgFn:r=>MARC_LOGO_BY_LINE[r.via], collect:()=>collectScheduleRows({url:"marc-schedule.json", stationCount:2, perStation:2,
     colorFn:l=>({Brunswick:"#e8792b",Penn:"#d1495b",Camden:"#e0a800"}[l])||"#e8792b"})},
   {id:"rideon", logo:"RIDE ON", label:"Ride On", collect:()=>collectScheduleRows({url:"rideon-schedule.json", stationCount:3, perStation:2, color:"#6aa9ff"})},
   {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
@@ -387,10 +428,47 @@ async function collectAllRows(){
   const active=SYSTEM_DEFS.filter(sys=>systemVisible(sys.id));
   const results=await Promise.all(active.map(sys=>sys.collect()));
   const rows=[];
-  active.forEach((sys,i)=>{ results[i].forEach(r=>{ r.logo=sys.logo; rows.push(r); }); });
+  active.forEach((sys,i)=>{ results[i].forEach(r=>{
+    r.logo=sys.logo;
+    r.logoImg = sys.logoImgFn ? sys.logoImgFn(r) : LOGO_URLS[sys.id];
+    rows.push(r);
+  }); });
   rows.sort((a,b)=>a.sortMin-b.sortMin);
   return rows.slice(0, ROW_COUNT);
 }
+
+/* ===== flip-click sound (synthesized, no audio file needed) =====
+   A short filtered-noise burst approximates the mechanical "clack" of a
+   real split-flap card turning. Reuses one pre-built noise buffer for every
+   click rather than building a new one per flip (many cells can flip within
+   the same ~100ms window, especially on a full board refresh). Browsers
+   block audio until a user gesture happens at least once -- ensureAudio()
+   just quietly no-ops until then, same as any other autoplay-blocked page. */
+const LS_SOUND="flipboard.sound";
+let soundOn = localStorage.getItem(LS_SOUND) !== "off";
+let audioCtx=null, clickBuffer=null;
+function ensureAudio(){
+  if(!audioCtx){
+    try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+    const dur=audioCtx.sampleRate*0.03;
+    clickBuffer=audioCtx.createBuffer(1, dur, audioCtx.sampleRate);
+    const data=clickBuffer.getChannelData(0);
+    for(let i=0;i<dur;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/dur, 3);
+  }
+  if(audioCtx.state==="suspended") audioCtx.resume().catch(()=>{});
+  return audioCtx;
+}
+function playFlipClick(){
+  if(!soundOn) return;
+  const ctx=ensureAudio(); if(!ctx || !clickBuffer) return;
+  const now=ctx.currentTime;
+  const src=ctx.createBufferSource(); src.buffer=clickBuffer;
+  const filter=ctx.createBiquadFilter(); filter.type="bandpass"; filter.frequency.value=2000+Math.random()*600; filter.Q.value=1.1;
+  const gain=ctx.createGain(); gain.gain.setValueAtTime(0.09, now); gain.gain.exponentialRampToValueAtTime(0.001, now+0.03);
+  src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  src.start(now); src.stop(now+0.035);
+}
+document.addEventListener("pointerdown", ()=>ensureAudio(), {once:true});
 
 /* ===== split-flap rendering engine ===== */
 const CHARS=" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:'&-/,";
@@ -422,6 +500,7 @@ class FlapField{
       const c=steps[i];
       cell.flap.classList.remove("flipping"); void cell.flap.offsetWidth;
       cell.flap.classList.add("flipping");
+      playFlipClick();
       setTimeout(()=>{ cell.ch.textContent=c; }, 55);
       i++;
       if(i<steps.length) setTimeout(runStep, 90);
@@ -441,18 +520,28 @@ function buildRows(){
     const row=document.createElement("div"); row.className="board-row"; row.style.setProperty("--cols", COLS);
     const timeWrap=document.createElement("div"); row.appendChild(timeWrap);
     const destWrap=document.createElement("div"); row.appendChild(destWrap);
-    const logoEl=document.createElement("span"); logoEl.className="op-logo"; logoEl.style.background="transparent"; row.appendChild(logoEl);
+    const logoWrap=document.createElement("div"); logoWrap.style.display="flex"; logoWrap.style.alignItems="center";
+    const logoImgEl=document.createElement("span"); logoImgEl.className="op-logo-img"; logoImgEl.style.display="none";
+    const logoImg=document.createElement("img"); logoImg.alt=""; logoImgEl.appendChild(logoImg);
+    const logoTextEl=document.createElement("span"); logoTextEl.className="op-logo"; logoTextEl.style.background="transparent";
+    logoWrap.append(logoImgEl, logoTextEl); row.appendChild(logoWrap);
     const viaWrap=document.createElement("div"); row.appendChild(viaWrap);
     const statusWrap=document.createElement("div"); statusWrap.className="status-tag na"; statusWrap.textContent=""; row.appendChild(statusWrap);
     wrap.appendChild(row);
     rowFields.push({
-      el:row, logoEl,
+      el:row, logoImgEl, logoImg, logoTextEl,
       time:new FlapField(timeWrap, 7, "left"),
       dest:new FlapField(destWrap, 20, "left"),
       via:new FlapField(viaWrap, 12, "left"),
       statusEl:statusWrap,
     });
   }
+}
+function showLogoText(f, r){
+  f.logoImgEl.style.display="none";
+  f.logoTextEl.style.display="";
+  f.logoTextEl.textContent=r?(r.logo||""):"";
+  f.logoTextEl.style.background=r?(r.color||"transparent"):"transparent";
 }
 function renderRows(rows){
   $("#rowCount").textContent = rows.length ? `${rows.length} shown` : "";
@@ -461,12 +550,21 @@ function renderRows(rows){
     if(!r){
       f.time.setText(""); f.dest.setText(""); f.via.setText("");
       f.statusEl.textContent=""; f.statusEl.className="status-tag na";
-      f.logoEl.textContent=""; f.logoEl.style.background="transparent";
+      showLogoText(f, null);
       continue;
     }
     f.time.setText(r.time); f.dest.setText(r.dest); f.via.setText(r.via);
     f.statusEl.textContent=r.status; f.statusEl.className="status-tag "+(r.statusKind||"na");
-    f.logoEl.textContent=r.logo||""; f.logoEl.style.background=r.color||"transparent";
+    if(r.logoImg){
+      f.logoTextEl.style.display="none";
+      f.logoImgEl.style.display="";
+      if(f.logoImg.src!==r.logoImg){
+        f.logoImg.onerror=()=>showLogoText(f, r); // real logo failed to load -- fall back to the text badge
+        f.logoImg.src=r.logoImg;
+      }
+    } else {
+      showLogoText(f, r);
+    }
   }
 }
 
@@ -505,12 +603,18 @@ function initFullscreen(){
   document.addEventListener("keydown", e=>{ if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen(); });
 }
 
-/* ---- settings panel: which systems show + text size ---- */
+/* ---- settings panel: which systems show + text size + sound ---- */
 const LS_SIZE="flipboard.textSize";
 function applySize(size){
   document.documentElement.setAttribute("data-size", size);
   localStorage.setItem(LS_SIZE, size);
   document.querySelectorAll("#sizeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.size===size));
+}
+function applySound(on){
+  soundOn=on;
+  localStorage.setItem(LS_SOUND, on?"on":"off");
+  document.querySelectorAll("#soundSeg button").forEach(b=>b.classList.toggle("active", (b.dataset.sound==="on")===on));
+  if(on) ensureAudio();
 }
 function buildSystemToggles(){
   const wrap=$("#sysToggles"); wrap.innerHTML="";
@@ -531,10 +635,12 @@ function buildSystemToggles(){
 function initSettings(){
   buildSystemToggles();
   applySize(localStorage.getItem(LS_SIZE)||"md");
+  applySound(soundOn);
   $("#setBtn").onclick=()=>$("#settings").classList.add("show");
   $("#setDone").onclick=()=>$("#settings").classList.remove("show");
   $("#settings").addEventListener("click", e=>{ if(e.target.id==="settings") $("#settings").classList.remove("show"); });
   $("#sizeSeg").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) applySize(b.dataset.size); });
+  $("#soundSeg").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) applySound(b.dataset.sound==="on"); });
 }
 
 function boot(){
