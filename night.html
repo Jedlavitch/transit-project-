@@ -241,21 +241,46 @@
    mode can use that board's own saved location (same localStorage key the
    board itself reads/writes) instead of a hardcoded Bethesda default —
    this is what used to make Philadelphia's night mode show DC stuff. */
-const CITY = new URLSearchParams(location.search).get("city")==="philly" ? "philly" : "bethesda";
 const CITY_CONFIG = {
   // lsMarcUrl/lsSeptaUrl mirror the board's own live-Worker settings so night
   // mode can pick up the SAME live positions once you've configured one there
   // -- nothing to set up twice. Ride On has no live source at all (see memory:
   // no public API/GTFS-RT feed exists), so Bethesda's buses stay schedule-only.
+  // lsBusUrl is a SEPARATE field from lsSeptaUrl even though Philly's happens
+  // to be the same URL (one septa-worker.js Worker serves both /trainview and
+  // /transitview) -- NYC's rail and bus live sources are genuinely unrelated
+  // (rail needs no Worker at all; bus needs its own, different Worker), so
+  // they can't share one field the way Philly's incidentally can.
   bethesda: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
     lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
     busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
-    lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, localRailSystem:"MARC" },
+    lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
+    localRailSystem:"MARC", localBusSystem:"Ride On", busPhotoQuery:"Ride On bus Montgomery County Maryland",
+    cityLabel:"Bethesda" },
   philly: { defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
     lsLoc:"transitboardphl.loc", lsManual:"transitboardphl.locManual", board:"philadelphia.html",
     busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16",
-    lsMarcUrl:null, lsSeptaUrl:"transitboardphl.septaUrl", localRailSystem:"SEPTA" },
+    lsMarcUrl:null, lsSeptaUrl:"transitboardphl.septaUrl", lsBusUrl:"transitboardphl.septaUrl",
+    localRailSystem:"SEPTA", localBusSystem:"SEPTA", busPhotoQuery:"SEPTA bus Philadelphia",
+    cityLabel:"Philadelphia" },
+  // NYC has three native live rail modes (subway/LIRR/Metro-North), all
+  // zero-setup (no Worker/key -- see nyc.html), unlike Bethesda/Philly's one
+  // Worker-optional rail system each -- so nycRail:true routes "nearest train"
+  // to produceNycRailTrain() instead of the lsMarcUrl/lsSeptaUrl branches.
+  // MTA Bus still needs its own optional Worker like SEPTA bus does, via the
+  // separate lsBusUrl field.
+  nyc: { defaultLoc:{ lat:40.7506, lon:-73.9935, label:"Penn Station, New York, NY" },
+    lsLoc:"transitboardnyc.loc", lsManual:"transitboardnyc.locManual", board:"nyc.html",
+    busSchedule:"mta-bus-schedule.json", busTag:"🚌 Nearest MTA bus", busRange:"MTA Bus M42/M15/M34/M34A",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:"transitboardnyc.busUrl",
+    localRailSystem:"Subway/LIRR/MNR", localBusSystem:"MTA Bus", busPhotoQuery:"MTA bus New York City",
+    cityLabel:"New York", nycRail:true },
 };
+// Falls back to "bethesda" for any unrecognized/missing ?city= value, same
+// as the previous binary ternary did -- now a proper N-way lookup so a third
+// (and future) city doesn't silently collapse into Bethesda's config.
+const CITY_PARAM = new URLSearchParams(location.search).get("city");
+const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "bethesda";
 const CITY_CFG = CITY_CONFIG[CITY];
 function loadLiveUrl(key){ return key ? (localStorage.getItem(key)||"") : ""; }
 const CFG = {
@@ -587,11 +612,160 @@ async function produceAmtrakTrain(){
     statusHtml:`<span class="phase">en route</span>`+eta,
     photoQuery:`Amtrak ${t.routeName||"train"} train`, photoFallback:"Amtrak train exterior" };
 }
+/* ---- NYC: subway/LIRR/Metro-North, all direct-fetch (no Worker/key needed --
+   see nyc.html) via the same minimal GTFS-Realtime protobuf decoder built
+   there. Ported here rather than shared via a separate file since these are
+   small, pure, self-contained functions (no dependency on nyc.html's own
+   `state` object) and this project has no build step to share modules with
+   otherwise. */
+function* gtfsrtFields(b, start, end){
+  let i = start;
+  while(i < end){
+    const [key, ni] = gtfsrtVarint(b, i); i = ni;
+    const field = Number(key >> 3n), wt = Number(key & 7n);
+    if(wt === 0){ const [v, n] = gtfsrtVarint(b, i); i = n; yield [field, 0, v]; }
+    else if(wt === 2){ const [len, n] = gtfsrtVarint(b, i); const l = Number(len); yield [field, 2, [n, n + l]]; i = n + l; }
+    else if(wt === 5){ yield [field, 5, i]; i += 4; }
+    else if(wt === 1){ i += 8; }
+    else throw new Error("bad wiretype "+wt);
+  }
+}
+function gtfsrtVarint(b, i){
+  let result = 0n, shift = 0n, x;
+  do{ x = BigInt(b[i++]); result |= (x & 0x7fn) << shift; shift += 7n; }while(x & 0x80n);
+  return [result, i];
+}
+function gtfsrtF32(b, i){ return new DataView(b.buffer, b.byteOffset+i, 4).getFloat32(0, true); }
+function gtfsrtStr(b, s, e){ return new TextDecoder().decode(b.subarray(s, e)); }
+function gtfsrtInt32(v){ return Number(BigInt.asIntN(32, v)); }
+function decodeVehiclePosition(b, s, e){
+  const v = {};
+  for(const [vf, vwt, vv] of gtfsrtFields(b, s, e)){
+    if(vf === 1 && vwt === 2){
+      for(const [tf, twt, tv] of gtfsrtFields(b, vv[0], vv[1])){
+        if(tf === 1) v.tripId = gtfsrtStr(b, tv[0], tv[1]);
+        else if(tf === 5) v.routeId = gtfsrtStr(b, tv[0], tv[1]);
+      }
+    } else if(vf === 2 && vwt === 2){
+      for(const [pf, pwt, pv] of gtfsrtFields(b, vv[0], vv[1])){
+        if(pf === 1) v.lat = gtfsrtF32(b, pv);
+        else if(pf === 2) v.lon = gtfsrtF32(b, pv);
+        else if(pf === 5) v.speed = gtfsrtF32(b, pv);
+      }
+    } else if(vf === 4 && vwt === 0){ v.status = Number(vv); }
+    else if(vf === 7 && vwt === 2){ v.stopId = gtfsrtStr(b, vv[0], vv[1]); }
+  }
+  return v;
+}
+function decodeTripUpdate(b, s, e){
+  const u = { stops: [] };
+  for(const [tf, twt, tv] of gtfsrtFields(b, s, e)){
+    if(tf === 1 && twt === 2){
+      for(const [df, dwt, dv] of gtfsrtFields(b, tv[0], tv[1])){
+        if(df === 1) u.tripId = gtfsrtStr(b, dv[0], dv[1]);
+        else if(df === 5) u.routeId = gtfsrtStr(b, dv[0], dv[1]);
+      }
+    } else if(tf === 2 && twt === 2){
+      const stu = {};
+      for(const [sf, swt, sv] of gtfsrtFields(b, tv[0], tv[1])){
+        if(sf === 4 && swt === 2) stu.stopId = gtfsrtStr(b, sv[0], sv[1]);
+        else if(sf === 2 && swt === 2){
+          for(const [af, awt, av] of gtfsrtFields(b, sv[0], sv[1])){
+            if(af === 1 && awt === 0) stu.delaySec = gtfsrtInt32(av);
+          }
+        }
+      }
+      u.stops.push(stu);
+    } else if(tf === 5 && twt === 0){ u.tripDelaySec = gtfsrtInt32(tv); }
+  }
+  return u;
+}
+function decodeGtfsRt(buf){
+  const vehicles = [], updates = {};
+  for(const [f, wt, val] of gtfsrtFields(buf, 0, buf.length)){
+    if(f !== 2 || wt !== 2) continue;
+    const [es, ee] = val;
+    for(const [ef, ewt, eval_] of gtfsrtFields(buf, es, ee)){
+      if(ef === 4 && ewt === 2){
+        const v = decodeVehiclePosition(buf, eval_[0], eval_[1]);
+        if(v.tripId) vehicles.push(v);
+      } else if(ef === 3 && ewt === 2){
+        const u = decodeTripUpdate(buf, eval_[0], eval_[1]);
+        if(u.tripId) updates[u.tripId] = u;
+      }
+    }
+  }
+  return { vehicles, updates };
+}
+const NYC_SUBWAY_FEEDS = ["gtfs","gtfs-ace","gtfs-bdfm","gtfs-g","gtfs-jz","gtfs-nqrw","gtfs-l"];
+const nycSchedCache = {};
+async function ensureNycSchedule(file){
+  if(nycSchedCache[file]) return nycSchedCache[file];
+  try{
+    const s=await getJSON(file, 20000);
+    s._coord={}; s._name={};
+    (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
+    nycSchedCache[file]=s;
+  }catch(e){}
+  return nycSchedCache[file];
+}
+function nycStationCoord(sched, stopId){
+  if(!sched) return null;
+  const pid=(sched.platforms||{})[stopId] || stopId;
+  return (sched._coord||{})[pid] || null;
+}
+function nycStationName(sched, stopId){
+  if(!sched) return "";
+  const pid=(sched.platforms||{})[stopId] || stopId;
+  return (sched._name||{})[pid] || "";
+}
+async function fetchNycFleet(feedPaths, schedFile){
+  const sched = await ensureNycSchedule(schedFile);
+  const results = await Promise.allSettled(feedPaths.map(p=>
+    fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/${p}`).then(r=>r.arrayBuffer())
+  ));
+  let vehicles=[], updates={};
+  results.forEach(r=>{
+    if(r.status!=="fulfilled") return;
+    try{ const {vehicles:v,updates:u}=decodeGtfsRt(new Uint8Array(r.value)); vehicles=vehicles.concat(v); Object.assign(updates,u); }catch(e){}
+  });
+  return vehicles.map(v=>{
+    const coord = typeof v.lat==="number" ? [v.lat,v.lon] : nycStationCoord(sched, v.stopId);
+    if(!coord) return null;
+    return { v, lat:coord[0], lon:coord[1], nm:haversineNm(loc,{lat:coord[0],lon:coord[1]}),
+      stationName: nycStationName(sched, v.stopId) };
+  }).filter(Boolean);
+}
+/* "Nearest train" for NYC checks subway + LIRR + Metro-North concurrently
+   (three native live rail modes where Bethesda/Philly each have only one)
+   and returns whichever single vehicle across all three is actually
+   closest -- mirrors produceTrain()'s own "pick the nearer of Amtrak/local"
+   logic one level down. */
+async function produceNycRailTrain(){
+  const [subway, lirr, mnr] = await Promise.all([
+    fetchNycFleet(NYC_SUBWAY_FEEDS, "mta-subway-schedule.json").catch(()=>[]),
+    fetchNycFleet(["lirr%2Fgtfs-lirr"], "lirr-schedule.json").catch(()=>[]),
+    fetchNycFleet(["mnr%2Fgtfs-mnr"], "mnr-schedule.json").catch(()=>[]),
+  ]);
+  const all=[...subway.map(x=>({...x,sys:"Subway"})), ...lirr.map(x=>({...x,sys:"LIRR"})), ...mnr.map(x=>({...x,sys:"Metro-North"}))];
+  if(!all.length) return null;
+  all.sort((a,b)=>a.nm-b.nm);
+  const {v,nm,sys,stationName}=all[0];
+  return { id:"nyc"+sys+v.tripId, nm, unit:"mi", dir:bearingFrom(loc,{lat:all[0].lat,lon:all[0].lon}),
+    altText: v.speed!=null?`${Math.round(v.speed*2.236936)} mph`:"", title:`${v.routeId||"?"} · ${sys}`,
+    sub:`${sys}`, oCity:null, dCity:null,
+    subline: stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : "",
+    oLL:null, dLL:null, posLL:{lat:all[0].lat,lon:all[0].lon}, oCode:"", dCode:"",
+    statusHtml:`<span class="phase">en route</span><span class="badge na">live</span>`,
+    photoQuery:`${sys} train New York`, photoFallback:"commuter train exterior" };
+}
+
 /* ---- local live rail (MARC on Bethesda, SEPTA Regional Rail on Philly) --
    reads the SAME live-Worker URL the board itself uses, so nothing needs to
    be configured twice. Falls back to null (Amtrak-only) if no Worker URL is
    saved on the board yet. */
 async function produceLiveLocalTrain(){
+  if(CITY_CFG.nycRail) return await produceNycRailTrain();
   if(CITY_CFG.lsMarcUrl){
     const url=loadLiveUrl(CITY_CFG.lsMarcUrl); if(!url) return null;
     let data; try{ data=await getJSON(url,12000); }catch(e){ return null; }
@@ -657,29 +831,49 @@ function roActiveServices(s, date){
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
   return act;
 }
-/* Live SEPTA bus, via the same Worker URL the board uses (Ride On has no
-   live source at all, so Bethesda always falls through to the schedule). */
+/* Live bus, via the board's own optional Worker URL (lsBusUrl -- a SEPARATE
+   field from lsSeptaUrl even though Philly's happens to be the same URL,
+   see CITY_CONFIG comment). Ride On has no live source at all, so Bethesda
+   always falls through to the schedule; MTA Bus's Worker (mta-bus-worker.js)
+   returns raw GTFS-Realtime protobuf rather than SEPTA's plain JSON, so NYC
+   takes its own decode path here instead of assuming SEPTA's /transitview
+   JSON shape. */
 async function produceLiveBus(){
-  if(!CITY_CFG.lsSeptaUrl) return null;
-  const url=loadLiveUrl(CITY_CFG.lsSeptaUrl); if(!url) return null;
+  if(!CITY_CFG.lsBusUrl) return null;
+  const url=loadLiveUrl(CITY_CFG.lsBusUrl); if(!url) return null;
+  if(CITY_CFG.nycRail){
+    let buf; try{ buf=new Uint8Array(await fetch(`${url}/vehiclePositions`).then(r=>r.arrayBuffer())); }catch(e){ return null; }
+    const {vehicles}=decodeGtfsRt(buf);
+    const NYC_BUS_ROUTES=new Set(["M42","M15","M15+","M34+","M34A+"]);
+    const buses=vehicles.filter(v=>NYC_BUS_ROUTES.has(v.routeId) && typeof v.lat==="number");
+    if(!buses.length) return null;
+    const list=buses.map(v=>({v, nm:haversineNm(loc,{lat:v.lat,lon:v.lon})})).sort((a,b)=>a.nm-b.nm);
+    const {v,nm}=list[0];
+    return { id:"lb"+v.tripId, nm, unit:"nm", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}),
+      altText:"", title:`Route ${v.routeId}`, sub:`MTA Bus`,
+      oCity:null, dCity:null, subline:"",
+      oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
+      statusHtml:`<span class="phase">in service</span><span class="badge na">live</span>`,
+      photoQuery:CITY_CFG.busPhotoQuery, photoFallback:"transit bus exterior" };
+  }
   let data; try{ data=await getJSON(`${url}/transitview`,12000); }catch(e){ return null; }
   const buses=(data.bus||[]).filter(b=>b.lat&&b.lng);
   if(!buses.length) return null;
   const list=buses.map(b=>({b, nm:haversineNm(loc,{lat:+b.lat,lon:+b.lng})})).sort((a,c)=>a.nm-c.nm);
   const {b,nm}=list[0], late=isRealLateNight(b.late);
   return { id:"lb"+(b.VehicleID||b.route_id), nm, unit:"nm", dir:bearingFrom(loc,{lat:+b.lat,lon:+b.lng}),
-    altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · SEPTA`,
+    altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · ${CITY_CFG.localBusSystem}`,
     oCity:null, dCity:b.destination||null, subline: b.Direction||"",
     oLL:null, dLL:null, posLL:{lat:+b.lat,lon:+b.lng}, oCode:"", dCode:"",
     statusHtml:`<span class="phase">in service</span>`+(late?`<span class="badge late">+${b.late} min late</span>`:`<span class="badge ok">on time</span>`),
-    photoQuery:"SEPTA bus Philadelphia", photoFallback:"transit bus exterior" };
+    photoQuery:CITY_CFG.busPhotoQuery, photoFallback:"transit bus exterior" };
 }
 async function produceBus(){
   const live=await produceLiveBus().catch(()=>null);
   if(live) return live;
   const s=await ensureRideOnScheduleNight();
   if(!s) return null;
-  const busSystem = CITY==="philly" ? "SEPTA" : "Ride On";
+  const busSystem = CITY_CFG.localBusSystem;
   const now=new Date(), active=roActiveServices(s, now);
   let best=null;
   s.trips.forEach((tr,i)=>{
@@ -707,7 +901,7 @@ async function produceBus(){
     oLL: first?{lat:first[0],lon:first[1]}:null, dLL: last?{lat:last[0],lon:last[1]}:null,
     posLL:{lat,lon}, oCode:"", dCode:"",
     statusHtml:`<span class="phase">in service</span><span class="badge na">scheduled</span>`,
-    photoQuery: CITY==="philly" ? "SEPTA bus Philadelphia" : "Ride On bus Montgomery County Maryland",
+    photoQuery: CITY_CFG.busPhotoQuery,
     photoFallback:"transit bus exterior" };
 }
 const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus };
@@ -870,7 +1064,7 @@ function boot(){
   document.querySelectorAll("#skySeg button").forEach(b=>b.classList.toggle("active", b.dataset.sky===(sunSkyEnabled()?"on":"off")));
   makeStars();
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
-  $("#boardBtn").title = CITY==="philly" ? "Back to the Philadelphia board" : "Back to the Bethesda board";
+  $("#boardBtn").title = `Back to the ${CITY_CFG.cityLabel} board`;
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
   updateSunSky(); setInterval(updateSunSky, 60000);

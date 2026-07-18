@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0f1a" />
+<title>New York Live Transit Board</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root{
+    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942; --bg-glow:#16203a;
+    --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a; --late:#ff5a5a;
+    --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8;
+    --row-bg:#0d1424; --row-line:#172038; --sched-b:#aab6d8; --scrim:rgba(6,9,16,.86);
+  }
+  :root[data-theme="black"]{
+    --bg:#000000; --panel:#0a0a0a; --panel2:#000000; --line:#1c1c1c; --bg-glow:#0e0e0e;
+    --text:#f2f2f2; --muted:#8a8a8a; --row-bg:#080808; --row-line:#1a1a1a; --sched-b:#c7c7c7;
+  }
+  :root[data-theme="day"]{
+    --bg:#eef1f8; --panel:#ffffff; --panel2:#f3f5fb; --line:#dde2ee; --bg-glow:#e2e8f7;
+    --text:#161b2e; --muted:#5b6478; --row-bg:#ffffff; --row-line:#e3e7f2; --sched-b:#3d475f;
+    --scrim:rgba(180,190,215,.55);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
+    color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
+  header{
+    display:flex; align-items:center; gap:16px; padding:14px 22px;
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--panel2),var(--bg));
+  }
+  header .title{font-size:20px; font-weight:800; letter-spacing:.3px}
+  header .title small{color:var(--muted); font-weight:600; margin-left:8px}
+  header .clock{margin-left:auto; text-align:right}
+  header .clock .time{font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1}
+  header .clock .meta{font-size:12px; color:var(--muted)}
+  header button{
+    background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
+  }
+  header button:hover{border-color:var(--accent)}
+  header #nightBtn, header #bethesdaBtn, header #phillyBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
+  header #nightBtn:hover, header #bethesdaBtn:hover, header #phillyBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
+
+  main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
+  .col{display:flex; flex-direction:column; gap:12px; min-height:0}
+  .cards{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:12px; min-height:0; flex:1}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line); border-radius:14px; padding:11px 13px;
+    display:flex; flex-direction:column; min-height:0; overflow:hidden;
+  }
+  .card.user-hidden{display:none !important}
+  .card h2{margin:0 0 7px; font-size:13px; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--muted); display:flex; align-items:center; gap:8px}
+  .card h2 .icon{font-size:17px}
+  .card h2 .count{margin-left:auto; font-size:12px; color:var(--muted); font-weight:600}
+  .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:5px; padding-right:2px}
+
+  .row{
+    display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
+    padding:7px 9px; border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
+  }
+  .row .badge{
+    min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
+    justify-content:center; font-weight:800; font-size:13px; color:#08101f;
+  }
+  .row .badge.rail{color:#fff}
+  .row .dest{font-weight:700; font-size:15px; line-height:1.15}
+  .row .sub{color:var(--muted); font-size:12px}
+  .row .times{display:flex; flex-direction:column; align-items:flex-end; gap:2px}
+  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live)}
+  .row .sched{font-size:11px; color:var(--sched)}
+  .row .sched b{color:var(--sched-b)}
+  .row .live-eta{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums}
+  .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+  .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
+  .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
+  .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
+
+  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
+  .leaflet-container{background:var(--row-bg)}
+  .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
+  .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
+
+  footer{display:flex; align-items:center; gap:14px; padding:6px 22px; border-top:1px solid var(--line);
+    font-size:12px; color:var(--muted)}
+  footer .dot{width:8px; height:8px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good)}
+  footer .dot.stale{background:var(--warn); box-shadow:0 0 8px var(--warn)}
+  footer .grow{flex:1}
+
+  /* Setup overlay */
+  #setup{position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(6px);
+    display:none; align-items:center; justify-content:center; z-index:9999; padding:20px}
+  #setup.show{display:flex}
+  #setup .box{background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    padding:26px; max-width:460px; width:100%}
+  #setup h3{margin:0 0 6px; font-size:19px}
+  #setup p{color:var(--muted); font-size:13px; line-height:1.5; margin:8px 0}
+  #setup a{color:var(--accent)}
+  #setup input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font-size:14px; margin-top:6px}
+  #setup .btns{display:flex; gap:10px; margin-top:16px}
+  #setup button{flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
+    background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; border:none}
+  #setup button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
+  #setup .box{max-height:88vh; overflow:auto}
+  #setup .accent-lbl, #setup .section-lbl{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; margin-top:14px}
+  #setup .addr-row{display:flex; gap:8px; margin-top:6px}
+  #setup .addr-row input{margin-top:0; flex:1}
+  #setup .addr-row button{flex:none; padding:0 14px; border-radius:10px; border:1px solid var(--line);
+    background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; font-size:13px}
+  #setup #addrGpsBtn{background:transparent; color:var(--text); white-space:nowrap}
+  #setup #addrStatus{font-size:12px; min-height:16px; margin-top:6px; color:var(--muted)}
+  #setup .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:9px}
+  #setup .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
+  #setup .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.2)}
+  #setup .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a); position:relative; overflow:hidden}
+  #setup .theme-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:9px}
+  #setup .theme-btn{flex:1; min-width:70px; padding:9px 6px; border-radius:10px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font-size:12px; font-weight:700; cursor:pointer}
+  #setup .theme-btn.active{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  #setup .card-toggle{flex:1; min-width:120px; display:flex; align-items:center; gap:7px; padding:8px 10px;
+    border-radius:10px; border:1px solid var(--line); background:var(--row-bg); font-size:12.5px; cursor:pointer}
+  #setup .card-toggle input{margin:0; cursor:pointer}
+  #setup .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
+
+  /* Narrower screens: stack map on top, cards fill the rest — still fits the
+     screen with no page scroll (cards trim themselves to fit via fitList). */
+  @media (max-width:1000px){
+    main{grid-template-columns:1fr; grid-template-rows:34dvh 1fr}
+    #map{min-height:0}
+    .cards{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:560px){
+    main{grid-template-rows:22dvh 1fr; gap:10px; padding:10px}
+    header{padding:10px 14px}
+    header .title{font-size:16px}
+    header .clock .time{font-size:22px}
+  }
+  @media (max-width:440px){
+    .cards{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title">🗽 New York Live Transit <small id="loclabel">locating…</small></div>
+    <a id="bethesdaBtn" href="index.html" title="Bethesda board" onclick="window.location.href='index.html'; return false;">🏠 Bethesda</a>
+    <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">🎓 Philly</a>
+    <a id="nightBtn" href="night.html?city=nyc" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=nyc'; return false;">🌙 Night</a>
+    <a id="flipBtn" href="flipboard.html?city=nyc" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=nyc'; return false;">🚉 Board</a>
+    <button id="fsBtn" title="Full screen (F)"></button>
+    <button id="settingsBtn" title="Settings">⚙︎</button>
+    <div class="clock">
+      <div class="time" id="clock">--:--</div>
+      <div class="meta" id="date">—</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="col">
+      <div id="map"></div>
+      <div class="legend">
+        <span>✈️ aircraft</span>
+        <span style="color:#3ad0c8">▦ Amtrak</span>
+        <span style="color:#EE352E">▦ Subway</span>
+        <span style="color:#00985F">▦ LIRR</span>
+        <span style="color:#A72650">▦ Metro-North</span>
+        <span style="color:#6E6E6E">▦ MTA Bus</span>
+        <span style="color:#00A9E0">▦ PATH</span>
+        <span style="color:#3ad0c8">┈ Amtrak route</span>
+        <span style="opacity:.7">┈ subway lines (real colors)</span>
+        <span style="opacity:.7">vehicles move live · zoom in for labels</span>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="cards">
+        <div class="card" id="subwayCard">
+          <h2><span class="icon">🚇</span> Subway <span class="count" id="subwayCount"></span></h2>
+          <div class="list" id="subwayList"><div class="empty">Finding nearby trains…</div></div>
+        </div>
+        <div class="card" id="lirrCard">
+          <h2><span class="icon">🚆</span> LIRR <span class="count" id="lirrCount"></span></h2>
+          <div class="list" id="lirrList"><div class="empty">Finding nearby trains…</div></div>
+        </div>
+        <div class="card" id="mnrCard">
+          <h2><span class="icon">🚆</span> Metro-North <span class="count" id="mnrCount"></span></h2>
+          <div class="list" id="mnrList"><div class="empty">Finding nearby trains…</div></div>
+        </div>
+        <div class="card" id="busCard">
+          <h2><span class="icon">🚌</span> MTA Bus — M42/M15/M34 <span class="count" id="busCount"></span></h2>
+          <div class="list" id="busList"><div class="empty">Loading bus schedule…</div></div>
+        </div>
+        <div class="card" id="pathCard">
+          <h2><span class="icon">🚆</span> PATH <span class="count" id="pathCount"></span></h2>
+          <div class="list" id="pathList"><div class="empty">Loading PATH schedule…</div></div>
+        </div>
+        <div class="card" id="amtrakCard">
+          <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
+          <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
+        </div>
+        <div class="card" id="planeCard">
+          <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
+          <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">live — Amtrak + airplanes.live</span>
+    <span class="grow"></span>
+  </footer>
+</div>
+
+<div id="setup">
+  <div class="box">
+    <h3>Settings</h3>
+
+    <div class="section-lbl">Location</div>
+    <p style="font-size:12px">This board tracks trains and planes <b>near one location</b> —
+      <b id="curLocLbl">Penn Station, New York, NY</b> by default. Type any address, city, or zip to move it there instead.
+      Amtrak and planes work anywhere in the US.</p>
+    <div class="addr-row">
+      <input id="addrInput" type="text" placeholder="Address, city, or zip…" autocomplete="off" spellcheck="false" />
+      <button id="addrSetBtn" type="button">Set</button>
+    </div>
+    <div id="addrStatus"></div>
+    <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
+
+    <div class="accent-lbl">Theme</div>
+    <div class="theme-row" id="themeRow">
+      <button type="button" class="theme-btn" data-theme="dark">Dark</button>
+      <button type="button" class="theme-btn" data-theme="black">Black</button>
+      <button type="button" class="theme-btn" data-theme="day">Day</button>
+    </div>
+
+    <div class="accent-lbl">Accent color</div>
+    <div class="swatches" id="accentSwatches"></div>
+
+    <div class="accent-lbl">Show on board</div>
+    <div class="theme-row" id="cardToggles"></div>
+
+    <details style="margin-top:6px">
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: exact live MTA Bus positions</summary>
+      <p style="margin-top:10px">MTA Bus (M42, M15, M34/M34A) works as <b>scheduled</b> by default (no setup).
+        For exact <b>live</b> positions instead, paste a free Cloudflare Worker URL (see
+        <code>mta-bus-worker.js</code> / README):</p>
+      <input id="busInput" type="text" placeholder="https://mta-bus.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
+    </details>
+
+    <details style="margin-top:6px">
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Optional: exact live PATH arrivals</summary>
+      <p style="margin-top:10px">PATH works as <b>scheduled</b> by default (no setup) -- trains are placed on the
+        map from their schedule. For real live arrival countdowns on the departures card instead (PATH's live data
+        is station-based, so it can't improve the map), paste a free Cloudflare Worker URL (see
+        <code>path-worker.js</code> / README):</p>
+      <input id="pathInput" type="text" placeholder="https://path.yourname.workers.dev (optional)" autocomplete="off" spellcheck="false" />
+    </details>
+
+    <div class="btns">
+      <button id="saveKey">Save</button>
+      <button class="ghost" id="skipKey">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+/* =========================================================================
+   New York (Manhattan + nearby Brooklyn/Queens) Live Transit Board
+   Pure client-side. Data: Amtrak (api-v3.amtraker.com) + airplanes.live (ADS-B).
+   Forked from philadelphia.html -- shared architecture (bundled-schedule
+   pattern, optional live-Worker upgrade, CARD_DEFS/CARD_LAYERS card<->map
+   visibility, fleet/updateFleet marker animation) reused unchanged here.
+   Subway/LIRR/Metro-North/Bus/PATH/NJ Transit land in later phases -- see
+   /Users/jackedlavitch/.claude/plans/hidden-snuggling-map.md for the plan.
+   ========================================================================= */
+const CFG = {
+  // Default location = Penn Station; overridden by device GPS or a typed address.
+  defaultLoc: { lat: 40.7506, lon: -73.9935, label: "Penn Station, New York, NY" },
+  planeRadiusNm: 12,   // nautical miles for "overhead"
+  amtrakRadiusMi: 60,  // miles: Amtrak trains to show as "regional"
+  planeEveryMs: 15000,
+  labelZoom: 12,        // at this zoom and closer, show vehicle labels; below, just dots
+  amtrakEveryMs: 20000,
+  subwayEveryMs: 10000,  // live subway positions (markers glide between updates)
+  lirrEveryMs: 15000,
+  mnrEveryMs: 15000,
+  busEveryMs: 15000,
+  pathEveryMs: 15000,
+  clockEveryMs: 1000,
+};
+const LS = {
+  loc: "transitboardnyc.loc",
+  bus: "transitboardnyc.busUrl",
+  path: "transitboardnyc.pathUrl",
+};
+const ACCENTS=["#4ea1ff","#ffb454","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
+
+let state = {
+  loc: CFG.defaultLoc,
+  busUrl: localStorage.getItem(LS.bus) || "",
+  pathUrl: localStorage.getItem(LS.path) || "",
+  map: null, planeLayer: null, trainLayer: null, amtrakRouteLayer: null, tileLayer: null,
+  subwayLayer: null, subwayRouteLayer: null, lirrLayer: null, lirrRouteLayer: null,
+  mnrLayer: null, mnrRouteLayer: null, busLayer: null, busRouteLayer: null,
+  pathLayer: null, pathRouteLayer: null,
+};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const el = (t, c, txt) => { const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e; };
+function haversine(a,b){
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s)); // km
+}
+const kmToMi = km => km*0.621371;
+async function getJSON(url, timeout=12000){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+
+/* ---------- clock ---------- */
+function tickClock(){
+  const d=new Date();
+  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  $("#date").textContent  = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
+}
+
+/* ---------- location ---------- */
+const LS_LOC_MANUAL = "transitboardnyc.locManual";
+function loadSavedLoc(){
+  try{ const s=JSON.parse(localStorage.getItem(LS.loc)); if(s&&s.lat) state.loc=s; }catch(e){}
+}
+function saveLoc(loc){ try{ localStorage.setItem(LS.loc, JSON.stringify(loc)); }catch(e){} }
+function setManualLoc(isManual){ try{ localStorage.setItem(LS_LOC_MANUAL, isManual?"1":"0"); }catch(e){} }
+function isManualLoc(){ return localStorage.getItem(LS_LOC_MANUAL)==="1"; }
+function applyLoc(loc){
+  state.loc = loc;
+  const label = loc.label || `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
+  $("#loclabel").textContent = label;
+  const curLbl=$("#curLocLbl"); if(curLbl) curLbl.textContent = label;
+}
+// Re-fetch every near-me data source for the current state.loc. Called after
+// GPS locates you, after you set a custom address, and on window resize.
+function refreshEverythingForNewLocation(){
+  fetchAmtrak(); refreshPlanes(); refreshSubway(); refreshLirr(); refreshMnr();
+  refreshBusScheduled(); busMapTick();
+  refreshPathScheduled(); drawPathScheduledMap();
+}
+function requestGeo(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const loc={ lat:pos.coords.latitude, lon:pos.coords.longitude, label:"Your location" };
+      applyLoc(loc); saveLoc(loc);
+      if(state.map) state.map.setView([loc.lat,loc.lon], 12);
+      setAddrStatus("Using your current location.", "good");
+      refreshEverythingForNewLocation();
+    },
+    _err => { if(!isManualLoc()) setAddrStatus(`Couldn't get your location — using ${state.loc.label||"the default"}.`, "warn"); },
+    { enableHighAccuracy:false, timeout:8000, maximumAge:600000 }
+  );
+}
+
+/* ---------- custom address (geocoded via Nominatim/OpenStreetMap, free, no key) ---------- */
+function setAddrStatus(msg, kind){
+  const el=$("#addrStatus"); if(!el) return;
+  el.textContent=msg||"";
+  el.style.color = kind==="good"?"var(--good)" : kind==="warn"?"var(--warn)" : "var(--muted)";
+}
+async function geocodeAddress(query){
+  const url=`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+  const data=await getJSON(url, 12000);
+  if(!data || !data.length) return null;
+  const r=data[0];
+  const parts=(r.display_name||"").split(",").map(s=>s.trim()).filter(Boolean);
+  return { lat:parseFloat(r.lat), lon:parseFloat(r.lon), label: parts.slice(0, Math.min(3, parts.length)).join(", ") };
+}
+async function handleSetAddress(){
+  const input=$("#addrInput"), q=(input.value||"").trim();
+  if(!q){ setAddrStatus("Type an address, city, or zip first.", "warn"); return; }
+  setAddrStatus("Searching…");
+  try{
+    const loc=await geocodeAddress(q);
+    if(!loc){ setAddrStatus("Couldn't find that place — try adding a city/state.", "warn"); return; }
+    applyLoc(loc); saveLoc(loc); setManualLoc(true);
+    if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat, loc.lon], 12); }
+    setAddrStatus("Now tracking near "+loc.label, "good");
+    refreshEverythingForNewLocation();
+  }catch(e){ setAddrStatus("Search failed — check your connection and try again.", "warn"); }
+}
+function handleUseMyLocation(){
+  setManualLoc(false);
+  setAddrStatus("Finding your location…");
+  requestGeo();
+}
+
+/* ---------- map ---------- */
+function initMap(){
+  state.map = L.map("map", { zoomControl:true, attributionControl:false })
+    .setView([state.loc.lat, state.loc.lon], 12);
+  state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
+  state.subwayRouteLayer = L.layerGroup().addTo(state.map); // subway line shapes, beneath everything
+  state.lirrRouteLayer = L.layerGroup().addTo(state.map);   // LIRR branch lines
+  state.mnrRouteLayer = L.layerGroup().addTo(state.map);    // Metro-North branch lines
+  state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
+  state.trainLayer  = L.layerGroup().addTo(state.map);
+  state.subwayLayer = L.layerGroup().addTo(state.map);
+  state.lirrLayer   = L.layerGroup().addTo(state.map);
+  state.mnrLayer    = L.layerGroup().addTo(state.map);
+  state.busRouteLayer = L.layerGroup().addTo(state.map);  // MTA Bus route lines
+  state.busLayer    = L.layerGroup().addTo(state.map);
+  state.pathRouteLayer = L.layerGroup().addTo(state.map); // PATH route line
+  state.pathLayer   = L.layerGroup().addTo(state.map);
+  state.planeLayer  = L.layerGroup().addTo(state.map);
+  const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
+  L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
+  state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
+  state.map.on("zoomend", updateLabelVisibility);
+
+  // Leaflet computes its internal size the instant it's created; if the
+  // #map container hasn't finished CSS layout yet (grid/flex reflow, web
+  // fonts, cards populating) the map can end up mis-sized or off-center
+  // until something calls invalidateSize(). Auto-correct whenever the
+  // container's actual size changes so it's never something to click/nudge.
+  if("ResizeObserver" in window){
+    new ResizeObserver(()=>{
+      state.map.invalidateSize();
+      state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom());
+    }).observe(document.getElementById("map"));
+  }
+  setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// A dot at the exact location + an info chip floating to its right.
+// The chip is hidden when zoomed out (state.labelsOn) to avoid clutter.
+function labelIcon(color, label){
+  const chip = (state.labelsOn && label) ? `<span style="position:absolute;left:8px;top:-8px;
+      background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
+      font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
+      box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
+    html:`<div style="position:relative">
+      <span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>${chip}
+    </div>` });
+}
+// Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
+function planeIcon(track, label){
+  const lbl = (state.labelsOn && label) ? `<span style="position:absolute;left:19px;top:3px;background:rgba(9,13,24,.85);
+      color:#ffd166;padding:1px 5px;border-radius:5px;font:700 10px/13px system-ui;white-space:nowrap;
+      box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  return L.divIcon({ className:"plane-icon", iconSize:[22,22], iconAnchor:[11,11],
+    html:`<div style="position:relative;width:22px;height:22px">
+      <svg width="22" height="22" viewBox="0 0 24 24" style="transform:rotate(${track||0}deg);filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))">
+        <path d="M12 2 L14 11 L22 15 L22 17 L13 14 L13 20 L16 22 L16 23 L12 21.5 L8 23 L8 22 L11 20 L11 14 L2 17 L2 15 L10 11 Z"
+        fill="#ffd166" stroke="#7a5a00" stroke-width=".5"/></svg>${lbl}</div>` });
+}
+
+/* ---------- animated vehicle markers (smooth "live" movement) ----------
+   Markers persist by id and glide from their last position to each new
+   fix over `dur` ms, so trains/planes visibly move between updates. */
+state.fleets = { amtrak:{}, plane:{}, subway:{}, lirr:{}, mnr:{}, bus:{}, path:{} };
+function fleetLayer(f){
+  return { amtrak:state.trainLayer, plane:state.planeLayer, subway:state.subwayLayer,
+           lirr:state.lirrLayer, mnr:state.mnrLayer, bus:state.busLayer, path:state.pathLayer }[f];
+}
+// items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
+function updateFleet(fleet, items, dur){
+  const F=state.fleets[fleet], layer=fleetLayer(fleet); if(!layer) return;
+  const now=performance.now(), keep=new Set();
+  for(const it of items){
+    if(typeof it.lat!=="number" || typeof it.lon!=="number") continue;
+    keep.add(it.id);
+    let v=F[it.id];
+    if(!v){
+      const m=L.marker([it.lat,it.lon], {icon:it.icon(), keyboard:false}).addTo(layer);
+      if(it.tip) m.bindTooltip(it.tip, {direction:"top"});
+      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon };
+    } else {
+      const c=v.marker.getLatLng();                 // animate from current interpolated spot
+      v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
+      if(it.tip) v.marker.setTooltipContent(it.tip);
+      if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
+    }
+  }
+  for(const id in F){ if(!keep.has(id)){ layer.removeLayer(F[id].marker); delete F[id]; } }
+}
+// Re-render every marker's icon (used when zoom crosses the label threshold).
+function refreshFleetIcons(){
+  for(const f in state.fleets){ const F=state.fleets[f];
+    for(const id in F){ if(F[id].iconFn) F[id].marker.setIcon(F[id].iconFn()); }
+  }
+}
+function updateLabelVisibility(){
+  const on = state.map.getZoom() >= CFG.labelZoom;
+  if(on!==state.labelsOn){ state.labelsOn=on; refreshFleetIcons(); }
+}
+function animateFleets(){
+  const now=performance.now();
+  for(const f in state.fleets){ const F=state.fleets[f];
+    for(const id in F){ const v=F[id];
+      if(v.dur<=1) continue;
+      const p=(now-v.t0)/v.dur;
+      if(p>=1){ v.marker.setLatLng(v.to); v.dur=1; continue; }
+      v.marker.setLatLng([ v.from[0]+(v.to[0]-v.from[0])*p, v.from[1]+(v.to[1]-v.from[1])*p ]);
+    }
+  }
+  requestAnimationFrame(animateFleets);
+}
+
+/* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
+function fitList(box){
+  if(!box || box.clientHeight < 8) return;    // skip only when not laid out yet (height ~0)
+  let guard=0;
+  while(box.scrollHeight > box.clientHeight + 1 && box.lastElementChild && guard++ < 80){
+    box.removeChild(box.lastElementChild);
+  }
+}
+/* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
+function fitAll(){ ["#subwayList","#lirrList","#mnrList","#busList","#pathList","#amtrakList","#planeList"].forEach(s=>fitList($(s))); }
+
+/* ---------- PLANES ---------- */
+async function fetchPlanes(){
+  const {lat,lon}=state.loc;
+  let data;
+  try{ data=await getJSON(`https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
+  catch(e){ return; }
+  const ac=(data.ac||[]).filter(a=>a.lat&&a.lon)
+    .map(a=>({...a, _dist: a.dst!=null? a.dst : kmToMi(haversine(state.loc,{lat:a.lat,lon:a.lon}))/1.15078 }))
+    .sort((a,b)=>(a.alt_baro==='ground'?1:0)-(b.alt_baro==='ground'?1:0) || a._dist-b._dist);
+  renderPlanes(ac);
+  drawPlanes(ac);
+}
+function renderPlanes(ac){
+  const box=$("#planeList"); box.innerHTML="";
+  const flying=ac.filter(a=>a.alt_baro!=="ground");
+  if(!flying.length){ box.appendChild(el("div","empty","No aircraft overhead right now.")); }
+  flying.slice(0,10).forEach(a=>{
+    const row=el("div","row plane");
+    const mid=el("div");
+    mid.appendChild(el("div","dest", (a.desc||a.t||"Aircraft")));
+    mid.appendChild(el("div","sub", `${a.ownOp?a.ownOp+" · ":""}${a.gs?Math.round(a.gs)+" kt":""}${a._dist!=null?` · ${a._dist.toFixed(1)} nm`:""}`));
+    const times=el("div","times");
+    const alt=el("div","alt", typeof a.alt_baro==="number"? a.alt_baro.toLocaleString()+"′" : (a.alt_baro||"—"));
+    times.append(alt, el("div","sched", a.baro_rate>200?"climbing":a.baro_rate<-200?"descending":"level"));
+    row.append(badge((a.flight||a.r||"—").trim().slice(0,7)), mid, el("div"), times);
+    box.appendChild(row);
+  });
+  $("#planeCount").textContent = `${flying.length} aloft`;
+  fitList(box);
+}
+function badge(txt){ const b=el("div","badge",txt); b.style.background="var(--plane)"; b.style.color="#3a2b00"; return b; }
+function drawPlanes(ac){
+  const items=ac.filter(a=>a.alt_baro!=="ground" && a.lat && a.lon).map(a=>{
+    const call=(a.flight||a.r||"").trim();
+    return {
+      id:"p"+a.hex, lat:a.lat, lon:a.lon,
+      icon:()=>planeIcon(a.track, call), ik:"t"+Math.round((a.track||0)/8)+"_"+call,
+      tip:`${call||"?"} · ${typeof a.alt_baro==="number"?a.alt_baro+"′":a.alt_baro}`
+    };
+  });
+  updateFleet("plane", items, CFG.planeEveryMs);
+}
+
+/* ---------- AMTRAK (regional / intercity rail) ---------- */
+function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
+async function ensureAmtrakStations(){
+  if(state.amStations) return state.amStations;
+  try{ const c=JSON.parse(localStorage.getItem("transitboardnyc.amstations")||"null");
+    if(c && Date.now()-c.t < 864e5 && c.map){ state.amStations=c.map; return c.map; } }catch(e){}
+  const data=await getJSON("https://api-v3.amtraker.com/v3/stations", 12000);
+  const map={};
+  for(const code in data){ const s=data[code];
+    if(typeof s.lat==="number" && typeof s.lon==="number") map[code]=[s.lat,s.lon]; }
+  state.amStations=map;
+  try{ localStorage.setItem("transitboardnyc.amstations", JSON.stringify({t:Date.now(), map})); }catch(e){}
+  return map;
+}
+async function fetchAmtrak(){
+  let data, amSt={};
+  try{ data=await getJSON("https://api-v3.amtraker.com/v3/trains", 12000); }catch(e){ return; }
+  try{ amSt=await ensureAmtrakStations(); }catch(e){}
+  const here=state.loc, byNum={};
+  for(const arr of Object.values(data)) for(const t of (arr||[])){
+    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+    if(t.trainState && t.trainState!=="Active") continue;       // only trains actually en route
+    const distMi=kmToMi(haversine(here,{lat:t.lat,lon:t.lon}));
+    if(distMi>CFG.amtrakRadiusMi) continue;
+    const ex=byNum[t.trainNum];                                 // dedupe: keep the nearest instance
+    if(!ex || distMi<ex.distMi) byNum[t.trainNum]={t, distMi};
+  }
+  const out=Object.values(byNum).sort((a,b)=>a.distMi-b.distMi);
+  renderAmtrak(out); drawAmtrak(out); drawAmtrakRoutes(out, amSt);
+}
+// Real curved track geometry (from Amtrak's own GTFS shapes.txt, bundled by
+// gen-amtrak-routes.py) keyed by a normalized route name, so drawn routes
+// follow the actual corridor instead of straight-lining between stations.
+function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"").trim(); }
+async function ensureAmtrakRouteShapes(){
+  if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
+  try{
+    const data=await getJSON("amtrak-routes.json", 15000);
+    const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
+    state.amtrakRouteShapes=map;
+  }catch(e){ state.amtrakRouteShapes={}; }
+  return state.amtrakRouteShapes;
+}
+async function drawAmtrakRoutes(list, amSt){
+  if(!state.amtrakRouteLayer) return;
+  const shapes=await ensureAmtrakRouteShapes();
+  state.amtrakRouteLayer.clearLayers();
+  list.forEach(({t})=>{
+    const shape=shapes[normAmtrakName(t.routeName)];
+    const pts=shape || (t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
+    if(pts.length>1) L.polyline(pts, {color:"#3ad0c8", weight:2.5, opacity:.35,
+      lineCap:"round", lineJoin:"round", dashArray: shape?null:"1 6"}).addTo(state.amtrakRouteLayer);
+  });
+}
+function renderAmtrak(list){
+  const box=$("#amtrakList"); box.innerHTML="";
+  if(!list.length){ box.appendChild(el("div","empty",`No Amtrak trains within ${CFG.amtrakRadiusMi} mi right now.`)); $("#amtrakCount").textContent=""; return; }
+  list.slice(0,10).forEach(({t,distMi})=>{
+    const row=el("div","row");
+    const b=el("div","badge", (t.trainNum||"?").toString()); b.style.background="#3ad0c8"; b.style.color="#04201e";
+    const mid=el("div");
+    mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
+    const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
+    mid.appendChild(el("div","sub",
+      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
+    const times=el("div","times");
+    if(ns){
+      times.appendChild(el("div","live", fmtTime(ns.arr||ns.dep)||"—"));
+      const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
+    } else { times.appendChild(el("div","sched", t.trainState||"")); }
+    row.append(b, mid, el("div"), times);
+    box.appendChild(row);
+  });
+  $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
+  fitList(box);
+}
+function drawAmtrak(list){
+  const items=list.map(({t})=>({
+    id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
+    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
+    ik:"a-"+(t.trainNum||"")+(t.destCode||""),
+    tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
+  }));
+  updateFleet("amtrak", items, CFG.amtrakEveryMs);
+}
+
+/* ---------- SUBWAY (live, direct from the browser -- no key, no Worker) ----------
+   Confirmed via curl: api-endpoint.mta.info's GTFS-Realtime feeds are
+   CORS-open with no API key needed, unlike MARC/SEPTA which both required a
+   Cloudflare Worker just to get CORS headers. The payload is binary
+   GTFS-Realtime protobuf though, so it needs decoding -- done here with a
+   hand-rolled field-walker (no CDN protobuf library: this repo's only
+   dependency is Leaflet, and a general-purpose protobuf runtime would need
+   an async .proto schema load for a much heavier lift than this project's
+   established zero-dependency pattern). Extends marc-worker.js's decoder
+   (VehiclePosition only) with TripUpdate (delay/ETA) decoding, matched to
+   VehiclePosition entries by trip_id. */
+const SUBWAY_FEEDS = ["gtfs","gtfs-ace","gtfs-bdfm","gtfs-g","gtfs-jz","gtfs-nqrw","gtfs-l"];
+const SUBWAY_COL = {
+  "1":"#EE352E","2":"#EE352E","3":"#EE352E",
+  "4":"#00933C","5":"#00933C","6":"#00933C","6X":"#00933C",
+  "7":"#B933AD","7X":"#B933AD",
+  "A":"#0039A6","C":"#0039A6","E":"#0039A6",
+  "B":"#FF6319","D":"#FF6319","F":"#FF6319","FX":"#FF6319","M":"#FF6319",
+  "G":"#6CBE45", "J":"#996633","Z":"#996633", "L":"#A7A9AC",
+  "N":"#FCCC0A","Q":"#FCCC0A","R":"#FCCC0A","W":"#FCCC0A", "GS":"#808183",
+};
+/* ---- minimal GTFS-Realtime protobuf decoder ----
+   Uses BigInt for varint accumulation (not Number+Math.pow like
+   marc-worker.js) because protobuf's plain `int32` fields -- e.g.
+   StopTimeEvent.delay -- encode negative values as a 10-byte *sign-extended
+   64-bit* varint (not zigzag), which silently loses precision past 2^53 with
+   floating-point accumulation. BigInt decodes it exactly; gtfsrtInt32()
+   reinterprets the low 32 bits as signed afterward. */
+function* gtfsrtFields(b, start, end){
+  let i = start;
+  while(i < end){
+    const [key, ni] = gtfsrtVarint(b, i); i = ni;
+    const field = Number(key >> 3n), wt = Number(key & 7n);
+    if(wt === 0){ const [v, n] = gtfsrtVarint(b, i); i = n; yield [field, 0, v]; }
+    else if(wt === 2){ const [len, n] = gtfsrtVarint(b, i); const l = Number(len); yield [field, 2, [n, n + l]]; i = n + l; }
+    else if(wt === 5){ yield [field, 5, i]; i += 4; }
+    else if(wt === 1){ i += 8; }
+    else throw new Error("bad wiretype "+wt);
+  }
+}
+function gtfsrtVarint(b, i){
+  let result = 0n, shift = 0n, x;
+  do{ x = BigInt(b[i++]); result |= (x & 0x7fn) << shift; shift += 7n; }while(x & 0x80n);
+  return [result, i];
+}
+function gtfsrtF32(b, i){ return new DataView(b.buffer, b.byteOffset+i, 4).getFloat32(0, true); }
+function gtfsrtStr(b, s, e){ return new TextDecoder().decode(b.subarray(s, e)); }
+function gtfsrtInt32(v){ return Number(BigInt.asIntN(32, v)); }
+function gtfsrtInt64(v){ return Number(BigInt.asIntN(64, v)); }
+
+function decodeVehiclePosition(b, s, e){
+  const v = {};
+  for(const [vf, vwt, vv] of gtfsrtFields(b, s, e)){
+    if(vf === 1 && vwt === 2){                // trip (TripDescriptor)
+      for(const [tf, twt, tv] of gtfsrtFields(b, vv[0], vv[1])){
+        if(tf === 1) v.tripId = gtfsrtStr(b, tv[0], tv[1]);
+        else if(tf === 5) v.routeId = gtfsrtStr(b, tv[0], tv[1]);
+      }
+    } else if(vf === 2 && vwt === 2){         // position
+      for(const [pf, pwt, pv] of gtfsrtFields(b, vv[0], vv[1])){
+        if(pf === 1) v.lat = gtfsrtF32(b, pv);
+        else if(pf === 2) v.lon = gtfsrtF32(b, pv);
+        else if(pf === 3) v.bearing = gtfsrtF32(b, pv);
+        else if(pf === 5) v.speed = gtfsrtF32(b, pv);
+      }
+    } else if(vf === 4 && vwt === 0){         // current_status (0=INCOMING_AT,1=STOPPED_AT,2=IN_TRANSIT_TO)
+      v.status = Number(vv);
+    } else if(vf === 7 && vwt === 2){         // stop_id (platform-level)
+      v.stopId = gtfsrtStr(b, vv[0], vv[1]);
+    }
+  }
+  return v;
+}
+function decodeTripUpdate(b, s, e){
+  const u = { stops: [] };
+  for(const [tf, twt, tv] of gtfsrtFields(b, s, e)){
+    if(tf === 1 && twt === 2){                // trip (TripDescriptor)
+      for(const [df, dwt, dv] of gtfsrtFields(b, tv[0], tv[1])){
+        if(df === 1) u.tripId = gtfsrtStr(b, dv[0], dv[1]);
+        else if(df === 5) u.routeId = gtfsrtStr(b, dv[0], dv[1]);
+      }
+    } else if(tf === 2 && twt === 2){         // stop_time_update (repeated)
+      const stu = {};
+      for(const [sf, swt, sv] of gtfsrtFields(b, tv[0], tv[1])){
+        if(sf === 4 && swt === 2) stu.stopId = gtfsrtStr(b, sv[0], sv[1]);
+        else if(sf === 2 && swt === 2){       // arrival (StopTimeEvent)
+          for(const [af, awt, av] of gtfsrtFields(b, sv[0], sv[1])){
+            if(af === 1 && awt === 0) stu.delaySec = gtfsrtInt32(av);
+          }
+        } else if(sf === 3 && swt === 2 && stu.delaySec == null){  // departure (fallback)
+          for(const [af, awt, av] of gtfsrtFields(b, sv[0], sv[1])){
+            if(af === 1 && awt === 0) stu.delaySec = gtfsrtInt32(av);
+          }
+        }
+      }
+      u.stops.push(stu);
+    } else if(tf === 5 && twt === 0){         // TripUpdate.delay (trip-level fallback)
+      u.tripDelaySec = gtfsrtInt32(tv);
+    }
+  }
+  return u;
+}
+// Returns {vehicles:[{tripId,routeId,lat,lon,bearing,speed,stopId,status}], updates:{tripId:{stops,tripDelaySec}}}
+// Note: `lat`/`lon` are only present when the upstream feed actually reports
+// GPS (true for above-ground rail like LIRR/Metro-North). NYCT subway trains
+// have no GPS at all (signaled by track circuit, not satellite -- most of the
+// network is underground) and report only stop_id + status; callers that
+// need a subway vehicle's map position must resolve it via stop_id against
+// bundled station coordinates instead (see fetchSubwayLive()).
+function decodeGtfsRt(buf){
+  const vehicles = [], updates = {};
+  for(const [f, wt, val] of gtfsrtFields(buf, 0, buf.length)){
+    if(f !== 2 || wt !== 2) continue;         // FeedMessage.entity
+    const [es, ee] = val;
+    for(const [ef, ewt, eval_] of gtfsrtFields(buf, es, ee)){
+      if(ef === 4 && ewt === 2){              // FeedEntity.vehicle
+        const v = decodeVehiclePosition(buf, eval_[0], eval_[1]);
+        if(v.tripId) vehicles.push(v);
+      } else if(ef === 3 && ewt === 2){       // FeedEntity.trip_update
+        const u = decodeTripUpdate(buf, eval_[0], eval_[1]);
+        if(u.tripId) updates[u.tripId] = u;
+      }
+    }
+  }
+  return { vehicles, updates };
+}
+// The delay (seconds) most relevant to a specific vehicle right now: the
+// stop_time_update matching its current/next stop if present, else the
+// first upcoming one, else the trip-level fallback field.
+function delayForVehicle(v, updates){
+  const u = updates[v.tripId]; if(!u) return null;
+  const here = u.stops.find(s => s.stopId === v.stopId && s.delaySec != null);
+  if(here) return here.delaySec;
+  const next = u.stops.find(s => s.delaySec != null);
+  if(next) return next.delaySec;
+  return u.tripDelaySec != null ? u.tripDelaySec : null;
+}
+
+/* Delay -> color/text, shared convention with SEPTA's live rows (green "on
+   time" / yellow "+3-5 min" / red "+5min+"); `late` is minutes, guarded
+   against phantom sentinel values the same way SEPTA's occasional bad data
+   is (out-of-range = no data, not "very late"). */
+function isRealLate(late){ return typeof late==="number" && isFinite(late) && late>0 && Math.abs(late)<=90; }
+function liveLateInfo(late){
+  if(typeof late!=="number" || !isFinite(late) || Math.abs(late)>90) return null;
+  const color = late>5 ? "var(--late)" : late>=3 ? "var(--warn)" : "var(--good)";
+  const text = late<=0 ? "on time" : `+${late} min`;
+  return {color, text};
+}
+function appendLiveTimes(row, late){
+  const times=el("div","times");
+  const li=liveLateInfo(late);
+  if(li){ const eta=el("div","live-eta"); eta.style.color=li.color; eta.textContent=li.text; times.appendChild(eta); }
+  times.appendChild(el("div","live-tag","live"));
+  row.appendChild(times);
+}
+
+/* Bundled fallback (station names/coords + platform->station lookup for
+   resolving a live vehicle's stop_id) -- not the primary data source, see
+   gen-mta-subway-schedule.py's header. */
+async function ensureSubwaySchedule(){
+  if(state.subwaySched) return state.subwaySched;
+  try{
+    const s=await getJSON("mta-subway-schedule.json", 20000);
+    s._coord={}; s._name={};
+    (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
+    state.subwaySched=s;
+  }catch(e){}
+  return state.subwaySched;
+}
+// Shared by subway/LIRR/Metro-North: resolves a live vehicle's stop_id to a
+// bundled station name/coordinate. `platforms` (platform stop_id -> parent
+// station id) only exists on the subway bundle; LIRR/Metro-North stop_ids
+// already ARE station ids, so the lookup is a no-op identity there.
+function scheduleStationName(sched, stopId){
+  if(!sched) return "";
+  const pid = (sched.platforms||{})[stopId] || stopId;
+  return (sched._name||{})[pid] || "";
+}
+function scheduleStationCoord(sched, stopId){
+  if(!sched) return null;
+  const pid = (sched.platforms||{})[stopId] || stopId;
+  return (sched._coord||{})[pid] || null;
+}
+// Real route geometry (shapes.txt, bundled by gen-mta-subway-schedule.py),
+// same most-used-shape-per-route + decimation technique as
+// gen-amtrak-routes.py -- drawn once, unlike Amtrak's per-refresh redraw,
+// since the physical subway map doesn't change between refreshes.
+async function drawSubwayRoutes(){
+  if(!state.subwayRouteLayer || state.subwayRoutesDrawn) return;
+  state.subwayRoutesDrawn = true;
+  let shapes;
+  try{ shapes = await getJSON("mta-subway-shapes.json", 20000); }catch(e){ return; }
+  state.subwayRouteLayer.clearLayers();
+  for(const routeId in shapes){
+    const pts = shapes[routeId];
+    if(pts && pts.length>1) L.polyline(pts, {
+      color:SUBWAY_COL[routeId]||"#888", weight:3, opacity:.4, lineCap:"round", lineJoin:"round"
+    }).addTo(state.subwayRouteLayer);
+  }
+}
+async function fetchSubwayLive(){
+  drawSubwayRoutes();   // one-time; no-ops after the first successful draw
+  const sched = await ensureSubwaySchedule();
+  const results = await Promise.allSettled(SUBWAY_FEEDS.map(f =>
+    fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F${f}`).then(r=>r.arrayBuffer())
+  ));
+  let vehicles=[], updates={};
+  results.forEach(r=>{
+    if(r.status!=="fulfilled") return;
+    try{
+      const {vehicles:v, updates:u} = decodeGtfsRt(new Uint8Array(r.value));
+      vehicles = vehicles.concat(v); Object.assign(updates, u);
+    }catch(e){}
+  });
+  const here=state.loc;
+  // NYCT subway reports no GPS (see decodeGtfsRt's note) -- place each train
+  // at its current/next stop's bundled coordinate instead. A stop outside
+  // the bundle (train currently beyond the Manhattan+nearby-BK/Queens box)
+  // resolves to null and is dropped -- the same "scoping for free" the
+  // schedule-interpolation systems (MARC/Ride On) already rely on, just
+  // reached via live stop_id instead of a static schedule lookup.
+  const list = vehicles.map(v=>{
+    if(!v.routeId && updates[v.tripId]) v.routeId = updates[v.tripId].routeId;
+    const coord = typeof v.lat==="number" ? [v.lat,v.lon] : scheduleStationCoord(sched, v.stopId);
+    if(!coord) return null;
+    const late = delayForVehicle(v, updates);
+    const lateMin = late!=null ? Math.round(late/60) : null;
+    return { v, lat:coord[0], lon:coord[1], lateMin, mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
+      stationName: scheduleStationName(sched, v.stopId) };
+  }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
+  renderSubway(list);
+  drawSubway(list);
+}
+function renderSubway(list){
+  const box=$("#subwayList"); if(!box) return; box.innerHTML="";
+  if(!list.length){ box.appendChild(el("div","empty","No subway trains found nearby right now.")); $("#subwayCount").textContent=""; return; }
+  list.slice(0,10).forEach(({v,lateMin,mi,stationName})=>{
+    const row=el("div","row");
+    const b=el("div","badge", v.routeId||"?"); b.style.background=SUBWAY_COL[v.routeId]||"#888";
+    if(["N","Q","R","W","GS"].includes(v.routeId)) b.style.color="#000";
+    const mid=el("div");
+    mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : (v.routeId+" train")));
+    mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
+    row.append(b, mid, el("div"));
+    appendLiveTimes(row, lateMin);
+    box.appendChild(row);
+  });
+  $("#subwayCount").textContent = `${list.length} nearby`;
+  fitList(box);
+}
+function drawSubway(list){
+  const items=list.map(({v,lat,lon,stationName})=>({
+    id:"sw"+v.tripId, lat, lon,
+    icon:()=>labelIcon(SUBWAY_COL[v.routeId]||"#888", v.routeId||"?"),
+    ik:"sw-"+(v.routeId||""),
+    tip:`${v.routeId||"?"} train${stationName?` · ${v.status===1?"at":"approaching"} ${stationName}`:""}`
+  }));
+  updateFleet("subway", items, CFG.subwayEveryMs);
+}
+
+/* Resolves which bundled-schedule service_ids are active on `date` --
+   base calendar.txt day-of-week match, then calendar_dates.txt exceptions
+   applied on top (removals then additions). Shared by every bundled-schedule
+   system in this project (MARC/Ride On/SEPTA/PATCO in the other boards);
+   works unchanged here even though MTA Bus's calendar.txt IS populated
+   (unlike LIRR/Metro-North's calendar_dates-only structure) since an empty
+   `svc` is just a no-op base loop. */
+function marcActiveServices(s, date){
+  const y=`${date.getFullYear()}${String(date.getMonth()+1).padStart(2,"0")}${String(date.getDate()).padStart(2,"0")}`;
+  const dow=(date.getDay()+6)%7;         // Mon=0 … Sun=6
+  const act=new Set();
+  for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
+  const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  return act;
+}
+/* Groups a stop's upcoming scheduled departures by headsign so a card can
+   show both directions' timetables separately instead of one merged list.
+   Returns up to maxDirs direction-groups, each up to perDir departures,
+   soonest direction first. */
+function groupDepsByDirection(deps, perDir=2, maxDirs=2){
+  const groups=new Map();
+  deps.forEach(d=>{ const key=d.hs||"—"; if(!groups.has(key)) groups.set(key, []); groups.get(key).push(d); });
+  return [...groups.values()]
+    .map(list=>list.sort((a,b)=>a.min-b.min).slice(0,perDir))
+    .sort((a,b)=>a[0].min-b[0].min)
+    .slice(0,maxDirs);
+}
+
+/* Draw each branch's route as a colored polyline: group trips by line, pick
+   the trip with the most stops per line (fullest run, not a short turnback),
+   and connect its already-correctly-ordered stop sequence. Works for any
+   bundled schedule sharing the {stations,_coord,trips:[{line,st}]} shape --
+   same helper MARC/SEPTA/PATCO use in the Philadelphia/Bethesda boards. */
+function drawScheduleRouteLines(schedule, layer, colorFn){
+  if(!schedule || !schedule.trips || !layer) return;
+  layer.clearLayers();
+  const bestByLine={};
+  schedule.trips.forEach(tr=>{
+    const cur=bestByLine[tr.line];
+    if(!cur || tr.st.length>cur.st.length) bestByLine[tr.line]=tr;
+  });
+  Object.values(bestByLine).forEach(tr=>{
+    const pts=tr.st.map(([sid])=>schedule._coord[sid]).filter(Boolean);
+    if(pts.length>1) L.polyline(pts, {
+      color:colorFn(tr.line), weight:4, opacity:.5, lineCap:"round", lineJoin:"round"
+    }).addTo(layer);
+  });
+}
+
+/* ---------- LIRR + METRO-NORTH (live, same direct-fetch pattern as subway) ----------
+   Both confirmed CORS-open/no-key via curl, same as subway. Unlike subway,
+   these are above-ground conventional rail and DO report real GPS for most
+   (LIRR: 20/20 in a live spot-check) or some (Metro-North: ~40/170 -- mixed,
+   some trains report GPS and some don't) vehicles -- decodeGtfsRt() already
+   handles this generically (lat/lon present or not), so both branches reuse
+   the exact same "GPS if present, else resolve via stop_id" logic subway
+   uses. Unlike subway's per-route colors (26 distinct MTA line colors),
+   these use one representative brand color per agency with the branch name
+   as badge text -- 13 (LIRR) + 6 (Metro-North) branch colors would be a lot
+   of design surface for a first pass; branch names in the badge/text already
+   distinguish them clearly. Route lines use the simpler straight-between-
+   stops drawScheduleRouteLines() (not real shapes.txt like subway) -- LIRR/
+   MNR branches run mostly straight point-to-point, same simplification
+   MARC/SEPTA Rail/PATCO already rely on successfully. */
+const LIRR_COL = "#00985F", MNR_COL = "#A72650";
+
+async function ensureLirrSchedule(){
+  if(state.lirrSched) return state.lirrSched;
+  try{
+    const s=await getJSON("lirr-schedule.json", 20000);
+    s._coord={}; s._name={};
+    (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
+    state.lirrSched=s;
+    drawScheduleRouteLines(s, state.lirrRouteLayer, ()=>LIRR_COL);
+  }catch(e){}
+  return state.lirrSched;
+}
+async function ensureMnrSchedule(){
+  if(state.mnrSched) return state.mnrSched;
+  try{
+    const s=await getJSON("mnr-schedule.json", 20000);
+    s._coord={}; s._name={};
+    (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
+    state.mnrSched=s;
+    drawScheduleRouteLines(s, state.mnrRouteLayer, ()=>MNR_COL);
+  }catch(e){}
+  return state.mnrSched;
+}
+// Shared by both: fetch one GTFS-RT feed, resolve each vehicle's position
+// (GPS if present, else its current stop's bundled coordinate), sort by
+// distance. `label(v)` builds the badge text (branch name, abbreviated).
+async function fetchRailLive(feedPath, ensureSched){
+  const sched = await ensureSched();
+  let buf;
+  try{ buf = new Uint8Array(await fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/${feedPath}`).then(r=>r.arrayBuffer())); }
+  catch(e){ return null; }
+  const {vehicles, updates} = decodeGtfsRt(buf);
+  const here=state.loc;
+  return vehicles.map(v=>{
+    // Some agencies' VehiclePosition omits route_id even though it's present
+    // on the matching TripUpdate's trip descriptor -- fall back to that.
+    if(!v.routeId && updates[v.tripId]) v.routeId = updates[v.tripId].routeId;
+    const coord = typeof v.lat==="number" ? [v.lat,v.lon] : scheduleStationCoord(sched, v.stopId);
+    if(!coord) return null;
+    const late = delayForVehicle(v, updates);
+    const lateMin = late!=null ? Math.round(late/60) : null;
+    return { v, lat:coord[0], lon:coord[1], lateMin, mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
+      stationName: scheduleStationName(sched, v.stopId) };
+  }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
+}
+function renderRailCard(listId, countId, list, color){
+  const box=$(listId); if(!box) return; box.innerHTML="";
+  if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent=""; return; }
+  list.slice(0,10).forEach(({v,lateMin,mi,stationName})=>{
+    const row=el("div","row");
+    const b=el("div","badge rail", (v.routeId||"?").slice(0,4)); b.style.background=color;
+    const mid=el("div");
+    mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : ((v.routeId||"Train"))));
+    mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
+    row.append(b, mid, el("div"));
+    appendLiveTimes(row, lateMin);
+    box.appendChild(row);
+  });
+  $(countId).textContent = `${list.length} nearby`;
+  fitList(box);
+}
+function drawRailFleet(fleet, list, color){
+  const items=(list||[]).map(({v,lat,lon,stationName})=>({
+    id:fleet+v.tripId, lat, lon,
+    icon:()=>labelIcon(color, v.routeId||"?"),
+    ik:fleet+"-"+(v.routeId||""),
+    tip:`${v.routeId||"Train"}${stationName?` · ${v.status===1?"at":"approaching"} ${stationName}`:""}`
+  }));
+  updateFleet(fleet, items, CFG[fleet+"EveryMs"]);
+}
+async function fetchLirrLive(){
+  const list = await fetchRailLive("lirr%2Fgtfs-lirr", ensureLirrSchedule);
+  renderRailCard("#lirrList", "#lirrCount", list, LIRR_COL);
+  drawRailFleet("lirr", list, LIRR_COL);
+}
+async function fetchMnrLive(){
+  const list = await fetchRailLive("mnr%2Fgtfs-mnr", ensureMnrSchedule);
+  renderRailCard("#mnrList", "#mnrCount", list, MNR_COL);
+  drawRailFleet("mnr", list, MNR_COL);
+}
+
+/* ---------- MTA BUS (bundled schedule by default, optional live Worker) ----------
+   Unlike subway/LIRR/Metro-North, MTA Bus's live feed has real data but NO
+   CORS headers (confirmed via curl) -- needs mta-bus-worker.js. Same
+   "zero-setup default, optional live upgrade" pattern as Ride On/SEPTA Bus
+   in the other boards: mta-bus-schedule.json (M42/M15/M15+/M34+/M34A+, see
+   gen-mta-bus-schedule.py) gives a working departures card + scheduled map
+   positions (interpolated between stops) with no setup; pasting a deployed
+   Worker URL into Settings upgrades to exact live positions for the same
+   card+map. */
+const BUS_COL = "#6E6E6E";
+function busClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
+async function ensureBusSchedule(){
+  if(state.busSched) return state.busSched;
+  try{
+    const s=await getJSON("mta-bus-schedule.json", 20000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._dep={};
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    state.busSched=s;
+    drawScheduleRouteLines(s, state.busRouteLayer, ()=>BUS_COL);
+  }catch(e){}
+  return state.busSched;
+}
+async function refreshBusScheduled(){
+  // ensureBusSchedule() also draws the route line on the map as a side
+  // effect the first time it loads, so it must always run even when the
+  // live Worker owns the card below -- otherwise the route line never
+  // gets drawn at all when live tracking is on.
+  const s=await ensureBusSchedule();
+  if(state.busUrl) return;   // the live Worker owns this card once configured
+  const box=$("#busList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","MTA Bus schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(used>=2) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||group[0].line)));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge", d.line); b.style.background=BUS_COL;
+        const mid=el("div");
+        mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color="#b5b5b5"; t.textContent=busClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No more scheduled buses today at nearby stops."));
+  $("#busCount").textContent="scheduled";
+  fitList(box);
+}
+/* Place buses on the map by interpolating each running trip's position
+   between the two stops its schedule puts it between right now -- same
+   technique drawMarcScheduledMap()/drawRideOnScheduledMap() use in the
+   other boards. */
+async function drawBusScheduledMap(){
+  if(state.busUrl) return;   // the live Worker owns positions once configured
+  const s=await ensureBusSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      items.push({ id:"bs"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(BUS_COL, `${tr.line} → ${tr.hs}`),
+        ik:"bs-"+tr.line+"-"+i, tip:`MTA Bus ${tr.line} → ${tr.hs} (scheduled)` });
+      break;
+    }
+  });
+  updateFleet("bus", items, CFG.busEveryMs);
+}
+async function fetchBusLive(){
+  if(!state.busUrl) return;
+  let buf;
+  try{ buf = new Uint8Array(await fetch(`${state.busUrl}/vehiclePositions`).then(r=>r.arrayBuffer())); }
+  catch(e){ return; }
+  const {vehicles, updates} = decodeGtfsRt(buf);
+  const BUS_ROUTES = new Set(["M42","M15","M15+","M34+","M34A+"]);
+  const sched = await ensureBusSchedule();
+  const here=state.loc;
+  const list = vehicles.filter(v=>BUS_ROUTES.has(v.routeId)).map(v=>{
+    if(typeof v.lat!=="number") return null;   // MTA Bus reports real GPS for every vehicle; skip if somehow absent
+    const late = delayForVehicle(v, updates);
+    const lateMin = late!=null ? Math.round(late/60) : null;
+    return { v, lat:v.lat, lon:v.lon, lateMin, mi: kmToMi(haversine(here,{lat:v.lat,lon:v.lon})),
+      stationName: scheduleStationName(sched, v.stopId) };
+  }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
+  renderRailCard("#busList", "#busCount", list, BUS_COL);
+  drawRailFleet("bus", list, BUS_COL);
+}
+// Map positions: live via the optional Worker if configured, else scheduled interpolation.
+function busMapTick(){ if(state.busUrl) fetchBusLive(); else drawBusScheduledMap(); }
+
+/* ---------- PATH (bundled schedule map always; optional live Worker upgrades the card only) ----------
+   Unlike every other system on this board, PATH's own live data
+   (panynj.gov/bin/portauthority/ridepath.json, via the optional
+   path-worker.js) is STATION-based next-arrival countdowns, not vehicle
+   GPS/positions -- there's no "where is this train right now" to place on a
+   map with. So live, when configured, only upgrades the departures CARD;
+   the map always uses the bundled schedule's interpolation (same technique
+   as MARC/Ride On/PATCO in the other boards), live or not. */
+const PATH_COL = "#00A9E0";
+async function ensurePathSchedule(){
+  if(state.pathSched) return state.pathSched;
+  try{
+    const s=await getJSON("path-schedule.json", 20000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._dep={};
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    state.pathSched=s;
+    drawScheduleRouteLines(s, state.pathRouteLayer, ()=>PATH_COL);
+  }catch(e){}
+  return state.pathSched;
+}
+// PANYNJ's station codes (NWK, HAR, JSQ, GRV, NEW, ...) aren't the same ids
+// as the bundled GTFS's stop_ids -- map by matching station NAME instead
+// (both ultimately name real PATH stations), built once from the schedule.
+function pathStationByName(sched){
+  if(sched._byName) return sched._byName;
+  const m={}; (sched.stations||[]).forEach(st=>{ m[st.name.toLowerCase()]=st; });
+  sched._byName=m;
+  return m;
+}
+async function fetchPathLive(){
+  if(!state.pathUrl) return;
+  const sched = await ensurePathSchedule();
+  let data;
+  try{ data=await getJSON(`${state.pathUrl}`, 12000); }catch(e){ return; }
+  const byName = sched ? pathStationByName(sched) : {};
+  const here=state.loc;
+  const rows=[];
+  (data.results||[]).forEach(r=>{
+    const st = byName[(r.consideredStation||"").toLowerCase()];
+    // consideredStation is a 3-letter code (e.g. "JSQ"), not a name -- PANYNJ
+    // doesn't publish a code->name table in this feed, so fall back to
+    // showing the raw code when no schedule station matches by chance.
+    const mi = st ? kmToMi(haversine(here, {lat:st.lat, lon:st.lon})) : null;
+    (r.destinations||[]).forEach(d=>{
+      (d.messages||[]).forEach(m=>{
+        rows.push({ station: st?st.name:r.consideredStation, mi, headSign:m.headSign,
+          mins: Math.round((+m.secondsToArrival||0)/60), color: "#"+(m.lineColor||"00A9E0") });
+      });
+    });
+  });
+  rows.sort((a,b)=>(a.mi??999)-(b.mi??999) || a.mins-b.mins);
+  const box=$("#pathList"); if(!box) return; box.innerHTML="";
+  if(!rows.length){ box.appendChild(el("div","empty","No PATH arrivals reported right now.")); $("#pathCount").textContent=""; return; }
+  const byStation=new Map();
+  rows.forEach(r=>{ if(!byStation.has(r.station)) byStation.set(r.station, []); byStation.get(r.station).push(r); });
+  let shown=0;
+  for(const [station, list] of byStation){
+    if(shown>=10) break;
+    box.appendChild(el("div","stop-label","◼ "+station+(list[0].mi!=null?`  ·  ${list[0].mi.toFixed(1)} mi`:"")));
+    list.slice(0,4).forEach(r=>{
+      const row=el("div","row");
+      const b=el("div","badge rail","P"); b.style.background=r.color;
+      const mid=el("div"); mid.appendChild(el("div","dest", r.headSign||"PATH"));
+      mid.appendChild(el("div","sub", `in ${r.mins} min`));
+      const times=el("div","times"); times.appendChild(el("div","live-tag","live"));
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row); shown++;
+    });
+  }
+  $("#pathCount").textContent = "live";
+  fitList(box);
+}
+async function refreshPathScheduled(){
+  const s=await ensurePathSchedule();
+  if(state.pathUrl){ fetchPathLive(); return; }   // the live Worker owns this card once configured
+  const box=$("#pathList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","PATH schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(used>=2) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||"PATH")));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail","P"); b.style.background=PATH_COL;
+        const mid=el("div"); mid.appendChild(el("div","dest", d.hs||"PATH"));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", "PATH · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color=PATH_COL; t.textContent=busClock(d.t);
+        times.append(t, el("div","sched","scheduled"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No more PATH trains today at nearby stations."));
+  $("#pathCount").textContent="scheduled";
+  fitList(box);
+}
+async function drawPathScheduledMap(){
+  const s=await ensurePathSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      items.push({ id:"path"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(PATH_COL, `PATH → ${tr.hs}`),
+        ik:"path-"+i, tip:`PATH → ${tr.hs} (scheduled)` });
+      break;
+    }
+  });
+  updateFleet("path", items, CFG.pathEveryMs);
+}
+
+/* ---------- refresh orchestration ---------- */
+async function refreshPlanes(){
+  try{ await fetchPlanes(); }catch(e){}
+}
+async function refreshSubway(){
+  try{ await fetchSubwayLive(); }catch(e){}
+}
+async function refreshLirr(){
+  try{ await fetchLirrLive(); }catch(e){}
+}
+async function refreshMnr(){
+  try{ await fetchMnrLive(); }catch(e){}
+}
+
+/* ---------- setup overlay ---------- */
+function openSetup(){
+  $("#busInput").value=state.busUrl;
+  $("#pathInput").value=state.pathUrl;
+  $("#setup").classList.add("show"); $("#addrInput").focus();
+}
+function closeSetup(){ $("#setup").classList.remove("show"); }
+$("#settingsBtn").onclick=openSetup;
+$("#saveKey").onclick=()=>{
+  state.busUrl=$("#busInput").value.trim().replace(/\/+$/,"");
+  localStorage.setItem(LS.bus, state.busUrl);
+  state.pathUrl=$("#pathInput").value.trim().replace(/\/+$/,"");
+  localStorage.setItem(LS.path, state.pathUrl);
+  closeSetup();
+  refreshEverythingForNewLocation();
+};
+$("#skipKey").onclick=closeSetup;
+$("#addrSetBtn").onclick=handleSetAddress;
+$("#addrGpsBtn").onclick=handleUseMyLocation;
+$("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
+
+/* ---------- full-screen kiosk mode + keep-awake ---------- */
+const SVG_EXPAND=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
+const SVG_COMPRESS=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m8 0v-3a2 2 0 0 1 2-2h3"/></svg>`;
+let wakeLock=null;
+async function requestWake(){
+  try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); } }catch(e){}
+}
+async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); } }catch(e){} wakeLock=null; }
+function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+function toggleFullscreen(){
+  const el=document.documentElement;
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  const req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!req){ hintFS(); return; }
+  try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>hintFS()); }catch(e){ hintFS(); }
+}
+let hintTimer=null;
+function hintFS(){
+  let t=document.getElementById("fsHint");
+  if(!t){ t=document.createElement("div"); t.id="fsHint"; document.body.appendChild(t);
+    t.style.cssText="position:fixed;top:0;left:50%;transform:translate(-50%,-120%);z-index:9999;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:0 0 12px 12px;padding:12px 20px;font-size:14px;max-width:90vw;text-align:center;transition:transform .35s ease;box-shadow:0 10px 30px rgba(0,0,0,.5)"; }
+  t.textContent="Full screen is blocked here. Open this page in its own browser tab (or your deployed link) to go full screen.";
+  t.style.transform="translate(-50%,0)"; clearTimeout(hintTimer);
+  hintTimer=setTimeout(()=>{ t.style.transform="translate(-50%,-120%)"; }, 4500);
+}
+function onFsChange(){
+  const on=!!fsElement();
+  const b=$("#fsBtn");
+  if(b){ b.innerHTML=on?SVG_COMPRESS:SVG_EXPAND; b.title=on?"Exit full screen (F)":"Full screen (F)"; }
+  if(on) requestWake(); else releaseWake();          // keep display awake only in kiosk mode
+  if(state.map) setTimeout(()=>{ state.map.invalidateSize(); fitAll(); }, 120);
+}
+$("#fsBtn").onclick=toggleFullscreen;
+document.addEventListener("fullscreenchange", onFsChange);
+document.addEventListener("webkitfullscreenchange", onFsChange);
+document.addEventListener("keydown", e=>{
+  if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
+});
+// browsers drop the wake lock when the tab is hidden; re-acquire when visible in kiosk mode
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
+onFsChange();   // set initial icon
+
+/* ---------- accent color customization ---------- */
+function setBoardAccent(hex){
+  document.documentElement.style.setProperty("--accent", hex);
+  localStorage.setItem("transitboardnyc.accent", hex);
+  document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
+}
+function buildAccentSwatches(){
+  const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
+  ACCENTS.forEach(hex=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.style.background=hex; b.title=hex; b.onclick=()=>setBoardAccent(hex); wrap.appendChild(b); });
+  const c=document.createElement("label"); c.className="sw custom"; c.title="Custom color";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("transitboardnyc.accent")||"#4ea1ff";
+  inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
+}
+
+/* ---------- theme (dark / black / day) ---------- */
+function setBoardTheme(mode){
+  document.documentElement.setAttribute("data-theme", mode);
+  localStorage.setItem("transitboardnyc.theme", mode);
+  document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
+  if(state.tileLayer) state.tileLayer.setUrl(tileUrlForTheme(mode));
+}
+// Day is a light UI theme; CartoDB's Positron ("light_all") basemap is the free
+// light counterpart to the Dark Matter ("dark_all") tiles used for Dark/Black,
+// same provider/URL scheme already in use elsewhere in this project, no key needed.
+function tileUrlForTheme(theme){
+  return theme==="day"
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+}
+function buildThemeButtons(){
+  document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
+}
+
+/* ---------- customize: which cards show on the board ---------- */
+const CARD_DEFS=[
+  {id:"subwayCard", label:"Subway"}, {id:"lirrCard", label:"LIRR"}, {id:"mnrCard", label:"Metro-North"},
+  {id:"busCard", label:"MTA Bus"}, {id:"pathCard", label:"PATH"},
+  {id:"amtrakCard", label:"Amtrak"}, {id:"planeCard", label:"Planes"},
+];
+// Which map layer(s) each card's "show on board" toggle also controls -- hiding
+// a card means turning off that whole system, not just its departure-list card.
+const CARD_LAYERS={
+  subwayCard: ["subwayLayer","subwayRouteLayer"],
+  lirrCard:   ["lirrLayer","lirrRouteLayer"],
+  mnrCard:    ["mnrLayer","mnrRouteLayer"],
+  busCard:    ["busLayer","busRouteLayer"],
+  pathCard:   ["pathLayer","pathRouteLayer"],
+  amtrakCard: ["trainLayer","amtrakRouteLayer"],
+  planeCard:  ["planeLayer"],
+};
+function loadHiddenCards(){
+  try{ return new Set(JSON.parse(localStorage.getItem("transitboardnyc.hiddenCards")||"[]")); }catch(e){ return new Set(); }
+}
+function applyCardVis(){
+  const hidden=loadHiddenCards();
+  CARD_DEFS.forEach(({id})=>{
+    const el=document.getElementById(id); if(el) el.classList.toggle("user-hidden", hidden.has(id));
+    if(!state.map) return;
+    (CARD_LAYERS[id]||[]).forEach(key=>{
+      const layer=state[key]; if(!layer) return;
+      if(hidden.has(id)) state.map.removeLayer(layer);
+      else if(!state.map.hasLayer(layer)) state.map.addLayer(layer);
+    });
+  });
+}
+function buildCardToggles(){
+  const wrap=document.getElementById("cardToggles"); if(!wrap) return; wrap.innerHTML="";
+  const hidden=loadHiddenCards();
+  CARD_DEFS.forEach(({id,label})=>{
+    const lab=document.createElement("label"); lab.className="card-toggle";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!hidden.has(id);
+    cb.onchange=()=>{
+      const h=loadHiddenCards();
+      if(cb.checked) h.delete(id); else h.add(id);
+      localStorage.setItem("transitboardnyc.hiddenCards", JSON.stringify([...h]));
+      applyCardVis();
+    };
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(label)); wrap.appendChild(lab);
+  });
+}
+
+/* ---------- boot ---------- */
+function boot(){
+  setBoardAccent(localStorage.getItem("transitboardnyc.accent")||"#4ea1ff"); buildAccentSwatches();
+  setBoardTheme(localStorage.getItem("transitboardnyc.theme")||"dark"); buildThemeButtons();
+  buildCardToggles();
+  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
+  tickClock(); setInterval(tickClock, CFG.clockEveryMs);
+
+  requestAnimationFrame(animateFleets);   // start the smooth-movement loop
+  refreshEverythingForNewLocation();
+  setInterval(refreshPlanes, CFG.planeEveryMs);
+  setInterval(fetchAmtrak, CFG.amtrakEveryMs);
+  setInterval(refreshSubway, CFG.subwayEveryMs);
+  setInterval(refreshLirr, CFG.lirrEveryMs);
+  setInterval(refreshMnr, CFG.mnrEveryMs);
+  setInterval(refreshBusScheduled, 30000);   // recompute next scheduled MTA Bus (card)
+  setInterval(busMapTick, CFG.busEveryMs);   // MTA Bus positions on the map (scheduled, or live via Worker)
+  setInterval(refreshPathScheduled, 30000);  // PATH departures card (scheduled, or live via Worker)
+  setInterval(drawPathScheduledMap, CFG.pathEveryMs); // PATH positions on the map (always scheduled)
+
+  // re-fit cards to the new layout when the window/display changes size
+  let rzT; window.addEventListener("resize", ()=>{
+    if(state.map) state.map.invalidateSize();
+    fitAll();                              // instant: never clip/scroll while shrinking
+    clearTimeout(rzT); rzT=setTimeout(()=>{ // then reload data to refill rows if we grew
+      if(state.map) state.map.invalidateSize();
+      refreshEverythingForNewLocation();
+    }, 350);
+  });
+
+  if(isManualLoc()){ setAddrStatus("Tracking near "+(state.loc.label||"your saved location"), "good"); }
+  else { requestGeo(); }
+}
+// Defensive: if the very first boot() attempt throws (observed occasionally,
+// likely a transient timing issue with the CDN-loaded map library), retry
+// shortly after instead of leaving the page stuck uninitialized.
+function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
+if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
+</script>
+</body>
+</html>

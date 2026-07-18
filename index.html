@@ -47,9 +47,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
-  header #nightBtn, header #phillyBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+  header #nightBtn, header #phillyBtn, header #nycBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
     border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
-  header #nightBtn:hover, header #phillyBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
+  header #nightBtn:hover, header #phillyBtn:hover, header #nycBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -162,6 +162,7 @@
   <header>
     <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
     <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">🎓 Philly</a>
+    <a id="nycBtn" href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">🗽 NYC</a>
     <a id="nightBtn" href="night.html?city=bethesda" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=bethesda'; return false;">🌙 Night</a>
     <a id="flipBtn" href="flipboard.html?city=bethesda" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=bethesda'; return false;">🚉 Board</a>
     <button id="fsBtn" title="Full screen (F)"></button>
