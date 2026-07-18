@@ -77,6 +77,13 @@
 
   /* ---- animated night sky background ---- */
   #sky{position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none}
+  /* Real sunrise/sunset: a horizon-to-zenith gradient recolored from the sun's
+     actual elevation at this location (see sunElevationDeg/updateSunSky), sitting
+     UNDER the existing glow blobs + stars so twilight/dawn/dusk tint the whole
+     sky instead of replacing it. opacity is driven per-frame by JS; only opacity
+     transitions (gradients themselves can't be CSS-transitioned) but updates are
+     60s apart so the color step is always small enough to look smooth. */
+  #sunSky{position:absolute; inset:0; transition:opacity 4s ease}
   #sky .glow{position:absolute; border-radius:50%; filter:blur(70px); opacity:.28;
     animation:drift 30s ease-in-out infinite alternate}
   #sky .g1{width:60vmax;height:60vmax; left:-18vmax; top:-24vmax; background:radial-gradient(circle,var(--glow),transparent 65%)}
@@ -159,6 +166,7 @@
 </head>
 <body>
   <div id="sky">
+    <div id="sunSky"></div>
     <div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div>
     <div id="stars"></div>
   </div>
@@ -184,6 +192,11 @@
         <button data-theme="dark"><span class="ic">🌘</span>Dark</button>
         <button data-theme="black"><span class="ic">⬛</span>Black</button>
         <button data-theme="day"><span class="ic">☀️</span>Day</button>
+      </div>
+      <div class="lbl">Sky colors</div>
+      <div class="seg" id="skySeg">
+        <button data-sky="on"><span class="ic">🌇</span>On</button>
+        <button data-sky="off"><span class="ic">🚫</span>Off</button>
       </div>
       <div class="lbl">Color</div>
       <div class="swatches" id="swatches"></div>
@@ -365,6 +378,17 @@ function initMiniMap(){
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(miniMap);
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
   miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng
+  // Same root cause as the board's own #map (see index.html's initMap()): Leaflet
+  // sizes itself once at construction and won't notice a later resize on its own.
+  // Here the trigger is the async representative-photo fetch -- .side is
+  // flex-direction:row with height:auto in the portrait/mobile layout, so when
+  // the photo figure appears next to this map (or the page is resized), the
+  // row's height changes and tiles end up positioned for the old size, leaving
+  // a visible gap until something calls invalidateSize(). Only invalidateSize()
+  // here (no setView) so this doesn't fight renderMiniMap()'s own glide/pan logic.
+  if("ResizeObserver" in window){
+    new ResizeObserver(()=>miniMap.invalidateSize()).observe(document.getElementById("miniMap"));
+  }
 }
 let miniMapFor=null;
 function renderMiniMap(id, oLL, dLL, posLL){
@@ -408,6 +432,70 @@ function makeStars(){
       `--tw:${(2.5+Math.random()*5).toFixed(1)}s;--td:${(-Math.random()*6).toFixed(1)}s;`;
     holder.appendChild(s);
   }
+}
+
+/* ---- real sunrise/sunset sky colors ----
+   Low-precision solar position formula (Julian-day mean longitude/anomaly ->
+   ecliptic -> equatorial -> hour angle via GMST), the same approach SunCalc-style
+   libraries use, accurate to well under a degree -- plenty for driving a color
+   gradient. No CDN dependency, matching the rest of this project's zero-setup bundled
+   approach. Returns the sun's elevation in degrees above the horizon for `date` at
+   `lat`,`lon` (0 = right on the horizon, i.e. sunrise/sunset itself). */
+function sunElevationDeg(date, lat, lon){
+  const rad=Math.PI/180, d=(date.getTime()-Date.UTC(2000,0,1,12,0,0))/86400000; // days since J2000.0
+  const meanLon=(280.460+0.9856474*d)%360, meanAnom=(357.528+0.9856003*d)%360;
+  const eclLon=meanLon+1.915*Math.sin(meanAnom*rad)+0.020*Math.sin(2*meanAnom*rad);
+  const oblEcl=23.439-0.0000004*d;
+  const ra=Math.atan2(Math.cos(oblEcl*rad)*Math.sin(eclLon*rad), Math.cos(eclLon*rad))/rad;
+  const decl=Math.asin(Math.sin(oblEcl*rad)*Math.sin(eclLon*rad))/rad;
+  const gmst=((18.697374558+24.06570982441908*d)%24+24)%24;
+  let lst=((gmst+lon/15)%24+24)%24, raHours=((ra/15)%24+24)%24;
+  let ha=(lst-raHours)*15; if(ha>180) ha-=360; if(ha<-180) ha+=360;
+  const latR=lat*rad, declR=decl*rad, haR=ha*rad;
+  return Math.asin(Math.sin(latR)*Math.sin(declR)+Math.cos(latR)*Math.cos(declR)*Math.cos(haR))/rad;
+}
+/* Horizon(bottom)/mid/top(zenith) hex colors + overall opacity at key sun
+   elevations, hand-picked to peak in vivid orange/pink/gold right at elevation 0
+   (sunrise/sunset itself), pass through indigo/violet twilight on the way down
+   into night, and fade to near-invisible once the sun is well up -- so daytime
+   stays close to the app's normal palette instead of looking tinted. */
+const SUN_STOPS=[
+  { el:-18, top:"#000000", mid:"#02040c", bot:"#050b1c", op:.12 },
+  { el:-12, top:"#03050f", mid:"#0c1030", bot:"#151048", op:.25 },
+  { el:-6,  top:"#0a0f2e", mid:"#2c1f5e", bot:"#5b2a6b", op:.42 },
+  { el:-2,  top:"#152a5e", mid:"#8a3a6b", bot:"#e8623f", op:.60 },
+  { el:0,   top:"#1c3f7a", mid:"#d16a63", bot:"#ffab4d", op:.72 },
+  { el:4,   top:"#3a72b8", mid:"#a7c3e8", bot:"#ffd28a", op:.45 },
+  { el:12,  top:"#3f86c9", mid:"#bcd9f5", bot:"#f2e7cf", op:.20 },
+  { el:30,  top:"#3f86c9", mid:"#bcd9f5", bot:"#eaf3ff", op:.06 },
+];
+function lerpRgb(a,b,t){ return a.map((v,i)=>v+(b[i]-v)*t); }
+function sunSkyColors(el){
+  const s=SUN_STOPS;
+  if(el<=s[0].el) return { top:s[0].top, mid:s[0].mid, bot:s[0].bot, op:s[0].op };
+  if(el>=s[s.length-1].el){ const last=s[s.length-1]; return { top:last.top, mid:last.mid, bot:last.bot, op:last.op }; }
+  let a=s[0], b=s[s.length-1];
+  for(let i=0;i<s.length-1;i++){ if(el>=s[i].el && el<=s[i+1].el){ a=s[i]; b=s[i+1]; break; } }
+  const t=(el-a.el)/(b.el-a.el);
+  return {
+    top: rgbStr(lerpRgb(hexToRgb(a.top), hexToRgb(b.top), t)),
+    mid: rgbStr(lerpRgb(hexToRgb(a.mid), hexToRgb(b.mid), t)),
+    bot: rgbStr(lerpRgb(hexToRgb(a.bot), hexToRgb(b.bot), t)),
+    op: a.op+(b.op-a.op)*t,
+  };
+}
+function sunSkyEnabled(){ return localStorage.getItem("nightmode.sunsky")!=="0"; }
+function updateSunSky(){
+  const el=$("#sunSky"); if(!el) return;
+  if(!sunSkyEnabled()){ el.style.opacity=0; return; }
+  const c=sunSkyColors(sunElevationDeg(new Date(), loc.lat, loc.lon));
+  el.style.background=`linear-gradient(to top, ${c.bot}, ${c.mid} 45%, ${c.top} 100%)`;
+  el.style.opacity=c.op;
+}
+function setSunSky(v){
+  localStorage.setItem("nightmode.sunsky", v==="off"?"0":"1");
+  document.querySelectorAll("#skySeg button").forEach(b=>b.classList.toggle("active", b.dataset.sky===v));
+  updateSunSky();
 }
 
 let photoShownFor=null;
@@ -733,6 +821,7 @@ function initSettings(){
   $("#settings").addEventListener("click",e=>{ if(e.target.id==="settings") $("#settings").classList.remove("show"); });
   $("#modeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setMode(b.dataset.mode); });
   $("#themeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setNightTheme(b.dataset.theme); });
+  $("#skySeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setSunSky(b.dataset.sky); });
 }
 function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
 
@@ -778,11 +867,13 @@ function boot(){
   setTheme(localStorage.getItem("nightmode.accent")||"#7db8ff");
   initSettings();
   document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.theme===(localStorage.getItem("nightmode.theme")||"dark")));
+  document.querySelectorAll("#skySeg button").forEach(b=>b.classList.toggle("active", b.dataset.sky===(sunSkyEnabled()?"on":"off")));
   makeStars();
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
   $("#boardBtn").title = CITY==="philly" ? "Back to the Philadelphia board" : "Back to the Bethesda board";
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
+  updateSunSky(); setInterval(updateSunSky, 60000);
   setMode(mode); setInterval(tick, CFG.refreshMs);
   // Only fall back to GPS if the board itself would (i.e. you haven't set a
   // manual address there) -- otherwise this would silently override the
@@ -790,7 +881,7 @@ function boot(){
   if(navigator.geolocation && !boardLocIsManual()){
     navigator.geolocation.getCurrentPosition(p=>{
       loc={ lat:p.coords.latitude, lon:p.coords.longitude, label:"your location" };
-      $("#loclbl").textContent="near your location"; tick();
+      $("#loclbl").textContent="near your location"; tick(); updateSunSky();
     }, ()=>{}, { enableHighAccuracy:false, timeout:8000, maximumAge:600000 });
   }
 }
