@@ -170,19 +170,28 @@
    one opened it comes in via ?city=bethesda|philly so it can reuse that
    board's own saved location / WMATA key / live-Worker URLs / "show on
    board" toggles -- nothing to set up twice. */
-const CITY = new URLSearchParams(location.search).get("city")==="philly" ? "philly" : "bethesda";
 const CITY_CONFIG = {
   bethesda: {
     defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
-    lsLoc:"transitboard.loc", board:"index.html",
+    lsLoc:"transitboard.loc", board:"index.html", cityLabel:"Bethesda",
     lsWmataKey:"transitboard.wmataKey", lsHidden:"transitboard.hiddenCards",
   },
   philly: {
     defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
-    lsLoc:"transitboardphl.loc", board:"philadelphia.html",
+    lsLoc:"transitboardphl.loc", board:"philadelphia.html", cityLabel:"Philadelphia",
     lsWmataKey:null, lsHidden:"transitboardphl.hiddenCards",
   },
+  nyc: {
+    defaultLoc:{ lat:40.7506, lon:-73.9935, label:"Penn Station, New York, NY" },
+    lsLoc:"transitboardnyc.loc", board:"nyc.html", cityLabel:"New York",
+    lsWmataKey:null, lsHidden:"transitboardnyc.hiddenCards",
+  },
 };
+// Falls back to "bethesda" for any unrecognized/missing ?city= value, same
+// as the previous binary ternary did -- now a proper N-way lookup so a third
+// (and future) city doesn't silently collapse into Bethesda's config.
+const CITY_PARAM = new URLSearchParams(location.search).get("city");
+const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "bethesda";
 const CITY_CFG = CITY_CONFIG[CITY];
 const $ = s=>document.querySelector(s);
 
@@ -407,23 +416,50 @@ const MARC_LOGO_BY_LINE = {
    the fuller name used in the checkbox list (some systems share a logo --
    SEPTA Rail/Subway both just say "SEPTA" -- but need distinct labels to
    toggle correctly). */
-const SYSTEM_DEFS = CITY==="bethesda" ? [
-  {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
-  {id:"metro", logo:"METRO", label:"Metrorail", collect:()=>collectRailRows(6)},
-  {id:"metrobus", logo:"METROBUS", label:"Metrobus", collect:()=>collectBusRows(6)},
-  {id:"marc", logo:"MARC", label:"MARC", logoImgFn:r=>MARC_LOGO_BY_LINE[r.via], collect:()=>collectScheduleRows({url:"marc-schedule.json", stationCount:2, perStation:2,
-    colorFn:l=>({Brunswick:"#e8792b",Penn:"#d1495b",Camden:"#e0a800"}[l])||"#e8792b"})},
-  {id:"rideon", logo:"RIDE ON", label:"Ride On", collect:()=>collectScheduleRows({url:"rideon-schedule.json", stationCount:3, perStation:2, color:"#6aa9ff"})},
-  {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
-] : [
-  {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
-  {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectScheduleRows({url:"septa-rail-schedule.json", stationCount:2, perStation:2, color:"#4F758B"})},
-  {id:"septasubway", logo:"SEPTA", label:"SEPTA Subway", collect:()=>collectScheduleRows({url:"septa-subway-schedule.json", stationCount:2, perStation:2,
-    colorFn:l=>({L1:"#1c6bb0",B1:"#f7941d",B2:"#f7941d",B3:"#f7941d"}[l])||"#556"})},
-  {id:"septabus", logo:"SEPTA BUS", label:"SEPTA Bus", collect:()=>collectScheduleRows({url:"septa-bus-schedule.json", stationCount:2, perStation:2, color:"#e8a33c"})},
-  {id:"patco", logo:"PATCO", label:"PATCO", collect:()=>collectScheduleRows({url:"patco-schedule.json", stationCount:2, perStation:2, color:"#BC0035"})},
-  {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
-];
+// Real MTA subway line colors, same map nyc.html's board uses -- the only
+// system here needing a colorFn instead of one flat color (26 distinct
+// lines vs. one brand color per agency for LIRR/Metro-North/Bus/PATH).
+const NYC_SUBWAY_COL = {
+  "1":"#EE352E","2":"#EE352E","3":"#EE352E","4":"#00933C","5":"#00933C","6":"#00933C","6X":"#00933C",
+  "7":"#B933AD","7X":"#B933AD","A":"#0039A6","C":"#0039A6","E":"#0039A6",
+  "B":"#FF6319","D":"#FF6319","F":"#FF6319","FX":"#FF6319","M":"#FF6319",
+  "G":"#6CBE45","J":"#996633","Z":"#996633","L":"#A7A9AC",
+  "N":"#FCCC0A","Q":"#FCCC0A","R":"#FCCC0A","W":"#FCCC0A","GS":"#808183",
+};
+const SYSTEM_DEFS_BY_CITY = {
+  bethesda: [
+    {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
+    {id:"metro", logo:"METRO", label:"Metrorail", collect:()=>collectRailRows(6)},
+    {id:"metrobus", logo:"METROBUS", label:"Metrobus", collect:()=>collectBusRows(6)},
+    {id:"marc", logo:"MARC", label:"MARC", logoImgFn:r=>MARC_LOGO_BY_LINE[r.via], collect:()=>collectScheduleRows({url:"marc-schedule.json", stationCount:2, perStation:2,
+      colorFn:l=>({Brunswick:"#e8792b",Penn:"#d1495b",Camden:"#e0a800"}[l])||"#e8792b"})},
+    {id:"rideon", logo:"RIDE ON", label:"Ride On", collect:()=>collectScheduleRows({url:"rideon-schedule.json", stationCount:3, perStation:2, color:"#6aa9ff"})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  philly: [
+    {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
+    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectScheduleRows({url:"septa-rail-schedule.json", stationCount:2, perStation:2, color:"#4F758B"})},
+    {id:"septasubway", logo:"SEPTA", label:"SEPTA Subway", collect:()=>collectScheduleRows({url:"septa-subway-schedule.json", stationCount:2, perStation:2,
+      colorFn:l=>({L1:"#1c6bb0",B1:"#f7941d",B2:"#f7941d",B3:"#f7941d"}[l])||"#556"})},
+    {id:"septabus", logo:"SEPTA BUS", label:"SEPTA Bus", collect:()=>collectScheduleRows({url:"septa-bus-schedule.json", stationCount:2, perStation:2, color:"#e8a33c"})},
+    {id:"patco", logo:"PATCO", label:"PATCO", collect:()=>collectScheduleRows({url:"patco-schedule.json", stationCount:2, perStation:2, color:"#BC0035"})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  // All five NYC systems read their bundled schedule JSONs here (not the
+  // live GTFS-Realtime feeds nyc.html's board decodes) -- avoids duplicating
+  // the protobuf decoder into a third file just for this departure board.
+  nyc: [
+    {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
+    {id:"subway", logo:"SUBWAY", label:"Subway", collect:()=>collectScheduleRows({url:"mta-subway-schedule.json", stationCount:3, perStation:2,
+      colorFn:l=>NYC_SUBWAY_COL[l]||"#888"})},
+    {id:"lirr", logo:"LIRR", label:"LIRR", collect:()=>collectScheduleRows({url:"lirr-schedule.json", stationCount:2, perStation:2, color:"#00985F"})},
+    {id:"mnr", logo:"MNR", label:"Metro-North", collect:()=>collectScheduleRows({url:"mnr-schedule.json", stationCount:2, perStation:2, color:"#A72650"})},
+    {id:"bus", logo:"MTA BUS", label:"MTA Bus", collect:()=>collectScheduleRows({url:"mta-bus-schedule.json", stationCount:2, perStation:2, color:"#6E6E6E"})},
+    {id:"path", logo:"PATH", label:"PATH", collect:()=>collectScheduleRows({url:"path-schedule.json", stationCount:2, perStation:2, color:"#00A9E0"})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+};
+const SYSTEM_DEFS = SYSTEM_DEFS_BY_CITY[CITY];
 async function collectAllRows(){
   const active=SYSTEM_DEFS.filter(sys=>systemVisible(sys.id));
   const results=await Promise.all(active.map(sys=>sys.collect()));
@@ -648,7 +684,7 @@ function boot(){
   initSettings();
   buildRows();
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
-  $("#boardBtn").title = CITY==="philly" ? "Back to the Philadelphia board" : "Back to the Bethesda board";
+  $("#boardBtn").title = `Back to the ${CITY_CFG.cityLabel} board`;
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
   tick(); setInterval(tick, 20000);
