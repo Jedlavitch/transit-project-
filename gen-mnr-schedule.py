@@ -68,8 +68,21 @@ def main():
         e = exc.setdefault(c["date"], {"add": [], "rem": []})
         (e["add"] if c["exception_type"] == "1" else e["rem"]).append(c["service_id"])
 
+    # train number (trip_short_name) -> line name, for the LIVE card. Metro-North's
+    # GTFS-Realtime feed carries NO route_id at all (neither VehiclePosition nor a
+    # matching TripUpdate) -- the only line identifier is its `trip_id`, which is
+    # actually the rider-facing train NUMBER (matches the static feed's
+    # trip_short_name, NOT its trip_id). So the board resolves e.g. "6300" ->
+    # "New Haven" through this map. ~1400 distinct numbers, no conflicts, ~25KB.
+    trip_lines = {}
+    for t in trips.values():
+        tsn = (t.get("trip_short_name") or "").strip()
+        if not tsn:
+            continue
+        trip_lines[tsn] = routes.get(t["route_id"], {}).get("route_long_name") or "Metro-North"
+
     out = {"generated": datetime.date.today().isoformat(), "note": f"Metro-North GTFS ({GTFS_URL})",
-           "stations": stations, "svc": svc, "exc": exc, "trips": trips_out}
+           "stations": stations, "svc": svc, "exc": exc, "trips": trips_out, "tripLines": trip_lines}
     with open(OUT, "w") as fh:
         json.dump(out, fh, separators=(",", ":"))
     print(f"Wrote {OUT}: {len(trips_out)} trips, {len(stations)} stations, {os.path.getsize(OUT)} bytes")
