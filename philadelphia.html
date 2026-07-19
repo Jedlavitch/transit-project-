@@ -1669,6 +1669,27 @@ document.addEventListener("keydown", e=>{
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
 onFsChange();   // set initial icon
 
+/* ---- keep kiosk fullscreen across board<->board navigation ----
+   Element fullscreen can't survive a page load and can't be re-entered
+   without a user gesture. So: when a header nav link is clicked WHILE
+   fullscreen, remember it (capture phase, before the link navigates); the
+   destination page re-enters fullscreen -- immediately where the browser
+   allows it (e.g. Chrome --kiosk), otherwise on the first tap/key. A manual
+   Esc/exit records nothing, so leaving fullscreen on purpose stays windowed. */
+document.addEventListener("click", e=>{
+  const a = e.target.closest && e.target.closest("header a[href]");
+  if(a && fsElement()){ try{ sessionStorage.setItem("kioskFS","1"); }catch(_){} }
+}, true);
+(function restoreKioskFS(){
+  try{ if(sessionStorage.getItem("kioskFS")!=="1") return; sessionStorage.removeItem("kioskFS"); }catch(_){ return; }
+  const tryFS=()=>{ if(fsElement()) return; const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(req){ try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); }catch(_){} } };
+  tryFS();
+  const once=()=>{ document.removeEventListener("pointerdown",once,true); document.removeEventListener("keydown",once,true); tryFS(); };
+  document.addEventListener("pointerdown", once, true);
+  document.addEventListener("keydown", once, true);
+})();
+
 /* ---------- accent color customization ---------- */
 function setBoardAccent(hex){
   document.documentElement.style.setProperty("--accent", hex);
