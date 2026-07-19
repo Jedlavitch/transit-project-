@@ -72,8 +72,14 @@ def main():
         e = exc.setdefault(c["date"], {"add": [], "rem": []})
         (e["add"] if c["exception_type"] == "1" else e["rem"]).append(c["service_id"])
 
+    # route_id -> branch name, for the LIVE card: LIRR's GTFS-Realtime feed
+    # reports a numeric route_id (e.g. "10") but no branch name, so the board
+    # resolves "10" -> "Port Jefferson" through this map. Same stripped names
+    # the trips above use (line_of()).
+    route_names = {rid: line_of(r.get("route_long_name")) for rid, r in routes.items()}
+
     out = {"generated": datetime.date.today().isoformat(), "note": f"LIRR GTFS ({GTFS_URL})",
-           "stations": stations, "svc": svc, "exc": exc, "trips": trips_out}
+           "stations": stations, "svc": svc, "exc": exc, "trips": trips_out, "routes": route_names}
     with open(OUT, "w") as fh:
         json.dump(out, fh, separators=(",", ":"))
     print(f"Wrote {OUT}: {len(trips_out)} trips, {len(stations)} stations, {os.path.getsize(OUT)} bytes")

@@ -1020,7 +1020,16 @@ async function ensureMnrSchedule(){
 // Shared by both: fetch one GTFS-RT feed, resolve each vehicle's position
 // (GPS if present, else its current stop's bundled coordinate), sort by
 // distance. `label(v)` builds the badge text (branch name, abbreviated).
-async function fetchRailLive(feedPath, ensureSched){
+/* Resolve a human line/branch name for a live vehicle. Each railroad's feed
+   identifies its line differently (LIRR: a numeric route_id that needs a
+   name lookup; Metro-North: NO route_id at all, only a train number that
+   matches the bundle's trip_short_name map), so each passes its own resolver
+   into fetchRailLive rather than the card assuming one scheme. See
+   gen-lirr-schedule.py / gen-mnr-schedule.py for how the maps are built. */
+function lirrLineOf(v, sched){ return (sched && sched.routes && sched.routes[v.routeId]) || v.routeId || "LIRR"; }
+function mnrLineOf(v, sched){ return (sched && sched.tripLines && sched.tripLines[v.tripId]) || "Metro-North"; }
+function railRouteIdLineOf(v){ return v.routeId || "?"; }   // e.g. MTA Bus, whose route_id ("M42") is already the label
+async function fetchRailLive(feedPath, ensureSched, lineOf){
   const sched = await ensureSched();
   let buf;
   try{ buf = new Uint8Array(await fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/${feedPath}`).then(r=>r.arrayBuffer())); }
@@ -1036,17 +1045,17 @@ async function fetchRailLive(feedPath, ensureSched){
     const late = delayForVehicle(v, updates);
     const lateMin = late!=null ? Math.round(late/60) : null;
     return { v, lat:coord[0], lon:coord[1], lateMin, mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
-      stationName: scheduleStationName(sched, v.stopId) };
+      stationName: scheduleStationName(sched, v.stopId), line: lineOf(v, sched) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
 }
 function renderRailCard(listId, countId, list, color){
   const box=$(listId); if(!box) return; box.innerHTML="";
   if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent=""; return; }
-  list.slice(0,10).forEach(({v,lateMin,mi,stationName})=>{
+  list.slice(0,10).forEach(({v,lateMin,mi,stationName,line})=>{
     const row=el("div","row");
-    const b=el("div","badge rail", (v.routeId||"?").slice(0,4)); b.style.background=color;
+    const b=el("div","badge rail", line||"?"); b.style.background=color;
     const mid=el("div");
-    mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : ((v.routeId||"Train"))));
+    mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : (line||"Train")));
     mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
     row.append(b, mid, el("div"));
     appendLiveTimes(row, lateMin);
@@ -1056,21 +1065,21 @@ function renderRailCard(listId, countId, list, color){
   fitList(box);
 }
 function drawRailFleet(fleet, list, color){
-  const items=(list||[]).map(({v,lat,lon,stationName})=>({
+  const items=(list||[]).map(({v,lat,lon,stationName,line})=>({
     id:fleet+v.tripId, lat, lon,
-    icon:()=>labelIcon(color, v.routeId||"?"),
-    ik:fleet+"-"+(v.routeId||""),
-    tip:`${v.routeId||"Train"}${stationName?` · ${v.status===1?"at":"approaching"} ${stationName}`:""}`
+    icon:()=>labelIcon(color, line||"?"),
+    ik:fleet+"-"+(line||""),
+    tip:`${line||"Train"}${stationName?` · ${v.status===1?"at":"approaching"} ${stationName}`:""}`
   }));
   updateFleet(fleet, items, CFG[fleet+"EveryMs"]);
 }
 async function fetchLirrLive(){
-  const list = await fetchRailLive("lirr%2Fgtfs-lirr", ensureLirrSchedule);
+  const list = await fetchRailLive("lirr%2Fgtfs-lirr", ensureLirrSchedule, lirrLineOf);
   renderRailCard("#lirrList", "#lirrCount", list, LIRR_COL);
   drawRailFleet("lirr", list, LIRR_COL);
 }
 async function fetchMnrLive(){
-  const list = await fetchRailLive("mnr%2Fgtfs-mnr", ensureMnrSchedule);
+  const list = await fetchRailLive("mnr%2Fgtfs-mnr", ensureMnrSchedule, mnrLineOf);
   renderRailCard("#mnrList", "#mnrCount", list, MNR_COL);
   drawRailFleet("mnr", list, MNR_COL);
 }
@@ -1178,7 +1187,7 @@ async function fetchBusLive(){
     const late = delayForVehicle(v, updates);
     const lateMin = late!=null ? Math.round(late/60) : null;
     return { v, lat:v.lat, lon:v.lon, lateMin, mi: kmToMi(haversine(here,{lat:v.lat,lon:v.lon})),
-      stationName: scheduleStationName(sched, v.stopId) };
+      stationName: scheduleStationName(sched, v.stopId), line: railRouteIdLineOf(v) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
   renderRailCard("#busList", "#busCount", list, BUS_COL);
   drawRailFleet("bus", list, BUS_COL);

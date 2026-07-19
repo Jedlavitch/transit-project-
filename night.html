@@ -719,6 +719,15 @@ function nycStationName(sched, stopId){
   const pid=(sched.platforms||{})[stopId] || stopId;
   return (sched._name||{})[pid] || "";
 }
+// Human line/branch name for a live NYC vehicle -- same resolution the board
+// uses (see nyc.html): subway carries its own route_id; LIRR's numeric
+// route_id maps via the bundle's `routes`; Metro-North has NO route_id and
+// maps its train number (v.tripId) via the bundle's `tripLines`.
+function nycLineOf(v, sched){
+  if(sched && sched.routes && sched.routes[v.routeId]) return sched.routes[v.routeId];
+  if(sched && sched.tripLines && sched.tripLines[v.tripId]) return sched.tripLines[v.tripId];
+  return v.routeId || null;
+}
 async function fetchNycFleet(feedPaths, schedFile){
   const sched = await ensureNycSchedule(schedFile);
   const results = await Promise.allSettled(feedPaths.map(p=>
@@ -730,10 +739,11 @@ async function fetchNycFleet(feedPaths, schedFile){
     try{ const {vehicles:v,updates:u}=decodeGtfsRt(new Uint8Array(r.value)); vehicles=vehicles.concat(v); Object.assign(updates,u); }catch(e){}
   });
   return vehicles.map(v=>{
+    if(!v.routeId && updates[v.tripId]) v.routeId = updates[v.tripId].routeId;   // LIRR: route_id lives on the TripUpdate
     const coord = typeof v.lat==="number" ? [v.lat,v.lon] : nycStationCoord(sched, v.stopId);
     if(!coord) return null;
     return { v, lat:coord[0], lon:coord[1], nm:haversineNm(loc,{lat:coord[0],lon:coord[1]}),
-      stationName: nycStationName(sched, v.stopId) };
+      stationName: nycStationName(sched, v.stopId), line: nycLineOf(v, sched) };
   }).filter(Boolean);
 }
 /* "Nearest train" for NYC checks subway + LIRR + Metro-North concurrently
@@ -750,9 +760,9 @@ async function produceNycRailTrain(){
   const all=[...subway.map(x=>({...x,sys:"Subway"})), ...lirr.map(x=>({...x,sys:"LIRR"})), ...mnr.map(x=>({...x,sys:"Metro-North"}))];
   if(!all.length) return null;
   all.sort((a,b)=>a.nm-b.nm);
-  const {v,nm,sys,stationName}=all[0];
+  const {v,nm,sys,stationName,line}=all[0];
   return { id:"nyc"+sys+v.tripId, nm, unit:"mi", dir:bearingFrom(loc,{lat:all[0].lat,lon:all[0].lon}),
-    altText: v.speed!=null?`${Math.round(v.speed*2.236936)} mph`:"", title:`${v.routeId||"?"} · ${sys}`,
+    altText: v.speed!=null?`${Math.round(v.speed*2.236936)} mph`:"", title: line ? (sys==="Subway" ? `${line} train` : `${line} · ${sys}`) : sys,
     sub:`${sys}`, oCity:null, dCity:null,
     subline: stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : "",
     oLL:null, dLL:null, posLL:{lat:all[0].lat,lon:all[0].lon}, oCode:"", dCode:"",
