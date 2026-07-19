@@ -47,9 +47,9 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
-  header #nightBtn, header #homeBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
+  header #nightBtn, header #homeBtn, header #nycBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
     border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
-  header #nightBtn:hover, header #homeBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
+  header #nightBtn:hover, header #homeBtn:hover, header #nycBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -162,6 +162,7 @@
   <header>
     <div class="title">🔔 Philadelphia Live Transit <small id="loclabel">locating…</small></div>
     <a id="homeBtn" href="index.html" title="Bethesda board" onclick="window.location.href='index.html'; return false;">🏠 Bethesda</a>
+    <a id="nycBtn" href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">🗽 NYC</a>
     <a id="nightBtn" href="night.html?city=philly" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=philly'; return false;">🌙 Night</a>
     <a id="flipBtn" href="flipboard.html?city=philly" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=philly'; return false;">🚉 Board</a>
     <button id="fsBtn" title="Full screen (F)"></button>
@@ -1667,6 +1668,27 @@ document.addEventListener("keydown", e=>{
 // browsers drop the wake lock when the tab is hidden; re-acquire when visible in kiosk mode
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
 onFsChange();   // set initial icon
+
+/* ---- keep kiosk fullscreen across board<->board navigation ----
+   Element fullscreen can't survive a page load and can't be re-entered
+   without a user gesture. So: when a header nav link is clicked WHILE
+   fullscreen, remember it (capture phase, before the link navigates); the
+   destination page re-enters fullscreen -- immediately where the browser
+   allows it (e.g. Chrome --kiosk), otherwise on the first tap/key. A manual
+   Esc/exit records nothing, so leaving fullscreen on purpose stays windowed. */
+document.addEventListener("click", e=>{
+  const a = e.target.closest && e.target.closest("header a[href]");
+  if(a && fsElement()){ try{ sessionStorage.setItem("kioskFS","1"); }catch(_){} }
+}, true);
+(function restoreKioskFS(){
+  try{ if(sessionStorage.getItem("kioskFS")!=="1") return; sessionStorage.removeItem("kioskFS"); }catch(_){ return; }
+  const tryFS=()=>{ if(fsElement()) return; const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(req){ try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); }catch(_){} } };
+  tryFS();
+  const once=()=>{ document.removeEventListener("pointerdown",once,true); document.removeEventListener("keydown",once,true); tryFS(); };
+  document.addEventListener("pointerdown", once, true);
+  document.addEventListener("keydown", once, true);
+})();
 
 /* ---------- accent color customization ---------- */
 function setBoardAccent(hex){
