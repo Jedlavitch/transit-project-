@@ -13,7 +13,12 @@
     --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a; --late:#ff5a5a;
     --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8;
     --row-bg:#0d1424; --row-line:#172038; --sched-b:#aab6d8; --scrim:rgba(6,9,16,.86);
+    /* row density -- "Trains per box" in Settings overrides these (see [data-rows]).
+       Smaller rows -> more trains fit each box; larger -> fewer, bigger. */
+    --row-gap:5px; --row-pad:7px 9px; --badge-h:26px; --dest-fs:15px; --sub-fs:12px; --live-fs:18px;
   }
+  :root[data-rows="more"]{ --row-gap:3px; --row-pad:4px 8px; --badge-h:22px; --dest-fs:13px; --sub-fs:11px; --live-fs:15px; }
+  :root[data-rows="fewer"]{ --row-gap:8px; --row-pad:11px 11px; --badge-h:30px; --dest-fs:17px; --sub-fs:13px; --live-fs:20px; }
   :root[data-theme="black"]{
     --bg:#000000; --panel:#0a0a0a; --panel2:#000000; --line:#1c1c1c; --bg-glow:#0e0e0e;
     --text:#f2f2f2; --muted:#8a8a8a; --row-bg:#080808; --row-line:#1a1a1a; --sched-b:#c7c7c7;
@@ -62,24 +67,24 @@
     color:var(--muted); display:flex; align-items:center; gap:8px}
   .card h2 .icon{font-size:17px}
   .card h2 .count{margin-left:auto; font-size:12px; color:var(--muted); font-weight:600}
-  .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:5px; padding-right:2px}
+  .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:var(--row-gap); padding-right:2px}
 
   .row{
     display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
-    padding:7px 9px; border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
+    padding:var(--row-pad); border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
   }
   .row .badge{
-    min-width:34px; height:26px; padding:0 8px; border-radius:7px; display:flex; align-items:center;
+    min-width:34px; height:var(--badge-h); padding:0 8px; border-radius:7px; display:flex; align-items:center;
     justify-content:center; font-weight:800; font-size:13px; color:#08101f;
   }
   .row .badge.rail{color:#fff}
-  .row .dest{font-weight:700; font-size:15px; line-height:1.15}
-  .row .sub{color:var(--muted); font-size:12px}
+  .row .dest{font-weight:700; font-size:var(--dest-fs); line-height:1.15}
+  .row .sub{color:var(--muted); font-size:var(--sub-fs)}
   .row .times{display:flex; flex-direction:column; align-items:flex-end; gap:2px}
-  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live)}
+  .row .live{font-weight:800; font-size:var(--live-fs); font-variant-numeric:tabular-nums; color:var(--live)}
   .row .sched{font-size:11px; color:var(--sched)}
   .row .sched b{color:var(--sched-b)}
-  .row .live-eta{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums}
+  .row .live-eta{font-weight:800; font-size:var(--live-fs); font-variant-numeric:tabular-nums}
   .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
@@ -249,6 +254,13 @@
 
     <div class="accent-lbl">Accent color</div>
     <div class="swatches" id="accentSwatches"></div>
+
+    <div class="accent-lbl">Trains per box</div>
+    <div class="theme-row" id="rowsRow">
+      <button type="button" class="theme-btn" data-rows="fewer">Fewer</button>
+      <button type="button" class="theme-btn" data-rows="normal">Normal</button>
+      <button type="button" class="theme-btn" data-rows="more">More</button>
+    </div>
 
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
@@ -554,7 +566,7 @@ function renderPlanes(ac){
   const box=$("#planeList"); box.innerHTML="";
   const flying=ac.filter(a=>a.alt_baro!=="ground");
   if(!flying.length){ box.appendChild(el("div","empty","No aircraft overhead right now.")); }
-  flying.slice(0,10).forEach(a=>{
+  flying.slice(0,20).forEach(a=>{
     const row=el("div","row plane");
     const mid=el("div");
     mid.appendChild(el("div","dest", (a.desc||a.t||"Aircraft")));
@@ -639,7 +651,7 @@ async function drawAmtrakRoutes(list, amSt){
 function renderAmtrak(list){
   const box=$("#amtrakList"); box.innerHTML="";
   if(!list.length){ box.appendChild(el("div","empty",`No Amtrak trains within ${CFG.amtrakRadiusMi} mi right now.`)); $("#amtrakCount").textContent=""; return; }
-  list.slice(0,10).forEach(({t,distMi})=>{
+  list.slice(0,20).forEach(({t,distMi})=>{
     const row=el("div","row");
     const b=el("div","badge", (t.trainNum||"?").toString()); b.style.background="#3ad0c8"; b.style.color="#04201e";
     const mid=el("div");
@@ -905,7 +917,7 @@ async function fetchSubwayLive(){
 function renderSubway(list){
   const box=$("#subwayList"); if(!box) return; box.innerHTML="";
   if(!list.length){ box.appendChild(el("div","empty","No subway trains found nearby right now.")); $("#subwayCount").textContent=""; return; }
-  list.slice(0,10).forEach(({v,lateMin,mi,stationName})=>{
+  list.slice(0,20).forEach(({v,lateMin,mi,stationName})=>{
     const row=el("div","row");
     const b=el("div","badge", v.routeId||"?"); b.style.background=SUBWAY_COL[v.routeId]||"#888";
     if(["N","Q","R","W","GS"].includes(v.routeId)) b.style.color="#000";
@@ -1051,7 +1063,7 @@ async function fetchRailLive(feedPath, ensureSched, lineOf){
 function renderRailCard(listId, countId, list, color){
   const box=$(listId); if(!box) return; box.innerHTML="";
   if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent=""; return; }
-  list.slice(0,10).forEach(({v,lateMin,mi,stationName,line})=>{
+  list.slice(0,20).forEach(({v,lateMin,mi,stationName,line})=>{
     const row=el("div","row");
     const b=el("div","badge rail", line||"?"); b.style.background=color;
     const mid=el("div");
@@ -1121,7 +1133,7 @@ async function refreshBusScheduled(){
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
-    if(used>=2) break;
+    if(used>=4) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
@@ -1278,7 +1290,7 @@ async function refreshPathScheduled(){
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
-    if(used>=2) break;
+    if(used>=4) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
@@ -1456,6 +1468,26 @@ function buildThemeButtons(){
   document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
 }
 
+/* ---------- row density ("Trains per box": Fewer / Normal / More) ----------
+   Scales row size via CSS variables (see [data-rows] blocks): smaller rows fit
+   more trains per box, larger fit fewer. fitAll() re-trims each card to the new
+   size so nothing clips or scrolls -- the render caps are set high enough that
+   "More" is limited by how many actually fit, not by the code. */
+function setBoardRows(mode){
+  const changed = document.documentElement.getAttribute("data-rows")!==mode;
+  document.documentElement.setAttribute("data-rows", mode);
+  localStorage.setItem("transitboardnyc.rows", mode);
+  document.querySelectorAll("#rowsRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.rows===mode));
+  // fitList() only trims rows to fit -- it can't re-add rows that a denser
+  // setting now has room for -- so rebuild every card from fresh data. Only on
+  // an actual change (not the initial boot apply, which renders right after).
+  if(changed && state.map) refreshEverythingForNewLocation();
+  else fitAll();
+}
+function buildRowsButtons(){
+  document.querySelectorAll("#rowsRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardRows(b.dataset.rows); });
+}
+
 /* ---------- customize: which cards show on the board ---------- */
 const CARD_DEFS=[
   {id:"subwayCard", label:"Subway"}, {id:"lirrCard", label:"LIRR"}, {id:"mnrCard", label:"Metro-North"},
@@ -1508,6 +1540,7 @@ function buildCardToggles(){
 function boot(){
   setBoardAccent(localStorage.getItem("transitboardnyc.accent")||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(localStorage.getItem("transitboardnyc.theme")||"dark"); buildThemeButtons();
+  setBoardRows(localStorage.getItem("transitboardnyc.rows")||"normal"); buildRowsButtons();
   buildCardToggles();
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
