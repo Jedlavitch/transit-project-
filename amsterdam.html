@@ -170,6 +170,7 @@
         <span><span style="color:#00A03C">▦</span><span style="color:#F49B00">▦</span><span style="color:#00A1E1">▦</span><span style="color:#E2001A">▦</span><span style="color:#FFD500">▦</span> Metro 50–54</span>
         <span style="color:#3FA9E0">▦ GVB tram</span>
         <span style="color:#FFC917">▦ NS trains</span>
+        <span><span style="color:#1D4E9E">▦</span><span style="color:#C8141C">▦</span><span style="color:#4B3F94">▦</span> Int'l (EST/ICE/NJ)</span>
         <span style="color:#00A5A0">▦ IJ ferries</span>
         <span style="opacity:.7">scheduled positions · zoom in for labels</span>
       </div>
@@ -188,6 +189,10 @@
         <div class="card" id="railCard">
           <h2><span class="icon">🚆</span> NS — Intercity &amp; Sprinter <span class="count" id="railCount"></span></h2>
           <div class="list" id="railList"><div class="empty">NS-dienstregeling laden…</div></div>
+        </div>
+        <div class="card" id="intlCard">
+          <h2><span class="icon">🌍</span> International — Eurostar · ICE · Nightjet <span class="count" id="intlCount"></span></h2>
+          <div class="list" id="intlList"><div class="empty">Internationale treinen laden…</div></div>
         </div>
         <div class="card" id="ferryCard">
           <h2><span class="icon">⛴️</span> Pontjes — IJ ferries <span class="count" id="ferryCount"></span></h2>
@@ -301,6 +306,7 @@ let state = {
   metroLayer: null, metroRouteLayer: null,
   tramLayer: null, tramRouteLayer: null,
   railLayer: null, railRouteLayer: null,
+  intlLayer: null, intlRouteLayer: null,
   ferryLayer: null, ferryRouteLayer: null,
 };
 
@@ -344,7 +350,7 @@ function applyLoc(loc){
 // locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
   refreshPlanes();
-  refreshMetro(); refreshTram(); refreshRail(); refreshFerry();
+  refreshMetro(); refreshTram(); refreshRail(); refreshIntl(); refreshFerry();
   drawMetroShapes(); drawAllSchedFleets();
 }
 function requestGeo(){
@@ -402,10 +408,12 @@ function initMap(){
   state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
   // ORDER = z-order (earlier = underneath): route lines first, then vehicles.
   state.railRouteLayer  = L.layerGroup().addTo(state.map);  // NS lines
+  state.intlRouteLayer  = L.layerGroup().addTo(state.map);  // international lines
   state.tramRouteLayer  = L.layerGroup().addTo(state.map);  // tram lines
   state.metroRouteLayer = L.layerGroup().addTo(state.map);  // metro shapes
   state.ferryRouteLayer = L.layerGroup().addTo(state.map);  // ferry crossings
   state.railLayer  = L.layerGroup().addTo(state.map);       // NS trains
+  state.intlLayer  = L.layerGroup().addTo(state.map);       // international trains
   state.tramLayer  = L.layerGroup().addTo(state.map);       // trams
   state.metroLayer = L.layerGroup().addTo(state.map);       // metros
   state.ferryLayer = L.layerGroup().addTo(state.map);       // ferries
@@ -458,12 +466,13 @@ function planeIcon(track, label){
    items array [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}] and
    call updateFleet("yourFleetName", items, durMs). */
 state.fleets = {
-  plane:{}, metro:{}, tram:{}, rail:{}, ferry:{},
+  plane:{}, metro:{}, tram:{}, rail:{}, intl:{}, ferry:{},
 };
 function fleetLayer(f){
   return {
     plane:state.planeLayer,
-    metro:state.metroLayer, tram:state.tramLayer, rail:state.railLayer, ferry:state.ferryLayer,
+    metro:state.metroLayer, tram:state.tramLayer, rail:state.railLayer,
+    intl:state.intlLayer, ferry:state.ferryLayer,
   }[f];
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
@@ -517,7 +526,7 @@ function fitList(box){
     box.removeChild(box.lastElementChild);
   }
 }
-function fitAll(){ ["#metroList","#tramList","#railList","#ferryList","#planeList"].forEach(s=>fitList($(s))); }
+function fitAll(){ ["#metroList","#tramList","#railList","#intlList","#ferryList","#planeList"].forEach(s=>fitList($(s))); }
 
 /* ---------- shared building blocks for bundled-schedule systems ----------
    These are the exact helpers MARC/Ride On/SEPTA/PATCO/PATH use in the real
@@ -652,10 +661,17 @@ function drawPlanes(ac){
 const AMS_METRO_COL={ "50":"#00A03C","51":"#F49B00","52":"#00A1E1","53":"#E2001A","54":"#FFD500" };
 const TRAM_COL="#3FA9E0", NS_COL="#FFC917", FERRY_COL="#00A5A0";
 const metroColor=l=>AMS_METRO_COL[l]||"#888";
+// International brand colors: Eurostar navy, ICE (DB) red, Nightjet indigo,
+// EuroCity purple, Intercity direct magenta, European Sleeper deep teal,
+// GoVolta yellow.
+const INTL_COL={ EST:"#1D4E9E", ICE:"#C8141C", NJ:"#4B3F94", EC:"#7A4FA3", ECD:"#7A4FA3",
+  ICD:"#E6007E", ES:"#175C54", GV:"#E8B10F" };
+const intlColor=l=>INTL_COL[l]||"#D23A4E";
 const SYSTEMS={
   metro:{ url:"ams-metro-schedule.json", color:metroColor,    tag:"Metro" },
   tram: { url:"ams-tram-schedule.json",  color:()=>TRAM_COL,  tag:"Tram" },
   rail: { url:"ams-rail-schedule.json",  color:()=>NS_COL,    tag:"NS" },
+  intl: { url:"ams-intl-schedule.json",  color:intlColor,     tag:"Int'l" },
   ferry:{ url:"ams-ferry-schedule.json", color:()=>FERRY_COL, tag:"Pont" },
 };
 function prepSchedule(s){   // index a bundle for the card + route-line helpers
@@ -734,6 +750,9 @@ const refreshTram =()=>refreshAmsCard({ key:"tram", list:"#tramList", count:"#tr
 const refreshRail =()=>refreshAmsCard({ key:"rail", list:"#railList", count:"#railCount", stations:2,
   badgeCls:()=>"badge",                        // dark text on NS yellow
   noneMsg:"No more NS trains today at nearby stations." });
+const refreshIntl =()=>refreshAmsCard({ key:"intl", list:"#intlList", count:"#intlCount", stations:2,
+  badgeCls:l=>l==="GV"?"badge":"badge rail",   // dark text on GoVolta's yellow
+  noneMsg:"No more international trains today from nearby stations." });
 const refreshFerry=()=>refreshAmsCard({ key:"ferry", list:"#ferryList", count:"#ferryCount", stations:2,
   noneMsg:"No more ferries today at nearby docks." });
 // Map vehicles: interpolate each running trip between the two stops its
@@ -761,7 +780,7 @@ async function drawSchedFleet(key){
   });
   updateFleet(key, items, CFG.schedMapEveryMs);
 }
-function drawAllSchedFleets(){ ["metro","tram","rail","ferry"].forEach(drawSchedFleet); }
+function drawAllSchedFleets(){ ["metro","tram","rail","intl","ferry"].forEach(drawSchedFleet); }
 
 /* ---------- refresh orchestration ---------- */
 async function refreshPlanes(){
@@ -862,13 +881,14 @@ function buildThemeButtons(){
    CARD_DEFS (the checkbox) and CARD_LAYERS (its map layers). */
 const CARD_DEFS=[
   {id:"metroCard", label:"Metro"}, {id:"tramCard", label:"Tram"},
-  {id:"railCard", label:"NS trains"}, {id:"ferryCard", label:"IJ ferries"},
-  {id:"planeCard", label:"Planes"},
+  {id:"railCard", label:"NS trains"}, {id:"intlCard", label:"International"},
+  {id:"ferryCard", label:"IJ ferries"}, {id:"planeCard", label:"Planes"},
 ];
 const CARD_LAYERS={
   metroCard: ["metroLayer","metroRouteLayer"],
   tramCard:  ["tramLayer","tramRouteLayer"],
   railCard:  ["railLayer","railRouteLayer"],
+  intlCard:  ["intlLayer","intlRouteLayer"],
   ferryCard: ["ferryLayer","ferryRouteLayer"],
   planeCard: ["planeLayer"],
 };
@@ -919,6 +939,7 @@ function boot(){
   setInterval(refreshMetro, CFG.cardEveryMs);
   setInterval(refreshTram, CFG.cardEveryMs);
   setInterval(refreshRail, CFG.cardEveryMs);
+  setInterval(refreshIntl, CFG.cardEveryMs);
   setInterval(refreshFerry, CFG.cardEveryMs);
 
   let rzT; window.addEventListener("resize", ()=>{

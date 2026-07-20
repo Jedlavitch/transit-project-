@@ -513,6 +513,8 @@ const SYSTEM_DEFS_BY_CITY = {
       colorFn:l=>AMS_METRO_COL[l]||"#888"})},
     {id:"amstram", logo:"GVB", label:"Tram", collect:()=>collectScheduleRows({url:"ams-tram-schedule.json", stationCount:3, perStation:2, color:"#3FA9E0"})},
     {id:"amsrail", logo:"NS", label:"NS trains", collect:()=>collectScheduleRows({url:"ams-rail-schedule.json", stationCount:2, perStation:2, color:"#FFC917"})},
+    {id:"amsintl", logo:"INT'L", label:"International", collect:()=>collectScheduleRows({url:"ams-intl-schedule.json", stationCount:2, perStation:2,
+      colorFn:l=>({EST:"#1D4E9E",ICE:"#C8141C",NJ:"#4B3F94",EC:"#7A4FA3",ECD:"#7A4FA3",ICD:"#E6007E",ES:"#175C54",GV:"#E8B10F"}[l]||"#D23A4E")})},
     {id:"amsferry", logo:"PONT", label:"IJ ferries", collect:()=>collectScheduleRows({url:"ams-ferry-schedule.json", stationCount:2, perStation:2, color:"#00A5A0"})},
     {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
   ],

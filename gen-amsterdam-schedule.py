@@ -15,6 +15,14 @@ amsterdam.html, night.html and flipboard.html from the Dutch national GTFS
                               country, so this keeps only in-box stops per
                               trip, same technique as gen-mta-subway's box.
                               Line label: IC / SPR.
+  ams-intl-schedule.json   -- international trains (NS International +
+                              European Sleeper + GoVolta + DB/NMBS/Eurobahn):
+                              Eurostar, ICE, Nightjet, EuroCity, Intercity
+                              direct, ES, GV. Kept at FULL route length (so
+                              the map can show one en route to Brussels or
+                              Berlin) but only trips that actually CALL at a
+                              station inside the Amsterdam box. Line labels:
+                              EST / ICE / NJ / EC / ECD / ICD / ES / GV.
   ams-metro-shapes.json    -- real metro geometry for the map, most-used
                               shape per line + uniform decimation.
 
@@ -47,6 +55,24 @@ LON_MIN, LON_MAX = 4.70, 5.06
 # Official-ish GVB metro line colors (also hardcoded in amsterdam.html /
 # flipboard.html as AMS_METRO_COL -- keep in sync)
 METRO_LINES = {"50", "51", "52", "53", "54"}
+
+# International operators serving the Netherlands in the national feed. The
+# eastern cross-border regionals (DB/Eurobahn/NMBS) never call inside the
+# Amsterdam box, so they filter themselves out naturally.
+INTL_AGENCIES = {"IFF:NS_INT", "IFF:EU_SLEEPER", "IFF:GV", "IFF:DB", "IFF:NMBS", "IFF:EUROBAHN"}
+
+
+def intl_label(sn):
+    s = (sn or "").strip().lower()
+    if s.startswith("eurostar"): return "EST"
+    if s.startswith("nightjet"): return "NJ"
+    if s.startswith("ice"): return "ICE"
+    if s.startswith("eurocity direct"): return "ECD"
+    if s.startswith("eurocity"): return "EC"
+    if s.startswith("intercity direct"): return "ICD"
+    if s.startswith("european sleeper"): return "ES"
+    if s.startswith("govolta"): return "GV"
+    return (sn or "INT").split()[0][:6].upper()
 
 
 def rows_iter(zf, name):
@@ -115,20 +141,26 @@ def main():
     ferry_routes = {rid for rid in gvb if routes[rid].get("route_type") == "4"}
     rail_routes  = {rid for rid, r in routes.items()
                     if r.get("agency_id") == "IFF:NS" and r.get("route_type") == "2"}
+    intl_routes  = {rid for rid, r in routes.items()
+                    if r.get("agency_id") in INTL_AGENCIES and r.get("route_type") == "2"}
     print(f"Routes: metro={sorted(short(r) for r in metro_routes)} "
-          f"tram={len(tram_routes)} ferry={len(ferry_routes)} NS rail={len(rail_routes)}")
+          f"tram={len(tram_routes)} ferry={len(ferry_routes)} NS rail={len(rail_routes)} "
+          f"intl={len(intl_routes)}")
 
     def group_of(rid):
         if rid in metro_routes: return "metro"
         if rid in tram_routes: return "tram"
         if rid in ferry_routes: return "ferry"
         if rid in rail_routes: return "rail"
+        if rid in intl_routes: return "intl"
         return None
 
     def line_label(rid):
         if rid in rail_routes:
             sn = short(rid)
             return "IC" if "intercity" in sn.lower() else "SPR" if "sprinter" in sn.lower() else (sn or "NS")
+        if rid in intl_routes:
+            return intl_label(short(rid))
         return short(rid) or rid
 
     trips_all, trip_group = {}, {}
@@ -155,8 +187,10 @@ def main():
         if not pid or not dt:
             continue
         if g == "rail" and not in_box(pid):
-            continue
+            continue          # NS domestic: keep only the in-box portion
         seq[tid].append((int(row["stop_sequence"]), pid, to_min(dt)))
+        # intl keeps its FULL route; trips that never call in the box are
+        # dropped later in emit() via must_touch_box.
 
     # calendar_dates-only feed: svc stays empty, activity comes from exc.
     print("Reading calendar_dates …")
@@ -173,7 +207,7 @@ def main():
         if c["exception_type"] == "1":
             window_svc.add(c["service_id"])
 
-    def emit(group, out_name):
+    def emit(group, out_name, must_touch_box=False):
         trips_out, used_stations, used_svc = [], set(), set()
         for tid, s in seq.items():
             if trip_group.get(tid) != group:
@@ -181,6 +215,8 @@ def main():
             s.sort()
             if len(s) < 2:
                 continue
+            if must_touch_box and not any(in_box(pid) for _, pid, _ in s):
+                continue   # an international that never calls near Amsterdam
             tr = trips_all[tid]
             if tr["service_id"] not in window_svc:
                 continue   # never runs inside the horizon -- don't bundle it
@@ -214,6 +250,7 @@ def main():
     emit("tram",  "ams-tram-schedule.json")
     emit("ferry", "ams-ferry-schedule.json")
     emit("rail",  "ams-rail-schedule.json")
+    emit("intl",  "ams-intl-schedule.json", must_touch_box=True)
 
     # ---- metro route shapes ----
     print("Reading shapes …")
