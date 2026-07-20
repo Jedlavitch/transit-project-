@@ -88,3 +88,17 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sa
 #followBanner .fb-stop{ border:0; border-radius:8px; padding:5px 9px; background:var(--row-line);
   color:var(--text); font-weight:700; font-size:12px; cursor:pointer; flex:none; }
 #followBanner .fb-stop:hover{ background:var(--late); color:#fff; }
+
+/* rich vehicle click-detail popup (Boston: crowding/speed + live next stops) */
+.veh-pop{ font:600 12px/1.35 "Helvetica Neue",Helvetica,Arial,sans-serif; color:#111; min-width:180px; }
+.veh-pop .vp-title{ font-weight:800; font-size:13px; margin-bottom:2px; }
+.veh-pop .vp-sub{ color:#444; font-weight:600; margin-bottom:5px; }
+.veh-pop .vp-load{ color:#777; font-style:italic; }
+.veh-pop .vp-hd{ color:#777; font-weight:700; text-transform:uppercase; letter-spacing:.05em; font-size:10px; margin:4px 0 2px; }
+.veh-pop .vp-stop{ display:flex; justify-content:space-between; gap:14px; padding:1px 0; }
+.veh-pop .vp-stop b{ font-variant-numeric:tabular-nums; }
+.veh-pop .vp-follow{ margin-top:8px; width:100%; padding:6px 10px; border:0; border-radius:8px;
+  background:var(--accent); color:#04101f; font-weight:800; font-size:12.5px; cursor:pointer; }
+/* a departure row you can click to follow that train on the map */
+.row.followable{ cursor:pointer; }
+.row.followable:hover{ border-color:var(--accent); }

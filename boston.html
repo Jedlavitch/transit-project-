@@ -316,9 +316,9 @@ function haversine(a,b){
   return 2*R*Math.asin(Math.sqrt(s)); // km
 }
 const kmToMi = km => km*0.621371;
-async function getJSON(url, timeout=12000){
+async function getJSON(url, timeout=12000, cache){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
   finally{ clearTimeout(t); }
 }
 
@@ -479,17 +479,15 @@ function updateFleet(fleet, items, dur){
     if(!v){
       const m=L.marker([it.lat,it.lon], {icon:it.icon(), keyboard:false}).addTo(layer);
       if(it.tip) m.bindTooltip(it.tip, {direction:"top"});
-      // click a vehicle -> popup with a "Follow route" button (see startFollow)
-      m.on("click", ()=>{ state._clicked={fleet, id:it.id};
-        const rec=state.fleets[fleet][it.id], lbl=(rec&&rec.label)||it.label||"Vehicle";
-        m.bindPopup(`<div class="follow-pop">${esc(lbl)}<br><button onclick="startFollowClicked()">▶ Follow route</button></div>`).openPopup();
-      });
+      // click a vehicle -> rich detail popup (line, crowding/speed, next stops,
+      // Follow button). buildVehiclePopup handles the fetch + render.
+      m.on("click", ()=>{ state._clicked={fleet, id:it.id}; buildVehiclePopup(fleet, it.id, m); });
       F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon,
-        route:it.route, label:it.label, color:it.color };
+        route:it.route, label:it.label, color:it.color, detail:it.detail };
     } else {
       const c=v.marker.getLatLng();                 // animate from current interpolated spot
       v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
-      v.route=it.route; v.label=it.label; v.color=it.color;
+      v.route=it.route; v.label=it.label; v.color=it.color; v.detail=it.detail;
       if(it.tip) v.marker.setTooltipContent(it.tip);
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
     }
@@ -556,6 +554,47 @@ function showFollowBanner(label){
   b.innerHTML=`<span class="fb-dot"></span><span class="fb-txt">Following <b></b></span><button class="fb-stop" onclick="stopFollow()">✕ Stop</button>`;
   b.querySelector(".fb-txt b").textContent=label;
   b.style.display="flex";
+}
+
+/* ---------- rich click detail popup (line, crowding/speed, next stops) ----------
+   MBTA reports occupancy + speed for some vehicles (often null on subway); shown
+   only when present. Next stops come live from the MBTA v3 predictions endpoint
+   (keyless, CORS-open) for the clicked train's trip. */
+const MBTA_OCCUPANCY={ MANY_SEATS_AVAILABLE:"🟢 many seats", FEW_SEATS_AVAILABLE:"🟡 few seats",
+  STANDING_ROOM_ONLY:"🟠 standing room", CRUSHED_STANDING_ROOM_ONLY:"🔴 packed", FULL:"🔴 full",
+  NOT_ACCEPTING_PASSENGERS:"⛔ not boarding" };
+const MBTA_STATUS={ INCOMING_AT:"approaching", STOPPED_AT:"at station", IN_TRANSIT_TO:"in transit" };
+function buildVehiclePopup(fleet, id, marker){
+  const rec=state.fleets[fleet] && state.fleets[fleet][id]; if(!rec) return;
+  const d=rec.detail||{}, bits=[];
+  if(d.occupancy && MBTA_OCCUPANCY[d.occupancy]) bits.push(MBTA_OCCUPANCY[d.occupancy]);
+  if(typeof d.speed==="number") bits.push(Math.round(d.speed*2.236936)+" mph");
+  if(d.status && MBTA_STATUS[d.status]) bits.push(MBTA_STATUS[d.status]);
+  const sub = bits.length ? `<div class="vp-sub">${esc(bits.join(" · "))}</div>` : "";
+  marker.bindPopup(`<div class="veh-pop">
+    <div class="vp-title">${esc(rec.label||"Vehicle")}</div>${sub}
+    <div class="vp-stops" id="vpStops">${d.tripId?'<div class="vp-load">loading next stops…</div>':''}</div>
+    <button class="vp-follow" onclick="startFollowClicked()">▶ Follow route</button>
+  </div>`, {minWidth:196}).openPopup();
+  if(d.tripId) loadNextStops(d.tripId);
+}
+async function loadNextStops(tripId){
+  let stops=[];
+  try{
+    const j=await getJSON(`https://api-v3.mbta.com/predictions?filter[trip]=${encodeURIComponent(tripId)}&include=stop&sort=stop_sequence`, 9000);
+    const names={}; (j.included||[]).forEach(s=>{ if(s.type==="stop") names[s.id]=(s.attributes&&s.attributes.name)||s.id; });
+    const now=Date.now();
+    (j.data||[]).forEach(p=>{
+      const t=p.attributes.arrival_time||p.attributes.departure_time; if(!t) return;
+      const ms=new Date(t).getTime(); if(ms<now-60000) return;   // drop already-passed stops
+      const st=p.relationships.stop&&p.relationships.stop.data;
+      stops.push({ name: st?(names[st.id]||st.id):"?", clock:new Date(t).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) });
+    });
+  }catch(e){}
+  const box=document.getElementById("vpStops"); if(!box) return;   // popup already closed
+  box.innerHTML = stops.length
+    ? '<div class="vp-hd">Next stops</div>'+stops.slice(0,6).map(s=>`<div class="vp-stop"><span>${esc(s.name)}</span><b>${esc(s.clock)}</b></div>`).join("")
+    : '<div class="vp-load">no upcoming stops</div>';
 }
 
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
@@ -641,19 +680,19 @@ const MBTA_LIVE_ROUTES=[ ...Object.keys(MBTA_COL),
 
 function prepSchedule(s){   // index a bundle for the card + route-line helpers
   s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
-  s._dep={};
-  (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+  s._dep={}; s._name={}; (s.stations||[]).forEach(st=>{ s._name[st.id]=st.name; });
+  (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, id:tr.id}); }));
   return s;
 }
 async function ensureSubwaySchedule(){
   if(state.subwaySched) return state.subwaySched;
-  try{ state.subwaySched=prepSchedule(await getJSON("mbta-subway-schedule.json", 25000)); }catch(e){}
+  try{ state.subwaySched=prepSchedule(await getJSON("mbta-subway-schedule.json", 25000, "no-cache")); }catch(e){}
   return state.subwaySched;
 }
 async function ensureCrSchedule(){
   if(state.crSched) return state.crSched;
   try{
-    const s=prepSchedule(await getJSON("mbta-cr-schedule.json", 20000));
+    const s=prepSchedule(await getJSON("mbta-cr-schedule.json", 20000, "no-cache"));
     state.crSched=s;
     drawScheduleRouteLines(s, state.crRouteLayer, ()=>CR_COL);
   }catch(e){}
@@ -662,7 +701,7 @@ async function ensureCrSchedule(){
 async function ensureBusSchedule(){
   if(state.busSched) return state.busSched;
   try{
-    const s=prepSchedule(await getJSON("mbta-bus-schedule.json", 20000));
+    const s=prepSchedule(await getJSON("mbta-bus-schedule.json", 20000, "no-cache"));
     state.busSched=s;
     drawScheduleRouteLines(s, state.busRouteLayer, busColor);
   }catch(e){}
@@ -726,6 +765,14 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
         const t=el("div","live"); t.style.color=color(d.line); t.textContent=schedClock(d.t);
         times.append(t, el("div","sched","scheduled"));
         row.append(b, mid, el("div"), times);
+        // follow-from-box: click a departure to follow that train on the map,
+        // if it's currently live (matched to a moving vehicle by trip_id).
+        if(d.id){
+          row.classList.add("followable"); row.title="Follow this train on the map";
+          row.onclick=()=>{ const lv=state.liveVehByTrip&&state.liveVehByTrip[d.id];
+            if(lv) startFollow(lv.fleet, lv.id);
+            else row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450}); };
+        }
         box.appendChild(row); shown++;
       });
     });
@@ -749,6 +796,7 @@ async function fetchMbtaLive(){
   const heads={};
   (j.included||[]).forEach(t=>{ if(t.type==="trip") heads[t.id]=(t.attributes&&t.attributes.headsign)||""; });
   const fleets={ subway:[], cr:[], mbus:[] };
+  state.liveVehByTrip={};   // GTFS trip_id -> {fleet, id} of the live marker (for follow-from-box)
   (j.data||[]).forEach(v=>{
     const a=v.attributes||{};
     if(typeof a.latitude!=="number" || typeof a.longitude!=="number") return;
@@ -760,10 +808,15 @@ async function fetchMbtaLive(){
     if(rid.startsWith("CR-")){ fleet="cr"; color=CR_COL; line=rid.slice(3); }
     else if(MBTA_COL[rid]){ fleet="subway"; color=MBTA_COL[rid]; line=rid; }
     else { fleet="mbus"; line=MBTA_BUS_SHORT[rid]||rid; color=busColor(line); }
-    fleets[fleet].push({ id:"mv"+v.id, lat:a.latitude, lon:a.longitude,
+    const mid="mv"+v.id;
+    if(tid) state.liveVehByTrip[tid]={fleet, id:mid};
+    fleets[fleet].push({ id:mid, lat:a.latitude, lon:a.longitude,
       icon:()=>labelIcon(color, hs?`${line} → ${hs}`:line), ik:"m-"+line+"-"+hs,
       tip:`MBTA ${line}${hs?" → "+hs:""} (live)`,
-      color, label:`MBTA ${line}${hs?" → "+hs:""}`, route:mbtaRoute(fleet, line) });
+      color, label:`MBTA ${line}${hs?" → "+hs:""}`, route:mbtaRoute(fleet, line),
+      // extras shown in the click detail card (speed/crowding are often null on
+      // subway; shown only when the MBTA reports them). tripId drives next-stops.
+      detail:{ tripId:tid, speed:a.speed, occupancy:a.occupancy_status, status:a.current_status } });
   });
   updateFleet("subway", fleets.subway, CFG.mbtaLiveEveryMs);
   updateFleet("cr",     fleets.cr,     CFG.mbtaLiveEveryMs);

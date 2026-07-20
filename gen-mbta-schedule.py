@@ -155,6 +155,8 @@ def main():
                 "line": line_label(tr["route_id"]),
                 "hs": (tr.get("trip_headsign") or "").strip(),
                 "s": tr["service_id"],
+                "id": tid,   # GTFS trip_id == the MBTA v3 API's live trip id, so a
+                             # departure row can be tied to a moving train (follow-from-box)
                 "st": [[pid, mins] for _, pid, mins in s],
             })
         stations = [{"id": pid, "name": name_of.get(pid, pid),
