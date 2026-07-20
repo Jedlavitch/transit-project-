@@ -193,6 +193,11 @@ const CITY_CONFIG = {
     lsLoc:"transitboardboston.loc", board:"boston.html", cityLabel:"Boston",
     lsWmataKey:null, lsHidden:"transitboardboston.hiddenCards",
   },
+  amsterdam: {
+    defaultLoc:{ lat:52.3791, lon:4.9003, label:"Amsterdam Centraal" },
+    lsLoc:"transitboardamsterdam.loc", board:"amsterdam.html", cityLabel:"Amsterdam",
+    lsWmataKey:null, lsHidden:"transitboardamsterdam.hiddenCards",
+  },
 };
 // Falls back to "dc" for any unrecognized/missing ?city= value (which also
 // keeps old ?city=bethesda links working -- "bethesda" is no longer a key,
@@ -237,9 +242,25 @@ function clockOf(min){
   let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"P":"A";
   return `${((h+11)%12)+1}:${String(m).padStart(2,"0")}${ap}`;
 }
+function clock24Of(min){ return `${String(Math.floor(min/60)%24).padStart(2,"0")}:${String(Math.round(min%60)).padStart(2,"0")}`; }
 function ymd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
-function activeServices(s, date){
-  const y=ymd(date), dow=(date.getDay()+6)%7;
+// "Now" for schedule math: minutes-since-midnight + GTFS date parts, computed
+// in the bundle's own timezone when it declares one (s.tz, e.g.
+// "Europe/Amsterdam"), else the viewer's local clock (all US bundles --
+// unchanged behavior). Without this, a European board viewed from the US
+// would show every scheduled departure hours off.
+function schedNowParts(tz){
+  const d=new Date();
+  if(!tz) return { y:ymd(d), dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
+  const p={};
+  new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",
+    day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"}).formatToParts(d)
+    .forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
+  const dow={Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[p.weekday];
+  return { y:p.year+p.month+p.day, dow, min:(parseInt(p.hour,10)%24)*60+parseInt(p.minute,10) };
+}
+function activeServices(s, parts){
+  const {y,dow}=parts;
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
@@ -264,13 +285,13 @@ async function collectScheduleRows(cfg){
       (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
       scheduleCache[cfg.url]=s;
     }
-    const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=activeServices(s, now);
+    const nowP=schedNowParts(s.tz), nowMin=nowP.min, active=activeServices(s, nowP);
     const near=(s.stations||[]).map(st=>({st, mi:haversineMi(loc,{lat:st.lat,lon:st.lon})})).sort((a,b)=>a.mi-b.mi).slice(0, cfg.stationCount||3);
     const rows=[];
     near.forEach(({st})=>{
       const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d,min:d.t})).filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0, cfg.perStation||2);
       deps.forEach(d=>{
-        rows.push({ sortMin:d.min, time:clockOf(d.min), dest:(d.hs||st.name||"").toUpperCase(),
+        rows.push({ sortMin:d.min, time:(s.tz?clock24Of:clockOf)(d.min), dest:(d.hs||st.name||"").toUpperCase(),
           via:(d.line||"").toUpperCase(), status:"SCHEDULED", statusKind:"na",
           color:cfg.colorFn?cfg.colorFn(d.line):cfg.color });
       });
@@ -438,6 +459,8 @@ const MBTA_COL = {
   Red:"#DA291C", Mattapan:"#DA291C", Orange:"#ED8B00", Blue:"#003DA5",
   "Green-B":"#00843D","Green-C":"#00843D","Green-D":"#00843D","Green-E":"#00843D",
 };
+// GVB metro line colors, same map amsterdam.html's board uses.
+const AMS_METRO_COL = { "50":"#00A03C","51":"#F49B00","52":"#00A1E1","53":"#E2001A","54":"#FFD500" };
 const SYSTEM_DEFS_BY_CITY = {
   dc: [
     {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
@@ -480,6 +503,17 @@ const SYSTEM_DEFS_BY_CITY = {
     {id:"mbtacr", logo:"MBTA CR", label:"Commuter Rail", collect:()=>collectScheduleRows({url:"mbta-cr-schedule.json", stationCount:2, perStation:2, color:"#80276C"})},
     {id:"mbtabus", logo:"MBTA BUS", label:"Silver Line + Rt 1", collect:()=>collectScheduleRows({url:"mbta-bus-schedule.json", stationCount:2, perStation:2,
       colorFn:l=>l.startsWith("SL")?"#7C878E":"#FFC72C"})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  // Amsterdam: all bundled Dutch GTFS -- every bundle carries
+  // tz:"Europe/Amsterdam", so collectScheduleRows computes "now" in that zone
+  // and shows 24h times. No US-only Amtrak here; planes are global.
+  amsterdam: [
+    {id:"amsmetro", logo:"GVB", label:"Metro", collect:()=>collectScheduleRows({url:"ams-metro-schedule.json", stationCount:2, perStation:2,
+      colorFn:l=>AMS_METRO_COL[l]||"#888"})},
+    {id:"amstram", logo:"GVB", label:"Tram", collect:()=>collectScheduleRows({url:"ams-tram-schedule.json", stationCount:3, perStation:2, color:"#3FA9E0"})},
+    {id:"amsrail", logo:"NS", label:"NS trains", collect:()=>collectScheduleRows({url:"ams-rail-schedule.json", stationCount:2, perStation:2, color:"#FFC917"})},
+    {id:"amsferry", logo:"PONT", label:"IJ ferries", collect:()=>collectScheduleRows({url:"ams-ferry-schedule.json", stationCount:2, perStation:2, color:"#00A5A0"})},
     {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
   ],
 };
