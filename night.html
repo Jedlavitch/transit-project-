@@ -275,6 +275,15 @@ const CITY_CONFIG = {
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:"transitboardnyc.busUrl",
     localRailSystem:"Subway/LIRR/MNR", localBusSystem:"MTA Bus", busPhotoQuery:"MTA bus New York City",
     cityLabel:"New York", nycRail:true },
+  // Boston's nearest-bus reads the bundled SL + Route 1 schedule; nearest
+  // train is Amtrak-only for now (no live local-rail source wired here yet --
+  // boston.html's own map uses the MBTA v3 API directly).
+  boston: { defaultLoc:{ lat:42.3519, lon:-71.0552, label:"South Station, Boston, MA" },
+    lsLoc:"transitboardboston.loc", lsManual:"transitboardboston.locManual", board:"boston.html",
+    busSchedule:"mbta-bus-schedule.json", busTag:"🚌 Nearest MBTA bus", busRange:"Silver Line + Route 1",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
+    localRailSystem:"MBTA", localBusSystem:"MBTA", busPhotoQuery:"MBTA Silver Line bus Boston",
+    cityLabel:"Boston" },
 };
 // Falls back to "dc" for any unrecognized/missing ?city= value (which also
 // keeps old ?city=bethesda links working -- "bethesda" is no longer a key,
@@ -834,8 +843,21 @@ async function ensureRideOnScheduleNight(){
   return roSchedNight;
 }
 function roYmd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
-function roActiveServices(s, date){
-  const y=roYmd(date), dow=(date.getDay()+6)%7;
+// "Now" for schedule math, in the bundle's own timezone when it declares one
+// (s.tz, e.g. "Europe/Amsterdam") -- else the viewer's local clock (all US
+// bundles; unchanged). Same helper flipboard.html carries.
+function roNowParts(tz){
+  const d=new Date();
+  if(!tz) return { y:roYmd(d), dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
+  const p={};
+  new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",
+    day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"}).formatToParts(d)
+    .forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
+  const dow={Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[p.weekday];
+  return { y:p.year+p.month+p.day, dow, min:(parseInt(p.hour,10)%24)*60+parseInt(p.minute,10) };
+}
+function roActiveServices(s, parts){
+  const {y,dow}=parts;
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
@@ -884,12 +906,12 @@ async function produceBus(){
   const s=await ensureRideOnScheduleNight();
   if(!s) return null;
   const busSystem = CITY_CFG.localBusSystem;
-  const now=new Date(), active=roActiveServices(s, now);
+  const nowP=roNowParts(s.tz), active=roActiveServices(s, nowP);
   let best=null;
   s.trips.forEach((tr,i)=>{
     if(!active.has(tr.s)) return;
     const seq=tr.st; if(seq.length<2) return;
-    for(const nowMin of [now.getHours()*60+now.getMinutes(), now.getHours()*60+now.getMinutes()+1440]){
+    for(const nowMin of [nowP.min, nowP.min+1440]){
       if(nowMin < seq[0][1] || nowMin > seq[seq.length-1][1]) continue;
       let k=0; while(k<seq.length-1 && seq[k+1][1] <= nowMin) k++;
       const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
