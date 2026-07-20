@@ -3,38 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#0b0f1a" />
-<title>Bethesda Live Transit Board</title>
+<meta name="theme-color" content="#081020" />
+<title>Washington DC Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="theme.css" />
 <style>
-  :root{
-    --bg:#0b0f1a; --panel:#131a2b; --panel2:#0f1524; --line:#1e2942; --bg-glow:#16203a;
-    --text:#eef2ff; --muted:#8b98b8; --accent:#4ea1ff; --good:#33d17a; --late:#ff5a5a;
-    --warn:#ffcc33; --live:#33d17a; --sched:#7d8bb0; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
-    --row-bg:#0d1424; --row-line:#172038; --sched-b:#aab6d8; --scrim:rgba(6,9,16,.86);
-    /* row density -- "Trains per box" in Settings overrides these (see [data-rows]).
-       Smaller rows -> more trains fit each box; larger -> fewer, bigger. */
-    --row-gap:5px; --row-pad:7px 9px; --badge-h:26px; --dest-fs:15px; --sub-fs:12px; --live-fs:18px;
-    /* WMATA line colors */
-    --RD:#BF0D3E; --BL:#009CDE; --YL:#FFD100; --OR:#ED8B00; --GR:#00B140; --SV:#919D9D;
-  }
-  :root[data-rows="more"]{ --row-gap:3px; --row-pad:4px 8px; --badge-h:22px; --dest-fs:13px; --sub-fs:11px; --live-fs:15px; }
-  :root[data-rows="fewer"]{ --row-gap:8px; --row-pad:11px 11px; --badge-h:30px; --dest-fs:17px; --sub-fs:13px; --live-fs:20px; }
-  :root[data-theme="black"]{
-    --bg:#000000; --panel:#0a0a0a; --panel2:#000000; --line:#1c1c1c; --bg-glow:#0e0e0e;
-    --text:#f2f2f2; --muted:#8a8a8a; --row-bg:#080808; --row-line:#1a1a1a; --sched-b:#c7c7c7;
-  }
-  :root[data-theme="day"]{
-    --bg:#eef1f8; --panel:#ffffff; --panel2:#f3f5fb; --line:#dde2ee; --bg-glow:#e2e8f7;
-    --text:#161b2e; --muted:#5b6478; --row-bg:#ffffff; --row-line:#e3e7f2; --sched-b:#3d475f;
-    --scrim:rgba(180,190,215,.55);
-  }
+  /* Palette, typeface, row-density vars, and header city-tabs all
+     come from the shared theme.css; only page-specific styles live here. */
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
     background:radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
-    color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    color:var(--text);
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
   #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
@@ -52,9 +33,6 @@
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
-  header #nightBtn, header #phillyBtn, header #nycBtn, header #flipBtn{background:var(--panel); color:var(--text); border:1px solid var(--line);
-    border-radius:10px; padding:8px 12px; font-size:13px; text-decoration:none; white-space:nowrap; font-weight:600}
-  header #nightBtn:hover, header #phillyBtn:hover, header #nycBtn:hover, header #flipBtn:hover{border-color:var(--accent)}
 
   main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
@@ -165,11 +143,16 @@
 <body>
 <div id="app">
   <header>
-    <div class="title">🚇 Bethesda Live Transit <small id="loclabel">locating…</small></div>
-    <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">🎓 Philly</a>
-    <a id="nycBtn" href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">🗽 NYC</a>
-    <a id="nightBtn" href="night.html?city=bethesda" title="Night mode — nearest flight" onclick="window.location.href='night.html?city=bethesda'; return false;">🌙 Night</a>
-    <a id="flipBtn" href="flipboard.html?city=bethesda" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=bethesda'; return false;">🚉 Board</a>
+    <div class="title">🚇 Washington DC Live Transit <small id="loclabel">locating…</small></div>
+    <nav class="city-tabs" aria-label="Switch city">
+      <span class="active" aria-current="page">DC</span>
+      <a id="phillyBtn" href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">Philly</a>
+      <a id="nycBtn" href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">NYC</a>
+    </nav>
+    <nav class="view-links">
+      <a id="nightBtn" href="night.html?city=dc" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=dc'; return false;">Sky</a>
+      <a id="flipBtn" href="flipboard.html?city=dc" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=dc'; return false;">Board</a>
+    </nav>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
@@ -297,7 +280,7 @@
 <script>
 "use strict";
 /* =========================================================================
-   Bethesda Live Transit Board
+   Washington DC Live Transit Board
    Pure client-side. Data: WMATA (rail+bus) + airplanes.live (ADS-B).
    ========================================================================= */
 const CFG = {

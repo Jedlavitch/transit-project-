@@ -8,11 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css" />
 <style>
+  /* Split-flap look keeps its own black palette, blue-tinted to match the
+     shared theme (typeface + accents come from theme.css conventions). */
   :root{
-    --bg:#000; --panel:#0c0c0c; --line:#222; --text:#e9e9e2; --muted:#7a7a72;
-    --flap-bg:#151515; --flap-bg2:#0e0e0e; --flap-text:#f2f2ea; --seam:rgba(0,0,0,.65);
-    --accent:#ffb454; --good:#5ad17a; --warn:#ffcc33; --late:#ff5a5a;
+    --bg:#000; --panel:#0b101e; --line:#1f2942; --text:#e8edf8; --muted:#8a94ad;
+    --flap-bg:#141b2c; --flap-bg2:#0d1322; --flap-text:#f1f5ff; --seam:rgba(0,0,0,.65);
+    --accent:#6ab0ff; --good:#5ad17a; --warn:#ffcc33; --late:#ff5a5a;
     /* board size -- overridden by [data-size="sm"|"lg"] below, set from Settings.
        Bumped noticeably bigger across the board (was 22/32/17) plus a clearer,
        wider-set font (IBM Plex Mono) for easier reading at a glance. */
@@ -24,7 +27,6 @@
   html,body{height:100%}
   body{
     background:var(--bg); color:var(--text); overflow:hidden;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     display:flex; flex-direction:column; height:100dvh;
   }
   header{
@@ -98,7 +100,7 @@
 
   footer{padding:1.2vmin 3vw; border-top:1px solid var(--line); font-size:11px; color:var(--muted); flex-shrink:0; display:flex; gap:1.5em}
   #fsHint{position:fixed; top:0; left:50%; transform:translate(-50%,-120%); z-index:80;
-    background:#0d0d0d; color:var(--text); border:1px solid var(--line); border-radius:0 0 10px 10px;
+    background:#0b101e; color:var(--text); border:1px solid var(--line); border-radius:0 0 10px 10px;
     padding:10px 18px; font-size:13px; max-width:90vw; text-align:center; transition:transform .35s ease}
   #fsHint.show{transform:translate(-50%,0)}
 
@@ -113,14 +115,14 @@
     letter-spacing:.14em; margin:18px 0 9px}
   #settings .seg{display:flex; gap:8px}
   #settings .seg button{flex:1; padding:11px 6px; border-radius:10px; border:1px solid var(--line);
-    background:#111; color:var(--muted); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit}
-  #settings .seg button.active{border-color:var(--accent); color:var(--accent); background:rgba(255,180,84,.08)}
+    background:#10182b; color:var(--muted); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit}
+  #settings .seg button.active{border-color:var(--accent); color:var(--accent); background:rgba(106,176,255,.08)}
   #settings .sys-grid{display:flex; flex-wrap:wrap; gap:8px}
   #settings .sys-toggle{flex:1; min-width:130px; display:flex; align-items:center; gap:8px; padding:9px 11px;
-    border-radius:10px; border:1px solid var(--line); background:#111; font-size:13px; cursor:pointer}
+    border-radius:10px; border:1px solid var(--line); background:#10182b; font-size:13px; cursor:pointer}
   #settings .sys-toggle input{margin:0; cursor:pointer}
   #settings .done{margin-top:22px; width:100%; padding:12px; border-radius:10px; border:none;
-    background:var(--accent); color:#1a0f00; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
+    background:var(--accent); color:#071528; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
 </style>
 </head>
 <body>
@@ -166,14 +168,14 @@
 
 <script>
 "use strict";
-/* Departure board is shared by both city boards, same as night.html. Which
-   one opened it comes in via ?city=bethesda|philly so it can reuse that
+/* Departure board is shared by the city boards, same as night.html. Which
+   one opened it comes in via ?city=dc|philly|nyc so it can reuse that
    board's own saved location / WMATA key / live-Worker URLs / "show on
    board" toggles -- nothing to set up twice. */
 const CITY_CONFIG = {
-  bethesda: {
+  dc: {
     defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
-    lsLoc:"transitboard.loc", board:"index.html", cityLabel:"Bethesda",
+    lsLoc:"transitboard.loc", board:"index.html", cityLabel:"Washington DC",
     lsWmataKey:"transitboard.wmataKey", lsHidden:"transitboard.hiddenCards",
   },
   philly: {
@@ -187,11 +189,11 @@ const CITY_CONFIG = {
     lsWmataKey:null, lsHidden:"transitboardnyc.hiddenCards",
   },
 };
-// Falls back to "bethesda" for any unrecognized/missing ?city= value, same
-// as the previous binary ternary did -- now a proper N-way lookup so a third
-// (and future) city doesn't silently collapse into Bethesda's config.
+// Falls back to "dc" for any unrecognized/missing ?city= value (which also
+// keeps old ?city=bethesda links working -- "bethesda" is no longer a key,
+// so it lands on the DC config it always meant).
 const CITY_PARAM = new URLSearchParams(location.search).get("city");
-const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "bethesda";
+const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "dc";
 const CITY_CFG = CITY_CONFIG[CITY];
 const $ = s=>document.querySelector(s);
 
@@ -427,7 +429,7 @@ const NYC_SUBWAY_COL = {
   "N":"#FCCC0A","Q":"#FCCC0A","R":"#FCCC0A","W":"#FCCC0A","GS":"#808183",
 };
 const SYSTEM_DEFS_BY_CITY = {
-  bethesda: [
+  dc: [
     {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
     {id:"metro", logo:"METRO", label:"Metrorail", collect:()=>collectRailRows(6)},
     {id:"metrobus", logo:"METROBUS", label:"Metrobus", collect:()=>collectBusRows(6)},
