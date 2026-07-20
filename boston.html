@@ -143,14 +143,17 @@
 <div id="app">
   <header>
     <div class="title">🦞 Boston Live Transit <small id="loclabel">locating…</small></div>
-    <nav class="city-tabs" aria-label="Switch city">
-      <a href="index.html" title="Washington DC board" onclick="window.location.href='index.html'; return false;">DC</a>
-      <a href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">Philly</a>
-      <a href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">NYC</a>
-      <span class="active" aria-current="page">Boston</span>
-      <a id="amsBtn" href="amsterdam.html" title="Amsterdam board" onclick="window.location.href='amsterdam.html'; return false;">AMS</a>
-      <a id="laBtn" href="losangeles.html" title="Los Angeles board" onclick="window.location.href='losangeles.html'; return false;">LA</a>
-      <a id="sfBtn" href="sanfrancisco.html" title="San Francisco board" onclick="window.location.href='sanfrancisco.html'; return false;">SF</a>
+    <nav class="city-picker">
+      <select aria-label="Switch city" title="Switch city"
+        onchange="try{ if(document.fullscreenElement||document.webkitFullscreenElement) sessionStorage.setItem('kioskFS','1'); }catch(e){} window.location.href=this.value;">
+        <option value="index.html">Washington DC</option>
+        <option value="philadelphia.html">Philadelphia</option>
+        <option value="nyc.html">New York</option>
+        <option value="boston.html" selected>Boston</option>
+        <option value="amsterdam.html">Amsterdam</option>
+        <option value="losangeles.html">Los Angeles</option>
+        <option value="sanfrancisco.html">San Francisco</option>
+      </select>
     </nav>
     <nav class="view-links">
       <a id="nightBtn" href="night.html?city=boston" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=boston'; return false;">Sky</a>

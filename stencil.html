@@ -145,19 +145,23 @@
   <header>
     <!-- [CITY-SETUP] header title + short subtitle -->
     <div class="title">🏙️ City Live Transit <small id="loclabel">locating…</small></div>
-    <!-- [CITY-SETUP] city tabs + view links: once you've named your city AND
+    <!-- [CITY-SETUP] city picker + view links: once you've named your city AND
          registered it in night.html / flipboard.html (see ADDING-A-CITY.md),
-         uncomment these, add your city as the active tab, and point the other
-         tabs at their boards. `?city=` must match your CITY_ID below.
-    <nav class="city-tabs" aria-label="Switch city">
-      <a href="index.html" title="Washington DC board" onclick="window.location.href='index.html'; return false;">DC</a>
-      <a href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">Philly</a>
-      <a href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">NYC</a>
-      <a href="boston.html" title="Boston board" onclick="window.location.href='boston.html'; return false;">Boston</a>
-      <a href="amsterdam.html" title="Amsterdam board" onclick="window.location.href='amsterdam.html'; return false;">AMS</a>
-      <a href="losangeles.html" title="Los Angeles board" onclick="window.location.href='losangeles.html'; return false;">LA</a>
-      <a href="sanfrancisco.html" title="San Francisco board" onclick="window.location.href='sanfrancisco.html'; return false;">SF</a>
-      <span class="active" aria-current="page">MyCity</span>
+         uncomment these, add your city's <option selected> line, and ALSO add
+         the same option to every other board's picker. `?city=` must match
+         your CITY_ID below.
+    <nav class="city-picker">
+      <select aria-label="Switch city" title="Switch city"
+        onchange="try{ if(document.fullscreenElement||document.webkitFullscreenElement) sessionStorage.setItem('kioskFS','1'); }catch(e){} window.location.href=this.value;">
+        <option value="index.html">Washington DC</option>
+        <option value="philadelphia.html">Philadelphia</option>
+        <option value="nyc.html">New York</option>
+        <option value="boston.html">Boston</option>
+        <option value="amsterdam.html">Amsterdam</option>
+        <option value="losangeles.html">Los Angeles</option>
+        <option value="sanfrancisco.html">San Francisco</option>
+        <option value="mycity.html" selected>MyCity</option>
+      </select>
     </nav>
     <nav class="view-links">
       <a href="night.html?city=mycity" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=mycity'; return false;">Sky</a>

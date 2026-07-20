@@ -143,14 +143,17 @@
 <div id="app">
   <header>
     <div class="title">🌉 San Francisco Live Transit <small id="loclabel">locating…</small></div>
-    <nav class="city-tabs" aria-label="Switch city">
-      <a href="index.html" title="Washington DC board" onclick="window.location.href='index.html'; return false;">DC</a>
-      <a href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">Philly</a>
-      <a href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">NYC</a>
-      <a href="boston.html" title="Boston board" onclick="window.location.href='boston.html'; return false;">Boston</a>
-      <a href="amsterdam.html" title="Amsterdam board" onclick="window.location.href='amsterdam.html'; return false;">AMS</a>
-      <a href="losangeles.html" title="Los Angeles board" onclick="window.location.href='losangeles.html'; return false;">LA</a>
-      <span class="active" aria-current="page">SF</span>
+    <nav class="city-picker">
+      <select aria-label="Switch city" title="Switch city"
+        onchange="try{ if(document.fullscreenElement||document.webkitFullscreenElement) sessionStorage.setItem('kioskFS','1'); }catch(e){} window.location.href=this.value;">
+        <option value="index.html">Washington DC</option>
+        <option value="philadelphia.html">Philadelphia</option>
+        <option value="nyc.html">New York</option>
+        <option value="boston.html">Boston</option>
+        <option value="amsterdam.html">Amsterdam</option>
+        <option value="losangeles.html">Los Angeles</option>
+        <option value="sanfrancisco.html" selected>San Francisco</option>
+      </select>
     </nav>
     <nav class="view-links">
       <a id="nightBtn" href="night.html?city=sf" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=sf'; return false;">Sky</a>
@@ -210,7 +213,7 @@
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">BART/Muni/Caltrain scheduled · live — Amtrak + airplanes.live</span>
+    <span id="statusText">live — BART + Amtrak + airplanes.live · Muni/Caltrain scheduled</span>
     <span class="grow"></span>
   </footer>
 </div>
@@ -672,9 +675,52 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
   const c=$(count); if(c) c.textContent="scheduled";
   fitList(box);
 }
-const refreshBart  =()=>refreshCityCard({ key:"bart", list:"#bartList", count:"#bartCount", stations:2,
+/* BART is the one Bay Area system with a CORS-open, keyless live API
+   (api.bart.gov ETDs, JSON -- verified access-control-allow-origin: *).
+   The card tries live first and falls back to the bundled schedule. Map
+   vehicles stay schedule-interpolated: BART is track-circuit signaled and
+   publishes no train GPS. */
+const BART_API_COL={ YELLOW:"#FFE733", ORANGE:"#FF9933", GREEN:"#339933", RED:"#FF4444",
+  BLUE:"#0099CC", WHITE:"#B0BEC7", BEIGE:"#D5CFA3", PURPLE:"#C0A9E0" };
+const refreshBartSched=()=>refreshCityCard({ key:"bart", list:"#bartList", count:"#bartCount", stations:2,
   badgeCls:l=>(l==="Yellow"||l==="Grey"||l==="Beige")?"badge":"badge rail",
   noneMsg:"No more BART trains today at nearby stations." });
+async function refreshBart(){
+  const s=await ensureSched("bart"); const box=$("#bartList"); if(!box) return;
+  try{
+    const here=state.loc;
+    const near=((s&&s.stations)||[]).map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))}))
+      .sort((a,b)=>a.mi-b.mi).slice(0,2);
+    if(!near.length) throw new Error("no stations");
+    const etds=await Promise.all(near.map(n=>getJSON(
+      `https://api.bart.gov/api/etd.aspx?cmd=etd&orig=${n.st.id}&key=MW9S-E7SL-26DU-VV8V&json=y`, 10000)
+      .then(j=>(j.root&&j.root.station&&j.root.station[0])||null).catch(()=>null)));
+    box.innerHTML=""; let shown=0;
+    near.forEach((n,i)=>{
+      const stn=etds[i]; if(!stn || !stn.etd || !stn.etd.length) return;
+      box.appendChild(el("div","stop-label","◼ "+stn.name+`  ·  ${n.mi.toFixed(1)} mi`));
+      stn.etd.slice(0,4).forEach(d=>{
+        const est=(d.estimate||[])[0]; if(!est) return;
+        const colName=(est.color||"").toUpperCase();
+        const col=BART_API_COL[colName]||"#888";
+        const dark = colName==="YELLOW"||colName==="WHITE"||colName==="BEIGE";
+        const row=el("div","row");
+        const b=el("div", dark?"badge":"badge rail", colName ? colName[0]+colName.slice(1).toLowerCase() : "?");
+        b.style.background=col;
+        const mid=el("div"); mid.appendChild(el("div","dest", d.destination));
+        mid.appendChild(el("div","sub", `${est.length} cars · platform ${est.platform}`));
+        const times=el("div","times");
+        times.append(el("div","live", est.minutes==="Leaving" ? "BRD" : `${est.minutes} min`),
+                     el("div","live-tag","live"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
+    });
+    if(!shown) throw new Error("no etds");   // e.g. overnight closure -> scheduled fallback
+    const c=$("#bartCount"); if(c) c.textContent="live";
+    fitList(box);
+  }catch(e){ refreshBartSched(); }
+}
 const refreshMuni  =()=>refreshCityCard({ key:"muni", list:"#muniList", count:"#muniCount", stations:2,
   badgeCls:l=>l==="J"?"badge":"badge rail",
   noneMsg:"No more Muni trains today at nearby stops." });
