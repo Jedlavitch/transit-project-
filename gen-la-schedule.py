@@ -103,7 +103,7 @@ def bundle(zf, line_label_fn, out_name, route_filter=lambda r: True):
             dt = (row.get("departure_time") or "").strip()
             if pid and dt:
                 seq[tid].append((int(row["stop_sequence"]), pid, to_min(dt)))
-    trips_out, used_stations, used_svc = [], set(), set()
+    trips_out, used_stations, used_svc, used_routes = [], set(), set(), set()
     for tid, s in seq.items():
         s.sort()
         if len(s) < 2:
@@ -112,6 +112,7 @@ def bundle(zf, line_label_fn, out_name, route_filter=lambda r: True):
         for _, pid, _ in s:
             used_stations.add(pid)
         used_svc.add(tr["service_id"])
+        used_routes.add(tr["route_id"])
         trips_out.append({"line": line_label_fn(routes[tr["route_id"]]),
                           "hs": (tr.get("trip_headsign") or "").strip(),
                           "s": tr["service_id"],
@@ -133,6 +134,9 @@ def bundle(zf, line_label_fn, out_name, route_filter=lambda r: True):
             e = exc.setdefault(c["date"], {"add": [], "rem": []})
             (e["add"] if c["exception_type"] == "1" else e["rem"]).append(c["service_id"])
     out = {"generated": datetime.date.today().isoformat(), "tz": TZ,
+           # GTFS route_id -> line label, for matching live GTFS-RT vehicles
+           # (which carry route_id) to this bundle's lines (future live wiring).
+           "routeLines": {rid: line_label_fn(routes[rid]) for rid in sorted(used_routes)},
            "stations": stations, "svc": svc, "exc": exc, "trips": trips_out}
     path = os.path.join(HERE, out_name)
     with open(path, "w") as fh:

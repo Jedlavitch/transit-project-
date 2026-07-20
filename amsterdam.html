@@ -246,14 +246,15 @@
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
-    <!-- [ADD-A-SYSTEM] optional live-Worker input: if a system's live feed has no
-         CORS (needs a Cloudflare Worker, like MTA Bus / SEPTA), add a <details>
-         block here with an <input id="xInput"> and wire it in openSetup()/#saveKey.
-         Systems whose live feed is directly fetchable (or that are schedule-only)
-         need nothing here. See ADDING-A-CITY.md. -->
+    <div class="accent-lbl">Optional: live tram positions</div>
+    <p style="font-size:12px">The Dutch realtime feed has no CORS, so live vehicles need a tiny relay:
+      deploy <b>ovapi-worker.js</b> (in the repo) at workers.cloudflare.com — free, no key —
+      then paste your Worker URL here. The feed carries GPS for the <b>GVB trams</b> (verified
+      ~100 at once); metro, NS, and ferries stay schedule-interpolated either way.</p>
+    <input id="liveUrlInput" type="text" placeholder="https://ovapi.you.workers.dev" autocomplete="off" spellcheck="false" />
 
     <div class="btns">
-      <button id="skipKey">Close</button>
+      <button id="skipKey">Save &amp; close</button>
     </div>
   </div>
 </div>
@@ -289,6 +290,7 @@ const CFG = {
   labelZoom: 12,        // at this zoom and closer, show vehicle labels; below, just dots
   schedMapEveryMs: 15000,  // re-interpolate scheduled vehicle positions (no network)
   cardEveryMs: 30000,      // scheduled-departure cards re-render (no network)
+  liveEveryMs: 20000,      // optional Worker GTFS-RT poll (~500KB national feed)
   clockEveryMs: 1000,
 };
 
@@ -298,8 +300,7 @@ const LS = {
   accent:    `transitboard${CITY_ID}.accent`,
   theme:     `transitboard${CITY_ID}.theme`,
   hidden:    `transitboard${CITY_ID}.hiddenCards`,
-  // [ADD-A-SYSTEM] if a system needs an optional live-Worker URL saved, add its
-  // key here, e.g.  busUrl: `transitboard${CITY_ID}.busUrl`,
+  liveUrl:   `transitboard${CITY_ID}.liveUrl`,   // optional ovapi-worker.js URL
 };
 // Oranje first -- the Dutch default; the rest match the other boards.
 const ACCENTS=["#ff7a1a","#4ea1ff","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
@@ -356,7 +357,7 @@ function applyLoc(loc){
 function refreshEverythingForNewLocation(){
   refreshPlanes();
   refreshMetro(); refreshTram(); refreshRail(); refreshIntl(); refreshFerry();
-  drawMetroShapes(); drawAllSchedFleets();
+  drawMetroShapes(); drawAllSchedFleets(); fetchAmsLive();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
@@ -658,6 +659,59 @@ function drawPlanes(ac){
   updateFleet("plane", items, CFG.planeEveryMs);
 }
 
+/* ---- GTFS-Realtime protobuf decoder -- same minimal, self-contained
+   decoder nyc.html/night.html carry (ported, not shared: no build step). ---- */
+function* gtfsrtFields(b, start, end){
+  let i = start;
+  while(i < end){
+    const [key, ni] = gtfsrtVarint(b, i); i = ni;
+    const field = Number(key >> 3n), wt = Number(key & 7n);
+    if(wt === 0){ const [v, n] = gtfsrtVarint(b, i); i = n; yield [field, 0, v]; }
+    else if(wt === 2){ const [len, n] = gtfsrtVarint(b, i); const l = Number(len); yield [field, 2, [n, n + l]]; i = n + l; }
+    else if(wt === 5){ yield [field, 5, i]; i += 4; }
+    else if(wt === 1){ i += 8; }
+    else throw new Error("bad wiretype "+wt);
+  }
+}
+function gtfsrtVarint(b, i){
+  let result = 0n, shift = 0n, x;
+  do{ x = BigInt(b[i++]); result |= (x & 0x7fn) << shift; shift += 7n; }while(x & 0x80n);
+  return [result, i];
+}
+function gtfsrtF32(b, i){ return new DataView(b.buffer, b.byteOffset+i, 4).getFloat32(0, true); }
+function gtfsrtStr(b, s, e){ return new TextDecoder().decode(b.subarray(s, e)); }
+function decodeVehiclePosition(b, s, e){
+  const v = {};
+  for(const [vf, vwt, vv] of gtfsrtFields(b, s, e)){
+    if(vf === 1 && vwt === 2){
+      for(const [tf, twt, tv] of gtfsrtFields(b, vv[0], vv[1])){
+        if(tf === 1) v.tripId = gtfsrtStr(b, tv[0], tv[1]);
+        else if(tf === 5) v.routeId = gtfsrtStr(b, tv[0], tv[1]);
+      }
+    } else if(vf === 2 && vwt === 2){
+      for(const [pf, pwt, pv] of gtfsrtFields(b, vv[0], vv[1])){
+        if(pf === 1) v.lat = gtfsrtF32(b, pv);
+        else if(pf === 2) v.lon = gtfsrtF32(b, pv);
+      }
+    }
+  }
+  return v;
+}
+function decodeGtfsRt(buf){
+  const vehicles = [];
+  for(const [f, wt, val] of gtfsrtFields(buf, 0, buf.length)){
+    if(f !== 2 || wt !== 2) continue;
+    const [es, ee] = val;
+    for(const [ef, ewt, eval_] of gtfsrtFields(buf, es, ee)){
+      if(ef === 4 && ewt === 2){
+        const v = decodeVehiclePosition(buf, eval_[0], eval_[1]);
+        if(typeof v.lat==="number") vehicles.push(v);
+      }
+    }
+  }
+  return { vehicles };
+}
+
 /* ---------- Amsterdam systems: GVB metro / tram / IJ ferries + NS ----------
    All four are bundled schedules (gen-amsterdam-schedule.py). No public CORS
    realtime feed exists for GVB/NS, so map vehicles are schedule-interpolated
@@ -764,6 +818,8 @@ const refreshFerry=()=>refreshAmsCard({ key:"ferry", list:"#ferryList", count:"#
 // schedule puts it between right now (per-system fleet, smooth-animated).
 async function drawSchedFleet(key){
   const sys=SYSTEMS[key];
+  // A system with fresh live positions doesn't get scheduled ghosts on top.
+  if(state.liveOk && state.liveOk[key] && Date.now()-state.liveOk[key] < 45000) return;
   const s=await ensureSched(key); if(!s || !s.trips) return;
   const nowP=schedNowParts(s.tz), active=activeServices(s, nowP);
   const items=[];
@@ -786,6 +842,39 @@ async function drawSchedFleet(key){
   updateFleet(key, items, CFG.schedMapEveryMs);
 }
 function drawAllSchedFleets(){ ["metro","tram","rail","intl","ferry"].forEach(drawSchedFleet); }
+/* ---- optional LIVE positions via the user's ovapi-worker.js relay ----
+   One national GTFS-RT fetch covers every system; vehicles are matched to a
+   bundle by route_id via its routeLines map. When a system has fresh live
+   data, its scheduled interpolation pauses (see drawSchedFleet's liveOk
+   check); if the Worker goes away, scheduled positions resume in <45s. */
+state.liveOk={};
+function liveWorkerUrl(){ return (localStorage.getItem(LS.liveUrl)||"").trim().replace(/\/+$/,""); }
+async function fetchAmsLive(){
+  const url=liveWorkerUrl(); if(!url) return;
+  let buf;
+  try{
+    const r=await fetch(url+"/vehiclePositions"); if(!r.ok) throw new Error(r.status);
+    buf=new Uint8Array(await r.arrayBuffer());
+  }catch(e){ return; }
+  let vehicles;
+  try{ ({vehicles}=decodeGtfsRt(buf)); }catch(e){ return; }
+  let anyLive=false;
+  for(const key in SYSTEMS){
+    const sys=SYSTEMS[key], s=sys.sched;
+    if(!s || !s.routeLines) continue;
+    const items=[];
+    vehicles.forEach((v,idx)=>{
+      const line=s.routeLines[v.routeId]; if(!line) return;
+      if(!(v.lat>-90 && v.lat<90 && v.lon>-180 && v.lon<180) || !v.lat) return;
+      const col=sys.color(line);
+      items.push({ id:"lv"+key+(v.tripId||idx), lat:v.lat, lon:v.lon,
+        icon:()=>labelIcon(col, line), ik:"lv-"+line,
+        tip:`${sys.tag} ${line} (live)` });
+    });
+    if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true; }
+  }
+  if(anyLive) $("#statusText").textContent="LIVE trams via your Worker · rest scheduled · planes live — airplanes.live";
+}
 
 /* ---------- refresh orchestration ---------- */
 async function refreshPlanes(){
@@ -794,15 +883,16 @@ async function refreshPlanes(){
 
 /* ---------- setup overlay ---------- */
 function openSetup(){
-  // [ADD-A-SYSTEM] if a system has an optional live-Worker input, preload it here:
-  //   $("#busInput").value = state.busUrl;
+  const inp=$("#liveUrlInput"); if(inp) inp.value=localStorage.getItem(LS.liveUrl)||"";
   $("#setup").classList.add("show"); $("#addrInput").focus();
 }
-function closeSetup(){ $("#setup").classList.remove("show"); }
+function closeSetup(){
+  const inp=$("#liveUrlInput");
+  if(inp){ try{ localStorage.setItem(LS.liveUrl, (inp.value||"").trim()); }catch(e){} fetchAmsLive(); }
+  $("#setup").classList.remove("show");
+}
 $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
-// [ADD-A-SYSTEM] if you added an optional live-Worker input + a Save button,
-// wire #saveKey here to persist state.busUrl to LS.busUrl then re-refresh.
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
@@ -941,6 +1031,7 @@ function boot(){
   refreshEverythingForNewLocation();
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(drawAllSchedFleets, CFG.schedMapEveryMs);
+  setInterval(fetchAmsLive, CFG.liveEveryMs);
   setInterval(refreshMetro, CFG.cardEveryMs);
   setInterval(refreshTram, CFG.cardEveryMs);
   setInterval(refreshRail, CFG.cardEveryMs);

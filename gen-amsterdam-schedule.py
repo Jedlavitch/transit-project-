@@ -208,7 +208,7 @@ def main():
             window_svc.add(c["service_id"])
 
     def emit(group, out_name, must_touch_box=False):
-        trips_out, used_stations, used_svc = [], set(), set()
+        trips_out, used_stations, used_svc, used_routes = [], set(), set(), set()
         for tid, s in seq.items():
             if trip_group.get(tid) != group:
                 continue
@@ -220,6 +220,7 @@ def main():
             tr = trips_all[tid]
             if tr["service_id"] not in window_svc:
                 continue   # never runs inside the horizon -- don't bundle it
+            used_routes.add(tr["route_id"])
             for _, pid, _ in s:
                 used_stations.add(pid)
             used_svc.add(tr["service_id"])
@@ -240,6 +241,10 @@ def main():
                 exc[date] = {"add": add, "rem": rem}
         out = {"generated": datetime.date.today().isoformat(),
                "note": f"NL national GTFS ({GTFS_URL}), {group} bundle", "tz": TZ,
+               # GTFS route_id -> line label, so the live GTFS-RT feed's
+               # vehicles (which carry route_id) can be matched to this
+               # bundle's lines (see amsterdam.html's fetchAmsLive).
+               "routeLines": {rid: line_label(rid) for rid in sorted(used_routes)},
                "stations": stations, "svc": {}, "exc": exc, "trips": trips_out}
         path = os.path.join(HERE, out_name)
         with open(path, "w") as fh:
