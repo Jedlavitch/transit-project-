@@ -198,6 +198,16 @@ const CITY_CONFIG = {
     lsLoc:"transitboardamsterdam.loc", board:"amsterdam.html", cityLabel:"Amsterdam",
     lsWmataKey:null, lsHidden:"transitboardamsterdam.hiddenCards",
   },
+  la: {
+    defaultLoc:{ lat:34.0562, lon:-118.2365, label:"Union Station, Los Angeles" },
+    lsLoc:"transitboardla.loc", board:"losangeles.html", cityLabel:"Los Angeles",
+    lsWmataKey:null, lsHidden:"transitboardla.hiddenCards",
+  },
+  sf: {
+    defaultLoc:{ lat:37.7844, lon:-122.4078, label:"Powell St, San Francisco" },
+    lsLoc:"transitboardsf.loc", board:"sanfrancisco.html", cityLabel:"San Francisco",
+    lsWmataKey:null, lsHidden:"transitboardsf.hiddenCards",
+  },
 };
 // Falls back to "dc" for any unrecognized/missing ?city= value (which also
 // keeps old ?city=bethesda links working -- "bethesda" is no longer a key,
@@ -516,6 +526,24 @@ const SYSTEM_DEFS_BY_CITY = {
     {id:"amsintl", logo:"INT'L", label:"International", collect:()=>collectScheduleRows({url:"ams-intl-schedule.json", stationCount:2, perStation:2,
       colorFn:l=>({EST:"#1D4E9E",ICE:"#C8141C",NJ:"#4B3F94",EC:"#7A4FA3",ECD:"#7A4FA3",ICD:"#E6007E",ES:"#175C54",GV:"#E8B10F"}[l]||"#D23A4E")})},
     {id:"amsferry", logo:"PONT", label:"IJ ferries", collect:()=>collectScheduleRows({url:"ams-ferry-schedule.json", stationCount:2, perStation:2, color:"#00A5A0"})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  la: [
+    {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
+    {id:"larail", logo:"METRO", label:"Metro Rail", collect:()=>collectScheduleRows({url:"la-rail-schedule.json", stationCount:3, perStation:2,
+      colorFn:l=>({A:"#0072BC",B:"#EB131B",C:"#58A738",D:"#A05DA5",E:"#FDB913",K:"#E56DB1"}[l]||"#888")})},
+    {id:"mlink", logo:"METROLINK", label:"Metrolink", collect:()=>collectScheduleRows({url:"la-metrolink-schedule.json", stationCount:2, perStation:2,
+      colorFn:l=>({AV:"#00AF43","IE-OC":"#E92076",OC:"#FF8400",RIV:"#682E86",SB:"#A32136",VC:"#FFB81D","91":"#0071CE"}[l]||"#FF8400")})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  sf: [
+    {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
+    {id:"bart", logo:"BART", label:"BART", collect:()=>collectScheduleRows({url:"sf-bart-schedule.json", stationCount:2, perStation:2,
+      colorFn:l=>({Yellow:"#FFE733",Orange:"#FF9933",Green:"#339933",Red:"#FF4444",Blue:"#0099CC",Grey:"#B0BEC7",Beige:"#D5CFA3"}[l]||"#888")})},
+    {id:"muni", logo:"MUNI", label:"Muni Metro", collect:()=>collectScheduleRows({url:"sf-muni-schedule.json", stationCount:3, perStation:2,
+      colorFn:l=>({J:"#F5A81C",K:"#008C9A",L:"#92278F",M:"#008752",N:"#005B95",T:"#BF2B45",F:"#B26F16"}[l]||"#BF2B45")})},
+    {id:"cable", logo:"CABLE CAR", label:"Cable cars", collect:()=>collectScheduleRows({url:"sf-cablecar-schedule.json", stationCount:2, perStation:2, color:"#8C4A2F"})},
+    {id:"ctrain", logo:"CALTRAIN", label:"Caltrain", collect:()=>collectScheduleRows({url:"sf-caltrain-schedule.json", stationCount:2, perStation:2, color:"#E31837"})},
     {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
   ],
 };

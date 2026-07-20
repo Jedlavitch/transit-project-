@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#081020" />
-<title>Boston Live Transit Board</title>
+<title>San Francisco Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css" />
@@ -142,19 +142,19 @@
 <body>
 <div id="app">
   <header>
-    <div class="title">🦞 Boston Live Transit <small id="loclabel">locating…</small></div>
+    <div class="title">🌉 San Francisco Live Transit <small id="loclabel">locating…</small></div>
     <nav class="city-tabs" aria-label="Switch city">
       <a href="index.html" title="Washington DC board" onclick="window.location.href='index.html'; return false;">DC</a>
       <a href="philadelphia.html" title="Philadelphia board" onclick="window.location.href='philadelphia.html'; return false;">Philly</a>
       <a href="nyc.html" title="New York board" onclick="window.location.href='nyc.html'; return false;">NYC</a>
-      <span class="active" aria-current="page">Boston</span>
-      <a id="amsBtn" href="amsterdam.html" title="Amsterdam board" onclick="window.location.href='amsterdam.html'; return false;">AMS</a>
-      <a id="laBtn" href="losangeles.html" title="Los Angeles board" onclick="window.location.href='losangeles.html'; return false;">LA</a>
-      <a id="sfBtn" href="sanfrancisco.html" title="San Francisco board" onclick="window.location.href='sanfrancisco.html'; return false;">SF</a>
+      <a href="boston.html" title="Boston board" onclick="window.location.href='boston.html'; return false;">Boston</a>
+      <a href="amsterdam.html" title="Amsterdam board" onclick="window.location.href='amsterdam.html'; return false;">AMS</a>
+      <a href="losangeles.html" title="Los Angeles board" onclick="window.location.href='losangeles.html'; return false;">LA</a>
+      <span class="active" aria-current="page">SF</span>
     </nav>
     <nav class="view-links">
-      <a id="nightBtn" href="night.html?city=boston" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=boston'; return false;">Sky</a>
-      <a id="flipBtn" href="flipboard.html?city=boston" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=boston'; return false;">Board</a>
+      <a id="nightBtn" href="night.html?city=sf" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=sf'; return false;">Sky</a>
+      <a id="flipBtn" href="flipboard.html?city=sf" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=sf'; return false;">Board</a>
     </nav>
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
@@ -170,26 +170,31 @@
       <div class="legend">
         <span>✈️ aircraft</span>
         <span style="color:#3ad0c8">▦ Amtrak</span>
-        <span><span style="color:#DA291C">▦</span><span style="color:#ED8B00">▦</span><span style="color:#003DA5">▦</span><span style="color:#00843D">▦</span> the T</span>
-        <span style="color:#80276C">▦ Commuter Rail</span>
-        <span><span style="color:#7C878E">▦</span> Silver Line <span style="color:#FFC72C">▦</span> Rt 1</span>
-        <span style="opacity:.7">vehicles move live · zoom in for labels</span>
+        <span><span style="color:#FFE733">▦</span><span style="color:#FF9933">▦</span><span style="color:#339933">▦</span><span style="color:#FF4444">▦</span><span style="color:#0099CC">▦</span> BART</span>
+        <span style="color:#BF2B45">▦ Muni Metro</span>
+        <span style="color:#8C4A2F">▦ Cable cars</span>
+        <span style="color:#E31837">▦ Caltrain</span>
+        <span style="opacity:.7">local scheduled · Amtrak + planes live</span>
       </div>
     </div>
 
     <div class="col">
       <div class="cards">
-        <div class="card" id="subwayCard">
-          <h2><span class="icon">🚇</span> MBTA Subway — the T <span class="count" id="subwayCount"></span></h2>
-          <div class="list" id="subwayList"><div class="empty">Loading T schedule…</div></div>
+        <div class="card" id="bartCard">
+          <h2><span class="icon">🚇</span> BART <span class="count" id="bartCount"></span></h2>
+          <div class="list" id="bartList"><div class="empty">Loading BART schedule…</div></div>
         </div>
-        <div class="card" id="crCard">
-          <h2><span class="icon">🚆</span> Commuter Rail <span class="count" id="crCount"></span></h2>
-          <div class="list" id="crList"><div class="empty">Loading commuter rail schedule…</div></div>
+        <div class="card" id="muniCard">
+          <h2><span class="icon">🚊</span> Muni Metro &amp; F streetcar <span class="count" id="muniCount"></span></h2>
+          <div class="list" id="muniList"><div class="empty">Loading Muni schedule…</div></div>
         </div>
-        <div class="card" id="busCard">
-          <h2><span class="icon">🚌</span> Silver Line &amp; Route 1 <span class="count" id="busCount"></span></h2>
-          <div class="list" id="busList"><div class="empty">Loading bus schedule…</div></div>
+        <div class="card" id="cableCard">
+          <h2><span class="icon">🚋</span> Cable cars <span class="count" id="cableCount"></span></h2>
+          <div class="list" id="cableList"><div class="empty">Loading cable car schedule…</div></div>
+        </div>
+        <div class="card" id="ctrainCard">
+          <h2><span class="icon">🚆</span> Caltrain <span class="count" id="ctrainCount"></span></h2>
+          <div class="list" id="ctrainList"><div class="empty">Loading Caltrain schedule…</div></div>
         </div>
         <div class="card" id="amtrakCard">
           <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
@@ -205,7 +210,7 @@
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">live — MBTA + Amtrak + airplanes.live</span>
+    <span id="statusText">BART/Muni/Caltrain scheduled · live — Amtrak + airplanes.live</span>
     <span class="grow"></span>
   </footer>
 </div>
@@ -215,9 +220,9 @@
     <h3>Settings</h3>
 
     <div class="section-lbl">Location</div>
-    <p style="font-size:12px">This board tracks trains, buses, and planes <b>near one location</b> —
-      <b id="curLocLbl">South Station</b> by default. Type any address, city, or zip to move it there instead.
-      MBTA covers Greater Boston; Amtrak and planes work anywhere in the US.</p>
+    <p style="font-size:12px">This board tracks trains, streetcars, cable cars, and planes <b>near one
+      location</b> — <b id="curLocLbl">Powell St</b> by default. Type any address, city, or zip to move
+      it there instead. BART/Muni/Caltrain cover the Bay Area; Amtrak and planes work anywhere in the US.</p>
     <div class="addr-row">
       <input id="addrInput" type="text" placeholder="Address, city, or zip…" autocomplete="off" spellcheck="false" />
       <button id="addrSetBtn" type="button">Set</button>
@@ -255,32 +260,31 @@
 <script>
 "use strict";
 /* =========================================================================
-   Boston Live Transit Board
+   San Francisco Live Transit Board
 
-   Built from stencil.html (see ADDING-A-CITY.md). Systems:
-     - MBTA subway (the T), Commuter Rail, and Silver Line + Route 1 buses:
-       the CARDS show bundled-GTFS scheduled departures at the nearest
-       stations (gen-mbta-schedule.py -> mbta-*-schedule.json); the MAP is
-       live -- the MBTA v3 API is CORS-open with no key, so one combined
-       /vehicles call per refresh covers all three fleets (~4 req/min,
-       comfortably inside the keyless 20 req/min per-IP limit).
-     - Amtrak + planes: the same zero-setup live sources as every board.
+   Built from stencil.html (see ADDING-A-CITY.md). Systems, all bundled
+   schedules from gen-sf-schedule.py: BART (real line colors + shapes), Muni
+   Metro light rail + the F historic streetcars, the three cable car lines
+   (Powell-Mason / Powell-Hyde / California), and Caltrain. Amtrak + planes
+   are the usual zero-setup live sources (SFO/OAK overhead).
+
+   Bundles carry tz:"America/Los_Angeles" and all schedule math runs in
+   Pacific time, so the board is correct viewed from anywhere.
    ========================================================================= */
 
-// A short unique id for this city -- EVERY localStorage key is namespaced with
-// it (transitboard<CITY_ID>.*), so two boards never clobber each other's saved
-// location/theme/toggles.
-const CITY_ID = "boston";
+// A short unique id for this city -- EVERY localStorage key is namespaced
+// with it (transitboard<CITY_ID>.*).
+const CITY_ID = "sf";
 
 const CFG = {
-  defaultLoc: { lat: 42.3519, lon: -71.0552, label: "South Station, Boston, MA" },
+  defaultLoc: { lat: 37.7844, lon: -122.4078, label: "Powell St, San Francisco" },
   planeRadiusNm: 12,    // nautical miles for "overhead"
   amtrakRadiusMi: 60,   // miles: Amtrak trains to show as "regional"
   planeEveryMs: 15000,
   labelZoom: 12,        // at this zoom and closer, show vehicle labels; below, just dots
   amtrakEveryMs: 20000,
-  mbtaLiveEveryMs: 15000,   // ONE combined v3-API /vehicles call for all three MBTA fleets
-  mbtaCardEveryMs: 30000,   // scheduled-departure cards re-render (bundle math, no network)
+  schedMapEveryMs: 15000,  // re-interpolate scheduled vehicle positions (no network)
+  cardEveryMs: 30000,      // scheduled-departure cards re-render (no network)
   clockEveryMs: 1000,
 };
 
@@ -299,9 +303,10 @@ let state = {
   loc: CFG.defaultLoc,
   map: null, tileLayer: null,
   amtrakRouteLayer: null, trainLayer: null, planeLayer: null,
-  subwayLayer: null, subwayRouteLayer: null,
-  crLayer: null, crRouteLayer: null,
-  busLayer: null, busRouteLayer: null,
+  bartLayer: null, bartRouteLayer: null,
+  muniLayer: null, muniRouteLayer: null,
+  cableLayer: null, cableRouteLayer: null,
+  ctrainLayer: null, ctrainRouteLayer: null,
 };
 
 /* ---------- helpers ---------- */
@@ -322,8 +327,9 @@ async function getJSON(url, timeout=12000){
 /* ---------- clock ---------- */
 function tickClock(){
   const d=new Date();
-  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-  $("#date").textContent  = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
+  // SF's own clock -- this is a San Francisco board.
+  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", timeZone:"America/Los_Angeles"});
+  $("#date").textContent  = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric", timeZone:"America/Los_Angeles"});
 }
 
 /* ---------- location ---------- */
@@ -343,8 +349,8 @@ function applyLoc(loc){
 // locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
   fetchAmtrak(); refreshPlanes();
-  refreshSubway(); refreshCr(); refreshBus();
-  drawSubwayShapes(); fetchMbtaLive();
+  refreshBart(); refreshMuni(); refreshCable(); refreshCtrain();
+  drawBartShapes(); drawAllSchedFleets();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
@@ -401,13 +407,15 @@ function initMap(){
   state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
   // ORDER = z-order (earlier = underneath): route lines first, then vehicles.
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes (under vehicles)
-  state.subwayRouteLayer = L.layerGroup().addTo(state.map); // T line shapes
-  state.crRouteLayer     = L.layerGroup().addTo(state.map); // commuter rail lines
-  state.busRouteLayer    = L.layerGroup().addTo(state.map); // SL + Rt 1 lines
+  state.bartRouteLayer   = L.layerGroup().addTo(state.map); // BART line shapes
+  state.ctrainRouteLayer = L.layerGroup().addTo(state.map); // Caltrain line
+  state.muniRouteLayer   = L.layerGroup().addTo(state.map); // Muni Metro lines
+  state.cableRouteLayer  = L.layerGroup().addTo(state.map); // cable car lines
   state.trainLayer  = L.layerGroup().addTo(state.map);      // Amtrak vehicles
-  state.crLayer     = L.layerGroup().addTo(state.map);      // live commuter rail trains
-  state.subwayLayer = L.layerGroup().addTo(state.map);      // live T trains
-  state.busLayer    = L.layerGroup().addTo(state.map);      // live SL + Rt 1 buses
+  state.bartLayer   = L.layerGroup().addTo(state.map);      // BART trains
+  state.ctrainLayer = L.layerGroup().addTo(state.map);      // Caltrain trains
+  state.muniLayer   = L.layerGroup().addTo(state.map);      // Muni vehicles
+  state.cableLayer  = L.layerGroup().addTo(state.map);      // cable cars
   state.planeLayer  = L.layerGroup().addTo(state.map);      // planes
   const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
@@ -457,12 +465,12 @@ function planeIcon(track, label){
    items array [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}] and
    call updateFleet("yourFleetName", items, durMs). */
 state.fleets = {
-  amtrak:{}, plane:{}, subway:{}, cr:{}, mbus:{},
+  amtrak:{}, plane:{}, bart:{}, muni:{}, cable:{}, ctrain:{},
 };
 function fleetLayer(f){
   return {
     amtrak:state.trainLayer, plane:state.planeLayer,
-    subway:state.subwayLayer, cr:state.crLayer, mbus:state.busLayer,
+    bart:state.bartLayer, muni:state.muniLayer, cable:state.cableLayer, ctrain:state.ctrainLayer,
   }[f];
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
@@ -516,7 +524,7 @@ function fitList(box){
     box.removeChild(box.lastElementChild);
   }
 }
-function fitAll(){ ["#subwayList","#crList","#busList","#amtrakList","#planeList"].forEach(s=>fitList($(s))); }
+function fitAll(){ ["#bartList","#muniList","#cableList","#ctrainList","#amtrakList","#planeList"].forEach(s=>fitList($(s))); }
 
 /* ---------- shared building blocks for bundled-schedule systems ----------
    These are the exact helpers MARC/Ride On/SEPTA/PATCO/PATH use in the real
@@ -526,9 +534,22 @@ function fitAll(){ ["#subwayList","#crList","#busList","#amtrakList","#planeList
 // Which bundled-schedule service_ids run on `date` (calendar day-of-week match,
 // then calendar_dates exceptions). Works whether svc is populated (calendar.txt)
 // or empty (calendar_dates-only feeds like LIRR/Metro-North).
-function activeServices(s, date){
-  const y=`${date.getFullYear()}${String(date.getMonth()+1).padStart(2,"0")}${String(date.getDate()).padStart(2,"0")}`;
-  const dow=(date.getDay()+6)%7;         // Mon=0 … Sun=6
+// "Now" for schedule math: minutes-since-midnight + GTFS date parts computed
+// in the bundle's own timezone (tz:"America/Los_Angeles" here), so departures
+// stay correct no matter where the board is viewed.
+function schedNowParts(tz){
+  const d=new Date();
+  if(!tz) return { y:`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`,
+                   dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
+  const p={};
+  new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",
+    day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"}).formatToParts(d)
+    .forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
+  const dow={Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[p.weekday];
+  return { y:p.year+p.month+p.day, dow, min:(parseInt(p.hour,10)%24)*60+parseInt(p.minute,10) };
+}
+function activeServices(s, parts){
+  const {y,dow}=parts;
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
@@ -573,70 +594,54 @@ function appendLiveTimes(row, late){
   row.appendChild(times);
 }
 
-/* ---------- MBTA: the T / Commuter Rail / Silver Line + Route 1 ----------
-   Cards = scheduled departures at the nearest stations, from the bundled GTFS
-   (gen-mbta-schedule.py). Map = LIVE vehicle positions from the MBTA v3 API
-   (CORS-open, no key): one combined /vehicles call feeds all three fleets. */
-const MBTA_COL={ Red:"#DA291C", Mattapan:"#DA291C", Orange:"#ED8B00", Blue:"#003DA5",
-  "Green-B":"#00843D","Green-C":"#00843D","Green-D":"#00843D","Green-E":"#00843D" };
-const CR_COL="#80276C", SL_COL="#7C878E", RT1_COL="#FFC72C";
-const busColor = line => line.startsWith("SL") ? SL_COL : RT1_COL;
-const MBTA_BUS_SHORT={ "741":"SL1","742":"SL2","743":"SL3","749":"SL5","751":"SL4" };
-// Every route id the combined live /vehicles call asks for. The CR list mirrors
-// what gen-mbta-schedule.py bundles -- re-check it when regenerating.
-const MBTA_LIVE_ROUTES=[ ...Object.keys(MBTA_COL),
-  "CR-Fairmount","CR-Fitchburg","CR-Foxboro","CR-Franklin","CR-Greenbush","CR-Haverhill",
-  "CR-Kingston","CR-Lowell","CR-Needham","CR-NewBedford","CR-Newburyport","CR-Providence","CR-Worcester",
-  "741","742","743","749","751","1" ];
-
+/* ---------- BART / Muni Metro / cable cars / Caltrain (bundled, tz-aware) ---------- */
+const BART_COL={ Yellow:"#FFE733", Orange:"#FF9933", Green:"#339933", Red:"#FF4444",
+  Blue:"#0099CC", Grey:"#B0BEC7", Beige:"#D5CFA3" };
+const MUNI_COL={ J:"#F5A81C", K:"#008C9A", L:"#92278F", M:"#008752", N:"#005B95",
+  T:"#BF2B45", F:"#B26F16" };
+const CABLE_COL="#8C4A2F", CTRAIN_COL="#E31837";
+const SYSTEMS={
+  bart:  { url:"sf-bart-schedule.json",     color:l=>BART_COL[l]||"#888", tag:"BART" },
+  muni:  { url:"sf-muni-schedule.json",     color:l=>MUNI_COL[l]||"#BF2B45", tag:"Muni" },
+  cable: { url:"sf-cablecar-schedule.json", color:()=>CABLE_COL, tag:"Cable car" },
+  ctrain:{ url:"sf-caltrain-schedule.json", color:()=>CTRAIN_COL, tag:"Caltrain" },
+};
 function prepSchedule(s){   // index a bundle for the card + route-line helpers
   s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
   s._dep={};
   (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
   return s;
 }
-async function ensureSubwaySchedule(){
-  if(state.subwaySched) return state.subwaySched;
-  try{ state.subwaySched=prepSchedule(await getJSON("mbta-subway-schedule.json", 25000)); }catch(e){}
-  return state.subwaySched;
-}
-async function ensureCrSchedule(){
-  if(state.crSched) return state.crSched;
+async function ensureSched(key){
+  const sys=SYSTEMS[key];
+  if(sys.sched) return sys.sched;
   try{
-    const s=prepSchedule(await getJSON("mbta-cr-schedule.json", 20000));
-    state.crSched=s;
-    drawScheduleRouteLines(s, state.crRouteLayer, ()=>CR_COL);
+    const s=prepSchedule(await getJSON(sys.url, 25000));
+    sys.sched=s;
+    // BART gets real shapes (drawBartShapes); the others connect their stops.
+    if(key!=="bart") drawScheduleRouteLines(s, state[key+"RouteLayer"], sys.color);
   }catch(e){}
-  return state.crSched;
+  return sys.sched;
 }
-async function ensureBusSchedule(){
-  if(state.busSched) return state.busSched;
+async function drawBartShapes(){
+  if(state.bartShapesDrawn || !state.bartRouteLayer) return;
   try{
-    const s=prepSchedule(await getJSON("mbta-bus-schedule.json", 20000));
-    state.busSched=s;
-    drawScheduleRouteLines(s, state.busRouteLayer, busColor);
-  }catch(e){}
-  return state.busSched;
-}
-// The T's map lines use real geometry (mbta-subway-shapes.json), drawn once.
-async function drawSubwayShapes(){
-  if(state.subwayShapesDrawn || !state.subwayRouteLayer) return;
-  try{
-    const shapes=await getJSON("mbta-subway-shapes.json", 15000);
-    for(const rid in shapes){
-      L.polyline(shapes[rid], {color:MBTA_COL[rid]||"#888", weight:3, opacity:.45,
-        lineCap:"round", lineJoin:"round"}).addTo(state.subwayRouteLayer);
+    const shapes=await getJSON("sf-bart-shapes.json", 15000);
+    for(const line in shapes){
+      L.polyline(shapes[line], {color:BART_COL[line]||"#888", weight:3.5, opacity:.5,
+        lineCap:"round", lineJoin:"round"}).addTo(state.bartRouteLayer);
     }
-    state.subwayShapesDrawn=true;
+    state.bartShapesDrawn=true;
   }catch(e){}
 }
-// One renderer for all three cards: nearest stations with upcoming scheduled
-// departures, grouped by direction (same pattern as MARC/Ride On/SEPTA/PATH).
-async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2, noneMsg}){
-  const s=await ensure(); const box=$(list); if(!box) return;
+// One card renderer for all four systems: nearest stations' upcoming
+// scheduled departures grouped by direction, in Pacific time.
+async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}){
+  const sys=SYSTEMS[key];
+  const s=await ensureSched(key); const box=$(list); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Schedule unavailable.")); return; }
-  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
-  const active=activeServices(s, now);
+  const here=state.loc, nowP=schedNowParts(s.tz), nowMin=nowP.min;
+  const active=activeServices(s, nowP);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
@@ -650,12 +655,13 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
       group.forEach(d=>{
         const row=el("div","row");
         const cls = badgeCls ? badgeCls(d.line) : "badge rail";
-        const b=el("div",cls, d.line); b.style.background=color(d.line);
+        const col = sys.color(d.line);
+        const b=el("div",cls, d.line); b.style.background=col;
         const mid=el("div"); mid.appendChild(el("div","dest", d.hs||d.line));
         const rel=d.min-nowMin;
         mid.appendChild(el("div","sub", d.line+" · "+(rel<=0?"now":rel<60?`in ${rel} min`:`in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`)));
         const times=el("div","times");
-        const t=el("div","live"); t.style.color=color(d.line); t.textContent=schedClock(d.t);
+        const t=el("div","live"); t.style.color=col; t.textContent=schedClock(d.t);
         times.append(t, el("div","sched","scheduled"));
         row.append(b, mid, el("div"), times);
         box.appendChild(row); shown++;
@@ -663,45 +669,44 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
     });
   }
   if(!shown) box.appendChild(el("div","empty",noneMsg||"No more departures today at nearby stations."));
-  const c=$(count); if(c && !c.dataset.live) c.textContent="scheduled";
+  const c=$(count); if(c) c.textContent="scheduled";
   fitList(box);
 }
-const refreshSubway=()=>refreshMbtaCard({ ensure:ensureSubwaySchedule, list:"#subwayList", count:"#subwayCount",
-  color:l=>MBTA_COL[l]||"#888", stations:3, noneMsg:"No more T trains today at nearby stations." });
-const refreshCr=()=>refreshMbtaCard({ ensure:ensureCrSchedule, list:"#crList", count:"#crCount",
-  color:()=>CR_COL, stations:2, noneMsg:"No more commuter rail trains today at nearby stations." });
-const refreshBus=()=>refreshMbtaCard({ ensure:ensureBusSchedule, list:"#busList", count:"#busCount",
-  color:busColor, badgeCls:l=>l.startsWith("SL")?"badge rail":"badge",   // dark text on Rt 1's yellow
-  stations:2, noneMsg:"No more SL / Route 1 buses today at nearby stops." });
-// Live positions: one JSON:API call for every MBTA route, split into fleets.
-async function fetchMbtaLive(){
-  let j;
-  try{ j=await getJSON("https://api-v3.mbta.com/vehicles?filter[route]="+MBTA_LIVE_ROUTES.join(",")+"&include=trip", 12000); }
-  catch(e){ return; }
-  const heads={};
-  (j.included||[]).forEach(t=>{ if(t.type==="trip") heads[t.id]=(t.attributes&&t.attributes.headsign)||""; });
-  const fleets={ subway:[], cr:[], mbus:[] };
-  (j.data||[]).forEach(v=>{
-    const a=v.attributes||{};
-    if(typeof a.latitude!=="number" || typeof a.longitude!=="number") return;
-    const rel=v.relationships||{};
-    const rid=(rel.route&&rel.route.data&&rel.route.data.id)||"";
-    const tid=(rel.trip&&rel.trip.data&&rel.trip.data.id)||"";
-    const hs=heads[tid]||"";
-    let fleet, color, line;
-    if(rid.startsWith("CR-")){ fleet="cr"; color=CR_COL; line=rid.slice(3); }
-    else if(MBTA_COL[rid]){ fleet="subway"; color=MBTA_COL[rid]; line=rid; }
-    else { fleet="mbus"; line=MBTA_BUS_SHORT[rid]||rid; color=busColor(line); }
-    fleets[fleet].push({ id:"mv"+v.id, lat:a.latitude, lon:a.longitude,
-      icon:()=>labelIcon(color, hs?`${line} → ${hs}`:line), ik:"m-"+line+"-"+hs,
-      tip:`MBTA ${line}${hs?" → "+hs:""} (live)` });
+const refreshBart  =()=>refreshCityCard({ key:"bart", list:"#bartList", count:"#bartCount", stations:2,
+  badgeCls:l=>(l==="Yellow"||l==="Grey"||l==="Beige")?"badge":"badge rail",
+  noneMsg:"No more BART trains today at nearby stations." });
+const refreshMuni  =()=>refreshCityCard({ key:"muni", list:"#muniList", count:"#muniCount", stations:2,
+  badgeCls:l=>l==="J"?"badge":"badge rail",
+  noneMsg:"No more Muni trains today at nearby stops." });
+const refreshCable =()=>refreshCityCard({ key:"cable", list:"#cableList", count:"#cableCount", stations:2,
+  noneMsg:"No more cable cars today at nearby stops." });
+const refreshCtrain=()=>refreshCityCard({ key:"ctrain", list:"#ctrainList", count:"#ctrainCount", stations:2,
+  noneMsg:"No more Caltrain today at nearby stations." });
+// Map vehicles: interpolate each running trip between stops (Pacific "now").
+async function drawSchedFleet(key){
+  const sys=SYSTEMS[key];
+  const s=await ensureSched(key); if(!s || !s.trips) return;
+  const nowP=schedNowParts(s.tz), active=activeServices(s, nowP);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowP.min, nowP.min+1440]){          // also catch after-midnight trips
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      const col=sys.color(tr.line);
+      items.push({ id:key+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(col, `${tr.line} → ${tr.hs}`), ik:key+"-"+tr.line+"-"+i,
+        tip:`${sys.tag} ${tr.line} → ${tr.hs} (scheduled)` });
+      break;
+    }
   });
-  updateFleet("subway", fleets.subway, CFG.mbtaLiveEveryMs);
-  updateFleet("cr",     fleets.cr,     CFG.mbtaLiveEveryMs);
-  updateFleet("mbus",   fleets.mbus,   CFG.mbtaLiveEveryMs);
-  [["#subwayCount",fleets.subway.length],["#crCount",fleets.cr.length],["#busCount",fleets.mbus.length]]
-    .forEach(([sel,n])=>{ const c=$(sel); if(c){ c.textContent=`${n} live · sched times`; c.dataset.live="1"; } });
+  updateFleet(key, items, CFG.schedMapEveryMs);
 }
+function drawAllSchedFleets(){ ["bart","muni","cable","ctrain"].forEach(drawSchedFleet); }
 
 /* ---------- PLANES (works anywhere in the US, no key) ---------- */
 async function fetchPlanes(){
@@ -930,15 +935,15 @@ function buildThemeButtons(){
    unchecking a system hides it everywhere. Every system needs an entry in both
    CARD_DEFS (the checkbox) and CARD_LAYERS (its map layers). */
 const CARD_DEFS=[
-  {id:"subwayCard", label:"Subway (the T)"},
-  {id:"crCard", label:"Commuter Rail"},
-  {id:"busCard", label:"SL + Route 1"},
+  {id:"bartCard", label:"BART"}, {id:"muniCard", label:"Muni Metro"},
+  {id:"cableCard", label:"Cable cars"}, {id:"ctrainCard", label:"Caltrain"},
   {id:"amtrakCard", label:"Amtrak"}, {id:"planeCard", label:"Planes"},
 ];
 const CARD_LAYERS={
-  subwayCard: ["subwayLayer","subwayRouteLayer"],
-  crCard:     ["crLayer","crRouteLayer"],
-  busCard:    ["busLayer","busRouteLayer"],
+  bartCard:  ["bartLayer","bartRouteLayer"],
+  muniCard:  ["muniLayer","muniRouteLayer"],
+  cableCard: ["cableLayer","cableRouteLayer"],
+  ctrainCard:["ctrainLayer","ctrainRouteLayer"],
   amtrakCard: ["trainLayer","amtrakRouteLayer"],
   planeCard:  ["planeLayer"],
 };
@@ -986,10 +991,11 @@ function boot(){
   refreshEverythingForNewLocation();
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
-  setInterval(fetchMbtaLive, CFG.mbtaLiveEveryMs);
-  setInterval(refreshSubway, CFG.mbtaCardEveryMs);
-  setInterval(refreshCr, CFG.mbtaCardEveryMs);
-  setInterval(refreshBus, CFG.mbtaCardEveryMs);
+  setInterval(drawAllSchedFleets, CFG.schedMapEveryMs);
+  setInterval(refreshBart, CFG.cardEveryMs);
+  setInterval(refreshMuni, CFG.cardEveryMs);
+  setInterval(refreshCable, CFG.cardEveryMs);
+  setInterval(refreshCtrain, CFG.cardEveryMs);
 
   let rzT; window.addEventListener("resize", ()=>{
     if(state.map) state.map.invalidateSize();

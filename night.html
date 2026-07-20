@@ -293,6 +293,20 @@ const CITY_CONFIG = {
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"NS", localBusSystem:"GVB", busPhotoQuery:"GVB tram Amsterdam",
     cityLabel:"Amsterdam" },
+  // LA's "nearest bus" is the nearest Metro Rail train; SF's is the nearest
+  // cable car. Both bundles carry tz:"America/Los_Angeles".
+  la: { defaultLoc:{ lat:34.0562, lon:-118.2365, label:"Union Station, Los Angeles" },
+    lsLoc:"transitboardla.loc", lsManual:"transitboardla.locManual", board:"losangeles.html",
+    busSchedule:"la-rail-schedule.json", busTag:"🚇 Nearest Metro Rail", busRange:"Metro A/B/C/D/E/K",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
+    localRailSystem:"Metrolink", localBusSystem:"LA Metro", busPhotoQuery:"LA Metro Rail train Los Angeles",
+    cityLabel:"Los Angeles" },
+  sf: { defaultLoc:{ lat:37.7844, lon:-122.4078, label:"Powell St, San Francisco" },
+    lsLoc:"transitboardsf.loc", lsManual:"transitboardsf.locManual", board:"sanfrancisco.html",
+    busSchedule:"sf-cablecar-schedule.json", busTag:"🚋 Nearest cable car", busRange:"Powell-Mason · Powell-Hyde · California",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
+    localRailSystem:"BART/Caltrain", localBusSystem:"cable car", busPhotoQuery:"San Francisco cable car",
+    cityLabel:"San Francisco" },
 };
 // Falls back to "dc" for any unrecognized/missing ?city= value (which also
 // keeps old ?city=bethesda links working -- "bethesda" is no longer a key,
