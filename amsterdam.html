@@ -527,9 +527,22 @@ function fitAll(){ ["#metroList","#tramList","#railList","#ferryList","#planeLis
 // Which bundled-schedule service_ids run on `date` (calendar day-of-week match,
 // then calendar_dates exceptions). Works whether svc is populated (calendar.txt)
 // or empty (calendar_dates-only feeds like LIRR/Metro-North).
-function activeServices(s, date){
-  const y=`${date.getFullYear()}${String(date.getMonth()+1).padStart(2,"0")}${String(date.getDate()).padStart(2,"0")}`;
-  const dow=(date.getDay()+6)%7;         // Mon=0 … Sun=6
+// "Now" for schedule math: minutes-since-midnight + GTFS date parts computed
+// in the bundle's own timezone (s.tz = "Europe/Amsterdam" here), so the board
+// shows correct departures no matter where in the world it's viewed.
+function schedNowParts(tz){
+  const d=new Date();
+  if(!tz) return { y:`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`,
+                   dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
+  const p={};
+  new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",
+    day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"}).formatToParts(d)
+    .forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
+  const dow={Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[p.weekday];
+  return { y:p.year+p.month+p.day, dow, min:(parseInt(p.hour,10)%24)*60+parseInt(p.minute,10) };
+}
+function activeServices(s, parts){
+  const {y,dow}=parts;
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
@@ -556,7 +569,8 @@ function drawScheduleRouteLines(schedule, layer, colorFn){
     if(pts.length>1) L.polyline(pts, {color:colorFn(tr.line), weight:4, opacity:.5, lineCap:"round", lineJoin:"round"}).addTo(layer);
   });
 }
-function schedClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
+// 24-hour clock -- this is Europe.
+function clock24(min){ return `${String(Math.floor(min/60)%24).padStart(2,"0")}:${String(Math.round(min%60)).padStart(2,"0")}`; }
 // Live delay chip helpers (green on-time / yellow / red), for systems with a
 // real-time feed. `late` is minutes; out-of-range values are treated as no-data
 // (some feeds send sentinel garbage instead of omitting the field).
@@ -630,91 +644,124 @@ function drawPlanes(ac){
   updateFleet("plane", items, CFG.planeEveryMs);
 }
 
-/* ---------- AMTRAK (works anywhere in the US, no key) ---------- */
-function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
-function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
-async function ensureAmtrakStations(){
-  if(state.amStations) return state.amStations;
-  try{ const c=JSON.parse(localStorage.getItem(`transitboard${CITY_ID}.amstations`)||"null");
-    if(c && Date.now()-c.t < 864e5 && c.map){ state.amStations=c.map; return c.map; } }catch(e){}
-  const data=await getJSON("https://api-v3.amtraker.com/v3/stations", 12000);
-  const map={};
-  for(const code in data){ const s=data[code];
-    if(typeof s.lat==="number" && typeof s.lon==="number") map[code]=[s.lat,s.lon]; }
-  state.amStations=map;
-  try{ localStorage.setItem(`transitboard${CITY_ID}.amstations`, JSON.stringify({t:Date.now(), map})); }catch(e){}
-  return map;
+/* ---------- Amsterdam systems: GVB metro / tram / IJ ferries + NS ----------
+   All four are bundled schedules (gen-amsterdam-schedule.py). No public CORS
+   realtime feed exists for GVB/NS, so map vehicles are schedule-interpolated
+   between stops, same technique as Ride On/PATH. Every "now" computation
+   runs in the bundle's own timezone via schedNowParts(). */
+const AMS_METRO_COL={ "50":"#00A03C","51":"#F49B00","52":"#00A1E1","53":"#E2001A","54":"#FFD500" };
+const TRAM_COL="#3FA9E0", NS_COL="#FFC917", FERRY_COL="#00A5A0";
+const metroColor=l=>AMS_METRO_COL[l]||"#888";
+const SYSTEMS={
+  metro:{ url:"ams-metro-schedule.json", color:metroColor,    tag:"Metro" },
+  tram: { url:"ams-tram-schedule.json",  color:()=>TRAM_COL,  tag:"Tram" },
+  rail: { url:"ams-rail-schedule.json",  color:()=>NS_COL,    tag:"NS" },
+  ferry:{ url:"ams-ferry-schedule.json", color:()=>FERRY_COL, tag:"Pont" },
+};
+function prepSchedule(s){   // index a bundle for the card + route-line helpers
+  s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+  s._dep={};
+  (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+  return s;
 }
-async function fetchAmtrak(){
-  let data, amSt={};
-  try{ data=await getJSON("https://api-v3.amtraker.com/v3/trains", 12000); }catch(e){ return; }
-  try{ amSt=await ensureAmtrakStations(); }catch(e){}
-  const here=state.loc, byNum={};
-  for(const arr of Object.values(data)) for(const t of (arr||[])){
-    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
-    if(t.trainState && t.trainState!=="Active") continue;       // only trains actually en route
-    const distMi=kmToMi(haversine(here,{lat:t.lat,lon:t.lon}));
-    if(distMi>CFG.amtrakRadiusMi) continue;
-    const ex=byNum[t.trainNum];                                 // dedupe: keep the nearest instance
-    if(!ex || distMi<ex.distMi) byNum[t.trainNum]={t, distMi};
-  }
-  const out=Object.values(byNum).sort((a,b)=>a.distMi-b.distMi);
-  renderAmtrak(out); drawAmtrak(out); drawAmtrakRoutes(out, amSt);
-}
-// Real curved track geometry (Amtrak's own GTFS shapes.txt, bundled by
-// gen-amtrak-routes.py -> amtrak-routes.json) so routes follow the real corridor.
-function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"").trim(); }
-async function ensureAmtrakRouteShapes(){
-  if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
+async function ensureSched(key){
+  const sys=SYSTEMS[key];
+  if(sys.sched) return sys.sched;
   try{
-    const data=await getJSON("amtrak-routes.json", 15000);
-    const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
-    state.amtrakRouteShapes=map;
-  }catch(e){ state.amtrakRouteShapes={}; }
-  return state.amtrakRouteShapes;
+    const s=prepSchedule(await getJSON(sys.url, 25000));
+    sys.sched=s;
+    // Route lines: metro gets real shapes (drawMetroShapes); the others
+    // connect their stops per line.
+    if(key!=="metro") drawScheduleRouteLines(s, state[key+"RouteLayer"], sys.color);
+  }catch(e){}
+  return sys.sched;
 }
-async function drawAmtrakRoutes(list, amSt){
-  if(!state.amtrakRouteLayer) return;
-  const shapes=await ensureAmtrakRouteShapes();
-  state.amtrakRouteLayer.clearLayers();
-  list.forEach(({t})=>{
-    const shape=shapes[normAmtrakName(t.routeName)];
-    const pts=shape || (t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
-    if(pts.length>1) L.polyline(pts, {color:"#3ad0c8", weight:2.5, opacity:.35,
-      lineCap:"round", lineJoin:"round", dashArray: shape?null:"1 6"}).addTo(state.amtrakRouteLayer);
-  });
+async function drawMetroShapes(){
+  if(state.metroShapesDrawn || !state.metroRouteLayer) return;
+  try{
+    const shapes=await getJSON("ams-metro-shapes.json", 15000);
+    for(const line in shapes){
+      L.polyline(shapes[line], {color:metroColor(line), weight:3.5, opacity:.5,
+        lineCap:"round", lineJoin:"round"}).addTo(state.metroRouteLayer);
+    }
+    state.metroShapesDrawn=true;
+  }catch(e){}
 }
-function renderAmtrak(list){
-  const box=$("#amtrakList"); box.innerHTML="";
-  if(!list.length){ box.appendChild(el("div","empty",`No Amtrak trains within ${CFG.amtrakRadiusMi} mi right now.`)); $("#amtrakCount").textContent=""; return; }
-  list.slice(0,10).forEach(({t,distMi})=>{
-    const row=el("div","row");
-    const b=el("div","badge", (t.trainNum||"?").toString()); b.style.background="#3ad0c8"; b.style.color="#04201e";
-    const mid=el("div");
-    mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
-    const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
-    mid.appendChild(el("div","sub",
-      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
-    const times=el("div","times");
-    if(ns){
-      times.appendChild(el("div","live", fmtTime(ns.arr||ns.dep)||"—"));
-      const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
-    } else { times.appendChild(el("div","sched", t.trainState||"")); }
-    row.append(b, mid, el("div"), times);
-    box.appendChild(row);
-  });
-  $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
+// One card renderer for all four systems: the nearest stops' upcoming
+// scheduled departures grouped by direction. 24h clock, kilometres, and a
+// little Dutch ("nu" = now, "over 4 min" = in 4 min, "gepland" = scheduled).
+async function refreshAmsCard({key, list, count, stations=2, badgeCls, noneMsg}){
+  const sys=SYSTEMS[key];
+  const s=await ensureSched(key); const box=$(list); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Schedule unavailable.")); return; }
+  const here=state.loc, nowP=schedNowParts(s.tz), nowMin=nowP.min;
+  const active=activeServices(s, nowP);
+  const near=s.stations.map(st=>({st, km:haversine(here,{lat:st.lat,lon:st.lon})})).sort((a,b)=>a.km-b.km);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,km} of near){
+    if(used>=stations) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${km.toFixed(1)} km`));
+    groupDepsByDirection(deps).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(group[0].hs||group[0].line)));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const cls = badgeCls ? badgeCls(d.line) : "badge rail";
+        const col = sys.color(d.line);
+        const b=el("div",cls, d.line); b.style.background=col;
+        const mid=el("div"); mid.appendChild(el("div","dest", d.hs||d.line));
+        const rel=d.min-nowMin;
+        mid.appendChild(el("div","sub", d.line+" · "+(rel<=0?"nu":rel<60?`over ${rel} min`:`over ${Math.floor(rel/60)}u${String(rel%60).padStart(2,"0")}`)));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color=col; t.textContent=clock24(d.t);
+        times.append(t, el("div","sched","gepland"));
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty",noneMsg||"No more departures today nearby."));
+  const c=$(count); if(c) c.textContent="gepland";
   fitList(box);
 }
-function drawAmtrak(list){
-  const items=list.map(({t})=>({
-    id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
-    ik:"a-"+(t.trainNum||"")+(t.destCode||""),
-    tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
-  }));
-  updateFleet("amtrak", items, CFG.amtrakEveryMs);
+const refreshMetro=()=>refreshAmsCard({ key:"metro", list:"#metroList", count:"#metroCount", stations:2,
+  badgeCls:l=>l==="54"?"badge":"badge rail",   // dark text on line 54's yellow
+  noneMsg:"No more metros today at nearby stations." });
+const refreshTram =()=>refreshAmsCard({ key:"tram", list:"#tramList", count:"#tramCount", stations:2,
+  noneMsg:"No more trams today at nearby stops." });
+const refreshRail =()=>refreshAmsCard({ key:"rail", list:"#railList", count:"#railCount", stations:2,
+  badgeCls:()=>"badge",                        // dark text on NS yellow
+  noneMsg:"No more NS trains today at nearby stations." });
+const refreshFerry=()=>refreshAmsCard({ key:"ferry", list:"#ferryList", count:"#ferryCount", stations:2,
+  noneMsg:"No more ferries today at nearby docks." });
+// Map vehicles: interpolate each running trip between the two stops its
+// schedule puts it between right now (per-system fleet, smooth-animated).
+async function drawSchedFleet(key){
+  const sys=SYSTEMS[key];
+  const s=await ensureSched(key); if(!s || !s.trips) return;
+  const nowP=schedNowParts(s.tz), active=activeServices(s, nowP);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowP.min, nowP.min+1440]){          // also catch after-midnight trips
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      const col=sys.color(tr.line);
+      items.push({ id:key+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(col, `${tr.line} → ${tr.hs}`), ik:key+"-"+tr.line+"-"+i,
+        tip:`${sys.tag} ${tr.line} → ${tr.hs} (gepland)` });
+      break;
+    }
+  });
+  updateFleet(key, items, CFG.schedMapEveryMs);
 }
+function drawAllSchedFleets(){ ["metro","tram","rail","ferry"].forEach(drawSchedFleet); }
 
 /* ---------- refresh orchestration ---------- */
 async function refreshPlanes(){
@@ -787,7 +834,7 @@ function buildAccentSwatches(){
   const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
   ACCENTS.forEach(hex=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.style.background=hex; b.title=hex; b.onclick=()=>setBoardAccent(hex); wrap.appendChild(b); });
   const c=document.createElement("label"); c.className="sw custom"; c.title="Custom color";
-  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem(LS.accent)||"#4ea1ff";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem(LS.accent)||"#ff7a1a";
   inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
 }
 
@@ -814,14 +861,16 @@ function buildThemeButtons(){
    unchecking a system hides it everywhere. Every system needs an entry in both
    CARD_DEFS (the checkbox) and CARD_LAYERS (its map layers). */
 const CARD_DEFS=[
-  // [ADD-A-SYSTEM] card def: add {id:"xCard", label:"Your System"} -- put local
-  // systems first so they read above Amtrak/planes.
-  {id:"amtrakCard", label:"Amtrak"}, {id:"planeCard", label:"Planes"},
+  {id:"metroCard", label:"Metro"}, {id:"tramCard", label:"Tram"},
+  {id:"railCard", label:"NS trains"}, {id:"ferryCard", label:"IJ ferries"},
+  {id:"planeCard", label:"Planes"},
 ];
 const CARD_LAYERS={
-  // [ADD-A-SYSTEM] card layers: map each card id -> the state.*Layer keys it owns.
-  amtrakCard: ["trainLayer","amtrakRouteLayer"],
-  planeCard:  ["planeLayer"],
+  metroCard: ["metroLayer","metroRouteLayer"],
+  tramCard:  ["tramLayer","tramRouteLayer"],
+  railCard:  ["railLayer","railRouteLayer"],
+  ferryCard: ["ferryLayer","ferryRouteLayer"],
+  planeCard: ["planeLayer"],
 };
 function loadHiddenCards(){
   try{ return new Set(JSON.parse(localStorage.getItem(LS.hidden)||"[]")); }catch(e){ return new Set(); }
@@ -856,7 +905,7 @@ function buildCardToggles(){
 
 /* ---------- boot ---------- */
 function boot(){
-  setBoardAccent(localStorage.getItem(LS.accent)||"#4ea1ff"); buildAccentSwatches();
+  setBoardAccent(localStorage.getItem(LS.accent)||"#ff7a1a"); buildAccentSwatches();   // oranje default
   setBoardTheme(localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
@@ -866,8 +915,11 @@ function boot(){
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshEverythingForNewLocation();
   setInterval(refreshPlanes, CFG.planeEveryMs);
-  setInterval(fetchAmtrak, CFG.amtrakEveryMs);
-  // [ADD-A-SYSTEM] boot interval: setInterval(refreshYourSystem, CFG.xEveryMs);
+  setInterval(drawAllSchedFleets, CFG.schedMapEveryMs);
+  setInterval(refreshMetro, CFG.cardEveryMs);
+  setInterval(refreshTram, CFG.cardEveryMs);
+  setInterval(refreshRail, CFG.cardEveryMs);
+  setInterval(refreshFerry, CFG.cardEveryMs);
 
   let rzT; window.addEventListener("resize", ()=>{
     if(state.map) state.map.invalidateSize();
