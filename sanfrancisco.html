@@ -137,6 +137,20 @@
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
+  /* follow-a-vehicle popup button + banner */
+  .follow-pop{font:600 12.5px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; text-align:center; color:#111}
+  .follow-pop button{margin-top:7px; padding:6px 11px; border:0; border-radius:8px; background:var(--accent);
+    color:#04101f; font-weight:800; font-size:12.5px; cursor:pointer}
+  #followBanner{position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1000;
+    display:none; align-items:center; gap:9px; padding:7px 9px 7px 13px; border-radius:11px;
+    background:var(--panel); border:1px solid var(--accent); box-shadow:0 6px 20px rgba(0,0,0,.5);
+    font:600 13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; color:var(--text); max-width:92%}
+  #followBanner .fb-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); flex:none}
+  #followBanner .fb-txt{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  #followBanner .fb-txt b{font-weight:800}
+  #followBanner .fb-stop{border:0; border-radius:8px; padding:5px 9px; background:var(--row-line); color:var(--text);
+    font-weight:700; font-size:12px; cursor:pointer; flex:none}
+  #followBanner .fb-stop:hover{background:var(--late); color:#fff}
 </style>
 </head>
 <body>
@@ -488,10 +502,17 @@ function updateFleet(fleet, items, dur){
     if(!v){
       const m=L.marker([it.lat,it.lon], {icon:it.icon(), keyboard:false}).addTo(layer);
       if(it.tip) m.bindTooltip(it.tip, {direction:"top"});
-      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon };
+      // click a vehicle -> popup with a "Follow route" button (see startFollow)
+      m.on("click", ()=>{ state._clicked={fleet, id:it.id};
+        const rec=state.fleets[fleet][it.id], lbl=(rec&&rec.label)||it.label||"Vehicle";
+        m.bindPopup(`<div class="follow-pop">${esc(lbl)}<br><button onclick="startFollowClicked()">▶ Follow route</button></div>`).openPopup();
+      });
+      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon,
+        route:it.route, label:it.label, color:it.color };
     } else {
       const c=v.marker.getLatLng();                 // animate from current interpolated spot
       v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
+      v.route=it.route; v.label=it.label; v.color=it.color;
       if(it.tip) v.marker.setTooltipContent(it.tip);
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
     }
@@ -517,7 +538,47 @@ function animateFleets(){
       v.marker.setLatLng([ v.from[0]+(v.to[0]-v.from[0])*p, v.from[1]+(v.to[1]-v.from[1])*p ]);
     }
   }
+  // keep the followed vehicle centered as it glides between fixes
+  if(state.follow){
+    const rec=state.fleets[state.follow.fleet] && state.fleets[state.follow.fleet][state.follow.id];
+    if(rec && rec.marker){
+      const ll=rec.marker.getLatLng(), c=state.map.getCenter();
+      if(Math.abs(ll.lat-c.lat)>1e-5 || Math.abs(ll.lng-c.lng)>1e-5) state.map.setView(ll, state.map.getZoom(), {animate:false});
+    } else { stopFollow(); }   // vehicle left the feed
+  }
   requestAnimationFrame(animateFleets);
+}
+
+/* ---------- follow a vehicle along its whole route ----------
+   Click any vehicle -> "Follow route": highlights its full route, keeps the
+   map centered on it as it moves, and shows a banner to stop. Not a new page. */
+function startFollowClicked(){ if(state._clicked){ startFollow(state._clicked.fleet, state._clicked.id); } if(state.map) state.map.closePopup(); }
+function startFollow(fleet, id){
+  const rec=state.fleets[fleet] && state.fleets[fleet][id]; if(!rec || !rec.marker) return;
+  state.follow={fleet, id};
+  if(!state.followLayer) state.followLayer=L.layerGroup().addTo(state.map);
+  state.followLayer.clearLayers();
+  if(rec.route && rec.route.length>1){
+    L.polyline(rec.route, {color:"#fff", weight:7, opacity:.25, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
+    L.polyline(rec.route, {color:rec.color||"var(--accent)", weight:3.5, opacity:.95, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
+  }
+  showFollowBanner(rec.label||"vehicle");
+  state.map.setView(rec.marker.getLatLng(), Math.max(state.map.getZoom(), 14), {animate:true});
+}
+function stopFollow(){
+  state.follow=null;
+  if(state.followLayer) state.followLayer.clearLayers();
+  const b=document.getElementById("followBanner"); if(b) b.style.display="none";
+}
+function showFollowBanner(label){
+  let b=document.getElementById("followBanner");
+  if(!b){
+    b=document.createElement("div"); b.id="followBanner";
+    document.getElementById("map").appendChild(b);
+  }
+  b.innerHTML=`<span class="fb-dot"></span><span class="fb-txt">Following <b></b></span><button class="fb-stop" onclick="stopFollow()">✕ Stop</button>`;
+  b.querySelector(".fb-txt b").textContent=label;
+  b.style.display="flex";
 }
 
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
@@ -855,7 +916,8 @@ async function drawSchedFleet(key){
       const col=sys.color(tr.line);
       items.push({ id:key+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
         icon:()=>labelIcon(col, `${tr.line} → ${tr.hs}`), ik:key+"-"+tr.line+"-"+i,
-        tip:`${sys.tag} ${tr.line} → ${tr.hs} (scheduled)` });
+        tip:`${sys.tag} ${tr.line} → ${tr.hs} (scheduled)`,
+        color:col, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean), label:`${sys.tag} ${tr.line} → ${tr.hs}` });
       break;
     }
   });
@@ -902,9 +964,12 @@ async function fetchSfLive(){
         else { if(!s || !s.routeLines) return; line=s.routeLines[v.routeId]; if(!line) return; }
         if(!(v.lat>-90 && v.lat<90 && v.lon>-180 && v.lon<180) || !v.lat) return;
         const col=sys.color(line);
+        const trip = s && s._trip && v.tripId ? s._trip[v.tripId] : null;
+        const route = trip ? trip.st.map(([sid])=>s._coord[sid]).filter(Boolean) : null;
         items.push({ id:"lv"+key+(v.tripId||idx), lat:v.lat, lon:v.lon,
           icon:()=>labelIcon(col, line), ik:"lv-"+line,
-          tip:`${sys.tag} ${line} (live)` });
+          tip:`${sys.tag} ${line} (live)`,
+          color:col, route, label:`${sys.tag} ${line}${trip&&trip.hs?" → "+trip.hs:""}` });
       });
       if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true; }
     });
@@ -1103,6 +1168,7 @@ document.addEventListener("fullscreenchange", onFsChange);
 document.addEventListener("webkitfullscreenchange", onFsChange);
 document.addEventListener("keydown", e=>{
   if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
+  if(e.key==="Escape" && state.follow) stopFollow();
 });
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
 onFsChange();   // set initial icon
