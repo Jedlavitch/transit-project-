@@ -122,6 +122,8 @@ def bundle(zf, line_label_fn, out_name, route_filter=lambda r: True):
         trips_out.append({"line": line_label_fn(routes[tr["route_id"]]),
                           "hs": (tr.get("trip_headsign") or "").strip(),
                           "s": tr["service_id"],
+                          "id": tid,   # GTFS trip_id -- matches live GTFS-RT vehicles 1:1, so a
+                                       # departure can be tied to a moving train and delay-adjusted
                           "st": [[pid, mins] for _, pid, mins in s]})
     stations = [{"id": pid, "name": name_of.get(pid, pid),
                  "lat": parent_coord[pid][0], "lon": parent_coord[pid][1]}

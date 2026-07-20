@@ -322,9 +322,9 @@ function haversine(a,b){
   return 2*R*Math.asin(Math.sqrt(s)); // km
 }
 const kmToMi = km => km*0.621371;
-async function getJSON(url, timeout=12000){
+async function getJSON(url, timeout=12000, cache){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
   finally{ clearTimeout(t); }
 }
 
@@ -665,15 +665,21 @@ const SYSTEMS={
 };
 function prepSchedule(s){   // index a bundle for the card + route-line helpers
   s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
-  s._dep={};
-  (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+  s._dep={}; s._trip={};
+  (s.trips||[]).forEach(tr=>{
+    if(tr.id) s._trip[tr.id]=tr;   // trip_id -> full trip, for delay-from-position
+    tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, id:tr.id}); });
+  });
   return s;
 }
 async function ensureSched(key){
   const sys=SYSTEMS[key];
   if(sys.sched) return sys.sched;
   try{
-    const s=prepSchedule(await getJSON(sys.url, 25000));
+    // "no-cache" = always revalidate, so a redeployed bundle (e.g. one that
+    // gained trip_ids for live matching) is picked up without a hard refresh;
+    // unchanged bundles just 304 so it stays cheap.
+    const s=prepSchedule(await getJSON(sys.url, 25000, "no-cache"));
     sys.sched=s;
     // BART gets real shapes (drawBartShapes); the others connect their stops.
     if(key!=="bart") drawScheduleRouteLines(s, state[key+"RouteLayer"], sys.color);
@@ -693,14 +699,46 @@ async function drawBartShapes(){
 }
 // One card renderer for all four systems: nearest stations' upcoming
 // scheduled departures grouped by direction, in Pacific time.
+// Live train positions by trip_id (populated by fetchSfLive), so a scheduled
+// departure can be tied to the actual moving train shown on the map.
+state.liveVeh = state.liveVeh || {};
+// Estimate a live train's delay (minutes; + = running late) from its GPS
+// position vs where its own schedule puts it: project the vehicle onto the two
+// nearest consecutive stops of its trip and interpolate the scheduled time.
+function tripDelayMin(s, trip, veh, nowMin){
+  const st=trip.st; if(!st || st.length<2) return null;
+  let jBest=0, dBest=Infinity;
+  for(let i=0;i<st.length;i++){
+    const c=s._coord[st[i][0]]; if(!c) continue;
+    const d=haversine(veh,{lat:c[0],lon:c[1]});
+    if(d<dBest){ dBest=d; jBest=i; }
+  }
+  const segs=[]; if(jBest>0) segs.push([jBest-1,jBest]); if(jBest<st.length-1) segs.push([jBest,jBest+1]);
+  let best=null;
+  for(const [a,b] of segs){
+    const ca=s._coord[st[a][0]], cb=s._coord[st[b][0]]; if(!ca||!cb) continue;
+    const ax=ca[1],ay=ca[0], dx=cb[1]-ax, dy=cb[0]-ay, len2=dx*dx+dy*dy;
+    let fr = len2>0 ? ((veh.lon-ax)*dx+(veh.lat-ay)*dy)/len2 : 0;
+    fr=Math.max(0,Math.min(1,fr));
+    const perp=haversine(veh,{lat:ay+fr*dy, lon:ax+fr*dx});
+    const schedAt = st[a][1] + fr*(st[b][1]-st[a][1]);
+    if(!best || perp<best.perp) best={perp, schedAt};
+  }
+  if(!best) return null;
+  let delay=nowMin-best.schedAt;
+  if(delay>720) delay-=1440; else if(delay<-720) delay+=1440;   // after-midnight wrap
+  if(delay<-6 || delay>45) return null;    // implausible -> treat as unknown
+  return delay;
+}
 async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}){
   const sys=SYSTEMS[key];
   const s=await ensureSched(key); const box=$(list); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Schedule unavailable.")); return; }
   const here=state.loc, nowP=schedNowParts(s.tz), nowMin=nowP.min;
   const active=activeServices(s, nowP);
+  const liveVeh=state.liveVeh[key]||{};
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  box.innerHTML=""; let shown=0, used=0, anyLive=false;
   for(const {st,mi} of near){
     if(used>=stations) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
@@ -715,18 +753,33 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
         const col = sys.color(d.line);
         const b=el("div",cls, d.line); b.style.background=col;
         const mid=el("div"); mid.appendChild(el("div","dest", d.hs||d.line));
-        const rel=d.min-nowMin;
+        // Is this departure's train live on the map right now? If so, shift its
+        // time by the train's measured delay so the box matches the map.
+        const veh = d.id && liveVeh[d.id];
+        let delay=null;
+        if(veh){ const trip=s._trip[d.id]; if(trip) delay=tripDelayMin(s, trip, veh, nowMin); }
+        const isLive = delay!=null;
+        const shownMin = isLive ? d.t+delay : d.t;
+        const rel=Math.round(shownMin-nowMin);
         mid.appendChild(el("div","sub", d.line+" · "+(rel<=0?"now":rel<60?`in ${rel} min`:`in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`)));
         const times=el("div","times");
-        const t=el("div","live"); t.style.color=col; t.textContent=schedClock(d.t);
-        times.append(t, el("div","sched","scheduled"));
+        const t=el("div","live"); t.style.color=col; t.textContent=schedClock(shownMin); times.appendChild(t);
+        if(isLive){
+          const r=Math.round(delay);
+          const tag=el("div","live-tag");
+          tag.textContent = r<=0 ? "on time" : `+${r} min`;
+          tag.style.color = r>4 ? "var(--late)" : r>=2 ? "var(--warn)" : "var(--good)";
+          times.appendChild(tag); anyLive=true;
+        } else {
+          times.appendChild(el("div","sched","scheduled"));
+        }
         row.append(b, mid, el("div"), times);
         box.appendChild(row); shown++;
       });
     });
   }
   if(!shown) box.appendChild(el("div","empty",noneMsg||"No more departures today at nearby stations."));
-  const c=$(count); if(c) c.textContent="scheduled";
+  const c=$(count); if(c) c.textContent = anyLive ? "live times" : "scheduled";
   fitList(box);
 }
 /* BART is the one Bay Area system with a CORS-open, keyless live API
@@ -830,8 +883,13 @@ async function fetchSfLive(){
     if(bufs[i].status!=="fulfilled") return;
     let vehicles;
     try{ ({vehicles}=decodeGtfsRt(new Uint8Array(bufs[i].value))); }catch(e){ return; }
+    // trip_id -> live position, shared by every card that reads this feed, so a
+    // scheduled departure can be tied to the actual moving train (delay-adjusted).
+    const tripPos={};
+    vehicles.forEach(v=>{ if(v.tripId && v.lat>-90&&v.lat<90&&v.lon>-180&&v.lon<180&&v.lat) tripPos[v.tripId]={lat:v.lat,lon:v.lon}; });
     f.keys.forEach(key=>{
       const sys=SYSTEMS[key], s=sys.sched;
+      state.liveVeh[key]=tripPos;
       const items=[];
       vehicles.forEach((v,idx)=>{
         // The /caltrain feed is Caltrain-only and labels routes by service
@@ -848,11 +906,14 @@ async function fetchSfLive(){
           icon:()=>labelIcon(col, line), ik:"lv-"+line,
           tip:`${sys.tag} ${line} (live)` });
       });
-      if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true;
-        const c=$("#"+key+"Count"); if(c) c.textContent=items.length+" live · sched times"; }
+      if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true; }
     });
   });
-  if(anyLive) $("#statusText").textContent="live — BART + Muni/Caltrain (your Worker) + Amtrak + airplanes.live";
+  if(anyLive){
+    $("#statusText").textContent="live — BART + Muni/Caltrain (your Worker) + Amtrak + airplanes.live";
+    // re-render cards so their departure times reflect the fresh live positions
+    refreshMuni(); refreshCable(); refreshCtrain();
+  }
 }
 
 /* ---------- PLANES (works anywhere in the US, no key) ---------- */
