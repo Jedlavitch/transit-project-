@@ -203,7 +203,7 @@
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">Metro + Metrolink scheduled · live — Amtrak + airplanes.live</span>
+    <span id="statusText">live — Metrolink + Amtrak + airplanes.live · Metro Rail scheduled</span>
     <span class="grow"></span>
   </footer>
 </div>
@@ -660,9 +660,68 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
 const refreshRail =()=>refreshCityCard({ key:"rail", list:"#railList", count:"#railCount", stations:2,
   badgeCls:l=>l==="E"?"badge":"badge rail",    // dark text on the E line's gold
   noneMsg:"No more Metro Rail trains today at nearby stations." });
-const refreshMlink=()=>refreshCityCard({ key:"mlink", list:"#mlinkList", count:"#mlinkCount", stations:2,
+const refreshMlinkSched=()=>refreshCityCard({ key:"mlink", list:"#mlinkList", count:"#mlinkCount", stations:2,
   badgeCls:l=>l==="VC"?"badge":"badge rail",   // dark text on Ventura County's gold
   noneMsg:"No more Metrolink trains today at nearby stations." });
+/* Metrolink publishes a live per-station arrivals feed that is CORS-open with
+   no key (rtt.metrolinktrains.com, verified) -- same kind of feed as BART's.
+   The card tries it first (real times + ON TIME/LATE) and falls back to the
+   bundled schedule. Map trains stay schedule-interpolated: this feed carries
+   times, not GPS. */
+const MLINK_ROUTE={ "AV LINE":"AV","IEOC LINE":"IE-OC","OC LINE":"OC","RVS LINE":"RIV",
+  "SB LINE":"SB","VC LINE":"VC","91/PV Line":"91","ARROW":"ARROW" };  // skips PAC SURF/SW CHIEF (Amtrak on shared track)
+const MLINK_ALIAS={ LAUNIONSTATION:"LAUS", BURBANKDOWNTOWN:"DOWNTOWNBURBANK",
+  ANAHEIMARTIC:"ARTIC", CORONANORTHMAIN:"MAINCORONANORTH" };
+const mlNorm=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+function mlDateMs(s){ const m=/\/Date\((\d+)\)\//.exec(s||""); return m?parseInt(m[1],10):null; }
+async function refreshMlink(){
+  const s=await ensureSched("mlink"); const box=$("#mlinkList"); if(!box) return;
+  try{
+    let feed=await getJSON("https://rtt.metrolinktrains.com/StationScheduleList.json", 12000);
+    if(!Array.isArray(feed) || !feed.length) throw new Error("empty feed");
+    // index feed events by normalized platform name
+    const byStn={};
+    feed.forEach(r=>{
+      const line=MLINK_ROUTE[r.RouteCode]; if(!line) return;
+      (byStn[mlNorm(r.PlatformName)]=byStn[mlNorm(r.PlatformName)]||[]).push({
+        line, dest:r.TrainDestination||"", train:r.TrainDesignation||"",
+        t:mlDateMs(r.CalcTrainMovementTime||r.TrainMovementTime),
+        clock:r.FormattedCalcTrainMovementTime||r.FormattedTrainMovementTime||"",
+        status:(r.CalculatedStatus||"").trim(), ev:r.EventType||"" });
+    });
+    const here=state.loc;
+    const near=(s?s.stations:[]).map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))}))
+      .sort((a,b)=>a.mi-b.mi);
+    box.innerHTML=""; let shown=0, used=0;
+    const nowMs=Date.now();
+    for(const {st,mi} of near){
+      if(used>=3) break;
+      const key=mlNorm(st.name); const fk=MLINK_ALIAS[key]||key;
+      let evs=(byStn[fk]||[]).filter(e=>!e.t || e.t>nowMs-120000).sort((a,b)=>(a.t||0)-(b.t||0)).slice(0,4);
+      if(!evs.length) continue;
+      used++;
+      box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+      evs.forEach(e=>{
+        const row=el("div","row");
+        const col=mlinkColor(e.line);
+        const b=el("div", e.line==="VC"?"badge":"badge rail", e.line); b.style.background=col;
+        const mid=el("div"); mid.appendChild(el("div","dest", e.dest));
+        const late=/late|delay/i.test(e.status);
+        mid.appendChild(el("div","sub", `${e.ev.toLowerCase()} · train ${e.train}`));
+        const times=el("div","times");
+        times.appendChild(el("div","live", e.clock||"—"));
+        const stat=el("div","live-tag"); stat.textContent=e.status||"live";
+        stat.style.color = late?"var(--late)":"var(--good)";
+        times.append(stat);
+        row.append(b, mid, el("div"), times);
+        box.appendChild(row); shown++;
+      });
+    }
+    if(!shown) throw new Error("no nearby live events");
+    const c=$("#mlinkCount"); if(c) c.textContent="live";
+    fitList(box);
+  }catch(e){ refreshMlinkSched(); }
+}
 // Map vehicles: interpolate each running trip between stops (Pacific "now").
 async function drawSchedFleet(key){
   const sys=SYSTEMS[key];
