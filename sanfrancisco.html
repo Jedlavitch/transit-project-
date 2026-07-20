@@ -289,7 +289,7 @@ const CFG = {
   amtrakEveryMs: 20000,
   schedMapEveryMs: 15000,  // re-interpolate scheduled vehicle positions (no network)
   cardEveryMs: 30000,      // scheduled-departure cards re-render (no network)
-  liveEveryMs: 120000,     // optional 511 Worker poll -- 511 allows 60 req/hr per key
+  liveEveryMs: 150000,     // optional 511 Worker poll -- 2 feeds x 24/hr = 48/hr, under 511's 60/hr/key cap
   clockEveryMs: 1000,
 };
 
@@ -815,6 +815,10 @@ function drawAllSchedFleets(){ ["bart","muni","cable","ctrain"].forEach(drawSche
    data pause their scheduled interpolation (drawSchedFleet's liveOk check)
    and resume within ~4 min if the Worker goes away. */
 state.liveOk={};
+// Caltrain's live feed labels routes by service type, not the bundle's numeric
+// route_ids -- tidy those into short badges.
+const CT_LABEL={ "Local Weekday":"Local", "Local Weekend":"Local", "Limited":"Ltd",
+  "Express":"Exp", "South County":"SC", "Baby Bullet":"Bullet" };
 function liveWorkerUrl(){ return (localStorage.getItem(LS.liveUrl)||"").trim().replace(/\/+$/,""); }
 async function fetchSfLive(){
   const url=liveWorkerUrl(); if(!url) return;
@@ -828,17 +832,24 @@ async function fetchSfLive(){
     try{ ({vehicles}=decodeGtfsRt(new Uint8Array(bufs[i].value))); }catch(e){ return; }
     f.keys.forEach(key=>{
       const sys=SYSTEMS[key], s=sys.sched;
-      if(!s || !s.routeLines) return;
       const items=[];
       vehicles.forEach((v,idx)=>{
-        const line=s.routeLines[v.routeId]; if(!line) return;
+        // The /caltrain feed is Caltrain-only and labels routes by service
+        // ("Local Weekday", "Limited", "Express") rather than the bundle's
+        // numeric route_ids -- so take every vehicle and pretty up the label.
+        // Muni + cable share the /muni feed (with ~600 buses too), so those
+        // MUST match the bundle's routeLines to keep only rail / cable cars.
+        let line;
+        if(key==="ctrain"){ line=CT_LABEL[v.routeId] || v.routeId || "Caltrain"; }
+        else { if(!s || !s.routeLines) return; line=s.routeLines[v.routeId]; if(!line) return; }
         if(!(v.lat>-90 && v.lat<90 && v.lon>-180 && v.lon<180) || !v.lat) return;
         const col=sys.color(line);
         items.push({ id:"lv"+key+(v.tripId||idx), lat:v.lat, lon:v.lon,
           icon:()=>labelIcon(col, line), ik:"lv-"+line,
           tip:`${sys.tag} ${line} (live)` });
       });
-      if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true; }
+      if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true;
+        const c=$("#"+key+"Count"); if(c) c.textContent=items.length+" live · sched times"; }
     });
   });
   if(anyLive) $("#statusText").textContent="live — BART + Muni/Caltrain (your Worker) + Amtrak + airplanes.live";
