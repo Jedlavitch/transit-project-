@@ -725,6 +725,8 @@ async function refreshMlink(){
 // Map vehicles: interpolate each running trip between stops (Pacific "now").
 async function drawSchedFleet(key){
   const sys=SYSTEMS[key];
+  // A system with fresh live positions doesn't get scheduled ghosts on top.
+  if(state.liveOk && state.liveOk[key] && Date.now()-state.liveOk[key] < 90000) return;
   const s=await ensureSched(key); if(!s || !s.trips) return;
   const nowP=schedNowParts(s.tz), active=activeServices(s, nowP);
   const items=[];
@@ -747,6 +749,51 @@ async function drawSchedFleet(key){
   updateFleet(key, items, CFG.schedMapEveryMs);
 }
 function drawAllSchedFleets(){ ["rail","mlink"].forEach(drawSchedFleet); }
+
+/* ---- LIVE Metro Rail via LA Metro's WebSocket (api.metro.net) ----
+   A browser WebSocket connects cross-origin with no CORS problem and no key,
+   so this needs zero setup (unlike the CORS-blocked feeds other cities relay
+   through a Worker). One socket streams all six lines' real positions; those
+   replace the scheduled interpolation on the map (drawSchedFleet's liveOk
+   check), and the card count shows the live train total. */
+const RAIL_ROUTEID={ "801":"A","802":"B","803":"C","804":"E","805":"D","807":"K" };
+state.liveOk = state.liveOk || {};
+state.liveRailVeh = {};
+let railWS=null, railWSStop=false;
+function railLiveConnect(){
+  if(railWSStop) return;
+  let ws;
+  try{ ws=new WebSocket("wss://api.metro.net/ws/LACMTA_Rail/vehicle_positions/801,802,803,804,805,807"); }
+  catch(e){ setTimeout(railLiveConnect, 6000); return; }
+  railWS=ws;
+  ws.onmessage=ev=>{
+    let d; try{ d=JSON.parse(ev.data); }catch(e){ return; }
+    const v=d.vehicle||{}, pos=v.position||{};
+    const line=RAIL_ROUTEID[(v.trip&&v.trip.routeId)||d.route_code]; if(!line) return;
+    const id=(v.vehicle&&v.vehicle.id)||d.id; if(!id) return;
+    if(typeof pos.latitude!=="number" || typeof pos.longitude!=="number") return;
+    state.liveRailVeh[id]={ lat:pos.latitude, lon:pos.longitude, line, t:Date.now() };
+  };
+  ws.onclose=()=>{ if(!railWSStop) setTimeout(railLiveConnect, 5000); };   // auto-reconnect
+  ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
+}
+function pushRailLive(){
+  const now=Date.now(), items=[];
+  for(const id in state.liveRailVeh){
+    const v=state.liveRailVeh[id];
+    if(now-v.t > 90000){ delete state.liveRailVeh[id]; continue; }   // gone stale
+    const col=railColor(v.line);
+    items.push({ id:"rl"+id, lat:v.lat, lon:v.lon,
+      icon:()=>labelIcon(col, v.line+" Line"), ik:"rl-"+v.line,
+      tip:`Metro ${v.line} Line (live)` });
+  }
+  if(items.length){
+    updateFleet("rail", items, 5000);
+    state.liveOk.rail = now;
+    const c=$("#railCount"); if(c) c.textContent = items.length+" live · sched times";
+    $("#statusText").textContent="live — Metro Rail + Metrolink + Amtrak + airplanes.live";
+  }
+}
 
 /* ---------- PLANES (works anywhere in the US, no key) ---------- */
 async function fetchPlanes(){
@@ -1030,6 +1077,7 @@ function boot(){
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
   setInterval(drawAllSchedFleets, CFG.schedMapEveryMs);
   setInterval(refreshRail, CFG.cardEveryMs);
+  railLiveConnect(); setInterval(pushRailLive, 3000);   // live Metro Rail positions (WebSocket)
   setInterval(refreshMlink, CFG.cardEveryMs);
 
   let rzT; window.addEventListener("resize", ()=>{
