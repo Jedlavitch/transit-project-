@@ -4,9 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#010409" />
-<title>Night Mode — Nearest Flight</title>
+<title>Sky — Nearest Flight</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="theme.css" />
 <style>
   :root{
     --bg:#010409; --amber:#7db8ff; --amber-dim:#4a7fc4; --muted:#35567e; --faint:#16263c;
@@ -28,7 +29,6 @@
   html,body{height:100%}
   body{
     background:var(--bg); color:var(--amber);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased; overflow:hidden;
     display:flex; flex-direction:column; height:100dvh;
     letter-spacing:.5px;
@@ -180,7 +180,7 @@
 
   <div id="settings">
     <div class="panel">
-      <h3>Customize night mode</h3>
+      <h3>Customize sky view</h3>
       <div class="lbl">Show the nearest…</div>
       <div class="seg" id="modeSeg">
         <button data-mode="planes"><span class="ic">✈</span>Plane</button>
@@ -236,11 +236,11 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 "use strict";
-/* Night mode is shared by both boards. Which one opened it comes in via
-   ?city=bethesda|philly (each board's "🌙 Night" link sets this) so night
-   mode can use that board's own saved location (same localStorage key the
-   board itself reads/writes) instead of a hardcoded Bethesda default —
-   this is what used to make Philadelphia's night mode show DC stuff. */
+/* The sky view is shared by all the boards. Which one opened it comes in
+   via ?city=dc|philly|nyc (each board's "Sky" link sets this) so it can use
+   that board's own saved location (same localStorage key the board itself
+   reads/writes) instead of a hardcoded DC default — this is what used to
+   make Philadelphia's sky view show DC stuff. */
 const CITY_CONFIG = {
   // lsMarcUrl/lsSeptaUrl mirror the board's own live-Worker settings so night
   // mode can pick up the SAME live positions once you've configured one there
@@ -251,12 +251,12 @@ const CITY_CONFIG = {
   // /transitview) -- NYC's rail and bus live sources are genuinely unrelated
   // (rail needs no Worker at all; bus needs its own, different Worker), so
   // they can't share one field the way Philly's incidentally can.
-  bethesda: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
+  dc: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
     lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
     busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
     lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"MARC", localBusSystem:"Ride On", busPhotoQuery:"Ride On bus Montgomery County Maryland",
-    cityLabel:"Bethesda" },
+    cityLabel:"Washington DC" },
   philly: { defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
     lsLoc:"transitboardphl.loc", lsManual:"transitboardphl.locManual", board:"philadelphia.html",
     busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16",
@@ -275,12 +275,21 @@ const CITY_CONFIG = {
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:"transitboardnyc.busUrl",
     localRailSystem:"Subway/LIRR/MNR", localBusSystem:"MTA Bus", busPhotoQuery:"MTA bus New York City",
     cityLabel:"New York", nycRail:true },
+  // Boston's nearest-bus reads the bundled SL + Route 1 schedule; nearest
+  // train is Amtrak-only for now (no live local-rail source wired here yet --
+  // boston.html's own map uses the MBTA v3 API directly).
+  boston: { defaultLoc:{ lat:42.3519, lon:-71.0552, label:"South Station, Boston, MA" },
+    lsLoc:"transitboardboston.loc", lsManual:"transitboardboston.locManual", board:"boston.html",
+    busSchedule:"mbta-bus-schedule.json", busTag:"🚌 Nearest MBTA bus", busRange:"Silver Line + Route 1",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
+    localRailSystem:"MBTA", localBusSystem:"MBTA", busPhotoQuery:"MBTA Silver Line bus Boston",
+    cityLabel:"Boston" },
 };
-// Falls back to "bethesda" for any unrecognized/missing ?city= value, same
-// as the previous binary ternary did -- now a proper N-way lookup so a third
-// (and future) city doesn't silently collapse into Bethesda's config.
+// Falls back to "dc" for any unrecognized/missing ?city= value (which also
+// keeps old ?city=bethesda links working -- "bethesda" is no longer a key,
+// so it lands on the DC config it always meant).
 const CITY_PARAM = new URLSearchParams(location.search).get("city");
-const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "bethesda";
+const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "dc";
 const CITY_CFG = CITY_CONFIG[CITY];
 function loadLiveUrl(key){ return key ? (localStorage.getItem(key)||"") : ""; }
 const CFG = {
