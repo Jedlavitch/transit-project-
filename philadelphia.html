@@ -515,10 +515,17 @@ function updateFleet(fleet, items, dur){
     if(!v){
       const m=L.marker([it.lat,it.lon], {icon:it.icon(), keyboard:false}).addTo(layer);
       if(it.tip) m.bindTooltip(it.tip, {direction:"top"});
-      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon };
+      // click a vehicle -> popup with a "Follow route" button (see startFollow)
+      m.on("click", ()=>{ state._clicked={fleet, id:it.id};
+        const rec=state.fleets[fleet][it.id], lbl=(rec&&rec.label)||it.label||"Vehicle";
+        m.bindPopup(`<div class="follow-pop">${esc(lbl)}<br><button onclick="startFollowClicked()">▶ Follow route</button></div>`).openPopup();
+      });
+      F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon,
+        route:it.route, label:it.label, color:it.color };
     } else {
       const c=v.marker.getLatLng();                 // animate from current interpolated spot
       v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
+      v.route=it.route; v.label=it.label; v.color=it.color;
       if(it.tip) v.marker.setTooltipContent(it.tip);
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
     }
@@ -545,7 +552,43 @@ function animateFleets(){
       v.marker.setLatLng([ v.from[0]+(v.to[0]-v.from[0])*p, v.from[1]+(v.to[1]-v.from[1])*p ]);
     }
   }
+  if(state.follow){
+    const rec=state.fleets[state.follow.fleet] && state.fleets[state.follow.fleet][state.follow.id];
+    if(rec && rec.marker){
+      const ll=rec.marker.getLatLng(), c=state.map.getCenter();
+      if(Math.abs(ll.lat-c.lat)>1e-5 || Math.abs(ll.lng-c.lng)>1e-5) state.map.setView(ll, state.map.getZoom(), {animate:false});
+    } else { stopFollow(); }
+  }
   requestAnimationFrame(animateFleets);
+}
+
+/* ---------- follow a vehicle along its whole route ----------
+   Click any vehicle -> "Follow route": highlights its full route, keeps the
+   map centered on it as it moves, and shows a banner to stop. Not a new page. */
+function startFollowClicked(){ if(state._clicked){ startFollow(state._clicked.fleet, state._clicked.id); } if(state.map) state.map.closePopup(); }
+function startFollow(fleet, id){
+  const rec=state.fleets[fleet] && state.fleets[fleet][id]; if(!rec || !rec.marker) return;
+  state.follow={fleet, id};
+  if(!state.followLayer) state.followLayer=L.layerGroup().addTo(state.map);
+  state.followLayer.clearLayers();
+  if(rec.route && rec.route.length>1){
+    L.polyline(rec.route, {color:"#fff", weight:7, opacity:.25, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
+    L.polyline(rec.route, {color:rec.color||"#4ea1ff", weight:3.5, opacity:.95, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
+  }
+  showFollowBanner(rec.label||"vehicle");
+  state.map.setView(rec.marker.getLatLng(), Math.max(state.map.getZoom(), 14), {animate:true});
+}
+function stopFollow(){
+  state.follow=null;
+  if(state.followLayer) state.followLayer.clearLayers();
+  const b=document.getElementById("followBanner"); if(b) b.style.display="none";
+}
+function showFollowBanner(label){
+  let b=document.getElementById("followBanner");
+  if(!b){ b=document.createElement("div"); b.id="followBanner"; document.getElementById("map").appendChild(b); }
+  b.innerHTML=`<span class="fb-dot"></span><span class="fb-txt">Following <b></b></span><button class="fb-stop" onclick="stopFollow()">✕ Stop</button>`;
+  b.querySelector(".fb-txt b").textContent=label;
+  b.style.display="flex";
 }
 
 /* ---------- RAIL ---------- */
@@ -968,7 +1011,9 @@ function drawAmtrak(list){
     id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
     icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
     ik:"a-"+(t.trainNum||"")+(t.destCode||""),
-    tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
+    tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`,
+    color:"#3ad0c8", label:`${t.routeName||"Amtrak"} #${t.trainNum} → ${t.destName||"?"}`,
+    route:(state.amtrakRouteShapes||{})[normAmtrakName(t.routeName)]||null
   }));
   updateFleet("amtrak", items, CFG.amtrakEveryMs);
 }
@@ -1251,7 +1296,8 @@ async function drawSeptaRailScheduledMap(){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"sr"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
         icon:()=>labelIcon(SEPTA_COL, `${tr.line} → ${tr.hs}`),
-        ik:"sr-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)` });
+        ik:"sr-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)`,
+        color:SEPTA_COL, label:`SEPTA ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
     }
   });
@@ -1336,7 +1382,8 @@ async function drawSeptaBusScheduledMap(){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"sb"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
         icon:()=>labelIcon(SEPTA_BUS_COL, `${tr.line} → ${tr.hs}`),
-        ik:"sb-"+tr.line+"-"+i, tip:`SEPTA Route ${tr.line} → ${tr.hs} (scheduled)` });
+        ik:"sb-"+tr.line+"-"+i, tip:`SEPTA Route ${tr.line} → ${tr.hs} (scheduled)`,
+        color:SEPTA_BUS_COL, label:`SEPTA Route ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
     }
   });
@@ -1501,7 +1548,8 @@ async function drawSeptaSubwayScheduledMap(){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"ss"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
         icon:()=>labelIcon(SEPTA_SUBWAY_COL[tr.line]||"#556", `${tr.line} → ${tr.hs}`),
-        ik:"ss-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)` });
+        ik:"ss-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)`,
+        color:SEPTA_SUBWAY_COL[tr.line]||"#556", label:`SEPTA ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
     }
   });
@@ -1577,7 +1625,8 @@ async function drawPatcoScheduledMap(){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"pt"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
         icon:()=>labelIcon(PATCO_COL, `PATCO → ${tr.hs}`),
-        ik:"pt-"+i, tip:`PATCO → ${tr.hs} (scheduled)` });
+        ik:"pt-"+i, tip:`PATCO → ${tr.hs} (scheduled)`,
+        color:PATCO_COL, label:`PATCO → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
     }
   });
@@ -1666,6 +1715,7 @@ document.addEventListener("fullscreenchange", onFsChange);
 document.addEventListener("webkitfullscreenchange", onFsChange);
 document.addEventListener("keydown", e=>{
   if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
+  if(e.key==="Escape" && state.follow) stopFollow();
 });
 // browsers drop the wake lock when the tab is hidden; re-acquire when visible in kiosk mode
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });

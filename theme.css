@@ -71,3 +71,20 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sa
   .city-tabs a, .city-tabs span{ padding:5px 10px; font-size:12px; }
   .view-links a{ padding:6px 10px; font-size:12px; }
 }
+
+/* Follow-a-vehicle: the click popup's Follow button + the "Following …" banner
+   over the map. Shared by every board (all link this file). */
+.follow-pop{ font:600 12.5px/1.4 "Helvetica Neue",Helvetica,Arial,sans-serif; text-align:center; color:#111; }
+.follow-pop button{ margin-top:7px; padding:6px 11px; border:0; border-radius:8px;
+  background:var(--accent); color:#04101f; font-weight:800; font-size:12.5px; cursor:pointer; }
+#followBanner{ position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1000;
+  display:none; align-items:center; gap:9px; padding:7px 9px 7px 13px; border-radius:11px;
+  background:var(--panel); border:1px solid var(--accent); box-shadow:0 6px 20px rgba(0,0,0,.5);
+  font:600 13px/1 "Helvetica Neue",Helvetica,Arial,sans-serif; color:var(--text); max-width:92%; }
+#followBanner .fb-dot{ width:8px; height:8px; border-radius:50%; background:var(--accent);
+  box-shadow:0 0 8px var(--accent); flex:none; }
+#followBanner .fb-txt{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#followBanner .fb-txt b{ font-weight:800; }
+#followBanner .fb-stop{ border:0; border-radius:8px; padding:5px 9px; background:var(--row-line);
+  color:var(--text); font-weight:700; font-size:12px; cursor:pointer; flex:none; }
+#followBanner .fb-stop:hover{ background:var(--late); color:#fff; }

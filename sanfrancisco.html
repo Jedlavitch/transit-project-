@@ -137,20 +137,6 @@
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
-  /* follow-a-vehicle popup button + banner */
-  .follow-pop{font:600 12.5px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; text-align:center; color:#111}
-  .follow-pop button{margin-top:7px; padding:6px 11px; border:0; border-radius:8px; background:var(--accent);
-    color:#04101f; font-weight:800; font-size:12.5px; cursor:pointer}
-  #followBanner{position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1000;
-    display:none; align-items:center; gap:9px; padding:7px 9px 7px 13px; border-radius:11px;
-    background:var(--panel); border:1px solid var(--accent); box-shadow:0 6px 20px rgba(0,0,0,.5);
-    font:600 13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; color:var(--text); max-width:92%}
-  #followBanner .fb-dot{width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); flex:none}
-  #followBanner .fb-txt{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  #followBanner .fb-txt b{font-weight:800}
-  #followBanner .fb-stop{border:0; border-radius:8px; padding:5px 9px; background:var(--row-line); color:var(--text);
-    font-weight:700; font-size:12px; cursor:pointer; flex:none}
-  #followBanner .fb-stop:hover{background:var(--late); color:#fff}
 </style>
 </head>
 <body>
@@ -560,7 +546,7 @@ function startFollow(fleet, id){
   state.followLayer.clearLayers();
   if(rec.route && rec.route.length>1){
     L.polyline(rec.route, {color:"#fff", weight:7, opacity:.25, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
-    L.polyline(rec.route, {color:rec.color||"var(--accent)", weight:3.5, opacity:.95, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
+    L.polyline(rec.route, {color:rec.color||"#4ea1ff", weight:3.5, opacity:.95, lineCap:"round", lineJoin:"round"}).addTo(state.followLayer);
   }
   showFollowBanner(rec.label||"vehicle");
   state.map.setView(rec.marker.getLatLng(), Math.max(state.map.getZoom(), 14), {animate:true});
