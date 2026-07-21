@@ -66,6 +66,30 @@
   .status .badge.ok{background:rgba(90,209,122,.14); color:var(--good)}
   .status .badge.late{background:rgba(255,107,90,.15); color:var(--late)}
   .status .badge.na{color:var(--muted); border:1px solid var(--faint)}
+  /* emergency squawk (7500/7600/7700) or an ADS-B emergency flag -- rare, so
+     make it impossible to miss: red, bordered, gently pulsing. */
+  .status .badge.emerg{background:rgba(255,60,45,.18); color:#ff6b5a;
+    border:1px solid rgba(255,90,80,.55); animation:emergPulse 1.1s ease-in-out infinite}
+  @keyframes emergPulse{0%,100%{opacity:1}50%{opacity:.4}}
+  /* a rotating arrow shows the vehicle's actual heading (track over ground);
+     inline-block so the per-frame transform:rotate() actually applies. */
+  .status .hdg-arrow{display:inline-block; font-weight:900; line-height:1}
+  .status .vr-arm{font-weight:900}
+
+  /* ---- journey progress: how far along its route the vehicle is, drawn as a
+     slim bar with a glowing marker at the live position + flown/to-go labels.
+     Shown for planes and Amtrak (anything with known origin+destination). ---- */
+  .progress{margin-top:1.3vmin; display:none}
+  .progress .bar{position:relative; height:6px; border-radius:99px; background:var(--faint)}
+  .progress .fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px;
+    background:linear-gradient(90deg,var(--amber-dim),var(--amber)); transition:width 1s ease}
+  .progress .dot{position:absolute; top:50%; width:13px; height:13px; margin-left:-6.5px;
+    border-radius:50%; background:var(--amber); transform:translateY(-50%);
+    box-shadow:0 0 0 3px var(--bg),0 0 10px 2px var(--glow); transition:left 1s ease}
+  .progress .lbl{display:flex; justify-content:space-between; gap:1em; margin-top:.6em;
+    font-size:clamp(.7rem,min(1.9vw,2.1vh),1.15rem); color:var(--muted); font-weight:600;
+    font-variant-numeric:tabular-nums}
+  .progress .lbl .pct{color:var(--amber-dim); font-weight:800}
 
   .empty{font-size:clamp(2rem,7vw,6rem); font-weight:800; color:var(--amber-dim); text-align:center}
 
@@ -214,6 +238,10 @@
         <div class="flight" id="flightno"></div>
         <div class="route" id="route"></div>
         <div class="subcity" id="subcity"></div>
+        <div class="progress" id="progress">
+          <div class="bar"><div class="fill" id="progFill"></div><div class="dot" id="progDot"></div></div>
+          <div class="lbl"><span id="progFlown"></span><span class="pct" id="progPct"></span><span id="progToGo"></span></div>
+        </div>
         <div class="status" id="status"></div>
       </div>
       <div class="side">
@@ -600,14 +628,17 @@ async function producePlane(){
   if(dLL && a.gs>40){ const mins=Math.round(haversineNm({lat:a.lat,lon:a.lon},dLL)/a.gs*60);
     if(mins>=0&&mins<600){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
       eta=mins<=1?`<span class="badge ok">landing now</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
-  return { id:"p"+a.hex, nm, unit:"nm", dir:bearingFrom(loc,{lat:a.lat,lon:a.lon}),
+  const prog=journeyProgress(oLL, dLL, {lat:a.lat,lon:a.lon});
+  return { id:"p"+a.hex, nm, unit:"nm", dir:bearingFrom(loc,{lat:a.lat,lon:a.lon}), count:air.length,
     altText: typeof a.alt_baro==="number"?`${a.alt_baro.toLocaleString()} ft`:"",
-    title: airlineName(route,a), sub:[(a.flight||"").trim(), a.desc||a.t].filter(Boolean).join("  ·  "),
+    title: airlineName(route,a), sub:[(a.flight||"").trim(), a.desc||a.t, a.r].filter(Boolean).join("  ·  "),
     oCity: route?(route.origin.municipality||route.origin.iata_code):null,
     dCity: route?(route.destination.municipality||route.destination.iata_code):null,
     subline: route?`${route.origin.iata_code||""} ${route.origin.name||""}  →  ${route.destination.iata_code||""} ${route.destination.name||""}`.trim():(a.ownOp||"General aviation — no scheduled route"),
     oLL, dLL, posLL:{lat:a.lat,lon:a.lon}, oCode:route?route.origin.iata_code:"", dCode:route?route.destination.iata_code:"",
-    statusHtml:`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")+eta, photoHex:a.hex };
+    progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
+    statusHtml: emergencyBadge(a)+`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")
+      +vRateChip(a.baro_rate)+headingChip(a.track)+eta, photoHex:a.hex };
 }
 
 /* ---- TRAINS (Amtrak) ---- */
@@ -634,14 +665,17 @@ async function produceAmtrakTrain(){
   if(dLL && t.velocity>20){ const mins=Math.round(haversineNm({lat:t.lat,lon:t.lon},dLL)*1.15078/t.velocity*60);
     if(mins>=0&&mins<900){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
       eta=mins<=1?`<span class="badge ok">arriving</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
-  const late=(t.trainTimely||"").trim();
-  return { id:"t"+(t.trainID||t.trainNum), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:t.lat,lon:t.lon}),
+  const late=(t.trainTimely||"").trim(), nx=amtrakNextStop(t);
+  const prog=journeyProgress(oLL, dLL, {lat:t.lat,lon:t.lon});   // Amtrak distances are shown in miles
+  return { id:"t"+(t.trainID||t.trainNum), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:t.lat,lon:t.lon}), count:list.length,
     altText:`${Math.round(t.velocity||0)} mph`, title:t.routeName||"Amtrak",
     sub:`Train ${t.trainNum} · Amtrak${late?"  ·  "+late:""}`,
     oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
     subline:`${t.origCode||""} ${t.origName||""}  →  ${t.destCode||""} ${t.destName||""}`.trim(),
     oLL, dLL, posLL:{lat:t.lat,lon:t.lon}, oCode:t.origCode||"", dCode:t.destCode||"",
-    statusHtml:`<span class="phase">en route</span>`+eta,
+    progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm*1.15078:null, progToGo: prog?prog.toGoNm*1.15078:null,
+    statusHtml:`<span class="phase">en route</span>`+headingChip(t.heading)
+      +(nx?nextStopChip(nx.name, nx.time, nx.note):"")+eta,
     photoQuery:`Amtrak ${t.routeName||"train"} train`, photoFallback:"Amtrak train exterior" };
 }
 /* ---- NYC: subway/LIRR/Metro-North, all direct-fetch (no Worker/key needed --
@@ -793,7 +827,7 @@ async function produceNycRailTrain(){
   if(!all.length) return null;
   all.sort((a,b)=>a.nm-b.nm);
   const {v,nm,sys,stationName,line}=all[0];
-  return { id:"nyc"+sys+v.tripId, nm, unit:"mi", dir:bearingFrom(loc,{lat:all[0].lat,lon:all[0].lon}),
+  return { id:"nyc"+sys+v.tripId, nm, unit:"mi", dir:bearingFrom(loc,{lat:all[0].lat,lon:all[0].lon}), count:all.length,
     altText: v.speed!=null?`${Math.round(v.speed*2.236936)} mph`:"", title: line ? (sys==="Subway" ? `${line} train` : `${line} · ${sys}`) : sys,
     sub:`${sys}`, oCity:null, dCity:null,
     subline: stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : "",
@@ -815,7 +849,7 @@ async function produceLiveLocalTrain(){
     if(!veh.length) return null;
     const list=veh.map(v=>({v, mi:haversineNm(loc,{lat:v.lat,lon:v.lon})*1.15078})).sort((a,b)=>a.mi-b.mi);
     const {v,mi}=list[0];
-    return { id:"lm"+(v.id||v.train), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}),
+    return { id:"lm"+(v.id||v.train), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}), count:list.length,
       altText: v.mph!=null?`${v.mph} mph`:"", title:v.line?`${v.line} Line`:"MARC",
       sub:`Train ${v.train||"?"} · MARC`, oCity:null, dCity:null, subline:"",
       oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
@@ -829,12 +863,14 @@ async function produceLiveLocalTrain(){
     if(!trains.length) return null;
     const list=trains.map(t=>({t, mi:haversineNm(loc,{lat:+t.lat,lon:+t.lon})*1.15078})).sort((a,b)=>a.mi-b.mi);
     const {t,mi}=list[0], late=isRealLateNight(t.late);
-    return { id:"ls"+t.trainno, nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:+t.lat,lon:+t.lon}),
+    const cars=String(t.consist||"").split(",").filter(Boolean).length;   // SEPTA lists each car number
+    return { id:"ls"+t.trainno, nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:+t.lat,lon:+t.lon}), count:list.length,
       altText:"", title:t.line||"SEPTA Regional Rail",
       sub:`Train ${t.trainno} · SEPTA`, oCity:t.currentstop||null, dCity:t.dest||null,
       subline: t.currentstop&&t.nextstop ? `${t.currentstop} → ${t.nextstop}` : (t.dest?`→ ${t.dest}`:""),
       oLL:null, dLL:null, posLL:{lat:+t.lat,lon:+t.lon}, oCode:"", dCode:"",
-      statusHtml:`<span class="phase">en route</span>`+(late?`<span class="badge late">+${t.late} min late</span>`:`<span class="badge ok">on time</span>`),
+      statusHtml:`<span class="phase">en route</span>`+headingChip(t.heading)+(cars?`<span class="alt">${cars} cars</span>`:"")
+        +(late?`<span class="badge late">+${t.late} min late</span>`:`<span class="badge ok">on time</span>`),
       photoQuery:"SEPTA Regional Rail train", photoFallback:"SEPTA train Philadelphia" };
   }
   return null;
@@ -904,7 +940,7 @@ async function produceLiveBus(){
     if(!buses.length) return null;
     const list=buses.map(v=>({v, nm:haversineNm(loc,{lat:v.lat,lon:v.lon})})).sort((a,b)=>a.nm-b.nm);
     const {v,nm}=list[0];
-    return { id:"lb"+v.tripId, nm, unit:"nm", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}),
+    return { id:"lb"+v.tripId, nm, unit:"nm", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}), count:list.length,
       altText:"", title:`Route ${v.routeId}`, sub:`MTA Bus`,
       oCity:null, dCity:null, subline:"",
       oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
@@ -916,11 +952,13 @@ async function produceLiveBus(){
   if(!buses.length) return null;
   const list=buses.map(b=>({b, nm:haversineNm(loc,{lat:+b.lat,lon:+b.lng})})).sort((a,c)=>a.nm-c.nm);
   const {b,nm}=list[0], late=isRealLateNight(b.late);
-  return { id:"lb"+(b.VehicleID||b.route_id), nm, unit:"nm", dir:bearingFrom(loc,{lat:+b.lat,lon:+b.lng}),
+  return { id:"lb"+(b.VehicleID||b.route_id), nm, unit:"nm", dir:bearingFrom(loc,{lat:+b.lat,lon:+b.lng}), count:list.length,
     altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · ${CITY_CFG.localBusSystem}`,
     oCity:null, dCity:b.destination||null, subline: b.Direction||"",
     oLL:null, dLL:null, posLL:{lat:+b.lat,lon:+b.lng}, oCode:"", dCode:"",
-    statusHtml:`<span class="phase">in service</span>`+(late?`<span class="badge late">+${b.late} min late</span>`:`<span class="badge ok">on time</span>`),
+    statusHtml:`<span class="phase">in service</span>`+headingChip(b.heading)
+      +(b.next_stop_name?nextStopChip(b.next_stop_name,"",""):"")
+      +(late?`<span class="badge late">+${b.late} min late</span>`:`<span class="badge ok">on time</span>`),
     photoQuery:CITY_CFG.busPhotoQuery, photoFallback:"transit bus exterior" };
 }
 async function produceBus(){
@@ -930,7 +968,7 @@ async function produceBus(){
   if(!s) return null;
   const busSystem = CITY_CFG.localBusSystem;
   const nowP=roNowParts(s.tz), active=roActiveServices(s, nowP);
-  let best=null;
+  let best=null, inService=0;
   s.trips.forEach((tr,i)=>{
     if(!active.has(tr.s)) return;
     const seq=tr.st; if(seq.length<2) return;
@@ -943,19 +981,24 @@ async function produceBus(){
       const lat=ca[0]+(cb[0]-ca[0])*f, lon=ca[1]+(cb[1]-ca[1])*f;
       const nm=haversineNm(loc,{lat,lon});
       const first=s._coord[seq[0][0]], last=s._coord[seq[seq.length-1][0]];
-      if(!best || nm<best.nm) best={ i, tr, lat, lon, nm, first, last };
+      inService++;   // this trip is running right now (nearby or not) -> feeds "nearest of N"
+      // next scheduled stop = the segment's far end (name + scheduled minute)
+      if(!best || nm<best.nm) best={ i, tr, lat, lon, nm, first, last, nextName: cb[2], nextMin: b[1] };
       break;
     }
   });
   if(!best) return null;
-  const { tr, lat, lon, nm, first, last } = best;
-  return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}),
+  const { tr, lat, lon, nm, first, last, nextName, nextMin } = best;
+  const prog=journeyProgress(first?{lat:first[0],lon:first[1]}:null, last?{lat:last[0],lon:last[1]}:null, {lat,lon});
+  return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}), count:inService,
     altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · ${busSystem}`,
     oCity: first?first[2]:null, dCity: last?last[2]:tr.hs,
     subline:`scheduled position (${busSystem} has no public live feed)`,
     oLL: first?{lat:first[0],lon:first[1]}:null, dLL: last?{lat:last[0],lon:last[1]}:null,
     posLL:{lat,lon}, oCode:"", dCode:"",
-    statusHtml:`<span class="phase">in service</span><span class="badge na">scheduled</span>`,
+    progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
+    statusHtml:`<span class="phase">in service</span>`+(nextName?nextStopChip(nextName, minToClock(nextMin), ""):"")
+      +`<span class="badge na">scheduled</span>`,
     photoQuery: CITY_CFG.busPhotoQuery,
     photoFallback:"transit bus exterior" };
 }
@@ -975,6 +1018,64 @@ function airlineName(route, a){
   if(a.ownOp) return a.ownOp;
   const cs=(a.flight||"").trim();
   return cs || a.r || "Unknown aircraft";
+}
+/* ---- live telemetry chips (planes) ----
+   These read fields the ADS-B feed already returns but the view was throwing
+   away: vertical rate (climb/descent trend), true track (heading), and the
+   transponder squawk / emergency flag. */
+function vRateChip(rate){
+  if(typeof rate!=="number" || !isFinite(rate) || Math.abs(rate)<120) return "";  // ~level: skip
+  const fpm=Math.abs(Math.round(rate/10)*10).toLocaleString();
+  return `<span class="alt"><span class="vr-arm">${rate>0?"↗":"↘"}</span> ${fpm} fpm</span>`;
+}
+/* Accepts a heading either as degrees (ADS-B track, SEPTA's numeric heading)
+   or as a compass string ("N","NE",… -- how Amtrak reports it), so one chip
+   serves planes, trains and buses. Returns "" when there's nothing usable. */
+const COMPASS8={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,
+  S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
+function headingChip(track){
+  let deg=null;
+  if(typeof track==="number" && isFinite(track)) deg=track;
+  else if(typeof track==="string"){ const k=track.trim().toUpperCase();
+    if(k in COMPASS8) deg=COMPASS8[k]; else if(/^-?\d+(\.\d+)?$/.test(k)) deg=parseFloat(k); }
+  if(deg==null) return "";
+  const t=Math.round(((deg%360)+360)%360), dir=COMPASS[Math.round(t/22.5)%16];
+  // ↑ points north (0°); rotating it clockwise by the heading gives the real bearing.
+  return `<span class="alt"><span class="hdg-arrow" style="transform:rotate(${t}deg)">↑</span> ${t}° ${dir}</span>`;
+}
+/* A "next stop" chip: the train/bus equivalent of a flight's ETA badge --
+   where it's headed next, with a scheduled/estimated time and optional note. */
+function nextStopChip(name, timeStr, note){
+  if(!name) return "";
+  const extra=[timeStr, note].filter(Boolean).join(" · ");
+  return `<span class="badge na">→ ${escapeHtml(name)}${extra?` · ${escapeHtml(extra)}`:""}</span>`;
+}
+function isoToClock(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+// minutes-since-midnight (schedule math, may wrap past 1440) -> "10:45 PM"
+function minToClock(min){ if(typeof min!=="number"||!isFinite(min)) return "";
+  const m=((Math.round(min)%1440)+1440)%1440; return new Date(2000,0,1,Math.floor(m/60),m%60).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+// Amtrak's next scheduled stop = first station it hasn't departed yet.
+function amtrakNextStop(t){
+  const ns=(t.stations||[]).find(s=>s.status!=="Departed");
+  if(!ns) return null;
+  return { name:ns.name||ns.code, time:isoToClock(ns.arr||ns.dep||ns.schArr||ns.schDep),
+    note:(ns.arrCmnt||ns.depCmnt||"").trim() };
+}
+const SQUAWK_EMERG={ "7500":"HIJACK", "7600":"RADIO FAIL", "7700":"EMERGENCY" };
+function emergencyBadge(a){
+  const sq=(a.squawk||"").trim(), em=(a.emergency||"").trim().toLowerCase();
+  const label=SQUAWK_EMERG[sq] || (em && em!=="none" ? em.toUpperCase() : null);
+  return label ? `<span class="badge emerg">⚠ ${escapeHtml(label)}</span>` : "";
+}
+/* Great-circle progress along a known origin→destination leg: how far the
+   vehicle has come and how far is left, as a fraction and in nautical miles. */
+function journeyProgress(oLL, dLL, posLL){
+  if(!oLL || !dLL || !posLL) return null;
+  const total=haversineNm(oLL, dLL);
+  if(!(total>1)) return null;
+  const toGo=Math.max(0, haversineNm(posLL, dLL));
+  const flown=Math.max(0, total-toGo);
+  return { pct:Math.max(0, Math.min(1, flown/total)), flownNm:flown, toGoNm:toGo };
 }
 
 let lastId=null;
@@ -998,7 +1099,18 @@ function render(s){
   else if(s.photoQuery) updatePhoto(s.photoQuery, true, s.photoFallback);
   else { $("#photoWrap").style.display="none"; photoShownFor=null; }
   renderMiniMap(s.id, s.oLL, s.dLL, s.posLL);
-  $("#dist").textContent = `${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`;
+  $("#dist").textContent = `${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`
+    + (s.count>1?` · nearest of ${s.count}`:"");
+  // journey-progress bar (planes/Amtrak with a known origin→destination)
+  const pv=$("#progress");
+  if(typeof s.progPct==="number"){
+    const u=s.unit||"nm", pctTxt=(s.progPct*100).toFixed(1)+"%";
+    pv.style.display="block";
+    $("#progFill").style.width=pctTxt; $("#progDot").style.left=pctTxt;
+    $("#progFlown").textContent=`${Math.round(s.progFlown).toLocaleString()} ${u} flown`;
+    $("#progPct").textContent=`${Math.round(s.progPct*100)}%`;
+    $("#progToGo").textContent=`${Math.round(s.progToGo).toLocaleString()} ${u} to go`;
+  } else pv.style.display="none";
   $("#airline").textContent = s.title;
   $("#flightno").textContent = s.sub;
   const routeEl=$("#route");
