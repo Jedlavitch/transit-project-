@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#010409" />
+<title>Grand Tour — Live Transit</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  /* ---------------------------------------------------------------------------
+     GRAND TOUR — a self-running, kiosk-style "world tour" of live transit.
+     It shuffles between cities and modes (planes / trains / buses / trams),
+     flies a full-screen map to whatever real vehicle is nearest each stop,
+     glides that vehicle across the map by dead-reckoning from its own speed +
+     heading, and overlays all the detail it can find. Standalone from the
+     boards + night.html on purpose (its own full-map layout), but it pulls the
+     SAME public sources: airplanes.live (planes), Amtrak (amtraker), the
+     bundled GTFS schedules already in this repo (local rail / bus / tram),
+     adsbdb (flight routes), planespotters + Wikimedia (photos).
+  --------------------------------------------------------------------------- */
+  :root{
+    --accent:#7db8ff; --accent-dim:#4a7fc4; --muted:#8ba3c7; --faint:#22344f;
+    --bg:#040810; --panel:rgba(10,18,32,.82); --good:#5ad1a0; --late:#ff6b5a; --city:#eaf2ff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{background:var(--bg); color:var(--accent); font-family:Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden; height:100dvh; letter-spacing:.3px}
+  #map{position:fixed; inset:0; z-index:0; background:#040810}
+  .leaflet-container{background:#040810; font-family:inherit}
+  /* the map is a show, not a tool: no attribution clutter, kill focus outlines */
+  .leaflet-control-attribution{display:none}
+  #map:focus{outline:none}
+
+  /* dim vignette so overlays stay readable over bright map areas */
+  #vignette{position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(2,5,11,.72) 100%)}
+
+  /* ---- vehicle marker: a heading-rotated glyph with a pulsing halo ---- */
+  .tour-veh{filter:drop-shadow(0 0 10px var(--accent))}
+  .tour-veh .rot{display:block; transition:transform .6s ease}
+  .tour-veh svg path, .tour-veh svg rect, .tour-veh svg circle{fill:#eaf3ff}
+  .tour-veh .ping{position:absolute; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px;
+    border-radius:50%; border:2px solid var(--accent); opacity:0; animation:ping 2.4s ease-out infinite}
+  @keyframes ping{0%{transform:scale(.5); opacity:.8}100%{transform:scale(4.4); opacity:0}}
+  .tour-endpt{width:11px; height:11px; border-radius:50%; background:var(--accent-dim);
+    border:2px solid var(--bg); box-shadow:0 0 8px var(--accent-dim)}
+  .endpt-label{white-space:nowrap; transform:translate(10px,-8px); color:var(--city); font-size:12px;
+    font-weight:700; text-shadow:0 1px 6px #000, 0 0 2px #000; letter-spacing:.5px}
+
+  /* ---- top bar: what we're watching + the shuffle queue + controls ---- */
+  header{position:fixed; z-index:5; top:0; left:0; right:0; display:flex; align-items:center; gap:14px;
+    padding:16px 22px; pointer-events:none}
+  header > *{pointer-events:auto}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.28em;
+    text-transform:uppercase; font-size:13px; color:var(--accent-dim)}
+  .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--good); box-shadow:0 0 10px var(--good);
+    animation:blink 2s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+  .queue{display:flex; gap:7px; margin-left:8px; overflow:hidden; flex:1; min-width:0}
+  .queue .chip{font-size:11px; font-weight:700; color:var(--muted); border:1px solid var(--faint);
+    border-radius:999px; padding:5px 11px; white-space:nowrap; opacity:.7; background:rgba(6,12,22,.5)}
+  .queue .chip.now{color:var(--bg); background:var(--accent); border-color:var(--accent); opacity:1}
+  .clock{margin-left:auto; font-variant-numeric:tabular-nums; color:var(--muted); font-size:15px; font-weight:700}
+  .ctrls{display:flex; gap:8px}
+  .ctrls button, .ctrls a{display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px;
+    border-radius:11px; border:1px solid var(--faint); background:rgba(8,14,24,.7); color:var(--muted);
+    cursor:pointer; font-size:16px; text-decoration:none; font-family:inherit}
+  .ctrls button:hover, .ctrls a:hover{color:var(--accent); border-color:var(--accent-dim)}
+
+  /* countdown ring around the "skip" button, drains until the next shuffle */
+  .ring{position:relative}
+  .ring svg{position:absolute; inset:-1px; transform:rotate(-90deg); pointer-events:none}
+  .ring circle{fill:none; stroke:var(--accent); stroke-width:2.5; opacity:.85}
+
+  /* ---- the info overlay (bottom-left glass card) ---- */
+  #card{position:fixed; z-index:5; left:22px; bottom:22px; width:min(560px,calc(100vw - 44px));
+    background:var(--panel); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border:1px solid var(--faint); border-radius:20px; padding:20px 22px; box-shadow:0 24px 70px rgba(0,0,0,.55);
+    display:grid; grid-template-columns:1fr auto; gap:18px; align-items:stretch;
+    opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease}
+  #card.in{opacity:1; transform:none}
+  #card .txt{min-width:0}
+  .kicker{display:flex; align-items:center; gap:9px; font-size:12px; font-weight:800; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--accent-dim)}
+  .kicker .mode-ic{font-size:15px}
+  .kicker .live{color:var(--good); border:1px solid rgba(90,209,160,.4); background:rgba(90,209,160,.1);
+    border-radius:6px; padding:1px 7px; letter-spacing:.1em}
+  .kicker .sched{color:var(--muted); border:1px solid var(--faint); border-radius:6px; padding:1px 7px; letter-spacing:.1em}
+  .city{font-size:clamp(1.5rem,3.6vw,2.5rem); font-weight:800; color:var(--city); line-height:1.02; margin-top:6px}
+  .title{font-size:clamp(1.05rem,2.3vw,1.6rem); font-weight:800; color:var(--accent); margin-top:3px; line-height:1.1}
+  .sub{font-size:13px; color:var(--muted); font-weight:600; margin-top:3px}
+  .route{display:flex; align-items:baseline; gap:.5em; flex-wrap:wrap; margin-top:10px; font-weight:800; color:var(--city)}
+  .route .r{font-size:clamp(1rem,2vw,1.35rem)} .route .arw{color:var(--accent-dim); font-weight:400}
+  .route .r.dim{color:var(--muted); font-weight:700; font-size:clamp(.9rem,1.6vw,1.1rem)}
+
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:12px}
+  .chips .c{font-size:13px; font-weight:700; color:var(--accent-dim); background:rgba(125,184,255,.08);
+    border:1px solid var(--faint); border-radius:9px; padding:5px 10px; display:inline-flex; align-items:center; gap:6px}
+  .chips .c.badge-ok{color:var(--good); background:rgba(90,209,160,.1); border-color:rgba(90,209,160,.35)}
+  .chips .c.badge-late{color:var(--late); background:rgba(255,107,90,.12); border-color:rgba(255,107,90,.4)}
+  .hdg-arrow{display:inline-block; font-weight:900}
+
+  .prog{margin-top:14px}
+  .prog .bar{position:relative; height:6px; border-radius:99px; background:var(--faint)}
+  .prog .fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px;
+    background:linear-gradient(90deg,var(--accent-dim),var(--accent)); transition:width 1s linear}
+  .prog .dot{position:absolute; top:50%; width:12px; height:12px; margin-left:-6px; border-radius:50%;
+    background:var(--accent); transform:translateY(-50%); box-shadow:0 0 0 3px var(--panel),0 0 9px var(--accent); transition:left 1s linear}
+  .prog .lbl{display:flex; justify-content:space-between; margin-top:7px; font-size:12px; color:var(--muted);
+    font-weight:600; font-variant-numeric:tabular-nums}
+  .prog .lbl .pct{color:var(--accent-dim); font-weight:800}
+
+  #photo{width:150px; min-height:0; border-radius:14px; border:1px solid var(--faint); object-fit:cover;
+    display:none; align-self:stretch; box-shadow:0 8px 30px rgba(0,0,0,.4)}
+  #photoCred{grid-column:1 / -1; text-align:right; font-size:11px; color:var(--muted); margin-top:-6px; display:none}
+  #photoCred a{color:var(--muted); text-decoration:none}
+
+  /* status flash while tuning into the next stop */
+  #flash{position:fixed; z-index:4; left:50%; top:44%; transform:translate(-50%,-50%); text-align:center;
+    color:var(--muted); font-weight:700; font-size:clamp(1rem,2.4vw,1.5rem); opacity:0; transition:opacity .4s ease;
+    text-shadow:0 2px 20px #000; pointer-events:none}
+  #flash.show{opacity:1}
+  #flash .big{color:var(--city); font-size:clamp(1.6rem,4vw,2.6rem); font-weight:800; display:block; margin-top:4px}
+
+  @media (max-width:640px){
+    #card{grid-template-columns:1fr} #photo{width:100%; max-height:120px}
+    .queue{display:none}
+  }
+  #fsHint{position:fixed; z-index:9; top:0; left:50%; transform:translate(-50%,-120%);
+    background:var(--panel); color:var(--city); border:1px solid var(--faint); border-radius:0 0 12px 12px;
+    padding:12px 20px; font-size:14px; max-width:90vw; text-align:center; transition:transform .35s ease}
+  #fsHint.show{transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="vignette"></div>
+
+  <header>
+    <div class="brand"><span class="dot"></span><span>Grand Tour</span></div>
+    <div class="queue" id="queue"></div>
+    <span class="clock" id="clock">—</span>
+    <div class="ctrls">
+      <button id="pauseBtn" title="Pause / resume (space)">⏸</button>
+      <button class="ring" id="skipBtn" title="Skip to next (→)">⏭
+        <svg viewBox="0 0 40 40"><circle id="ringC" cx="20" cy="20" r="18.5"></circle></svg>
+      </button>
+      <button id="fsBtn" title="Full screen (F)">⛶</button>
+      <a id="boardBtn" href="index.html" title="Back to the board">‹</a>
+    </div>
+  </header>
+
+  <div id="flash"><span id="flashSmall">Tuning in…</span><span class="big" id="flashBig"></span></div>
+
+  <div id="card">
+    <div class="txt">
+      <div class="kicker"><span class="mode-ic" id="modeIc">✈</span><span id="feedLbl">—</span><span id="liveTag"></span></div>
+      <div class="city" id="city">—</div>
+      <div class="title" id="title"></div>
+      <div class="sub" id="sub"></div>
+      <div class="route" id="route" style="display:none"></div>
+      <div class="chips" id="chips"></div>
+      <div class="prog" id="prog" style="display:none">
+        <div class="bar"><div class="fill" id="progFill"></div><div class="dot" id="progDot"></div></div>
+        <div class="lbl"><span id="progFlown"></span><span class="pct" id="progPct"></span><span id="progToGo"></span></div>
+      </div>
+    </div>
+    <img id="photo" alt="" />
+    <div id="photoCred"></div>
+  </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+const $ = s=>document.querySelector(s);
+
+/* ===================== the tour deck =====================================
+   Each stop is a (city, feed) pair. `src` is either a live API ("plane" /
+   "amtrak") or a bundled GTFS schedule file already in this repo, which we
+   interpolate to a live-ish position. Kept to the lighter bundles so the tour
+   stays snappy; the multi-MB subway/tram bundles are intentionally left out. */
+const CITIES = [
+  { key:"dc",     label:"Washington", loc:{lat:38.9050,lon:-77.0400}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"DCA / IAD traffic"},
+      {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
+      {mode:"train", kind:"train", src:"marc-schedule.json",   label:"MARC", photo:"MARC train Maryland"},
+      {mode:"bus",   kind:"bus",   src:"rideon-schedule.json", label:"Ride On", photo:"Ride On bus Montgomery County Maryland"} ] },
+  { key:"philly", label:"Philadelphia", loc:{lat:39.9526,lon:-75.1652}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"PHL traffic"},
+      {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
+      {mode:"train", kind:"train", src:"septa-rail-schedule.json", label:"SEPTA Regional Rail", photo:"SEPTA Regional Rail train"},
+      {mode:"train", kind:"train", src:"patco-schedule.json",      label:"PATCO", photo:"PATCO Speedline train"} ] },
+  { key:"nyc",    label:"New York", loc:{lat:40.7484,lon:-73.9857}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"JFK / LGA / EWR"},
+      {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
+      {mode:"train", kind:"train", src:"lirr-schedule.json", label:"Long Island Rail Road", photo:"Long Island Rail Road train"} ] },
+  { key:"boston", label:"Boston", loc:{lat:42.3554,lon:-71.0605}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"BOS traffic"},
+      {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
+      {mode:"train", kind:"train", src:"mbta-cr-schedule.json", label:"MBTA Commuter Rail", photo:"MBTA commuter rail train Boston"} ] },
+  { key:"la",     label:"Los Angeles", loc:{lat:34.0430,lon:-118.2670}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"LAX traffic"},
+      {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
+      {mode:"train", kind:"train", src:"la-metrolink-schedule.json", label:"Metrolink", photo:"Metrolink train Los Angeles"} ] },
+  { key:"sf",     label:"San Francisco", loc:{lat:37.7880,lon:-122.4075}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"SFO / OAK traffic"},
+      {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
+      {mode:"train", kind:"train", src:"sf-caltrain-schedule.json", label:"Caltrain", photo:"Caltrain train San Francisco"},
+      {mode:"tram",  kind:"tram",  src:"sf-cablecar-schedule.json", label:"Cable car", photo:"San Francisco cable car"} ] },
+  { key:"ams",    label:"Amsterdam", loc:{lat:52.3785,lon:4.9000}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"Schiphol traffic"} ] },
+];
+/* flatten to a working list of stops */
+const STOPS = [];
+CITIES.forEach(c=> c.feeds.forEach(f=> STOPS.push({ city:c.label, cityKey:c.key, loc:c.loc, ...f })));
+
+const MODE_IC = { plane:"✈", train:"🚆", bus:"🚌", tram:"🚋" };
+const HOLD_MS = 15000;     // how long each stop stays on screen
+const RADIUS_NM = 32;      // plane search radius around each city
+
+/* ===================== small geo + fetch helpers ========================= */
+async function getJSON(url, timeout=15000){
+  const c=new AbortController(), t=setTimeout(()=>c.abort(), timeout);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+function haversineNm(a,b){
+  const R=3440.065, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+const COMPASS=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const COMPASS8={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5};
+function bearingDeg(a,b){
+  const y=Math.sin((b.lon-a.lon)*Math.PI/180)*Math.cos(b.lat*Math.PI/180);
+  const x=Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180)-Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lon-a.lon)*Math.PI/180);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function toDeg(h){ if(typeof h==="number"&&isFinite(h)) return (h%360+360)%360;
+  if(typeof h==="string"){ const k=h.trim().toUpperCase(); if(k in COMPASS8) return COMPASS8[k]; if(/^-?\d+(\.\d+)?$/.test(k)) return (parseFloat(k)%360+360)%360; } return null; }
+function compassOf(deg){ return COMPASS[Math.round(deg/22.5)%16]; }
+function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// advance a lat/lon by `nm` nautical miles along heading `deg` (dead reckoning)
+function moveLL(ll, deg, nm){
+  const dLat=(nm/60)*Math.cos(deg*Math.PI/180);
+  const dLon=(nm/60)*Math.sin(deg*Math.PI/180)/Math.cos(ll.lat*Math.PI/180);
+  return { lat:ll.lat+dLat, lon:ll.lon+dLon };
+}
+// a lifted bezier arc between two points (classic flight-map curve)
+function arc(o,d,bend=0.22){
+  const mid={lat:(o.lat+d.lat)/2,lon:(o.lon+d.lon)/2};
+  const dx=d.lon-o.lon, dy=d.lat-o.lat, len=Math.hypot(dx,dy)||1;
+  const ctrl={ lat:mid.lat + (-dx/len)*len*bend, lon:mid.lon + (dy/len)*len*bend };
+  const pts=[]; for(let t=0;t<=1;t+=1/48){ const u=1-t;
+    pts.push([ u*u*o.lat+2*u*t*ctrl.lat+t*t*d.lat, u*u*o.lon+2*u*t*ctrl.lon+t*t*d.lon ]); }
+  return pts;
+}
+
+/* ===================== route + photo lookups (planes) ==================== */
+const routeCache = (()=>{ try{ return JSON.parse(localStorage.getItem("tour.routes")||"{}"); }catch(e){ return {}; } })();
+const photoCache = (()=>{ try{ return JSON.parse(localStorage.getItem("tour.photos")||"{}"); }catch(e){ return {}; } })();
+const saveRoutes=()=>{ try{ localStorage.setItem("tour.routes", JSON.stringify(routeCache)); }catch(e){} };
+const savePhotos=()=>{ try{ localStorage.setItem("tour.photos", JSON.stringify(photoCache)); }catch(e){} };
+async function lookupRoute(cs){
+  if(!cs) return null; const hit=routeCache[cs]; if(hit && Date.now()-hit.t<216e5) return hit.v;
+  try{ const d=await getJSON(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`);
+    const fr=d&&d.response&&d.response.flightroute;
+    const v=fr?{airline:fr.airline,origin:fr.origin,destination:fr.destination}:null;
+    routeCache[cs]={t:Date.now(),v}; saveRoutes(); return v;
+  }catch(e){ routeCache[cs]={t:Date.now(),v:null}; return null; }
+}
+async function planePhoto(hex){
+  if(!hex) return null; const hit=photoCache["h:"+hex]; if(hit && Date.now()-hit.t<864e5) return hit.v;
+  let v=null; try{ const d=await getJSON(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
+    const p=d&&d.photos&&d.photos[0]; if(p) v={src:(p.thumbnail_large||p.thumbnail||{}).src||"", link:p.link||"", cred:p.photographer||""}; }catch(e){}
+  photoCache["h:"+hex]={t:Date.now(),v}; savePhotos(); return v;
+}
+async function wikiPhoto(query){
+  if(!query) return null; const hit=photoCache["w:"+query]; if(hit && Date.now()-hit.t<30*864e5) return hit.v;
+  let v=null; try{
+    const url=`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=1&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=800&format=json&origin=*`;
+    const d=await getJSON(url,10000); const pages=d&&d.query&&d.query.pages; const page=pages&&Object.values(pages)[0];
+    const info=page&&page.imageinfo&&page.imageinfo[0];
+    if(info){ const artist=(((info.extmetadata||{}).Artist||{}).value||"").replace(/<[^>]+>/g,"").trim();
+      v={src:info.thumburl||info.url, link:info.descriptionurl||"", cred:artist, rep:true}; }
+  }catch(e){}
+  photoCache["w:"+query]={t:Date.now(),v}; savePhotos(); return v;
+}
+
+/* ===================== PLANE subject ===================================== */
+async function planeSubject(stop){
+  const {loc}=stop;
+  const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${RADIUS_NM}`);
+  const air=(data.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
+    .map(a=>({a, nm:a.dst!=null?a.dst:haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
+  if(!air.length) return null;
+  let pick=null;
+  for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,5)){
+    const route=await lookupRoute((x.a.flight||"").trim());
+    if(route&&route.origin&&route.destination){ pick={...x,route}; break; }
+  }
+  if(!pick) pick={...air[0], route:null};
+  const {a,route}=pick, spd=a.gs?Math.round(a.gs):null, hdg=toDeg(a.track);
+  const oLL=route&&typeof route.origin.latitude==="number"?{lat:route.origin.latitude,lon:route.origin.longitude}:null;
+  const dLL=route&&typeof route.destination.latitude==="number"?{lat:route.destination.latitude,lon:route.destination.longitude}:null;
+  const chips=[];
+  if(typeof a.alt_baro==="number") chips.push({t:`${a.alt_baro.toLocaleString()} ft`});
+  if(spd) chips.push({t:`${spd} kt`});
+  if(typeof a.baro_rate==="number" && Math.abs(a.baro_rate)>=120) chips.push({t:`${a.baro_rate>0?"↗":"↘"} ${Math.abs(Math.round(a.baro_rate/10)*10).toLocaleString()} fpm`});
+  if(hdg!=null) chips.push({t:`${Math.round(hdg)}° ${compassOf(hdg)}`, hdg:Math.round(hdg)});
+  const sq=(a.squawk||"").trim(), em=(a.emergency||"").trim().toLowerCase();
+  const emerg={"7500":"HIJACK","7600":"RADIO FAIL","7700":"EMERGENCY"}[sq] || (em&&em!=="none"?em.toUpperCase():null);
+  if(emerg) chips.unshift({t:`⚠ ${emerg}`, cls:"badge-late"});
+  return {
+    kind:"plane", live:true, city:stop.city, feedLbl:stop.label,
+    title: (route&&route.airline&&route.airline.name)||a.ownOp||(a.flight||"").trim()||"Aircraft",
+    sub:[(a.flight||"").trim(), a.desc||a.t, a.r].filter(Boolean).join("  ·  "),
+    oCity: route?(route.origin.municipality||route.origin.iata_code):null,
+    dCity: route?(route.destination.municipality||route.destination.iata_code):null,
+    subline: route?`${route.origin.iata_code||""} → ${route.destination.iata_code||""}`:(a.ownOp?"":"General aviation"),
+    pos:{lat:a.lat,lon:a.lon}, oLL, dLL, heading:hdg, speedKt:spd||0, chips,
+    photoHex:a.hex, arcRoute:true, zoom:8,
+  };
+}
+
+/* ===================== AMTRAK subject (national, cached) ================= */
+let amTrains=null, amStations=null, amAt=0;
+async function ensureAmtrak(){
+  if(amTrains && Date.now()-amAt<45000) return;
+  const [tr, st]=await Promise.all([
+    getJSON("https://api-v3.amtraker.com/v3/trains",15000),
+    amStations?Promise.resolve(null):getJSON("https://api-v3.amtraker.com/v3/stations",15000).catch(()=>({})),
+  ]);
+  amTrains=tr; amAt=Date.now();
+  if(st){ const m={}; for(const c in st){ const s=st[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }
+}
+async function amtrakSubject(stop){
+  await ensureAmtrak(); const {loc}=stop, st=amStations||{}, list=[];
+  for(const arr of Object.values(amTrains)) for(const t of (arr||[])){
+    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+    if(t.trainState && t.trainState!=="Active") continue;
+    const nm=haversineNm(loc,{lat:t.lat,lon:t.lon});
+    if(nm>260) continue;                         // keep Amtrak picks reasonably near this city
+    list.push({t, nm});
+  }
+  list.sort((x,y)=>x.nm-y.nm); if(!list.length) return null;
+  const {t}=list[0];
+  const oLL=st[t.origCode]?{lat:st[t.origCode][0],lon:st[t.origCode][1]}:null;
+  const dLL=st[t.destCode]?{lat:st[t.destCode][0],lon:st[t.destCode][1]}:null;
+  const hdg=toDeg(t.heading) ?? (dLL?bearingDeg({lat:t.lat,lon:t.lon},dLL):null);
+  const ns=(t.stations||[]).find(s=>s.status!=="Departed");
+  const chips=[]; if(t.velocity) chips.push({t:`${Math.round(t.velocity)} mph`});
+  if(hdg!=null) chips.push({t:`${Math.round(hdg)}° ${compassOf(hdg)}`, hdg:Math.round(hdg)});
+  const late=(t.trainTimely||"").trim();
+  if(late) chips.push({t:late, cls:/late/i.test(late)?"badge-late":"badge-ok"});
+  if(ns){ const tm=ns.arr||ns.dep||ns.schArr||ns.schDep; const tt=tm?new Date(tm).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
+    chips.push({t:`→ ${ns.name||ns.code}${tt?` · ${tt}`:""}`}); }
+  return {
+    kind:"train", live:true, city:stop.city, feedLbl:stop.label,
+    title:t.routeName||"Amtrak", sub:`Train ${t.trainNum} · Amtrak`,
+    oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
+    subline:`${t.origCode||""} → ${t.destCode||""}`,
+    pos:{lat:t.lat,lon:t.lon}, oLL, dLL, heading:hdg, speedKt:(t.velocity||0)/1.15078, chips,
+    photoQuery:`Amtrak ${t.routeName||"train"} train`, zoom:9,
+  };
+}
+
+/* ===================== bundled-schedule subject ========================= */
+const bundleCache={};
+async function ensureBundle(file){
+  if(bundleCache[file]) return bundleCache[file];
+  const s=await getJSON(file, 25000); s._coord={};
+  (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
+  bundleCache[file]=s; return s;
+}
+function ymd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
+function nowParts(tz){
+  const d=new Date();
+  if(!tz) return { y:ymd(d), dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
+  const p={}; new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"})
+    .formatToParts(d).forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
+  const dow={Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[p.weekday];
+  return { y:p.year+p.month+p.day, dow, min:(parseInt(p.hour,10)%24)*60+parseInt(p.minute,10) };
+}
+function activeServices(s, parts){
+  const {y,dow}=parts, act=new Set();
+  for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
+  const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  return act;
+}
+function minClock(min){ if(typeof min!=="number") return ""; const m=((Math.round(min)%1440)+1440)%1440;
+  return new Date(2000,0,1,Math.floor(m/60),m%60).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+async function schedSubject(stop){
+  const s=await ensureBundle(stop.src); if(!s) return null;
+  const p=nowParts(s.tz), active=activeServices(s,p); let best=null, running=0;
+  s.trips.forEach(tr=>{
+    if(!active.has(tr.s)) return; const seq=tr.st; if(seq.length<2) return;
+    for(const now of [p.min, p.min+1440]){
+      if(now<seq[0][1] || now>seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1]<=now) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)], ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f=b[1]>a[1]?(now-a[1])/(b[1]-a[1]):0;
+      const lat=ca[0]+(cb[0]-ca[0])*f, lon=ca[1]+(cb[1]-ca[1])*f, nm=haversineNm(stop.loc,{lat,lon});
+      running++;
+      if(!best||nm<best.nm){ const first=s._coord[seq[0][0]], last=s._coord[seq[seq.length-1][0]];
+        const segNm=haversineNm({lat:ca[0],lon:ca[1]},{lat:cb[0],lon:cb[1]}), segMin=Math.max(1,b[1]-a[1]);
+        best={ nm, lat, lon, tr, first, last, ca, cb, nextName:cb[2], nextMin:b[1],
+          heading: bearingDeg({lat:ca[0],lon:ca[1]},{lat:cb[0],lon:cb[1]}), speedKt: segNm/(segMin/60) }; }
+      break;
+    }
+  });
+  if(!best) return null;
+  const {tr,lat,lon,first,last,nextName,nextMin,heading,speedKt}=best;
+  const chips=[]; if(speedKt>2) chips.push({t:`${Math.round(speedKt*1.15078)} mph`});
+  chips.push({t:`${Math.round(heading)}° ${compassOf(heading)}`, hdg:Math.round(heading)});
+  if(nextName) chips.push({t:`→ ${nextName}${nextMin!=null?` · ${minClock(nextMin)}`:""}`});
+  chips.push({t:"scheduled", cls:"sched-chip"});
+  // "Route 23" for buses/trams, but rail lines are named ("Penn Line", "Far
+  // Rockaway"), where a "Route" prefix reads wrong.
+  const title = (stop.kind==="bus"||stop.kind==="tram") ? `Route ${tr.line}` : String(tr.line||stop.label);
+  return {
+    kind:stop.kind, live:false, city:stop.city, feedLbl:stop.label,
+    title, sub:`${tr.hs||""} · ${stop.label}`,
+    oCity:first?first[2]:null, dCity:last?last[2]:(tr.hs||null),
+    subline:"scheduled position",
+    pos:{lat,lon}, oLL:first?{lat:first[0],lon:first[1]}:null, dLL:last?{lat:last[0],lon:last[1]}:null,
+    heading, speedKt, chips, count:running,
+    photoQuery:stop.photo, zoom: stop.kind==="tram"?14:12,
+  };
+}
+
+async function fetchSubject(stop){
+  try{
+    if(stop.src==="plane")  return await planeSubject(stop);
+    if(stop.src==="amtrak") return await amtrakSubject(stop);
+    return await schedSubject(stop);
+  }catch(e){ return null; }
+}
+
+/* ===================== the map ========================================== */
+let map, routeLayer, veh=null, trail=null, trailPts=[];
+const ICON = {
+  plane:'<path d="M0,-13 L3,-2 L13,3 L13,6 L2,4 L2,10 L6,13 L6,15 L0,13.5 L-6,15 L-6,13 L-2,10 L-2,4 L-13,6 L-13,3 L-3,-2 Z"/>',
+  train:'<path d="M0,-13 C5,-13 7,-9.5 7,-6 L7,9 C7,11.8 5,13 2,13 L-2,13 C-5,13 -7,11.8 -7,9 L-7,-6 C-7,-9.5 -5,-13 0,-13 Z"/><rect x="-4.2" y="-6.5" width="3.4" height="4.4" rx="1"/><rect x="0.8" y="-6.5" width="3.4" height="4.4" rx="1"/><rect x="-5" y="10.2" width="10" height="1.8" rx="0.9"/>',
+  bus:'<path d="M-7,-9.5 C-7,-11.8 -5,-13 -2.5,-13 L2.5,-13 C5,-13 7,-11.8 7,-9.5 L7,10 C7,11.8 5,13 3,13 L-3,13 C-5,13 -7,11.8 -7,10 Z"/><rect x="-5" y="-10.6" width="10" height="4" rx="1"/><circle cx="-4.3" cy="12.3" r="1.5"/><circle cx="4.3" cy="12.3" r="1.5"/>',
+  tram:'<path d="M0,-13 C5,-13 7,-9.5 7,-6 L7,9 C7,11.8 5,13 2,13 L-2,13 C-5,13 -7,11.8 -7,9 L-7,-6 C-7,-9.5 -5,-13 0,-13 Z"/><rect x="-4.5" y="-7" width="9" height="5" rx="1"/><circle cx="0" cy="14" r="1.4"/>',
+};
+function vehIcon(kind, deg){
+  return L.divIcon({ className:"tour-veh", iconSize:[30,30], iconAnchor:[15,15],
+    html:`<span class="ping"></span><span class="rot" style="transform:rotate(${deg||0}deg)"><svg viewBox="-15 -16 30 32" width="30" height="30">${ICON[kind]||ICON.plane}</svg></span>` });
+}
+function initMap(){
+  map=L.map("map",{ zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false,
+    doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, worldCopyJump:true })
+    .setView([39.5,-98], 4);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{ maxZoom:19, keepBuffer:6 }).addTo(map);
+  routeLayer=L.layerGroup().addTo(map);
+}
+
+/* ===================== render one stop ================================== */
+let cur=null, driftTimer=null, dashTimer=null, flying=false, flyT=null;
+function present(s){
+  cur=s;
+  // ---- map: draw route + endpoints, fly to the vehicle ----
+  routeLayer.clearLayers(); trailPts=[]; if(trail){ trail=null; }
+  if(s.oLL && s.dLL){
+    const line=s.arcRoute? arc(s.oLL,s.dLL) : [[s.oLL.lat,s.oLL.lon],[s.dLL.lat,s.dLL.lon]];
+    L.polyline(line,{color:getAccent(),weight:2.5,opacity:.5,dashArray:"3 10"}).addTo(routeLayer);
+    [s.oLL,s.dLL].forEach(p=> L.marker([p.lat,p.lon],{icon:L.divIcon({className:"",html:'<span class="tour-endpt"></span>',iconSize:[11,11],iconAnchor:[5,5]})}).addTo(routeLayer));
+    if(s.oCity) L.marker([s.oLL.lat,s.oLL.lon],{icon:L.divIcon({className:"endpt-label",html:escapeHtml(s.oCity)}),interactive:false}).addTo(routeLayer);
+    if(s.dCity) L.marker([s.dLL.lat,s.dLL.lon],{icon:L.divIcon({className:"endpt-label",html:escapeHtml(s.dCity)}),interactive:false}).addTo(routeLayer);
+  }
+  veh=L.marker([s.pos.lat,s.pos.lon],{icon:vehIcon(s.kind, s.heading||0),zIndexOffset:1000}).addTo(routeLayer);
+  trail=L.polyline([[s.pos.lat,s.pos.lon]],{color:getAccent(),weight:3,opacity:.45}).addTo(routeLayer);
+  // The drift loop's edge-of-view panTo would CANCEL this flyTo mid-animation
+  // (Leaflet aborts a running fly on any new map movement), stranding the map
+  // zoomed way out -- so flag the flight window and let drift wait it out.
+  // Center the map a bit SOUTH of the vehicle so the vehicle settles in the
+  // upper part of the screen, clear of the info card along the bottom.
+  const tz=s.zoom||9;
+  const ctr=map.unproject(map.project([s.pos.lat,s.pos.lon], tz).add([0, map.getSize().y*0.16]), tz);
+  flying=true; clearTimeout(flyT);
+  flyT=setTimeout(()=>{ flying=false;
+    // Safety net: flyTo is rAF-driven, and rAF is suspended in hidden/
+    // throttled tabs -- if the fly stalled, snap straight to the destination
+    // so the tour never lingers zoomed out over nothing.
+    if(Math.abs(map.getZoom()-tz)>0.5) map.setView(ctr, tz, {animate:false});
+  }, 2800);
+  map.flyTo(ctr, tz, {duration:2.6, easeLinearity:.25});
+  animateDashes();
+  startDrift();
+  fillCard(s);
+  loadPhoto(s);
+}
+function getAccent(){ return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#7db8ff"; }
+
+// flowing dashes along the route line
+function animateDashes(){
+  clearInterval(dashTimer); let off=0;
+  dashTimer=setInterval(()=>{ off=(off-1)%1000; routeLayer.eachLayer(l=>{ if(l._path && l.options.dashArray) l._path.style.strokeDashoffset=off; }); }, 45);
+}
+// glide the vehicle forward from its own speed + heading, drop a comet trail
+function startDrift(){
+  clearInterval(driftTimer);
+  if(!cur || cur.heading==null || !(cur.speedKt>3)){ return; }
+  const stepMs=280;
+  driftTimer=setInterval(()=>{
+    if(paused || !cur) return;
+    const nmPerStep=cur.speedKt*(stepMs/3600000);
+    cur.pos=moveLL(cur.pos, cur.heading, nmPerStep);
+    veh.setLatLng([cur.pos.lat,cur.pos.lon]);
+    trailPts.push([cur.pos.lat,cur.pos.lon]); if(trailPts.length>26) trailPts.shift();
+    if(trail) trail.setLatLngs(trailPts);
+    if(flying) return;   // don't interrupt the fly-in (see present())
+    const b=map.getBounds().pad(-0.22); if(!b.contains([cur.pos.lat,cur.pos.lon])) map.panTo([cur.pos.lat,cur.pos.lon],{animate:true,duration:1.4});
+  }, stepMs);
+}
+
+function chipHtml(c){
+  const arrow = c.hdg!=null ? `<span class="hdg-arrow" style="transform:rotate(${c.hdg}deg)">↑</span> ` : "";
+  const cls = c.cls==="sched-chip" ? "" : (c.cls||"");
+  return `<span class="c ${cls}">${arrow}${escapeHtml(c.t)}</span>`;
+}
+function fillCard(s){
+  $("#modeIc").textContent = MODE_IC[s.kind]||"✈";
+  $("#feedLbl").textContent = s.feedLbl;   // the big .city line right below already names the city
+  $("#liveTag").className = s.live?"live":"sched"; $("#liveTag").textContent = s.live?"LIVE":"SCHED";
+  $("#city").textContent = s.city;
+  $("#title").textContent = s.title||"";
+  $("#sub").textContent = s.sub||"";
+  const r=$("#route");
+  if(s.dCity){ r.style.display="";
+    r.innerHTML = (s.oCity?`<span class="r">${escapeHtml(s.oCity)}</span><span class="arw">→</span>`:`<span class="arw">→</span>`)
+      + `<span class="r">${escapeHtml(s.dCity)}</span>` + (s.subline?`<span class="r dim">${escapeHtml(s.subline)}</span>`:"");
+  } else r.style.display="none";
+  $("#chips").innerHTML = (s.chips||[]).map(chipHtml).join("");
+  // progress bar (needs known origin+destination)
+  const prog=$("#prog");
+  if(s.oLL && s.dLL){
+    const tot=haversineNm(s.oLL,s.dLL); if(tot>1){
+      const toGo=Math.max(0,haversineNm(s.pos,s.dLL)), flown=Math.max(0,tot-toGo), pct=Math.max(0,Math.min(1,flown/tot));
+      const conv = s.kind==="plane"?1:1.15078, u = s.kind==="plane"?"nm":"mi";
+      prog.style.display=""; $("#progFill").style.width=(pct*100).toFixed(1)+"%"; $("#progDot").style.left=(pct*100).toFixed(1)+"%";
+      $("#progFlown").textContent=`${Math.round(flown*conv).toLocaleString()} ${u} flown`;
+      $("#progPct").textContent=`${Math.round(pct*100)}%`;
+      $("#progToGo").textContent=`${Math.round(toGo*conv).toLocaleString()} ${u} to go`;
+    } else prog.style.display="none";
+  } else prog.style.display="none";
+  $("#card").classList.add("in");
+}
+let photoTok=0;
+async function loadPhoto(s){
+  const tok=++photoTok, img=$("#photo"), cred=$("#photoCred");
+  img.style.display="none"; cred.style.display="none";
+  const v = s.photoHex ? await planePhoto(s.photoHex) : (s.photoQuery? await wikiPhoto(s.photoQuery) : null);
+  if(tok!==photoTok || !v || !v.src) return;        // a newer stop took over while we waited
+  img.src=v.src; img.style.display="block";
+  cred.style.display="block";
+  cred.innerHTML = v.rep
+    ? `<a href="${escapeHtml(v.link)}" target="_blank" rel="noopener">${v.cred?escapeHtml(v.cred)+" · ":""}Wikimedia (representative)</a>`
+    : `<a href="${escapeHtml(v.link)}" target="_blank" rel="noopener">${v.cred?"© "+escapeHtml(v.cred)+" · ":""}planespotters.net</a>`;
+}
+
+/* ===================== the shuffle loop ================================= */
+let order=[], oi=0, paused=false, holdTimer=null, holdStart=0, ringRAF=null, nextPrefetch=null;
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function buildOrder(){ order=shuffle(STOPS.map((_,i)=>i)); oi=0; }
+function renderQueue(nowIdx){
+  const q=$("#queue"); const upcoming=[]; for(let k=0;k<6;k++){ const st=STOPS[order[(oi+k)%order.length]]; upcoming.push(st); }
+  q.innerHTML = upcoming.map((st,k)=>`<span class="chip ${k===0?"now":""}">${MODE_IC[st.kind]} ${escapeHtml(st.city)}</span>`).join("");
+}
+function flash(city){ $("#flashBig").textContent=city; $("#flash").classList.add("show"); }
+function unflash(){ $("#flash").classList.remove("show"); }
+
+async function advance(){
+  clearTimeout(holdTimer); cancelAnimationFrame(ringRAF);
+  $("#card").classList.remove("in");
+  renderQueue();
+  // find the next stop that actually has a vehicle (try several before giving up)
+  let s=null, tries=0;
+  if(nextPrefetch && nextPrefetch.idx===order[oi]){ s=nextPrefetch.subject; nextPrefetch=null; }
+  while(!s && tries<STOPS.length){
+    const stop=STOPS[order[oi]];
+    if(!(nextPrefetch && nextPrefetch.used)) flash(stop.city);
+    s=await fetchSubject(stop);
+    if(!s){ oi=(oi+1)%order.length; tries++; if(oi===0) buildOrderKeepPos(); }
+  }
+  unflash();
+  if(!s){ // nothing anywhere right now — wait and retry
+    holdTimer=setTimeout(advance, 4000); return;
+  }
+  present(s);
+  startRing();
+  prefetchNext();
+  holdTimer=setTimeout(()=>{ oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }, HOLD_MS);
+  holdStart=Date.now();
+}
+function buildOrderKeepPos(){ const seen=order.slice(0,oi); order=seen.concat(shuffle(STOPS.map((_,i)=>i))); }
+async function prefetchNext(){
+  const idx=order[(oi+1)%order.length]; const stop=STOPS[idx];
+  try{ const subject=await fetchSubject(stop); nextPrefetch={idx, subject, used:true}; }catch(e){ nextPrefetch=null; }
+}
+function startRing(){
+  const C=$("#ringC"), R=18.5, LEN=2*Math.PI*R; C.style.strokeDasharray=LEN;
+  const tick=()=>{ const el=Math.min(1,(Date.now()-holdStart)/HOLD_MS); C.style.strokeDashoffset=(LEN*el).toFixed(1);
+    if(el<1 && !paused) ringRAF=requestAnimationFrame(tick); };
+  holdStart=Date.now(); ringRAF=requestAnimationFrame(tick);
+}
+
+/* ===================== controls ======================================== */
+function togglePause(){ paused=!paused; $("#pauseBtn").textContent=paused?"▶":"⏸";
+  if(paused){ clearTimeout(holdTimer); cancelAnimationFrame(ringRAF); }
+  else{ const left=Math.max(0,HOLD_MS-(Date.now()-holdStart)); holdStart=Date.now()-(HOLD_MS-left);
+    holdTimer=setTimeout(()=>{ oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }, left); startRing(); } }
+function skip(){ clearTimeout(holdTimer); oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }
+function fsElement(){ return document.fullscreenElement||document.webkitFullscreenElement; }
+function toggleFS(){ const el=document.documentElement;
+  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  const req=el.requestFullscreen||el.webkitRequestFullscreen; if(!req){ hintFS(); return; }
+  try{ const p=req.call(el); if(p&&p.catch) p.catch(hintFS); }catch(e){ hintFS(); } }
+let hintT=null;
+function hintFS(){ let t=$("#fsHint"); if(!t){ t=document.createElement("div"); t.id="fsHint"; document.body.appendChild(t); }
+  t.textContent="Full screen is blocked here — open this page in its own tab (or the deployed link)."; t.classList.add("show");
+  clearTimeout(hintT); hintT=setTimeout(()=>t.classList.remove("show"),4200); }
+
+function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+
+function boot(){
+  // tint from the sky view's saved accent, if the user picked one there
+  try{ const a=localStorage.getItem("nightmode.accent"); if(a){ document.documentElement.style.setProperty("--accent",a); } }catch(e){}
+  initMap();
+  buildOrder();
+  $("#pauseBtn").onclick=togglePause; $("#skipBtn").onclick=skip; $("#fsBtn").onclick=toggleFS;
+  document.addEventListener("keydown",e=>{ if(/^(input|textarea)$/i.test(e.target.tagName)) return;
+    if(e.key===" "){ e.preventDefault(); togglePause(); } else if(e.key==="ArrowRight") skip();
+    else if(e.key==="f"||e.key==="F") toggleFS(); });
+  document.addEventListener("fullscreenchange", ()=>{ setTimeout(()=>map&&map.invalidateSize(),200); });
+  clock(); setInterval(clock,1000);
+  advance();
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+</script>
+</body>
+</html>
