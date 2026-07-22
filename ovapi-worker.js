@@ -30,6 +30,7 @@
 const UPSTREAM = {
   vehiclePositions: "http://gtfs.ovapi.nl/nl/vehiclePositions.pb",
   tripUpdates:      "http://gtfs.ovapi.nl/nl/tripUpdates.pb",
+  alerts:           "http://gtfs.ovapi.nl/nl/alerts.pb",   // KV15 service messages (nationwide; board filters to GVB)
 };
 
 const CORS = {

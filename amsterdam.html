@@ -137,6 +137,20 @@
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
+  /* ---- live service-alert ticker (bottom edge) ---- */
+  #alertTicker{position:fixed; left:0; right:0; bottom:0; z-index:70; display:none; align-items:center;
+    background:var(--scrim); backdrop-filter:blur(8px); border-top:1px solid var(--line); height:38px; overflow:hidden}
+  #alertTicker.show{display:flex}
+  #alertTicker .tk-badge{flex-shrink:0; display:flex; align-items:center; gap:6px; height:100%; padding:0 14px;
+    background:rgba(255,204,51,.12); border-right:1px solid var(--line); color:var(--warn);
+    font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap}
+  #alertTicker .tk-scroll{flex:1; overflow:hidden; height:100%; display:flex; align-items:center}
+  #alertTicker .tk-inner{display:inline-block; white-space:nowrap; padding-left:100vw;
+    animation:tkmove var(--tk-dur,60s) linear infinite; will-change:transform}
+  #alertTicker:hover .tk-inner{animation-play-state:paused}
+  #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
+  #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
+  @keyframes tkmove{to{transform:translateX(-100%)}}
 </style>
 </head>
 <body>
@@ -217,6 +231,9 @@
     <span id="statusText">GVB + NS scheduled · planes live — airplanes.live</span>
     <span class="grow"></span>
   </footer>
+
+  <div id="alertTicker"><span class="tk-badge">⚠ Storingen</span>
+    <div class="tk-scroll"><div class="tk-inner" id="tkInner"></div></div></div>
 </div>
 
 <div id="setup">
@@ -1064,6 +1081,75 @@ function buildCardToggles(){
   });
 }
 
+/* ---------- live service-alert ticker (OVapi KV15 messages via your Worker) ----------
+   Rides the same Worker the live trams use -- its /alerts route proxies the
+   nationwide gtfs.ovapi.nl/nl/alerts.pb feed (no CORS upstream, same story
+   as vehiclePositions). Entities are tagged by agency ("KV15:GVB:…"), so the
+   nationwide feed filters cleanly to Amsterdam. Decoded with the same
+   GTFS-Realtime field walker the tram positions already use (Alert message:
+   active_period=1, header_text=10 -> TranslatedString.translation.text).
+   No Worker configured, no ticker. (Older Workers need septa-style re-paste
+   of ovapi-worker.js to pick up the /alerts route.) */
+function decodeGtfsAlerts(buf){
+  const out=[];
+  for(const [f, wt, val] of gtfsrtFields(buf, 0, buf.length)){
+    if(f!==2 || wt!==2) continue;
+    const [es, ee]=val;
+    let id="", alert=null;
+    for(const [ef, ewt, ev] of gtfsrtFields(buf, es, ee)){
+      if(ef===1 && ewt===2) id=gtfsrtStr(buf, ev[0], ev[1]);
+      else if(ef===5 && ewt===2) alert=ev;
+    }
+    if(!alert || id.indexOf(":GVB")<0) continue;
+    const a={ header:"", periods:[] };
+    for(const [af, awt, av] of gtfsrtFields(buf, alert[0], alert[1])){
+      if(af===1 && awt===2){
+        const p={};
+        for(const [pf, pwt, pv] of gtfsrtFields(buf, av[0], av[1])){
+          if(pf===1 && pwt===0) p.start=Number(pv);
+          else if(pf===2 && pwt===0) p.end=Number(pv);
+        }
+        a.periods.push(p);
+      } else if(af===10 && awt===2){
+        for(const [tf, twt, tv] of gtfsrtFields(buf, av[0], av[1])){
+          if(tf===1 && twt===2){
+            for(const [sf, swt, sv] of gtfsrtFields(buf, tv[0], tv[1])){
+              if(sf===1 && swt===2 && !a.header) a.header=gtfsrtStr(buf, sv[0], sv[1]);
+            }
+          }
+        }
+      }
+    }
+    if(a.header) out.push(a);
+  }
+  return out;
+}
+function renderTicker(items){
+  const t=document.getElementById("alertTicker"), inner=document.getElementById("tkInner");
+  if(!items.length){ t.classList.remove("show"); document.body.style.paddingBottom=""; return; }
+  inner.innerHTML=items.map(i=>`<span>${i.lbl?`<b>${esc(i.lbl)}</b>`:""}${esc(i.txt)}</span>`).join("");
+  const chars=items.reduce((n,i)=>n+i.txt.length+(i.lbl||"").length, 0);
+  t.style.setProperty("--tk-dur", Math.max(40, Math.round(chars*0.30))+"s");
+  t.classList.add("show"); document.body.style.paddingBottom="40px";
+}
+async function refreshAlertTicker(){
+  const base=liveWorkerUrl();
+  if(!base){ renderTicker([]); return; }
+  try{
+    const r=await fetch(`${base}/alerts`); if(!r.ok) throw new Error(r.status);
+    const buf=new Uint8Array(await r.arrayBuffer());
+    const now=Date.now()/1000, seen=new Set(), items=[];
+    for(const a of decodeGtfsAlerts(buf)){
+      const act=!a.periods.length || a.periods.some(p=>now>=(p.start||0) && now<=(p.end||Infinity));
+      const txt=a.header.replace(/\s+/g," ").trim();
+      if(!act || !txt || seen.has(txt)) continue; seen.add(txt);
+      items.push({ lbl:"GVB", txt });
+      if(items.length>=12) break;
+    }
+    renderTicker(items);
+  }catch(e){ /* keep whatever's showing */ }
+}
+
 /* ---------- boot ---------- */
 function boot(){
   setBoardAccent(localStorage.getItem(LS.accent)||"#ff7a1a"); buildAccentSwatches();   // oranje default
@@ -1083,6 +1169,7 @@ function boot(){
   setInterval(refreshRail, CFG.cardEveryMs);
   setInterval(refreshIntl, CFG.cardEveryMs);
   setInterval(refreshFerry, CFG.cardEveryMs);
+  refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 
   let rzT; window.addEventListener("resize", ()=>{
     if(state.map) state.map.invalidateSize();

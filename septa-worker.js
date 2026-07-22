@@ -16,6 +16,7 @@
  *   /trainview    -> live Regional Rail train positions (system-wide)
  *   /transitview  -> live bus/trolley positions (system-wide)
  *   /arrivals?station=NAME  -> next arrivals at a named Regional Rail station
+ *   /alerts       -> system-wide service alerts/advisories/detours
  *
  * No API key required. No dependencies.
  */
@@ -24,6 +25,7 @@ const UPSTREAM = {
   trainview:   "https://www3.septa.org/api/TrainView/index.php",
   transitview: "https://www3.septa.org/api/TransitView/index.php",
   arrivals:    "https://www3.septa.org/api/Arrivals/index.php",
+  alerts:      "https://www3.septa.org/api/Alerts/index.php?req1=all",
 };
 
 const CORS = {

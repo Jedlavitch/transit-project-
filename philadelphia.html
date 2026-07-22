@@ -138,6 +138,20 @@
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
+  /* ---- live service-alert ticker (bottom edge) ---- */
+  #alertTicker{position:fixed; left:0; right:0; bottom:0; z-index:70; display:none; align-items:center;
+    background:var(--scrim); backdrop-filter:blur(8px); border-top:1px solid var(--line); height:38px; overflow:hidden}
+  #alertTicker.show{display:flex}
+  #alertTicker .tk-badge{flex-shrink:0; display:flex; align-items:center; gap:6px; height:100%; padding:0 14px;
+    background:rgba(255,204,51,.12); border-right:1px solid var(--line); color:var(--warn);
+    font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap}
+  #alertTicker .tk-scroll{flex:1; overflow:hidden; height:100%; display:flex; align-items:center}
+  #alertTicker .tk-inner{display:inline-block; white-space:nowrap; padding-left:100vw;
+    animation:tkmove var(--tk-dur,60s) linear infinite; will-change:transform}
+  #alertTicker:hover .tk-inner{animation-play-state:paused}
+  #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
+  #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
+  @keyframes tkmove{to{transform:translateX(-100%)}}
 </style>
 </head>
 <body>
@@ -224,6 +238,9 @@
     <span class="grow"></span>
     <span id="refreshInfo">next refresh in —</span>
   </footer>
+
+  <div id="alertTicker"><span class="tk-badge">⚠ Service alerts</span>
+    <div class="tk-scroll"><div class="tk-inner" id="tkInner"></div></div></div>
 </div>
 
 <div id="setup">
@@ -1839,6 +1856,41 @@ function buildCardToggles(){
   });
 }
 
+/* ---------- live service-alert ticker (SEPTA Alerts via your Worker) ----------
+   SEPTA's Alerts API has no CORS headers, so this rides the same Worker URL
+   the board already uses for TrainView/TransitView -- the Worker's /alerts
+   route proxies www3.septa.org/api/Alerts. No Worker configured, no ticker.
+   (If your Worker predates this route, re-paste septa-worker.js to update.)
+   Live alert text and active detours only -- advisories are planned notices
+   and would drown the ticker. */
+function renderTicker(items){
+  const t=document.getElementById("alertTicker"), inner=document.getElementById("tkInner");
+  if(!items.length){ t.classList.remove("show"); document.body.style.paddingBottom=""; return; }
+  inner.innerHTML=items.map(i=>`<span>${i.lbl?`<b>${esc(i.lbl)}</b>`:""}${esc(i.txt)}</span>`).join("");
+  const chars=items.reduce((n,i)=>n+i.txt.length+(i.lbl||"").length, 0);
+  t.style.setProperty("--tk-dur", Math.max(40, Math.round(chars*0.30))+"s");
+  t.classList.add("show"); document.body.style.paddingBottom="40px";
+}
+async function refreshAlertTicker(){
+  const base=(state.septaUrl||"").trim().replace(/\/+$/,"");
+  if(!base){ renderTicker([]); return; }
+  try{
+    const d=await getJSON(`${base}/alerts`, 15000);
+    const items=[], seen=new Set();
+    for(const a of (Array.isArray(d)?d:[])){
+      const route=(a.route_name||a.route_id||"").trim();
+      let txt=(a.alert||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+      if(!txt && a.isdetour==="Y" && Array.isArray(a.detour) && a.detour[0])
+        txt=((a.detour[0].reason?a.detour[0].reason+": ":"")+(a.detour[0].message||""))
+          .replace(/\s+/g," ").trim();
+      if(!txt || seen.has(txt)) continue; seen.add(txt);
+      items.push({ lbl:route, txt });
+      if(items.length>=12) break;
+    }
+    renderTicker(items);
+  }catch(e){ /* keep whatever's showing */ }
+}
+
 /* ---------- boot ---------- */
 function boot(){
   setBoardAccent(localStorage.getItem("transitboardphl.accent")||"#4ea1ff"); buildAccentSwatches();
@@ -1860,6 +1912,7 @@ function boot(){
   setInterval(septaMapTick, CFG.septaEveryMs); // SEPTA positions on the map (scheduled, or live via Worker)
   setInterval(refreshPatco, 30000);            // recompute next scheduled PATCO (card)
   setInterval(drawPatcoScheduledMap, CFG.septaEveryMs); // PATCO positions on the map (scheduled)
+  refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 
   // re-fit cards to the new layout when the window/display changes size
   let rzT; window.addEventListener("resize", ()=>{

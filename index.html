@@ -138,6 +138,20 @@
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
+  /* ---- live service-alert ticker (bottom edge) ---- */
+  #alertTicker{position:fixed; left:0; right:0; bottom:0; z-index:70; display:none; align-items:center;
+    background:var(--scrim); backdrop-filter:blur(8px); border-top:1px solid var(--line); height:38px; overflow:hidden}
+  #alertTicker.show{display:flex}
+  #alertTicker .tk-badge{flex-shrink:0; display:flex; align-items:center; gap:6px; height:100%; padding:0 14px;
+    background:rgba(255,204,51,.12); border-right:1px solid var(--line); color:var(--warn);
+    font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap}
+  #alertTicker .tk-scroll{flex:1; overflow:hidden; height:100%; display:flex; align-items:center}
+  #alertTicker .tk-inner{display:inline-block; white-space:nowrap; padding-left:100vw;
+    animation:tkmove var(--tk-dur,60s) linear infinite; will-change:transform}
+  #alertTicker:hover .tk-inner{animation-play-state:paused}
+  #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
+  #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
+  @keyframes tkmove{to{transform:translateX(-100%)}}
 </style>
 </head>
 <body>
@@ -222,6 +236,9 @@
     <span class="grow"></span>
     <span id="refreshInfo">next refresh in —</span>
   </footer>
+
+  <div id="alertTicker"><span class="tk-badge">⚠ Service alerts</span>
+    <div class="tk-scroll"><div class="tk-inner" id="tkInner"></div></div></div>
 </div>
 
 <div id="setup">
@@ -1455,6 +1472,42 @@ function buildCardToggles(){
   });
 }
 
+/* ---------- live service-alert ticker (WMATA Incidents, uses your key) ----------
+   Rides the same saved WMATA key the rest of the board uses -- no key, no
+   ticker, no error. Rail incidents first (they're the headline), then bus. */
+function renderTicker(items){
+  const t=document.getElementById("alertTicker"), inner=document.getElementById("tkInner");
+  if(!items.length){ t.classList.remove("show"); document.body.style.paddingBottom=""; return; }
+  inner.innerHTML=items.map(i=>`<span>${i.lbl?`<b>${esc(i.lbl)}</b>`:""}${esc(i.txt)}</span>`).join("");
+  const chars=items.reduce((n,i)=>n+i.txt.length+(i.lbl||"").length, 0);
+  t.style.setProperty("--tk-dur", Math.max(40, Math.round(chars*0.30))+"s");
+  t.classList.add("show"); document.body.style.paddingBottom="40px";
+}
+async function refreshAlertTicker(){
+  if(!state.wmataKey){ renderTicker([]); return; }
+  try{
+    const [rail, bus]=await Promise.all([
+      getJSON(wmata("Incidents.svc/json/Incidents")).catch(()=>({Incidents:[]})),
+      getJSON(wmata("Incidents.svc/json/BusIncidents")).catch(()=>({BusIncidents:[]})),
+    ]);
+    const items=[], seen=new Set();
+    for(const i of (rail.Incidents||[])){
+      const txt=(i.Description||"").replace(/\s+/g," ").trim();
+      if(!txt || seen.has(txt)) continue; seen.add(txt);
+      const lines=(i.LinesAffected||"").split(/;\s*/).filter(Boolean).join(", ");
+      items.push({ lbl: lines?`Metrorail ${lines}`:"Metrorail", txt });
+      if(items.length>=12) break;
+    }
+    for(const i of (bus.BusIncidents||[])){
+      if(items.length>=12) break;
+      const txt=(i.Description||"").replace(/\s+/g," ").trim();
+      if(!txt || seen.has(txt)) continue; seen.add(txt);
+      items.push({ lbl:`Metrobus ${(i.RoutesAffected||[]).slice(0,4).join(", ")}`, txt });
+    }
+    renderTicker(items);
+  }catch(e){ /* keep whatever's showing */ }
+}
+
 /* ---------- boot ---------- */
 function boot(){
   setBoardAccent(localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
@@ -1478,6 +1531,7 @@ function boot(){
   setInterval(marcMapTick, CFG.marcEveryMs);   // MARC positions on the map (live or scheduled)
   setInterval(refreshMarc, 30000);             // recompute next scheduled MARC trains (card)
   setInterval(refreshRideOn, 60000);           // recompute next scheduled Ride On (card)
+  refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
   setInterval(drawRideOnScheduledMap, CFG.rideonEveryMs); // Ride On positions on the map (scheduled)
   setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
