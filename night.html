@@ -117,6 +117,45 @@
   .star{position:absolute; border-radius:50%; background:var(--city);
     animation:twinkle var(--tw,4s) ease-in-out var(--td,0s) infinite}
   @keyframes twinkle{0%,100%{opacity:.12}50%{opacity:.85}}
+  /* ---- the real moon: position + phase computed from the actual sky ---- */
+  #moon{position:absolute; width:min(7.5vmin,64px); height:min(7.5vmin,64px); display:none;
+    filter:drop-shadow(0 0 16px rgba(190,210,255,.35))}
+  #moon svg{width:100%; height:100%; display:block}
+  #moon .lit{fill:#e8edf6}
+  #moon .base{fill:#1c2740}
+
+  /* ---- rare-bird alert banner (emergency / military / A380 / ISS pass) ---- */
+  #alertBanner{position:fixed; top:0; left:50%; transform:translate(-50%,-130%); z-index:85;
+    background:var(--panel); border:1px solid var(--amber-dim); border-top:none; border-radius:0 0 14px 14px;
+    padding:13px 22px; max-width:92vw; box-shadow:0 12px 44px rgba(0,0,0,.55); transition:transform .45s ease;
+    display:flex; align-items:center; gap:14px}
+  #alertBanner.show{transform:translate(-50%,0)}
+  #alertBanner .ic{font-size:26px}
+  #alertBanner .t{color:var(--city); font-weight:800; font-size:clamp(.95rem,2.2vw,1.3rem)}
+  #alertBanner .s{color:var(--muted); font-weight:600; font-size:clamp(.8rem,1.8vw,1.05rem); margin-top:2px}
+  #alertBanner.red{border-color:rgba(255,90,80,.6)}
+  #alertBanner.red .t{color:#ff8577; animation:emergPulse 1.1s ease-in-out infinite}
+
+  /* ---- spotter's log overlay ---- */
+  #logPanel{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
+  #logPanel.show{display:flex}
+  #logPanel .panel{background:var(--panel2); border:1px solid var(--faint); border-radius:18px;
+    padding:26px; max-width:520px; width:100%; box-shadow:0 20px 80px rgba(0,0,0,.6);
+    max-height:86dvh; overflow:auto}
+  #logPanel h3{color:var(--amber); font-size:20px}
+  #logPanel .sect{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.15em; margin:18px 0 6px}
+  #logPanel .row{display:flex; justify-content:space-between; gap:1em; padding:7px 0;
+    border-bottom:1px solid var(--faint); color:var(--city); font-size:14px; font-weight:600}
+  #logPanel .row b{color:var(--amber)}
+  #logPanel .row .when{color:var(--muted); font-variant-numeric:tabular-nums}
+  #logPanel .empty2{color:var(--muted); font-size:14px; padding:6px 0}
+  #logPanel .actions{display:flex; gap:10px; margin-top:22px}
+  #logPanel .actions button{flex:1; padding:12px; border-radius:12px; font-weight:800; font-size:14px;
+    cursor:pointer; font-family:inherit}
+  #logPanel .done2{border:none; background:var(--amber); color:var(--btn-text)}
+  #logPanel .reset{border:1px solid rgba(255,107,90,.5); background:none; color:var(--late)}
 
   /* ---- flight-change transition ---- */
   #flight.swap{animation:swapIn .8s cubic-bezier(.2,.7,.2,1)}
@@ -129,8 +168,10 @@
      Lives in the .side column next to the photo, not stretched full-width
      under the text, so it gets a sane (close to square) shape instead of a
      thin wide letterbox. */
+  /* position:relative + z-index:0 isolate Leaflet's internal pane z-indexes
+     (400+) so the settings/log overlays (z-index:50) actually cover the map */
   #miniMap{width:100%; min-height:0; border-radius:1.4vmin; border:1px solid var(--faint);
-    display:none; overflow:hidden}
+    display:none; overflow:hidden; position:relative; z-index:0}
   #miniMap .leaflet-container{background:var(--panel2)}
   .mini-veh-icon svg{overflow:visible; filter:drop-shadow(0 0 6px rgba(120,180,255,.9))}
   .mini-veh-icon path, .mini-veh-icon rect{fill:#bcd9ff}
@@ -193,10 +234,13 @@
     <div id="sunSky"></div>
     <div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div>
     <div id="stars"></div>
+    <div id="moon"></div>
   </div>
+  <div id="alertBanner"><span class="ic"></span><span><span class="t"></span><div class="s"></div></span></div>
   <header>
     <span class="tag" id="tag">✈ Nearest flight</span>
     <span class="clock" id="clock">—</span>
+    <button id="logBtn" title="Spotter's log">📓</button>
     <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)"></button>
     <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city on one live map" onclick="window.location.href=this.href; return false;">tour ›</a>
@@ -211,6 +255,7 @@
         <button data-mode="planes"><span class="ic">✈</span>Plane</button>
         <button data-mode="trains"><span class="ic">🚆</span>Train</button>
         <button data-mode="buses"><span class="ic">🚌</span>Bus</button>
+        <button data-mode="iss"><span class="ic">🛰</span>ISS</button>
       </div>
       <div class="lbl">Theme</div>
       <div class="seg" id="themeSeg">
@@ -226,6 +271,17 @@
       <div class="lbl">Color</div>
       <div class="swatches" id="swatches"></div>
       <button class="done" id="setDone">Done</button>
+    </div>
+  </div>
+
+  <div id="logPanel">
+    <div class="panel">
+      <h3>📓 Spotter's log</h3>
+      <div id="logBody"></div>
+      <div class="actions">
+        <button class="reset" id="logReset">Reset log</button>
+        <button class="done2" id="logDone">Done</button>
+      </div>
     </div>
   </div>
 
@@ -450,6 +506,8 @@ const VEH_ICON_SVG = {
   buses: '<path d="M-7,-9.5 C-7,-11.8 -5,-13 -2.5,-13 L2.5,-13 C5,-13 7,-11.8 7,-9.5 L7,10 C7,11.8 5,13 3,13 L-3,13 C-5,13 -7,11.8 -7,10 Z"/>'+
     '<rect x="-5" y="-10.6" width="10" height="4" rx="1"/><rect x="-5" y="-4.8" width="4" height="4.2" rx="0.8"/>'+
     '<rect x="1" y="-4.8" width="4" height="4.2" rx="0.8"/><circle cx="-4.3" cy="12.3" r="1.5"/><circle cx="4.3" cy="12.3" r="1.5"/>',
+  iss: '<rect x="-3.2" y="-6.5" width="6.4" height="13" rx="1.6"/>'+
+    '<rect x="-13" y="-4.6" width="8.2" height="9.2" rx="1"/><rect x="4.8" y="-4.6" width="8.2" height="9.2" rx="1"/>',
 };
 function vehDivIcon(kind){
   return L.divIcon({ className:"mini-veh-icon", iconSize:[26,26], iconAnchor:[13,13],
@@ -462,6 +520,7 @@ function initMiniMap(){
     scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, fadeAnimation:false })
     .setView([0,0], 3);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(miniMap);
+  initRadar(miniMap, .5);                          // live precipitation overlay
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
   miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng
   // Same root cause as the board's own #map (see index.html's initMap()): Leaflet
@@ -494,8 +553,10 @@ function renderMiniMap(id, oLL, dLL, posLL){
     if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([oLL.lat,oLL.lon]); }
     if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([dLL.lat,dLL.lon]); }
     if(oLL && dLL) L.polyline([[oLL.lat,oLL.lon],[dLL.lat,dLL.lon]], {color:"#7d95c9", weight:2, opacity:.45, dashArray:"1 8"}).addTo(miniRouteLayer);
+    // The ISS crosses a continent in minutes -- a city-level zoom would need
+    // constant re-panning, so give it a hemisphere view instead.
     if(pts.length>1) miniMap.fitBounds(pts, {padding:[26,26], maxZoom:11});
-    else miniMap.setView([posLL.lat,posLL.lon], 11);
+    else miniMap.setView([posLL.lat,posLL.lon], mode==="iss"?2:11);
     miniMapFor=id;
   }
   if(!miniVeh || miniVehKind!==mode){
@@ -519,6 +580,79 @@ function makeStars(){
     holder.appendChild(s);
   }
 }
+
+/* ---- the real moon ----
+   Same low-precision astronomy toolkit as sunElevationDeg below, extended to
+   the lunar ephemeris (mean longitude/anomaly + the largest perturbation
+   terms -- ~1° accuracy, plenty for placing a decoration in the sky).
+   Returns altitude/azimuth for the viewer plus the illuminated fraction and
+   waxing/waning, which drive an SVG whose terminator ellipse is the real
+   phase shape rather than a canned emoji. */
+function moonAltAzPhase(date, lat, lon){
+  const rad=Math.PI/180, d=(date.getTime()-Date.UTC(2000,0,1,12,0,0))/86400000;
+  const Lm=218.316+13.176396*d, Mm=134.963+13.064993*d, F=93.272+13.229350*d;
+  const lam=(Lm+6.289*Math.sin(Mm*rad))*rad, bet=(5.128*Math.sin(F*rad))*rad;
+  const e=(23.439-0.0000004*d)*rad;
+  const ra=Math.atan2(Math.sin(lam)*Math.cos(e)-Math.tan(bet)*Math.sin(e), Math.cos(lam));
+  const dec=Math.asin(Math.sin(bet)*Math.cos(e)+Math.cos(bet)*Math.sin(e)*Math.sin(lam));
+  const gmst=((18.697374558+24.06570982441908*d)%24+24)%24;
+  let ha=(gmst+lon/15)*15 - ra/rad; ha=((ha%360)+360)%360; if(ha>180) ha-=360;
+  const haR=ha*rad, latR=lat*rad;
+  const alt=Math.asin(Math.sin(latR)*Math.sin(dec)+Math.cos(latR)*Math.cos(dec)*Math.cos(haR))/rad;
+  let az=Math.atan2(Math.sin(haR), Math.cos(haR)*Math.sin(latR)-Math.tan(dec)*Math.cos(latR))/rad+180;
+  az=((az%360)+360)%360;                       // 0=N, clockwise
+  const meanLon=280.460+0.9856474*d, meanAnom=(357.528+0.9856003*d)*rad;
+  const sunLam=(meanLon+1.915*Math.sin(meanAnom)+0.020*Math.sin(2*meanAnom))*rad;
+  const elong=(((lam-sunLam)/rad)%360+360)%360;
+  return { alt, az, frac:(1-Math.cos(elong*rad))/2, waxing: elong<180 };
+}
+function moonPhaseName(frac, waxing){
+  if(frac<.03) return "new moon"; if(frac>.97) return "full moon";
+  if(Math.abs(frac-.5)<.04) return waxing?"first quarter":"last quarter";
+  return `${waxing?"waxing":"waning"} ${frac>.5?"gibbous":"crescent"}`;
+}
+function moonSvg(frac, waxing){
+  const r=28, cx=32, cy=32, rx=(Math.abs(2*frac-1)*r).toFixed(2);
+  const sweepOut=waxing?1:0;                                  // lit limb: right when waxing
+  const sweepTerm=(frac>.5?1:0)^(waxing?0:1);                 // terminator bulge side
+  return `<svg viewBox="0 0 64 64"><circle class="base" cx="${cx}" cy="${cy}" r="${r}"/>`+
+    `<path class="lit" d="M${cx} ${cy-r} A${r} ${r} 0 0 ${sweepOut} ${cx} ${cy+r} A${rx} ${r} 0 0 ${sweepTerm} ${cx} ${cy-r} Z"/></svg>`;
+}
+function updateMoon(){
+  const el=$("#moon"); if(!el) return;
+  const m=moonAltAzPhase(new Date(), loc.lat, loc.lon);
+  if(m.alt<=0 || m.frac<.02){ el.style.display="none"; return; }
+  el.style.display="block";
+  // azimuth → x across the viewport (E≈25%, S=center, W≈75%); altitude → height
+  el.style.left=`calc(${(m.az/360*100).toFixed(1)}% - min(3.75vmin,32px))`;
+  el.style.top=`${(76 - Math.min(m.alt,70)/70*68).toFixed(1)}%`;
+  el.style.opacity = sunElevationDeg(new Date(),loc.lat,loc.lon)>0 ? .35 : .95;
+  const key=`${m.frac.toFixed(2)}|${m.waxing}`;
+  if(el.dataset.k!==key){ el.dataset.k=key; el.innerHTML=moonSvg(m.frac,m.waxing); }
+  el.title=`${moonPhaseName(m.frac,m.waxing)} · ${(m.frac*100).toFixed(0)}% illuminated`;
+}
+
+/* ---- live precipitation radar (RainViewer -- free public tiles, no key).
+   Latest composite frame as a translucent tile layer on the mini map; the
+   frame list is re-checked every 5 min and the layer swapped only when a
+   newer frame exists (the old one lingers a beat so tiles never flash). */
+let radarTL=null;
+async function refreshRadar(m, opacity){
+  try{
+    const j=await getJSON("https://api.rainviewer.com/public/weather-maps.json", 10000);
+    const fr=j&&j.radar&&j.radar.past&&j.radar.past[j.radar.past.length-1];
+    if(!fr) return;
+    const url=`${j.host}${fr.path}/256/{z}/{x}/{y}/2/1_1.png`;
+    if(radarTL && radarTL._url===url) return;
+    // RainViewer's public composite tops out at z7 (verified: z8+ returns
+    // watermark tiles) -- Leaflet upscales beyond that, like any weather app
+    const nl=L.tileLayer(url,{opacity, maxNativeZoom:7});
+    nl.addTo(m);
+    const old=radarTL; radarTL=nl;
+    if(old) setTimeout(()=>m.removeLayer(old), 1200);
+  }catch(e){}
+}
+function initRadar(m, opacity){ refreshRadar(m,opacity); setInterval(()=>refreshRadar(m,opacity), 5*60000); }
 
 /* ---- real sunrise/sunset sky colors ----
    Low-precision solar position formula (Julian-day mean longitude/anomaly ->
@@ -602,9 +736,9 @@ async function updatePhoto(key, representative, fallbackQuery){
 }
 
 /* ===== subject producers: each returns a normalized subject or null ===== */
-let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses"].includes(m)?m:"planes"; })();
-const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:CITY_CFG.busTag };
-const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.localRailSystem} trains`, buses:CITY_CFG.busRange };
+let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses","iss"].includes(m)?m:"planes"; })();
+const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:CITY_CFG.busTag, iss:"🛰 Nearest spacecraft" };
+const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.localRailSystem} trains`, buses:CITY_CFG.busRange, iss:"International Space Station · low Earth orbit" };
 /* SEPTA's live feeds occasionally send phantom vehicles with nonsense
    sentinel lateness (e.g. late:998) instead of omitting the field --
    matching the same guard used on the boards. */
@@ -613,6 +747,7 @@ function isRealLateNight(late){ return typeof late==="number" && isFinite(late) 
 /* ---- PLANES ---- */
 async function producePlane(){
   const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
+  scanAlerts(data.ac);                              // rare-bird sweep over EVERY aircraft in range
   const air=(data.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
     .map(a=>({a, nm: a.dst!=null? a.dst : haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
@@ -630,7 +765,15 @@ async function producePlane(){
     if(mins>=0&&mins<600){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
       eta=mins<=1?`<span class="badge ok">landing now</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
   const prog=journeyProgress(oLL, dLL, {lat:a.lat,lon:a.lon});
+  // approach mode: on final near a known destination -> add landing runway +
+  // surface weather there (METAR). Cached, so usually no extra latency.
+  let appr="";
+  if(dLL && route && phaseOf(a)==="on final approach" && haversineNm({lat:a.lat,lon:a.lon},dLL)<20){
+    appr=approachChips(await lookupDestWx(dLL), runwayFor(route.destination.icao_code, a.track));
+  }
   return { id:"p"+a.hex, nm, unit:"nm", dir:bearingFrom(loc,{lat:a.lat,lon:a.lon}), count:air.length,
+    acType:(a.t||"").toUpperCase(), acTypeName:a.desc||a.t, airlineNm:airlineName(route,a),
+    gsKt:a.gs, altFt: typeof a.alt_baro==="number"?a.alt_baro:null,
     altText: typeof a.alt_baro==="number"?`${a.alt_baro.toLocaleString()} ft`:"",
     title: airlineName(route,a), sub:[(a.flight||"").trim(), a.desc||a.t, a.r].filter(Boolean).join("  ·  "),
     oCity: route?(route.origin.municipality||route.origin.iata_code):null,
@@ -639,7 +782,7 @@ async function producePlane(){
     oLL, dLL, posLL:{lat:a.lat,lon:a.lon}, oCode:route?route.origin.iata_code:"", dCode:route?route.destination.iata_code:"",
     progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
     statusHtml: emergencyBadge(a)+`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")
-      +vRateChip(a.baro_rate)+headingChip(a.track)+eta, photoHex:a.hex };
+      +vRateChip(a.baro_rate)+headingChip(a.track)+appr+eta, photoHex:a.hex };
 }
 
 /* ---- TRAINS (Amtrak) ---- */
@@ -668,7 +811,9 @@ async function produceAmtrakTrain(){
       eta=mins<=1?`<span class="badge ok">arriving</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
   const late=(t.trainTimely||"").trim(), nx=amtrakNextStop(t);
   const prog=journeyProgress(oLL, dLL, {lat:t.lat,lon:t.lon});   // Amtrak distances are shown in miles
+  const lateM=/late/i.test(late) ? late.match(/(\d+)\s*min/i) : null;
   return { id:"t"+(t.trainID||t.trainNum), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:t.lat,lon:t.lon}), count:list.length,
+    sysName:"Amtrak", lateMin:lateM?+lateM[1]:null,
     altText:`${Math.round(t.velocity||0)} mph`, title:t.routeName||"Amtrak",
     sub:`Train ${t.trainNum} · Amtrak${late?"  ·  "+late:""}`,
     oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
@@ -830,7 +975,7 @@ async function produceNycRailTrain(){
   const {v,nm,sys,stationName,line}=all[0];
   return { id:"nyc"+sys+v.tripId, nm, unit:"mi", dir:bearingFrom(loc,{lat:all[0].lat,lon:all[0].lon}), count:all.length,
     altText: v.speed!=null?`${Math.round(v.speed*2.236936)} mph`:"", title: line ? (sys==="Subway" ? `${line} train` : `${line} · ${sys}`) : sys,
-    sub:`${sys}`, oCity:null, dCity:null,
+    sub:`${sys}`, sysName:sys, oCity:null, dCity:null,
     subline: stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : "",
     oLL:null, dLL:null, posLL:{lat:all[0].lat,lon:all[0].lon}, oCode:"", dCode:"",
     statusHtml:`<span class="phase">en route</span><span class="badge na">live</span>`,
@@ -852,7 +997,7 @@ async function produceLiveLocalTrain(){
     const {v,mi}=list[0];
     return { id:"lm"+(v.id||v.train), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}), count:list.length,
       altText: v.mph!=null?`${v.mph} mph`:"", title:v.line?`${v.line} Line`:"MARC",
-      sub:`Train ${v.train||"?"} · MARC`, oCity:null, dCity:null, subline:"",
+      sub:`Train ${v.train||"?"} · MARC`, sysName:"MARC", oCity:null, dCity:null, subline:"",
       oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
       statusHtml:`<span class="phase">en route</span><span class="badge na">live</span>`,
       photoQuery:`MARC ${v.line||"train"} train Maryland`, photoFallback:"MARC train Maryland" };
@@ -867,7 +1012,8 @@ async function produceLiveLocalTrain(){
     const cars=String(t.consist||"").split(",").filter(Boolean).length;   // SEPTA lists each car number
     return { id:"ls"+t.trainno, nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:+t.lat,lon:+t.lon}), count:list.length,
       altText:"", title:t.line||"SEPTA Regional Rail",
-      sub:`Train ${t.trainno} · SEPTA`, oCity:t.currentstop||null, dCity:t.dest||null,
+      sub:`Train ${t.trainno} · SEPTA`, sysName:"SEPTA", lateMin:late?t.late:null,
+      oCity:t.currentstop||null, dCity:t.dest||null,
       subline: t.currentstop&&t.nextstop ? `${t.currentstop} → ${t.nextstop}` : (t.dest?`→ ${t.dest}`:""),
       oLL:null, dLL:null, posLL:{lat:+t.lat,lon:+t.lon}, oCode:"", dCode:"",
       statusHtml:`<span class="phase">en route</span>`+headingChip(t.heading)+(cars?`<span class="alt">${cars} cars</span>`:"")
@@ -1003,7 +1149,204 @@ async function produceBus(){
     photoQuery: CITY_CFG.busPhotoQuery,
     photoFallback:"transit bus exterior" };
 }
-const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus };
+/* ---- ISS (wheretheiss.at -- no key, CORS-open). Distance shown is the true
+   line-of-sight slant range, and elevation comes from spherical geometry, so
+   "above your horizon" means you could actually walk outside and look. */
+async function produceISS(){
+  const d=await getJSON("https://api.wheretheiss.at/v1/satellites/25544", 10000);
+  if(typeof d.latitude!=="number") return null;
+  const posLL={lat:d.latitude, lon:d.longitude};
+  const R=6371, h=d.altitude||420;
+  const c=haversineNm(loc,posLL)*1.852/R;                      // central angle, radians
+  const elev=Math.atan2(Math.cos(c)-R/(R+h), Math.sin(c))*180/Math.PI;
+  const slantKm=Math.sqrt(R*R+(R+h)*(R+h)-2*R*(R+h)*Math.cos(c));
+  const mph=Math.round((d.velocity||0)*0.621371), up=elev>0;
+  const sunlit=d.visibility!=="eclipsed";
+  return { id:"iss", nm:slantKm*0.621371, unit:"mi", dir:bearingFrom(loc,posLL), elev,
+    altText:`${Math.round(h)} km up`,
+    title:"International Space Station", sub:`ISS · NORAD 25544 · ${mph.toLocaleString()} mph`,
+    oCity:null, dCity:null,
+    subline: up ? `above your horizon — look ${bearingFrom(loc,posLL)}, ${Math.round(elev)}° up`
+                : `below the horizon · sub-point ${posLL.lat.toFixed(1)}°, ${posLL.lon.toFixed(1)}°`,
+    oLL:null, dLL:null, posLL, oCode:"", dCode:"",
+    statusHtml:`<span class="phase">${up?"overhead":"orbiting"}</span>`
+      +`<span class="alt">${up?Math.round(elev)+"° elevation":Math.round(-elev)+"° below horizon"}</span>`
+      +`<span class="badge ${sunlit?"ok":"na"}">${sunlit?"in sunlight":"in Earth's shadow"}</span>`,
+    photoQuery:"International Space Station", photoFallback:"ISS space station Earth orbit" };
+}
+
+/* ---- approach mode: destination weather + landing runway ----
+   METAR from aviationweather.gov's data API (CORS-open, no key). The runway
+   is inferred: magnetic heading ≈ true track + local declination (d, °W
+   positive), matched against the airport's runway numbers. The table only
+   needs the airports these boards actually sit under. */
+const RUNWAYS={ KDCA:{d:11,r:[1,19,15,33,4,22]}, KIAD:{d:11,r:[1,19,12,30]}, KBWI:{d:11,r:[10,28,15,33]},
+  KPHL:{d:12,r:[9,27,17,35,8,26]}, KJFK:{d:13,r:[4,22,13,31]}, KLGA:{d:13,r:[4,22,13,31]}, KEWR:{d:13,r:[4,22,11,29]},
+  KBOS:{d:14,r:[4,22,9,27,15,33,14,32]}, EHAM:{d:-2,r:[18,36,6,24,9,27,4,22]},
+  KLAX:{d:-12,r:[6,24,7,25]}, KBUR:{d:-12,r:[8,26,15,33]}, KSFO:{d:-13,r:[1,19,10,28]}, KOAK:{d:-13,r:[12,30,10,28]} };
+/* Surface weather comes from Open-Meteo rather than the METAR itself --
+   aviationweather.gov publishes no CORS header, so browsers can't read it
+   directly, and this project deliberately has no proxy to hide behind.
+   Open-Meteo is CORS-open, keyless, and can report wind in knots at the
+   destination's exact coordinates, which is all the chip needs. */
+const metarCache={};
+async function lookupDestWx(ll){
+  if(!ll) return null;
+  const key=`${ll.lat.toFixed(2)},${ll.lon.toFixed(2)}`;
+  const hit=metarCache[key];
+  if(hit && Date.now()-hit.t<6e5) return hit.v;                // cache 10 min
+  let v=null;
+  try{
+    const d=await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${ll.lat.toFixed(3)}&longitude=${ll.lon.toFixed(3)}`+
+      `&current=wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility&wind_speed_unit=kn`, 8000);
+    const c=d && d.current;
+    if(c) v={ wdir:Math.round(c.wind_direction_10m), wspd:Math.round(c.wind_speed_10m),
+      wgst: c.wind_gusts_10m!=null?Math.round(c.wind_gusts_10m):null,
+      visMi: c.visibility!=null?c.visibility/1609.34:null };
+  }catch(e){}
+  metarCache[key]={t:Date.now(), v};
+  return v;
+}
+function runwayFor(icao, track){
+  const rw=RUNWAYS[icao]; if(!rw || typeof track!=="number") return null;
+  const mag=((track+rw.d)%360+360)%360;
+  let best=null, bestD=21;                                     // must be within 20°
+  for(const n of rw.r){ let dd=Math.abs(mag-n*10); if(dd>180) dd=360-dd; if(dd<bestD){ bestD=dd; best=n; } }
+  return best;
+}
+function approachChips(wx, rwy){
+  let h="";
+  if(rwy!=null) h+=`<span class="badge na">RWY ${String(rwy).padStart(2,"0")}</span>`;
+  if(wx){
+    if(typeof wx.wdir==="number" && typeof wx.wspd==="number" && wx.wspd>0)
+      h+=`<span class="alt">wind ${wx.wdir}° ${wx.wspd}${wx.wgst&&wx.wgst>=wx.wspd+8?`G${wx.wgst}`:""} kt</span>`;
+    else if(wx.wspd===0) h+=`<span class="alt">wind calm</span>`;
+    if(wx.visMi!=null && wx.visMi<7) h+=`<span class="alt">${wx.visMi.toFixed(1)} mi vis</span>`;
+  }
+  return h;
+}
+
+/* ---- rare-bird alerts: things worth interrupting the wall for ----
+   The plane producer already downloads EVERY aircraft in range and keeps one;
+   this sweeps the rest of that list for the interesting stuff -- emergencies
+   anywhere nearby, military traffic (dbFlags bit 0), the big/rare airframes,
+   close helicopters -- and slides a banner down. In-memory dedupe per
+   aircraft per 30 min so a loitering helicopter doesn't nag. */
+const RARE_TYPES={ A388:"Airbus A380", B748:"Boeing 747-8", B744:"Boeing 747-400", B742:"Boeing 747-200",
+  A124:"Antonov An-124", C5M:"C-5M Super Galaxy", C17:"C-17 Globemaster III",
+  VC25:"VC-25A — Air Force One", B52:"B-52 Stratofortress", U2:"U-2 Dragon Lady", E6:"E-6B Mercury" };
+const alertSeen={};
+let alertQueue=[], alertShowing=false;
+function pushAlert(key, red, ic, t, s, ttlMin=30){
+  const now=Date.now();
+  if(alertSeen[key] && now-alertSeen[key]<ttlMin*60000) return;
+  alertSeen[key]=now;
+  alertQueue.push({red,ic,t,s});
+  if(!alertShowing) nextAlert();
+}
+function nextAlert(){
+  const b=$("#alertBanner"), a=alertQueue.shift();
+  if(!a){ alertShowing=false; return; }
+  alertShowing=true;
+  b.classList.toggle("red", !!a.red);
+  b.querySelector(".ic").textContent=a.ic;
+  b.querySelector(".t").textContent=a.t;
+  b.querySelector(".s").textContent=a.s;
+  b.classList.add("show");
+  setTimeout(()=>{ b.classList.remove("show"); setTimeout(nextAlert, 600); }, 9000);
+}
+function scanAlerts(ac){
+  for(const a of (ac||[])){
+    if(typeof a.lat!=="number" || typeof a.lon!=="number") continue;
+    const nm=a.dst!=null?a.dst:haversineNm(loc,{lat:a.lat,lon:a.lon});
+    const who=[(a.flight||"").trim()||a.r||a.hex, a.desc||a.t].filter(Boolean).join(" · ");
+    const where=`${nm.toFixed(0)} nm ${bearingFrom(loc,{lat:a.lat,lon:a.lon})}`
+      +(typeof a.alt_baro==="number"?` · ${a.alt_baro.toLocaleString()} ft`:"");
+    const sq=(a.squawk||"").trim(), em=(a.emergency||"").trim().toLowerCase();
+    const emerg=SQUAWK_EMERG[sq] || (em && em!=="none" ? em.toUpperCase() : null);
+    if(emerg){ pushAlert("em:"+a.hex, true, "🚨", `${emerg} — squawk ${sq||"?"}`, `${who} · ${where}`); continue; }
+    const ty=(a.t||"").toUpperCase();
+    if(RARE_TYPES[ty]){ pushAlert("rare:"+a.hex, false, "✈", `${RARE_TYPES[ty]} in range`, `${who} · ${where}`); continue; }
+    if((a.dbFlags||0)&1){ pushAlert("mil:"+a.hex, false, "🎖", "Military aircraft in range", `${who} · ${where}`); continue; }
+    if(a.category==="A7" && nm<=5) pushAlert("heli:"+a.hex, false, "🚁", "Helicopter close by", `${who} · ${where}`);
+  }
+}
+/* Off-mode watcher: the sweep above only runs while in planes mode, so once a
+   minute do a light scan (one point query) from the other modes, and check
+   for an ISS pass from every mode -- dedupe key "iss" spans the whole ~10 min
+   pass, and 45 min is under one orbit so the NEXT pass can alert again. */
+async function backgroundWatch(){
+  try{
+    if(mode!=="planes"){
+      const d=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`, 10000);
+      scanAlerts(d.ac);
+    }
+  }catch(e){}
+  try{
+    if(mode!=="iss"){
+      const s=await produceISS();
+      if(s && s.elev>10) pushAlert("iss", false, "🛰", "The ISS is above your horizon",
+        `look ${s.dir}, ${Math.round(s.elev)}° up · ${Math.round(s.nm).toLocaleString()} mi away`, 45);
+    }
+  }catch(e){}
+}
+
+/* ---- spotter's log: everything this screen has ever seen ---- */
+function freshLog(){ return { v:1, planes:{n:0, types:{}, airlines:{}}, trains:{n:0, systems:{}},
+  buses:{n:0, routes:{}}, iss:{n:0}, records:{} }; }
+let skyLog=(function(){ try{ const l=JSON.parse(localStorage.getItem("skylog.v1")||"null"); if(l && l.v===1) return l; }catch(e){}
+  return freshLog(); })();
+function saveLogNow(){ try{ localStorage.setItem("skylog.v1", JSON.stringify(skyLog)); }catch(e){} }
+function bumpLog(m, key, name){ if(!key) return; const e=m[key]||(m[key]={n:0, first:Date.now()});
+  e.n++; e.last=Date.now(); if(name) e.name=name; }
+function recHigh(id, v, who){ if(v==null || !isFinite(v)) return;
+  const r=skyLog.records[id]; if(!r || v>r.v) skyLog.records[id]={v, who, t:Date.now()}; }
+function recLow(id, v, who){ if(v==null || !isFinite(v)) return;
+  const r=skyLog.records[id]; if(!r || v<r.v) skyLog.records[id]={v, who, t:Date.now()}; }
+function logSubject(s){
+  if(mode==="planes"){
+    skyLog.planes.n++;
+    bumpLog(skyLog.planes.types, s.acType, s.acTypeName);
+    bumpLog(skyLog.planes.airlines, s.airlineNm);
+    recHigh("fastestKt", s.gsKt, s.title); recHigh("highestFt", s.altFt, s.title);
+    recLow("closestNm", s.nm, s.title);
+  }
+  else if(mode==="trains"){ skyLog.trains.n++; bumpLog(skyLog.trains.systems, s.sysName);
+    recHigh("mostLateMin", s.lateMin, s.title); }
+  else if(mode==="buses"){ skyLog.buses.n++; bumpLog(skyLog.buses.routes, s.title); }
+  else if(mode==="iss"){ skyLog.iss.n++; }
+  saveLogNow();
+}
+function fmtWhen(t){ return t?new Date(t).toLocaleDateString([],{month:"short",day:"numeric"}):""; }
+function renderLogPanel(){
+  const P=skyLog.planes, T=skyLog.trains, B=skyLog.buses, R=skyLog.records;
+  const row=(l,r)=>`<div class="row"><span>${l}</span><span>${r}</span></div>`;
+  const rows=[];
+  rows.push(`<div class="sect">Totals</div>`);
+  rows.push(row("✈ Aircraft", `${P.n} seen · ${Object.keys(P.types).length} types · ${Object.keys(P.airlines).length} airlines`));
+  rows.push(row("🚆 Trains", `${T.n} seen · ${Object.keys(T.systems).length} systems`));
+  rows.push(row("🚌 Buses", `${B.n} seen · ${Object.keys(B.routes).length} routes`));
+  if(skyLog.iss.n) rows.push(row("🛰 ISS", `${skyLog.iss.n} sightings`));
+  const rare=Object.entries(P.types).sort((a,b)=>a[1].n-b[1].n || (b[1].last||0)-(a[1].last||0)).slice(0,5);
+  if(rare.length){
+    rows.push(`<div class="sect">Rarest catches</div>`);
+    rare.forEach(([code,e])=> rows.push(row(`<b>${escapeHtml(e.name||code)}</b>`,
+      `${e.n}× <span class="when">${fmtWhen(e.last)}</span>`)));
+  }
+  const defs=[["fastestKt","Fastest",v=>`${Math.round(v)} kt`],
+    ["highestFt","Highest",v=>`${Math.round(v).toLocaleString()} ft`],
+    ["closestNm","Closest",v=>`${v.toFixed(1)} nm`],
+    ["mostLateMin","Most delayed",v=>`+${Math.round(v)} min`]].filter(([id])=>R[id]);
+  if(defs.length){
+    rows.push(`<div class="sect">Records</div>`);
+    defs.forEach(([id,lbl,fmt])=>{ const r=R[id];
+      rows.push(row(`<b>${lbl}</b> ${fmt(r.v)}`, `${escapeHtml(r.who||"")} <span class="when">${fmtWhen(r.t)}</span>`)); });
+  }
+  $("#logBody").innerHTML = (P.n+T.n+B.n+skyLog.iss.n)
+    ? rows.join("") : `<div class="empty2">Nothing logged yet — leave the sky on for a while.</div>`;
+}
+
+const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus, iss:produceISS };
 
 function phaseOf(a){
   const alt=typeof a.alt_baro==="number"?a.alt_baro:null, rate=a.baro_rate||0;
@@ -1095,6 +1438,7 @@ function render(s){
   L.style.display="none";
   const fl=$("#flight"); fl.style.display="";
   if(lastId!==null && lastId!==s.id){ fl.classList.remove("swap"); void fl.offsetWidth; fl.classList.add("swap"); }
+  if(lastId!==s.id) logSubject(s);                 // a new subject — into the spotter's log
   lastId=s.id;
   if(s.photoHex) updatePhoto(s.photoHex, false);
   else if(s.photoQuery) updatePhoto(s.photoQuery, true, s.photoFallback);
@@ -1173,7 +1517,7 @@ function setMode(m){
   lastId=null; photoShownFor=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
   if(miniVehLayer){ miniVehLayer.clearLayers(); miniVeh=null; miniVehKind=null; miniMapFor=null; }
   const L=$("#loading"); L.style.display=""; L.classList.add("pulse");
-  L.textContent = m==="planes"?"Scanning the sky…":m==="trains"?"Finding trains…":"Finding buses…";
+  L.textContent = m==="planes"?"Scanning the sky…":m==="trains"?"Finding trains…":m==="iss"?"Acquiring the ISS…":"Finding buses…";
   tick();
 }
 function initSettings(){
@@ -1182,6 +1526,11 @@ function initSettings(){
   $("#setDone").onclick=()=>$("#settings").classList.remove("show");
   $("#settings").addEventListener("click",e=>{ if(e.target.id==="settings") $("#settings").classList.remove("show"); });
   $("#modeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setMode(b.dataset.mode); });
+  $("#logBtn").onclick=()=>{ renderLogPanel(); $("#logPanel").classList.add("show"); };
+  $("#logDone").onclick=()=>$("#logPanel").classList.remove("show");
+  $("#logPanel").addEventListener("click",e=>{ if(e.target.id==="logPanel") $("#logPanel").classList.remove("show"); });
+  $("#logReset").onclick=()=>{ if(confirm("Reset the spotter's log? This clears everything seen so far.")){
+    skyLog=freshLog(); saveLogNow(); renderLogPanel(); } };
   $("#themeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setNightTheme(b.dataset.theme); });
   $("#skySeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setSunSky(b.dataset.sky); });
 }
@@ -1254,6 +1603,8 @@ function boot(){
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
   clock(); setInterval(clock, 1000);
   updateSunSky(); setInterval(updateSunSky, 60000);
+  updateMoon(); setInterval(updateMoon, 60000);
+  setInterval(backgroundWatch, 60000);             // off-mode rare-bird + ISS-pass watcher
   setMode(mode); setInterval(tick, CFG.refreshMs);
   // Only fall back to GPS if the board itself would (i.e. you haven't set a
   // manual address there) -- otherwise this would silently override the
@@ -1261,7 +1612,7 @@ function boot(){
   if(navigator.geolocation && !boardLocIsManual()){
     navigator.geolocation.getCurrentPosition(p=>{
       loc={ lat:p.coords.latitude, lon:p.coords.longitude, label:"your location" };
-      $("#loclbl").textContent="near your location"; tick(); updateSunSky();
+      $("#loclbl").textContent="near your location"; tick(); updateSunSky(); updateMoon();
     }, ()=>{}, { enableHighAccuracy:false, timeout:8000, maximumAge:600000 });
   }
 }

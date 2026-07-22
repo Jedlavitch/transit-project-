@@ -458,6 +458,63 @@ function initMap(){
     .setView([39.5,-98], 4);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{ maxZoom:19, keepBuffer:6 }).addTo(map);
   routeLayer=L.layerGroup().addTo(map);
+  // own pane between tiles (200) and overlays (400): the night shade re-adds
+  // itself every 5 min and must never land on top of routes/trails
+  const shadePane=map.createPane("nightshade");
+  shadePane.style.zIndex=350; shadePane.style.pointerEvents="none";
+  initRadar();                                       // live precipitation overlay
+  drawTerminator(); setInterval(drawTerminator, 5*60000);
+}
+
+/* ---- live precipitation radar (RainViewer -- free public tiles, no key).
+   Latest composite frame as a translucent tile layer under the vectors; the
+   frame list is re-checked every 5 min and the layer swapped only when a new
+   frame exists (old one lingers a beat so tiles never flash). Planes visibly
+   routing around storm cells is exactly the show this page is for. */
+let radarTL=null;
+async function refreshRadar(){
+  try{
+    const j=await getJSON("https://api.rainviewer.com/public/weather-maps.json", 10000);
+    const fr=j&&j.radar&&j.radar.past&&j.radar.past[j.radar.past.length-1];
+    if(!fr) return;
+    const url=`${j.host}${fr.path}/256/{z}/{x}/{y}/2/1_1.png`;
+    if(radarTL && radarTL._url===url) return;
+    // RainViewer's public composite tops out at z7 (verified: z8+ returns
+    // watermark tiles) -- Leaflet upscales beyond that, like any weather app
+    const nl=L.tileLayer(url,{opacity:.55, maxNativeZoom:7});
+    nl.addTo(map);
+    const old=radarTL; radarTL=nl;
+    if(old) setTimeout(()=>map.removeLayer(old), 1200);
+  }catch(e){}
+}
+function initRadar(){ refreshRadar(); setInterval(refreshRadar, 5*60000); }
+
+/* ---- day/night terminator: shade the actual night half of the planet ----
+   Same low-precision solar position math as night.html. For each longitude,
+   the latitude where the sun sits exactly on the horizon comes from
+   tan(lat) = -cos(hourAngle)/tan(declination); closing the polygon over the
+   winter pole covers the whole night hemisphere. The tour hops between
+   continents, so stops visibly flip between daylight and night. */
+let nightPoly=null;
+function drawTerminator(){
+  const rad=Math.PI/180, d=(Date.now()-Date.UTC(2000,0,1,12,0,0))/86400000;
+  const meanLon=(280.460+0.9856474*d)%360, meanAnom=(357.528+0.9856003*d)%360;
+  const eclLon=meanLon+1.915*Math.sin(meanAnom*rad)+0.020*Math.sin(2*meanAnom*rad);
+  const obl=23.439-0.0000004*d;
+  const ra=Math.atan2(Math.cos(obl*rad)*Math.sin(eclLon*rad), Math.cos(eclLon*rad))/rad;
+  const decl=Math.asin(Math.sin(obl*rad)*Math.sin(eclLon*rad))/rad;
+  const gmst=((18.697374558+24.06570982441908*d)%24+24)%24;
+  const ha0=gmst*15-(((ra%360)+360)%360);            // sun's hour angle at lon 0
+  const pts=[];
+  for(let lon=-180;lon<=180;lon+=3){
+    const H=(ha0+lon)*rad;
+    pts.push([Math.atan(-Math.cos(H)/Math.tan(decl*rad))/rad, lon]);
+  }
+  const pole=decl>0?-90:90;                          // night side wraps over the winter pole
+  pts.push([pole,180],[pole,-180]);
+  const np=L.polygon(pts,{pane:"nightshade", stroke:false, fillColor:"#01030a", fillOpacity:.42, interactive:false}).addTo(map);
+  if(nightPoly) map.removeLayer(nightPoly);
+  nightPoly=np;
 }
 
 /* ===================== render one stop ================================== */

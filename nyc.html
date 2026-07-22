@@ -134,6 +134,20 @@
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
+  /* ---- live service-alert ticker (bottom edge) ---- */
+  #alertTicker{position:fixed; left:0; right:0; bottom:0; z-index:70; display:none; align-items:center;
+    background:var(--scrim); backdrop-filter:blur(8px); border-top:1px solid var(--line); height:38px; overflow:hidden}
+  #alertTicker.show{display:flex}
+  #alertTicker .tk-badge{flex-shrink:0; display:flex; align-items:center; gap:6px; height:100%; padding:0 14px;
+    background:rgba(255,204,51,.12); border-right:1px solid var(--line); color:var(--warn);
+    font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap}
+  #alertTicker .tk-scroll{flex:1; overflow:hidden; height:100%; display:flex; align-items:center}
+  #alertTicker .tk-inner{display:inline-block; white-space:nowrap; padding-left:100vw;
+    animation:tkmove var(--tk-dur,60s) linear infinite; will-change:transform}
+  #alertTicker:hover .tk-inner{animation-play-state:paused}
+  #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
+  #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
+  @keyframes tkmove{to{transform:translateX(-100%)}}
 </style>
 </head>
 <body>
@@ -221,6 +235,9 @@
     <span id="statusText">live — Amtrak + airplanes.live</span>
     <span class="grow"></span>
   </footer>
+
+  <div id="alertTicker"><span class="tk-badge">⚠ Service alerts</span>
+    <div class="tk-scroll"><div class="tk-inner" id="tkInner"></div></div></div>
 </div>
 
 <div id="setup">
@@ -1579,6 +1596,41 @@ function buildCardToggles(){
   });
 }
 
+/* ---------- live service-alert ticker (MTA all-alerts feed, no key) ----------
+   Same api-endpoint.mta.info host the realtime feeds use, but the JSON
+   variant of the camsys service-alerts feed (GTFS-RT ServiceAlert entities
+   plus MTA's "mercury" extensions). Planned-work notices would drown the
+   ticker, so only live alert types get through. */
+function renderTicker(items){
+  const t=document.getElementById("alertTicker"), inner=document.getElementById("tkInner");
+  if(!items.length){ t.classList.remove("show"); document.body.style.paddingBottom=""; return; }
+  inner.innerHTML=items.map(i=>`<span>${i.lbl?`<b>${esc(i.lbl)}</b>`:""}${esc(i.txt)}</span>`).join("");
+  const chars=items.reduce((n,i)=>n+i.txt.length+(i.lbl||"").length, 0);
+  t.style.setProperty("--tk-dur", Math.max(40, Math.round(chars*0.30))+"s");
+  t.classList.add("show"); document.body.style.paddingBottom="40px";
+}
+async function refreshAlertTicker(){
+  try{
+    const d=await getJSON("https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fall-alerts.json", 15000);
+    const now=Date.now()/1000, seen=new Set(), items=[];
+    for(const e of (d.entity||[])){
+      const al=e.alert; if(!al) continue;
+      const kind=((al["transit_realtime.mercury_alert"]||{}).alert_type||"");
+      if(/planned/i.test(kind)) continue;
+      const per=al.active_period||[];
+      const act=!per.length || per.some(p=>now>=(p.start||0) && now<=(p.end||Infinity));
+      if(!act) continue;
+      const tr=((al.header_text||{}).translation||[]).find(t2=>!t2.language||/^en$/i.test(t2.language));
+      const txt=(tr&&tr.text||"").replace(/\s+/g," ").trim();
+      if(!txt || seen.has(txt)) continue;
+      seen.add(txt);
+      items.push({ lbl:kind, txt });
+      if(items.length>=12) break;
+    }
+    renderTicker(items);
+  }catch(e){ /* keep whatever's showing */ }
+}
+
 /* ---------- boot ---------- */
 function boot(){
   setBoardAccent(localStorage.getItem("transitboardnyc.accent")||"#4ea1ff"); buildAccentSwatches();
@@ -1599,6 +1651,7 @@ function boot(){
   setInterval(busMapTick, CFG.busEveryMs);   // MTA Bus positions on the map (scheduled, or live via Worker)
   setInterval(refreshPathScheduled, 30000);  // PATH departures card (scheduled, or live via Worker)
   setInterval(drawPathScheduledMap, CFG.pathEveryMs); // PATH positions on the map (always scheduled)
+  refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 
   // re-fit cards to the new layout when the window/display changes size
   let rzT; window.addEventListener("resize", ()=>{
