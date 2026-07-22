@@ -137,25 +137,31 @@
   #alertBanner.red .t{color:#ff8577; animation:emergPulse 1.1s ease-in-out infinite}
 
   /* ---- spotter's log overlay ---- */
-  #logPanel{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
+  #logPanel, #fleetPanel{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
     display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
-  #logPanel.show{display:flex}
-  #logPanel .panel{background:var(--panel2); border:1px solid var(--faint); border-radius:18px;
+  #logPanel.show, #fleetPanel.show{display:flex}
+  #logPanel .panel, #fleetPanel .panel{background:var(--panel2); border:1px solid var(--faint); border-radius:18px;
     padding:26px; max-width:520px; width:100%; box-shadow:0 20px 80px rgba(0,0,0,.6);
     max-height:86dvh; overflow:auto}
-  #logPanel h3{color:var(--amber); font-size:20px}
+  #logPanel h3, #fleetPanel h3{color:var(--amber); font-size:20px}
   #logPanel .sect{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase;
     letter-spacing:.15em; margin:18px 0 6px}
-  #logPanel .row{display:flex; justify-content:space-between; gap:1em; padding:7px 0;
+  #logPanel .row, #fleetPanel .row{display:flex; justify-content:space-between; gap:1em; padding:7px 0;
     border-bottom:1px solid var(--faint); color:var(--city); font-size:14px; font-weight:600}
-  #logPanel .row b{color:var(--amber)}
-  #logPanel .row .when{color:var(--muted); font-variant-numeric:tabular-nums}
-  #logPanel .empty2{color:var(--muted); font-size:14px; padding:6px 0}
-  #logPanel .actions{display:flex; gap:10px; margin-top:22px}
-  #logPanel .actions button{flex:1; padding:12px; border-radius:12px; font-weight:800; font-size:14px;
+  #logPanel .row b, #fleetPanel .row b{color:var(--amber)}
+  #logPanel .row .when, #fleetPanel .row .when{color:var(--muted); font-variant-numeric:tabular-nums}
+  #logPanel .empty2, #fleetPanel .empty2{color:var(--muted); font-size:14px; padding:6px 0}
+  #logPanel .actions, #fleetPanel .actions{display:flex; gap:10px; margin-top:22px}
+  #logPanel .actions button, #fleetPanel .actions button{flex:1; padding:12px; border-radius:12px; font-weight:800; font-size:14px;
     cursor:pointer; font-family:inherit}
-  #logPanel .done2{border:none; background:var(--amber); color:var(--btn-text)}
+  #logPanel .done2, #fleetPanel .done2{border:none; background:var(--amber); color:var(--btn-text)}
   #logPanel .reset{border:1px solid rgba(255,107,90,.5); background:none; color:var(--late)}
+  /* ---- "nearest of N" -> whole-fleet list ---- */
+  .fleet-btn{cursor:pointer; border-bottom:1px dotted var(--amber-dim)}
+  .fleet-btn:hover{color:var(--amber); border-bottom-color:var(--amber)}
+  .frow-sub{color:var(--muted); font-weight:600}
+  .mini-fleet-dot{display:block; width:7px; height:7px; border-radius:50%;
+    background:var(--amber-dim); opacity:.8; box-shadow:0 0 5px var(--glow)}
 
   /* ---- flight-change transition ---- */
   #flight.swap{animation:swapIn .8s cubic-bezier(.2,.7,.2,1)}
@@ -271,6 +277,16 @@
       <div class="lbl">Color</div>
       <div class="swatches" id="swatches"></div>
       <button class="done" id="setDone">Done</button>
+    </div>
+  </div>
+
+  <div id="fleetPanel">
+    <div class="panel">
+      <h3 id="fleetTitle">In range</h3>
+      <div id="fleetBody"></div>
+      <div class="actions">
+        <button class="done2" id="fleetDone">Done</button>
+      </div>
     </div>
   </div>
 
@@ -513,7 +529,7 @@ function vehDivIcon(kind){
   return L.divIcon({ className:"mini-veh-icon", iconSize:[26,26], iconAnchor:[13,13],
     html:`<svg viewBox="-14 -15 28 30" width="26" height="26">${VEH_ICON_SVG[kind]||VEH_ICON_SVG.planes}</svg>` });
 }
-let miniMap=null, miniRouteLayer=null, miniVehLayer=null, miniVeh=null, miniVehKind=null;
+let miniMap=null, miniRouteLayer=null, miniVehLayer=null, miniVeh=null, miniVehKind=null, miniFleetLayer=null;
 function initMiniMap(){
   if(miniMap) return;
   miniMap=L.map("miniMap",{ zoomControl:false, attributionControl:false, dragging:false,
@@ -536,12 +552,18 @@ function initMiniMap(){
   }
 }
 let miniMapFor=null;
-function renderMiniMap(id, oLL, dLL, posLL){
+function renderMiniMap(id, oLL, dLL, posLL, fleet){
   const wrap=$("#miniMap");
   if(!posLL){ wrap.style.display="none"; miniMapFor=null; return; }
   wrap.style.display="block";
   initMiniMap();
   miniMap.invalidateSize();
+  // the rest of the fleet as faint dots, so "nearest of N" is visible on the map
+  if(!miniFleetLayer) miniFleetLayer=L.layerGroup().addTo(miniMap);
+  miniFleetLayer.clearLayers();
+  (fleet||[]).slice(0,80).forEach(v=>{ if(!v.ll) return;
+    L.marker([v.ll.lat,v.ll.lon],{icon:L.divIcon({className:"",html:'<span class="mini-fleet-dot"></span>',
+      iconSize:[7,7], iconAnchor:[3,3]}), interactive:false}).addTo(miniFleetLayer); });
   // Only redraw endpoints/route and re-fit the view for a NEW subject (a
   // different vehicle, or switching plane/train/bus). Re-fitting on every
   // 12s refresh -- even though the vehicle barely moved -- was what made the
@@ -772,6 +794,11 @@ async function producePlane(){
     appr=approachChips(await lookupDestWx(dLL), runwayFor(route.destination.icao_code, a.track));
   }
   return { id:"p"+a.hex, nm, unit:"nm", dir:bearingFrom(loc,{lat:a.lat,lon:a.lon}), count:air.length,
+    // every aircraft in range, for the click-to-expand fleet list + mini-map dots
+    fleet: air.map(x=>({ t:(x.a.flight||"").trim()||x.a.r||x.a.hex, s:x.a.desc||x.a.t||"",
+      nm:x.nm, unit:"nm", dir:bearingFrom(loc,{lat:x.a.lat,lon:x.a.lon}),
+      x: typeof x.a.alt_baro==="number"?`${x.a.alt_baro.toLocaleString()} ft`:"",
+      ll:{lat:x.a.lat,lon:x.a.lon} })),
     acType:(a.t||"").toUpperCase(), acTypeName:a.desc||a.t, airlineNm:airlineName(route,a),
     gsKt:a.gs, altFt: typeof a.alt_baro==="number"?a.alt_baro:null,
     altText: typeof a.alt_baro==="number"?`${a.alt_baro.toLocaleString()} ft`:"",
@@ -813,6 +840,10 @@ async function produceAmtrakTrain(){
   const prog=journeyProgress(oLL, dLL, {lat:t.lat,lon:t.lon});   // Amtrak distances are shown in miles
   const lateM=/late/i.test(late) ? late.match(/(\d+)\s*min/i) : null;
   return { id:"t"+(t.trainID||t.trainNum), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:t.lat,lon:t.lon}), count:list.length,
+    fleet: list.map(({t:tt,mi:m2})=>({ t:`${tt.routeName||"Amtrak"} #${tt.trainNum}`,
+      s:`→ ${tt.destName||tt.destCode||""}`, nm:m2, unit:"mi",
+      dir:bearingFrom(loc,{lat:tt.lat,lon:tt.lon}), x:`${Math.round(tt.velocity||0)} mph`,
+      ll:{lat:tt.lat,lon:tt.lon} })),
     sysName:"Amtrak", lateMin:lateM?+lateM[1]:null,
     altText:`${Math.round(t.velocity||0)} mph`, title:t.routeName||"Amtrak",
     sub:`Train ${t.trainNum} · Amtrak${late?"  ·  "+late:""}`,
@@ -974,6 +1005,9 @@ async function produceNycRailTrain(){
   all.sort((a,b)=>a.nm-b.nm);
   const {v,nm,sys,stationName,line}=all[0];
   return { id:"nyc"+sys+v.tripId, nm, unit:"mi", dir:bearingFrom(loc,{lat:all[0].lat,lon:all[0].lon}), count:all.length,
+    fleet: all.map(x=>({ t: x.line ? (x.sys==="Subway"?`${x.line} train`:`${x.line} · ${x.sys}`) : x.sys,
+      s:x.stationName||"", nm:x.nm, unit:"mi", dir:bearingFrom(loc,{lat:x.lat,lon:x.lon}), x:"",
+      ll:{lat:x.lat,lon:x.lon} })),
     altText: v.speed!=null?`${Math.round(v.speed*2.236936)} mph`:"", title: line ? (sys==="Subway" ? `${line} train` : `${line} · ${sys}`) : sys,
     sub:`${sys}`, sysName:sys, oCity:null, dCity:null,
     subline: stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : "",
@@ -996,6 +1030,9 @@ async function produceLiveLocalTrain(){
     const list=veh.map(v=>({v, mi:haversineNm(loc,{lat:v.lat,lon:v.lon})*1.15078})).sort((a,b)=>a.mi-b.mi);
     const {v,mi}=list[0];
     return { id:"lm"+(v.id||v.train), nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}), count:list.length,
+      fleet: list.map(({v:v2,mi:m2})=>({ t:v2.line?`${v2.line} Line`:"MARC", s:`Train ${v2.train||"?"}`,
+        nm:m2, unit:"mi", dir:bearingFrom(loc,{lat:v2.lat,lon:v2.lon}),
+        x:v2.mph!=null?`${v2.mph} mph`:"", ll:{lat:v2.lat,lon:v2.lon} })),
       altText: v.mph!=null?`${v.mph} mph`:"", title:v.line?`${v.line} Line`:"MARC",
       sub:`Train ${v.train||"?"} · MARC`, sysName:"MARC", oCity:null, dCity:null, subline:"",
       oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
@@ -1011,6 +1048,9 @@ async function produceLiveLocalTrain(){
     const {t,mi}=list[0], late=isRealLateNight(t.late);
     const cars=String(t.consist||"").split(",").filter(Boolean).length;   // SEPTA lists each car number
     return { id:"ls"+t.trainno, nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:+t.lat,lon:+t.lon}), count:list.length,
+      fleet: list.map(({t:t2,mi:m2})=>({ t:t2.line||"SEPTA", s:`Train ${t2.trainno} → ${t2.dest||""}`,
+        nm:m2, unit:"mi", dir:bearingFrom(loc,{lat:+t2.lat,lon:+t2.lon}),
+        x:isRealLateNight(t2.late)?`+${t2.late} min`:"on time", ll:{lat:+t2.lat,lon:+t2.lon} })),
       altText:"", title:t.line||"SEPTA Regional Rail",
       sub:`Train ${t.trainno} · SEPTA`, sysName:"SEPTA", lateMin:late?t.late:null,
       oCity:t.currentstop||null, dCity:t.dest||null,
@@ -1029,7 +1069,13 @@ async function produceTrain(){
     produceAmtrakTrain().catch(()=>null),
     produceLiveLocalTrain().catch(()=>null),
   ]);
-  if(amtrak && local) return amtrak.nm<=local.nm ? amtrak : local;
+  if(amtrak && local){
+    // winner shows, but the fleet list covers BOTH systems, distance-sorted
+    const win = amtrak.nm<=local.nm ? amtrak : local;
+    win.fleet=[...(amtrak.fleet||[]), ...(local.fleet||[])].sort((a,b)=>a.nm-b.nm);
+    win.count=win.fleet.length;
+    return win;
+  }
   return amtrak || local;
 }
 
@@ -1088,6 +1134,8 @@ async function produceLiveBus(){
     const list=buses.map(v=>({v, nm:haversineNm(loc,{lat:v.lat,lon:v.lon})})).sort((a,b)=>a.nm-b.nm);
     const {v,nm}=list[0];
     return { id:"lb"+v.tripId, nm, unit:"nm", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}), count:list.length,
+      fleet: list.map(({v:v2,nm:n2})=>({ t:`Route ${v2.routeId}`, s:"", nm:n2, unit:"nm",
+        dir:bearingFrom(loc,{lat:v2.lat,lon:v2.lon}), x:"live", ll:{lat:v2.lat,lon:v2.lon} })),
       altText:"", title:`Route ${v.routeId}`, sub:`MTA Bus`,
       oCity:null, dCity:null, subline:"",
       oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
@@ -1100,6 +1148,9 @@ async function produceLiveBus(){
   const list=buses.map(b=>({b, nm:haversineNm(loc,{lat:+b.lat,lon:+b.lng})})).sort((a,c)=>a.nm-c.nm);
   const {b,nm}=list[0], late=isRealLateNight(b.late);
   return { id:"lb"+(b.VehicleID||b.route_id), nm, unit:"nm", dir:bearingFrom(loc,{lat:+b.lat,lon:+b.lng}), count:list.length,
+    fleet: list.map(({b:b2,nm:n2})=>({ t:`Route ${b2.route_id}`, s:b2.destination||"", nm:n2, unit:"nm",
+      dir:bearingFrom(loc,{lat:+b2.lat,lon:+b2.lng}),
+      x:isRealLateNight(b2.late)?`+${b2.late} min`:"on time", ll:{lat:+b2.lat,lon:+b2.lng} })),
     altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · ${CITY_CFG.localBusSystem}`,
     oCity:null, dCity:b.destination||null, subline: b.Direction||"",
     oLL:null, dLL:null, posLL:{lat:+b.lat,lon:+b.lng}, oCode:"", dCode:"",
@@ -1115,7 +1166,7 @@ async function produceBus(){
   if(!s) return null;
   const busSystem = CITY_CFG.localBusSystem;
   const nowP=roNowParts(s.tz), active=roActiveServices(s, nowP);
-  let best=null, inService=0;
+  let best=null, inService=0; const cand=[];
   s.trips.forEach((tr,i)=>{
     if(!active.has(tr.s)) return;
     const seq=tr.st; if(seq.length<2) return;
@@ -1129,6 +1180,8 @@ async function produceBus(){
       const nm=haversineNm(loc,{lat,lon});
       const first=s._coord[seq[0][0]], last=s._coord[seq[seq.length-1][0]];
       inService++;   // this trip is running right now (nearby or not) -> feeds "nearest of N"
+      cand.push({ t:`Route ${tr.line}`, s:tr.hs||"", nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}),
+        x:"scheduled", ll:{lat,lon} });
       // next scheduled stop = the segment's far end (name + scheduled minute)
       if(!best || nm<best.nm) best={ i, tr, lat, lon, nm, first, last, nextName: cb[2], nextMin: b[1] };
       break;
@@ -1138,6 +1191,7 @@ async function produceBus(){
   const { tr, lat, lon, nm, first, last, nextName, nextMin } = best;
   const prog=journeyProgress(first?{lat:first[0],lon:first[1]}:null, last?{lat:last[0],lon:last[1]}:null, {lat,lon});
   return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}), count:inService,
+    fleet: cand.sort((a,b2)=>a.nm-b2.nm),
     altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · ${busSystem}`,
     oCity: first?first[2]:null, dCity: last?last[2]:tr.hs,
     subline:`scheduled position (${busSystem} has no public live feed)`,
@@ -1422,6 +1476,17 @@ function journeyProgress(oLL, dLL, posLL){
   return { pct:Math.max(0, Math.min(1, flown/total)), flownNm:flown, toGoNm:toGo };
 }
 
+/* ---- whole-fleet list: the data behind "nearest of N", one row each ---- */
+let currentFleet=null;
+function renderFleetPanel(){
+  const f=currentFleet||[];
+  $("#fleetTitle").textContent=`${TAGS[mode]||"In range"} — ${f.length} in range`;
+  $("#fleetBody").innerHTML = f.length ? f.map(v=>
+    `<div class="row"><span><b>${escapeHtml(v.t)}</b>${v.s?` <span class="frow-sub">${escapeHtml(v.s)}</span>`:""}</span>`+
+    `<span class="when">${v.nm.toFixed(1)} ${v.unit} ${v.dir}${v.x?` · ${escapeHtml(v.x)}`:""}</span></div>`).join("")
+    : `<div class="empty2">Nothing in range right now.</div>`;
+}
+
 let lastId=null;
 function render(s){
   $("#updated").textContent = "updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
@@ -1443,9 +1508,16 @@ function render(s){
   if(s.photoHex) updatePhoto(s.photoHex, false);
   else if(s.photoQuery) updatePhoto(s.photoQuery, true, s.photoFallback);
   else { $("#photoWrap").style.display="none"; photoShownFor=null; }
-  renderMiniMap(s.id, s.oLL, s.dLL, s.posLL);
-  $("#dist").textContent = `${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`
-    + (s.count>1?` · nearest of ${s.count}`:"");
+  currentFleet = s.fleet||null;
+  renderMiniMap(s.id, s.oLL, s.dLL, s.posLL, currentFleet);
+  const distTxt=`${s.nm.toFixed(1)} ${s.unit||"nm"} ${s.dir}${s.altText?` · ${s.altText}`:""}`;
+  // the count opens the whole-fleet list when there's a list to show
+  $("#dist").innerHTML = escapeHtml(distTxt) + (s.count>1
+    ? (currentFleet && currentFleet.length>1
+        ? ` · <span class="fleet-btn" id="fleetBtn" title="Show everything in range">nearest of ${s.count} ▾</span>`
+        : ` · nearest of ${s.count}`)
+    : "");
+  if($("#fleetPanel").classList.contains("show")) renderFleetPanel();
   // journey-progress bar (planes/Amtrak with a known origin→destination)
   const pv=$("#progress");
   if(typeof s.progPct==="number"){
@@ -1516,6 +1588,8 @@ function setMode(m){
   document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.mode===m));
   lastId=null; photoShownFor=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
   if(miniVehLayer){ miniVehLayer.clearLayers(); miniVeh=null; miniVehKind=null; miniMapFor=null; }
+  if(miniFleetLayer) miniFleetLayer.clearLayers();
+  currentFleet=null; $("#fleetPanel").classList.remove("show");
   const L=$("#loading"); L.style.display=""; L.classList.add("pulse");
   L.textContent = m==="planes"?"Scanning the sky…":m==="trains"?"Finding trains…":m==="iss"?"Acquiring the ISS…":"Finding buses…";
   tick();
@@ -1531,6 +1605,11 @@ function initSettings(){
   $("#logPanel").addEventListener("click",e=>{ if(e.target.id==="logPanel") $("#logPanel").classList.remove("show"); });
   $("#logReset").onclick=()=>{ if(confirm("Reset the spotter's log? This clears everything seen so far.")){
     skyLog=freshLog(); saveLogNow(); renderLogPanel(); } };
+  // the "nearest of N" chip is re-created every render, so delegate the click
+  $("#dist").addEventListener("click", e=>{
+    if(e.target.closest("#fleetBtn")){ renderFleetPanel(); $("#fleetPanel").classList.add("show"); } });
+  $("#fleetDone").onclick=()=>$("#fleetPanel").classList.remove("show");
+  $("#fleetPanel").addEventListener("click",e=>{ if(e.target.id==="fleetPanel") $("#fleetPanel").classList.remove("show"); });
   $("#themeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setNightTheme(b.dataset.theme); });
   $("#skySeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setSunSky(b.dataset.sky); });
 }

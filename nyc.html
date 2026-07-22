@@ -718,6 +718,8 @@ function renderAmtrak(list){
       const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
     } else { times.appendChild(el("div","sched", t.trainState||"")); }
     row.append(b, mid, el("div"), times);
+    row.classList.add("followable"); row.title="Follow this train on the map";
+    row.onclick=()=>startFollow("amtrak", "a"+(t.trainID||t.trainNum));
     box.appendChild(row);
   });
   $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
@@ -981,6 +983,9 @@ function renderSubway(list){
     mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
     row.append(b, mid, el("div"));
     appendLiveTimes(row, lateMin);
+    // live rows map 1:1 to their marker -- follow directly by trip id
+    row.classList.add("followable"); row.title="Follow this train on the map";
+    row.onclick=()=>startFollow("subway", "sw"+v.tripId);
     box.appendChild(row);
   });
   $("#subwayCount").textContent = `${list.length} nearby`;
@@ -1115,7 +1120,7 @@ async function fetchRailLive(feedPath, ensureSched, lineOf){
       stationName: scheduleStationName(sched, v.stopId), line: lineOf(v, sched) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
 }
-function renderRailCard(listId, countId, list, color){
+function renderRailCard(listId, countId, list, color, fleet){
   const box=$(listId); if(!box) return; box.innerHTML="";
   if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent=""; return; }
   list.slice(0,20).forEach(({v,lateMin,mi,stationName,line})=>{
@@ -1126,6 +1131,10 @@ function renderRailCard(listId, countId, list, color){
     mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
     row.append(b, mid, el("div"));
     appendLiveTimes(row, lateMin);
+    if(fleet){ // live rows map 1:1 to their marker (drawRailFleet keys fleet+tripId)
+      row.classList.add("followable"); row.title="Follow this train on the map";
+      row.onclick=()=>startFollow(fleet, fleet+v.tripId);
+    }
     box.appendChild(row);
   });
   $(countId).textContent = `${list.length} nearby`;
@@ -1144,12 +1153,12 @@ function drawRailFleet(fleet, list, color){
 }
 async function fetchLirrLive(){
   const list = await fetchRailLive("lirr%2Fgtfs-lirr", ensureLirrSchedule, lirrLineOf);
-  renderRailCard("#lirrList", "#lirrCount", list, LIRR_COL);
+  renderRailCard("#lirrList", "#lirrCount", list, LIRR_COL, "lirr");
   drawRailFleet("lirr", list, LIRR_COL);
 }
 async function fetchMnrLive(){
   const list = await fetchRailLive("mnr%2Fgtfs-mnr", ensureMnrSchedule, mnrLineOf);
-  renderRailCard("#mnrList", "#mnrCount", list, MNR_COL);
+  renderRailCard("#mnrList", "#mnrCount", list, MNR_COL, "mnr");
   drawRailFleet("mnr", list, MNR_COL);
 }
 
@@ -1259,7 +1268,7 @@ async function fetchBusLive(){
     return { v, lat:v.lat, lon:v.lon, lateMin, mi: kmToMi(haversine(here,{lat:v.lat,lon:v.lon})),
       stationName: scheduleStationName(sched, v.stopId), line: railRouteIdLineOf(v) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
-  renderRailCard("#busList", "#busCount", list, BUS_COL);
+  renderRailCard("#busList", "#busCount", list, BUS_COL, "bus");
   drawRailFleet("bus", list, BUS_COL);
 }
 // Map positions: live via the optional Worker if configured, else scheduled interpolation.

@@ -488,6 +488,17 @@ function initMap(){
   setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+/* follow-from-box: click a departure row to follow that trip's map vehicle.
+   Scheduled fleets are keyed prefix+tripIndex (see the _dep builders' ti);
+   a row whose trip isn't interpolating on the map right now just blinks. */
+function wireFollowRow(row, fleet, prefix, d){
+  row.classList.add("followable"); row.title="Follow on the map";
+  row.onclick=()=>{
+    const F=state.fleets[fleet]||{};
+    if(d.ti!=null && F[prefix+d.ti]){ startFollow(fleet, prefix+d.ti); return; }
+    row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450});
+  };
+}
 // A dot at the exact location + an info chip floating to its right.
 // The chip is hidden when zoomed out (state.labelsOn) to avoid clutter.
 function labelIcon(color, label){
@@ -1019,6 +1030,8 @@ function renderAmtrak(list){
       const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
     } else { times.appendChild(el("div","sched", t.trainState||"")); }
     row.append(b, mid, el("div"), times);
+    row.classList.add("followable"); row.title="Follow this train on the map";
+    row.onclick=()=>startFollow("amtrak", "a"+(t.trainID||t.trainNum));
     box.appendChild(row);
   });
   $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
@@ -1066,7 +1079,7 @@ async function ensureMarcSchedule(){
   try{ const s=await getJSON("marc-schedule.json", 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.marcSched=s;
   }catch(e){}
   return state.marcSched;
@@ -1150,7 +1163,7 @@ async function ensureRideOnSchedule(){
     const s=await getJSON("rideon-schedule.json", 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.roSched=s;
   }catch(e){}
   return state.roSched;
@@ -1250,7 +1263,7 @@ async function ensureSeptaRailSchedule(){
     const s=await getJSON("septa-rail-schedule.json", 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.septaSched=s;
     drawScheduleRouteLines(s, state.septaRailRouteLayer, ()=>SEPTA_COL);
   }catch(e){}
@@ -1290,6 +1303,7 @@ async function refreshSeptaRail(){
         const t=el("div","live"); t.style.color="#8fb3c7"; t.textContent=marcClock(d.t);
         times.append(t, el("div","sched","scheduled"));
         row.append(b, mid, el("div"), times);
+        wireFollowRow(row, "septaRail", "sr", d);
         box.appendChild(row); shown++;
       });
     });
@@ -1336,7 +1350,7 @@ async function ensureSeptaBusSchedule(){
     const s=await getJSON("septa-bus-schedule.json", 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.septaBusSched=s;
     drawScheduleRouteLines(s, state.septaBusRouteLayer, ()=>SEPTA_BUS_COL);
   }catch(e){}
@@ -1376,6 +1390,7 @@ async function refreshSeptaBusScheduled(){
         const t=el("div","live"); t.style.color="#e0b466"; t.textContent=marcClock(d.t);
         times.append(t, el("div","sched","scheduled"));
         row.append(b, mid, el("div"), times);
+        wireFollowRow(row, "septaBus", "sb", d);
         box.appendChild(row); shown++;
       });
     });
@@ -1455,6 +1470,9 @@ async function fetchSeptaLive(){
         mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}${isRealLate(t.late)?` · ${t.late} min late`:""}`));
         row.append(bd, mid, el("div"));
         appendLiveTimes(row, t.late);
+        // live rows map 1:1 to their marker -- follow directly by train number
+        row.classList.add("followable"); row.title="Follow this train on the map";
+        row.onclick=()=>startFollow("septaRail", "slt"+t.trainno);
         box.appendChild(row);
       });
       fitList(box);
@@ -1485,6 +1503,8 @@ async function fetchSeptaLive(){
         mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}${isRealLate(b.late)?` · ${b.late} min late`:""}`));
         row.append(bd, mid, el("div"));
         appendLiveTimes(row, b.late);
+        row.classList.add("followable"); row.title="Follow this bus on the map";
+        row.onclick=()=>startFollow("septaBus", "slb"+b.VehicleID);
         box.appendChild(row);
       });
       fitList(box);
@@ -1509,7 +1529,7 @@ async function ensureSeptaSubwaySchedule(){
     const s=await getJSON("septa-subway-schedule.json", 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.septaSubwaySched=s;
     drawScheduleRouteLines(s, state.septaSubwayRouteLayer, line=>SEPTA_SUBWAY_COL[line]||"#556");
   }catch(e){}
@@ -1543,6 +1563,7 @@ async function refreshSeptaSubway(){
         const t=el("div","live"); t.style.color="#7fb0e0"; t.textContent=marcClock(d.t);
         times.append(t, el("div","sched","scheduled"));
         row.append(b, mid, el("div"), times);
+        wireFollowRow(row, "septaSubway", "ss", d);
         box.appendChild(row); shown++;
       });
     });
@@ -1586,7 +1607,7 @@ async function ensurePatcoSchedule(){
     const s=await getJSON("patco-schedule.json", 15000);
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.patcoSched=s;
     drawScheduleRouteLines(s, state.patcoRouteLayer, ()=>PATCO_COL);
   }catch(e){}
@@ -1620,6 +1641,7 @@ async function refreshPatco(){
         const t=el("div","live"); t.style.color="#e0708a"; t.textContent=marcClock(d.t);
         times.append(t, el("div","sched","scheduled"));
         row.append(b, mid, el("div"), times);
+        wireFollowRow(row, "patco", "pt", d);
         box.appendChild(row); shown++;
       });
     });

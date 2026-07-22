@@ -797,7 +797,9 @@ const SYSTEMS={
 function prepSchedule(s){   // index a bundle for the card + route-line helpers
   s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
   s._dep={};
-  (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+  // ti = trip index: ties a departure row to that trip's interpolated map
+  // vehicle (scheduled fleet ids are key+index) for follow-from-box
+  (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
   return s;
 }
 async function ensureSched(key){
@@ -854,6 +856,23 @@ async function refreshAmsCard({key, list, count, stations=2, badgeCls, noneMsg})
         const t=el("div","live"); t.style.color=col; t.textContent=clock24(d.t);
         times.append(t, el("div","sched","gepland"));
         row.append(b, mid, el("div"), times);
+        // follow-from-box: click a departure to follow that vehicle on the map --
+        // its own scheduled ghost when interpolated right now, else the nearest
+        // LIVE vehicle on the same line (the Dutch GTFS-RT trip ids don't match
+        // the bundle's trips, so live matching is by line + proximity).
+        row.classList.add("followable"); row.title="Follow on the map";
+        row.onclick=()=>{
+          const F=state.fleets[key]||{};
+          if(d.ti!=null && F[key+d.ti]){ startFollow(key, key+d.ti); return; }
+          let bestF=null;
+          for(const fid in F){ const rec=F[fid];
+            if(!rec || !rec.label || rec.label.indexOf(" "+d.line)<0 || !rec.to) continue;
+            const dd=haversine({lat:rec.to[0],lon:rec.to[1]},{lat:st.lat,lon:st.lon});
+            if(!bestF || dd<bestF.dd) bestF={fid, dd};
+          }
+          if(bestF){ startFollow(key, bestF.fid); return; }
+          row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450});
+        };
         box.appendChild(row); shown++;
       });
     });

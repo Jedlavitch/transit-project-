@@ -839,6 +839,18 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
           times.appendChild(el("div","sched","scheduled"));
         }
         row.append(b, mid, el("div"), times);
+        // follow-from-box: click a departure to follow that train on the map --
+        // the LIVE vehicle when this trip is being tracked (same trip_id the
+        // delay math above uses), else its scheduled ghost interpolating now.
+        row.classList.add("followable"); row.title="Follow this train on the map";
+        row.onclick=()=>{
+          const F=state.fleets[key]||{};
+          if(d.id && F["lv"+key+d.id]){ startFollow(key, "lv"+key+d.id); return; }
+          const trip=d.id && s._trip ? s._trip[d.id] : null;
+          const ti=trip ? s.trips.indexOf(trip) : -1;
+          if(ti>=0 && F[key+ti]){ startFollow(key, key+ti); return; }
+          row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450});
+        };
         box.appendChild(row); shown++;
       });
     });
@@ -1099,6 +1111,8 @@ function renderAmtrak(list){
       const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
     } else { times.appendChild(el("div","sched", t.trainState||"")); }
     row.append(b, mid, el("div"), times);
+    row.classList.add("followable"); row.title="Follow this train on the map";
+    row.onclick=()=>startFollow("amtrak", "a"+(t.trainID||t.trainNum));
     box.appendChild(row);
   });
   $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
