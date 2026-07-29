@@ -14,6 +14,9 @@
   --text:#eef3ff; --muted:#93a5cf; --accent:#4ea1ff; --good:#33d17a; --late:#ff5a5a;
   --warn:#ffcc33; --live:#33d17a; --sched:#7f93c4; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
   --row-bg:#0d1830; --row-line:#1c2c4e; --sched-b:#b3c3e8; --scrim:rgba(5,10,22,.86);
+  /* blue depth range: bright for highlights (clock ink, row sheen, labels),
+     deep for floors (header/footer washes) — flipped per theme below */
+  --blue-bright:#7cc0ff; --blue-deep:#0a1a3d;
   /* row density -- "Trains per box" in Settings overrides these (see [data-rows]).
      Smaller rows -> more trains fit each box; larger -> fewer, bigger.
      The default is deliberately compact (what used to be the "More" size,
@@ -27,11 +30,14 @@
 :root[data-theme="black"]{
   --bg:#000000; --panel:#060910; --panel2:#000000; --line:#1a2338; --bg-glow:#0a0f1a;
   --text:#eef2fa; --muted:#8d99b5; --row-bg:#04070d; --row-line:#141c2e; --sched-b:#c6d0e4;
+  --blue-bright:#6fb4ff; --blue-deep:#050a18;
 }
 :root[data-theme="day"]{
   --bg:#e9eefb; --panel:#ffffff; --panel2:#f1f5fd; --line:#d0dcf2; --bg-glow:#d7e3fa;
   --text:#13203e; --muted:#54648c; --row-bg:#ffffff; --row-line:#dde6f7; --sched-b:#334a78;
   --scrim:rgba(165,185,225,.55);
+  /* light theme: "bright" = a saturated darker blue (reads on white), "deep" = pale wash */
+  --blue-bright:#1e63c4; --blue-deep:#dbe6fa;
 }
 
 /* One typeface everywhere: the native system UI font (San Francisco on
