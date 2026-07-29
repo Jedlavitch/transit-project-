@@ -9,6 +9,12 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css" />
 <script src="license.js" defer></script>
+<script src="cityswitch.js"></script>
+<script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
+(function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
+var t=g("tb.theme")||g("transitboard.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
+var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accent",a);
+var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("data-rows",r);}catch(e){}})();</script>
 <style>
   /* Palette, typeface, row-density vars, and header city-tabs all
      come from the shared theme.css; only page-specific styles live here. */
@@ -277,7 +283,7 @@
     <div class="title">🚇 <span class="t-grad">Washington DC Live Transit</span> <small id="loclabel">locating…</small></div>
     <nav class="city-picker">
       <select aria-label="Switch city" title="Switch city"
-        onchange="try{ if(document.fullscreenElement||document.webkitFullscreenElement) sessionStorage.setItem('kioskFS','1'); }catch(e){} window.location.href=this.value;">
+        onchange="switchCity(this.value)">
         <option value="index.html" selected>Washington DC</option>
         <option value="philadelphia.html">Philadelphia</option>
         <option value="nyc.html">New York</option>
@@ -1687,7 +1693,7 @@ document.addEventListener("click", e=>{
 const ACCENTS=["#4ea1ff","#ffb454","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
 function setBoardAccent(hex){
   document.documentElement.style.setProperty("--accent", hex);
-  localStorage.setItem("transitboard.accent", hex);
+  localStorage.setItem("transitboard.accent", hex); localStorage.setItem("tb.accent", hex);
   document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
   drawRangeRings();   // rings are stroked in the accent color
 }
@@ -1695,14 +1701,14 @@ function buildAccentSwatches(){
   const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
   ACCENTS.forEach(hex=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.style.background=hex; b.title=hex; b.onclick=()=>setBoardAccent(hex); wrap.appendChild(b); });
   const c=document.createElement("label"); c.className="sw custom"; c.title="Custom color";
-  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("transitboard.accent")||"#4ea1ff";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("tb.accent")||localStorage.getItem("transitboard.accent")||"#4ea1ff";
   inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
 }
 
 /* ---------- theme (dark / black / day) ---------- */
 function setBoardTheme(mode){
   document.documentElement.setAttribute("data-theme", mode);
-  localStorage.setItem("transitboard.theme", mode);
+  localStorage.setItem("transitboard.theme", mode); localStorage.setItem("tb.theme", mode);
   document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
   if(state.tileLayer) state.tileLayer.setUrl(tileUrlForTheme(mode));
 }
@@ -1725,7 +1731,7 @@ function buildThemeButtons(){
 function setBoardRows(mode){
   const changed = document.documentElement.getAttribute("data-rows")!==mode;
   document.documentElement.setAttribute("data-rows", mode);
-  localStorage.setItem("transitboard.rows", mode);
+  localStorage.setItem("transitboard.rows", mode); localStorage.setItem("tb.rows", mode);
   document.querySelectorAll("#rowsRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.rows===mode));
   if(changed && state.map) refreshEverythingForNewLocation();
   else fitAll();
@@ -1819,9 +1825,9 @@ async function refreshAlertTicker(){
 
 /* ---------- boot ---------- */
 function boot(){
-  setBoardAccent(localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
-  setBoardTheme(localStorage.getItem("transitboard.theme")||"dark"); buildThemeButtons();
-  setBoardRows(localStorage.getItem("transitboard.rows")||"normal"); buildRowsButtons();
+  setBoardAccent(localStorage.getItem("tb.accent")||localStorage.getItem("transitboard.accent")||"#4ea1ff"); buildAccentSwatches();
+  setBoardTheme(localStorage.getItem("tb.theme")||localStorage.getItem("transitboard.theme")||"dark"); buildThemeButtons();
+  setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem("transitboard.rows")||"normal"); buildRowsButtons();
   buildCardToggles();
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
