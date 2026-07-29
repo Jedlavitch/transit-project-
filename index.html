@@ -200,6 +200,18 @@
   #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
   #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
   @keyframes tkmove{to{transform:translateX(-100%)}}
+
+  /* ---- minimizable stats strip: a small pull-tab hides the tiles ---- */
+  #statStrip{position:relative}
+  #statsToggle{position:absolute; top:0; right:20px; z-index:5; height:18px; padding:0 8px;
+    display:flex; align-items:center; gap:4px;
+    background:var(--panel); color:var(--muted); border:1px solid var(--line);
+    border-top:none; border-radius:0 0 7px 7px; cursor:pointer;
+    font-size:9px; font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase}
+  #statsToggle:hover{color:var(--text); border-color:var(--accent)}
+  body.stats-min #statStrip{display:flex; justify-content:flex-end; padding:0 14px}
+  body.stats-min #statStrip .stat{display:none}
+  body.stats-min #statsToggle{position:static}
 </style>
 </head>
 <body>
@@ -232,7 +244,7 @@
   </header>
 
   <!-- live statistics strip: every number is computed from data already on the board -->
-  <div id="statStrip">
+  <div id="statStrip"><button id="statsToggle" type="button">▴</button>
     <div class="stat"><div class="s-label"><span class="s-glyph">⊕</span>Tracking</div>
       <div class="s-value" id="stTotal">—</div><div class="s-sub" id="stTotalSub">vehicles live on map</div></div>
     <div class="stat"><div class="s-label"><span class="s-glyph">✈</span>Air</div>
@@ -460,6 +472,21 @@ function medianOf(arr){ if(!arr.length) return null; const s=[...arr].sort((a,b)
 function setTxt(id, txt){ const e=document.getElementById(id); if(e && e.textContent!==txt) e.textContent=txt; }
 function setHTML(id, html){ const e=document.getElementById(id); if(e && e.innerHTML!==html) e.innerHTML=html; }
 function feedAge(ts){ return ts? Math.max(0,Math.round((Date.now()-ts)/1000))+"s" : "—"; }
+
+/* ---- minimizable stats strip: chevron pull-tab, sticks per board ---- */
+function setStatsMin(on){
+  document.body.classList.toggle("stats-min", on);
+  try{ localStorage.setItem("transitboard.statsMin", on?"1":"0"); }catch(_){}
+  const b=document.getElementById("statsToggle");
+  if(b){ b.textContent = on?"▾ stats":"▴"; b.title = on?"Show statistics":"Minimize statistics"; }
+  if(typeof fitAll==="function") setTimeout(fitAll, 60);   // cards gain/lose height
+}
+(function initStatsMin(){
+  const b=document.getElementById("statsToggle"); if(!b) return;
+  b.onclick=()=>setStatsMin(!document.body.classList.contains("stats-min"));
+  setStatsMin(localStorage.getItem("transitboard.statsMin")==="1");   // restore + set icon
+})();
+
 function updateStats(){
   const air=fleetCount("plane"), metro=fleetCount("metro"), amtk=fleetCount("amtrak"),
         marc=fleetCount("marc"), mbus=fleetCount("bus"), ro=fleetCount("rideon");

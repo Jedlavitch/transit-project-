@@ -20,8 +20,12 @@
      adsbdb (flight routes), planespotters + Wikimedia (photos).
   --------------------------------------------------------------------------- */
   :root{
-    --accent:#7db8ff; --accent-dim:#4a7fc4; --muted:#8ba3c7; --faint:#22344f;
+    /* --accent/--accent2/--accent-dim are LIVE: present() re-tints them per
+       mode (gold planes / teal trains / violet buses / pink trams), and every
+       accent-colored element below morphs along via the transition rule. */
+    --accent:#7db8ff; --accent2:#59e0c1; --accent-dim:#4a7fc4; --muted:#8ba3c7; --faint:#22344f;
     --bg:#040810; --panel:rgba(10,18,32,.82); --good:#5ad1a0; --late:#ff6b5a; --city:#eaf2ff;
+    --violet:#b58cff;
   }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
@@ -55,6 +59,9 @@
   header > *{pointer-events:auto}
   .brand{display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.28em;
     text-transform:uppercase; font-size:13px; color:var(--accent-dim)}
+  /* gradient wordmark — re-tints with the live mode palette */
+  .brand .t{background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent}
   .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--good); box-shadow:0 0 10px var(--good);
     animation:blink 2s ease-in-out infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
@@ -68,6 +75,12 @@
     border-radius:11px; border:1px solid var(--faint); background:rgba(8,14,24,.7); color:var(--muted);
     cursor:pointer; font-size:16px; text-decoration:none; font-family:inherit}
   .ctrls button:hover, .ctrls a:hover{color:var(--accent); border-color:var(--accent-dim)}
+  /* an engaged toggle (📌 stay) fills with the live mode gradient */
+  .ctrls button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));
+    border-color:var(--accent); color:#04101f}
+  /* everything accent-tinted morphs smoothly when the mode palette changes */
+  .chips .c, .queue .chip, .ctrls button, .ctrls a, .kicker .mode-ic, .kicker,
+  .title, .clock, .prog .lbl .pct, .citytime{transition:color .8s ease, background-color .8s ease, border-color .8s ease}
 
   /* countdown ring around the "skip" button, drains until the next shuffle */
   .ring{position:relative}
@@ -81,23 +94,40 @@
     display:grid; grid-template-columns:1fr auto; gap:18px; align-items:stretch;
     opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease}
   #card.in{opacity:1; transform:none}
+  /* gradient rail across the card's top edge, in the live mode palette */
+  #card::before{content:""; position:absolute; top:0; left:24px; right:24px; height:3px;
+    border-radius:0 0 6px 6px; background:linear-gradient(90deg,var(--accent),var(--accent2)); opacity:.95}
   #card .txt{min-width:0}
   .kicker{display:flex; align-items:center; gap:9px; font-size:12px; font-weight:800; letter-spacing:.18em;
     text-transform:uppercase; color:var(--accent-dim)}
   .kicker .mode-ic{font-size:15px}
   .kicker .live{color:var(--good); border:1px solid rgba(90,209,160,.4); background:rgba(90,209,160,.1);
     border-radius:6px; padding:1px 7px; letter-spacing:.1em}
-  .kicker .sched{color:var(--muted); border:1px solid var(--faint); border-radius:6px; padding:1px 7px; letter-spacing:.1em}
-  .city{font-size:clamp(1.5rem,3.6vw,2.5rem); font-weight:800; color:var(--city); line-height:1.02; margin-top:6px}
-  .title{font-size:clamp(1.05rem,2.3vw,1.6rem); font-weight:800; color:var(--accent); margin-top:3px; line-height:1.1}
+  .kicker .sched{color:var(--violet); border:1px solid rgba(181,140,255,.4); background:rgba(181,140,255,.12);
+    border-radius:6px; padding:1px 7px; letter-spacing:.1em}
+  .city{font-size:clamp(1.5rem,3.6vw,2.5rem); font-weight:800; color:var(--city); line-height:1.02; margin-top:6px;
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+  .citytime{font-size:14px; font-weight:800; color:var(--accent); letter-spacing:.08em;
+    font-variant-numeric:tabular-nums; text-transform:uppercase}
+  .citytime:empty{display:none}
+  /* the vehicle/line name flows through the mode gradient */
+  .title{font-size:clamp(1.05rem,2.3vw,1.6rem); font-weight:800; color:var(--accent); margin-top:3px; line-height:1.1;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; width:fit-content}
   .sub{font-size:13px; color:var(--muted); font-weight:600; margin-top:3px}
   .route{display:flex; align-items:baseline; gap:.5em; flex-wrap:wrap; margin-top:10px; font-weight:800; color:var(--city)}
   .route .r{font-size:clamp(1rem,2vw,1.35rem)} .route .arw{color:var(--accent-dim); font-weight:400}
   .route .r.dim{color:var(--muted); font-weight:700; font-size:clamp(.9rem,1.6vw,1.1rem)}
 
   .chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:12px}
-  .chips .c{font-size:13px; font-weight:700; color:var(--accent-dim); background:rgba(125,184,255,.08);
+  .chips .c{font-size:13px; font-weight:700; color:var(--accent); background:rgba(125,184,255,.08);
     border:1px solid var(--faint); border-radius:9px; padding:5px 10px; display:inline-flex; align-items:center; gap:6px}
+  /* gradient-tinted chip fills where color-mix exists (older browsers keep the flat look above) */
+  @supports (color: color-mix(in srgb, red 10%, blue)){
+    .chips .c{background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent),
+        color-mix(in srgb, var(--accent2) 9%, transparent));
+      border-color:color-mix(in srgb, var(--accent) 32%, transparent)}
+  }
   .chips .c.badge-ok{color:var(--good); background:rgba(90,209,160,.1); border-color:rgba(90,209,160,.35)}
   .chips .c.badge-late{color:var(--late); background:rgba(255,107,90,.12); border-color:rgba(255,107,90,.4)}
   .hdg-arrow{display:inline-block; font-weight:900}
@@ -105,7 +135,7 @@
   .prog{margin-top:14px}
   .prog .bar{position:relative; height:6px; border-radius:99px; background:var(--faint)}
   .prog .fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px;
-    background:linear-gradient(90deg,var(--accent-dim),var(--accent)); transition:width 1s linear}
+    background:linear-gradient(90deg,var(--accent2),var(--accent)); transition:width 1s linear}
   .prog .dot{position:absolute; top:50%; width:12px; height:12px; margin-left:-6px; border-radius:50%;
     background:var(--accent); transform:translateY(-50%); box-shadow:0 0 0 3px var(--panel),0 0 9px var(--accent); transition:left 1s linear}
   .prog .lbl{display:flex; justify-content:space-between; margin-top:7px; font-size:12px; color:var(--muted);
@@ -122,7 +152,30 @@
     color:var(--muted); font-weight:700; font-size:clamp(1rem,2.4vw,1.5rem); opacity:0; transition:opacity .4s ease;
     text-shadow:0 2px 20px #000; pointer-events:none}
   #flash.show{opacity:1}
-  #flash .big{color:var(--city); font-size:clamp(1.6rem,4vw,2.6rem); font-weight:800; display:block; margin-top:4px}
+  #flash .big{font-size:clamp(1.6rem,4vw,2.6rem); font-weight:800; display:block; margin-top:4px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2),var(--city));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent}
+
+  /* ---- tour settings (⚙): pace + city/mode filters, persisted ---- */
+  #settings{position:fixed; z-index:8; top:74px; right:22px; width:min(320px,calc(100vw - 44px));
+    background:var(--panel); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border:1px solid var(--faint); border-radius:16px; padding:16px 18px 18px; display:none;
+    box-shadow:0 18px 50px rgba(0,0,0,.5); max-height:calc(100dvh - 100px); overflow:auto}
+  #settings.show{display:block}
+  #settings h3{font-size:13px; font-weight:800; letter-spacing:.2em; text-transform:uppercase;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent}
+  .set-lbl{margin:14px 0 0; font-size:10.5px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+  .seg{display:flex; gap:6px; margin-top:7px}
+  .seg button{flex:1; padding:7px 0; border-radius:9px; border:1px solid var(--faint); background:rgba(8,14,24,.6);
+    color:var(--muted); font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit}
+  .seg button.on{background:linear-gradient(135deg,var(--accent),var(--accent2)); border-color:var(--accent); color:#04101f}
+  .checks{display:flex; flex-wrap:wrap; gap:6px; margin-top:7px}
+  .checks label{font-size:12.5px; font-weight:700; color:var(--muted); border:1px solid var(--faint);
+    border-radius:9px; padding:6px 10px; cursor:pointer; user-select:none}
+  .checks label.on{color:var(--accent); border-color:var(--accent);
+    background:linear-gradient(135deg,rgba(125,184,255,.14),rgba(89,224,193,.09))}
+  #settings .note{margin-top:14px; font-size:11px; color:var(--muted); line-height:1.5}
 
   @media (max-width:640px){
     #card{grid-template-columns:1fr} #photo{width:100%; max-height:120px}
@@ -139,25 +192,40 @@
   <div id="vignette"></div>
 
   <header>
-    <div class="brand"><span class="dot"></span><span>Grand Tour</span></div>
+    <div class="brand"><span class="dot"></span><span class="t">Grand Tour</span></div>
     <div class="queue" id="queue"></div>
     <span class="clock" id="clock">—</span>
     <div class="ctrls">
+      <button id="backBtn" title="Previous stop (←)">⏮</button>
       <button id="pauseBtn" title="Pause / resume (space)">⏸</button>
       <button class="ring" id="skipBtn" title="Skip to next (→)">⏭
         <svg viewBox="0 0 40 40"><circle id="ringC" cx="20" cy="20" r="18.5"></circle></svg>
       </button>
+      <button id="stayBtn" title="Stay with this vehicle (S)">📌</button>
+      <button id="setBtn" title="Tour settings">⚙</button>
       <button id="fsBtn" title="Full screen (F)">⛶</button>
       <a id="boardBtn" href="index.html" title="Back to the board">‹</a>
     </div>
   </header>
+
+  <div id="settings">
+    <h3>Tour settings</h3>
+    <div class="set-lbl">Seconds per stop</div>
+    <div class="seg" id="paceSeg"></div>
+    <div class="set-lbl">Cities</div>
+    <div class="checks" id="cityChecks"></div>
+    <div class="set-lbl">Modes</div>
+    <div class="checks" id="modeChecks"></div>
+    <div class="note">📌 stays with the current vehicle (its position keeps updating live) ·
+      the screen is kept awake while the tour runs · unchecking everything shows everything.</div>
+  </div>
 
   <div id="flash"><span id="flashSmall">Tuning in…</span><span class="big" id="flashBig"></span></div>
 
   <div id="card">
     <div class="txt">
       <div class="kicker"><span class="mode-ic" id="modeIc">✈</span><span id="feedLbl">—</span><span id="liveTag"></span></div>
-      <div class="city" id="city">—</div>
+      <div class="city"><span id="city">—</span><span class="citytime" id="cityTime"></span></div>
       <div class="title" id="title"></div>
       <div class="sub" id="sub"></div>
       <div class="route" id="route" style="display:none"></div>
@@ -183,43 +251,75 @@ const $ = s=>document.querySelector(s);
    interpolate to a live-ish position. Kept to the lighter bundles so the tour
    stays snappy; the multi-MB subway/tram bundles are intentionally left out. */
 const CITIES = [
-  { key:"dc",     label:"Washington", loc:{lat:38.9050,lon:-77.0400}, feeds:[
+  { key:"dc",     label:"Washington", tz:"America/New_York", loc:{lat:38.9050,lon:-77.0400}, feeds:[
       {mode:"plane", kind:"plane", src:"plane",  label:"DCA / IAD traffic"},
       {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
       {mode:"train", kind:"train", src:"marc-schedule.json",   label:"MARC", photo:"MARC train Maryland"},
       {mode:"bus",   kind:"bus",   src:"rideon-schedule.json", label:"Ride On", photo:"Ride On bus Montgomery County Maryland"} ] },
-  { key:"philly", label:"Philadelphia", loc:{lat:39.9526,lon:-75.1652}, feeds:[
+  { key:"philly", label:"Philadelphia", tz:"America/New_York", loc:{lat:39.9526,lon:-75.1652}, feeds:[
       {mode:"plane", kind:"plane", src:"plane",  label:"PHL traffic"},
       {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
       {mode:"train", kind:"train", src:"septa-rail-schedule.json", label:"SEPTA Regional Rail", photo:"SEPTA Regional Rail train"},
       {mode:"train", kind:"train", src:"patco-schedule.json",      label:"PATCO", photo:"PATCO Speedline train"} ] },
-  { key:"nyc",    label:"New York", loc:{lat:40.7484,lon:-73.9857}, feeds:[
+  { key:"nyc",    label:"New York", tz:"America/New_York", loc:{lat:40.7484,lon:-73.9857}, feeds:[
       {mode:"plane", kind:"plane", src:"plane",  label:"JFK / LGA / EWR"},
       {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
       {mode:"train", kind:"train", src:"lirr-schedule.json", label:"Long Island Rail Road", photo:"Long Island Rail Road train"} ] },
-  { key:"boston", label:"Boston", loc:{lat:42.3554,lon:-71.0605}, feeds:[
+  { key:"boston", label:"Boston", tz:"America/New_York", loc:{lat:42.3554,lon:-71.0605}, feeds:[
       {mode:"plane", kind:"plane", src:"plane",  label:"BOS traffic"},
       {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
       {mode:"train", kind:"train", src:"mbta-cr-schedule.json", label:"MBTA Commuter Rail", photo:"MBTA commuter rail train Boston"} ] },
-  { key:"la",     label:"Los Angeles", loc:{lat:34.0430,lon:-118.2670}, feeds:[
+  { key:"la",     label:"Los Angeles", tz:"America/Los_Angeles", loc:{lat:34.0430,lon:-118.2670}, feeds:[
       {mode:"plane", kind:"plane", src:"plane",  label:"LAX traffic"},
       {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
       {mode:"train", kind:"train", src:"la-metrolink-schedule.json", label:"Metrolink", photo:"Metrolink train Los Angeles"} ] },
-  { key:"sf",     label:"San Francisco", loc:{lat:37.7880,lon:-122.4075}, feeds:[
+  { key:"sf",     label:"San Francisco", tz:"America/Los_Angeles", loc:{lat:37.7880,lon:-122.4075}, feeds:[
       {mode:"plane", kind:"plane", src:"plane",  label:"SFO / OAK traffic"},
       {mode:"train", kind:"train", src:"amtrak", label:"Amtrak"},
       {mode:"train", kind:"train", src:"sf-caltrain-schedule.json", label:"Caltrain", photo:"Caltrain train San Francisco"},
       {mode:"tram",  kind:"tram",  src:"sf-cablecar-schedule.json", label:"Cable car", photo:"San Francisco cable car"} ] },
-  { key:"ams",    label:"Amsterdam", loc:{lat:52.3785,lon:4.9000}, feeds:[
-      {mode:"plane", kind:"plane", src:"plane",  label:"Schiphol traffic"} ] },
+  { key:"ams",    label:"Amsterdam", tz:"Europe/Amsterdam", loc:{lat:52.3785,lon:4.9000}, feeds:[
+      {mode:"plane", kind:"plane", src:"plane",  label:"Schiphol traffic"},
+      {mode:"train", kind:"train", src:"ams-intl-schedule.json", label:"International rail",
+       photo:"NS International ICE train Netherlands",
+       lineNames:{EST:"Eurostar",ES:"Eurostar",ICE:"ICE International",NJ:"Nightjet",ICD:"Intercity Direct",ECD:"Eurocity Direct"}} ] },
 ];
 /* flatten to a working list of stops */
 const STOPS = [];
-CITIES.forEach(c=> c.feeds.forEach(f=> STOPS.push({ city:c.label, cityKey:c.key, loc:c.loc, ...f })));
+CITIES.forEach(c=> c.feeds.forEach(f=> STOPS.push({ city:c.label, cityKey:c.key, loc:c.loc, tz:c.tz, ...f })));
 
 const MODE_IC = { plane:"✈", train:"🚆", bus:"🚌", tram:"🚋" };
-const HOLD_MS = 15000;     // how long each stop stays on screen
+/* per-mode color palettes: present() pours these into --accent/--accent2/
+   --accent-dim so the whole page (marker glow, trail, route, ring, chips,
+   gradients) re-tints to match what's on screen */
+const MODE_PAL = {
+  plane:{a:"#ffd166", b:"#ff9d5c", dim:"#c9962e"},   // gold → sunset orange
+  train:{a:"#4de0c0", b:"#3fa9ff", dim:"#2e9c85"},   // mint → sky blue
+  bus:  {a:"#8ab4ff", b:"#c58cff", dim:"#5d7fc4"},   // periwinkle → violet
+  tram: {a:"#ff8ac2", b:"#ffb86b", dim:"#c25a8a"},   // pink → peach
+};
+function applyPalette(kind){
+  const p=MODE_PAL[kind]||MODE_PAL.plane, r=document.documentElement.style;
+  r.setProperty("--accent",p.a); r.setProperty("--accent2",p.b); r.setProperty("--accent-dim",p.dim);
+}
+const PACES=[10000,15000,25000,45000];
+let holdMs=(()=>{ try{ const v=parseInt(localStorage.getItem("tour.pace"),10); return PACES.includes(v)?v:15000; }catch(e){ return 15000; } })();
 const RADIUS_NM = 32;      // plane search radius around each city
+
+/* keep the display awake — this page lives on kiosks/portals, and without a
+   wake lock the screen sleeps mid-tour. Re-acquired whenever the tab comes
+   back (the lock auto-releases on hide); a first-gesture retry covers
+   browsers that refuse the boot-time request. */
+let wakeLock=null;
+async function keepAwake(){
+  try{
+    if(wakeLock || !navigator.wakeLock || document.visibilityState!=="visible") return;
+    wakeLock=await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", ()=>{ wakeLock=null; });
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", keepAwake);
+document.addEventListener("pointerdown", keepAwake);
 
 /* ===================== small geo + fetch helpers ========================= */
 async function getJSON(url, timeout=15000){
@@ -290,17 +390,24 @@ async function wikiPhoto(query){
   photoCache["w:"+query]={t:Date.now(),v}; savePhotos(); return v;
 }
 
-/* ===================== PLANE subject ===================================== */
-async function planeSubject(stop){
+/* ===================== PLANE subject =====================================
+   `pin` (from 📌 stay mode) re-finds the SAME aircraft by hex instead of
+   picking the nearest — null once it lands / leaves the search radius. */
+async function planeSubject(stop, pin){
   const {loc}=stop;
   const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${RADIUS_NM}`);
   const air=(data.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
     .map(a=>({a, nm:a.dst!=null?a.dst:haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
   let pick=null;
-  for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,5)){
-    const route=await lookupRoute((x.a.flight||"").trim());
-    if(route&&route.origin&&route.destination){ pick={...x,route}; break; }
+  if(pin){
+    const m=air.find(x=>x.a.hex===pin.hex); if(!m) return null;
+    pick={...m, route:await lookupRoute((m.a.flight||"").trim())};
+  }else{
+    for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,5)){
+      const route=await lookupRoute((x.a.flight||"").trim());
+      if(route&&route.origin&&route.destination){ pick={...x,route}; break; }
+    }
   }
   if(!pick) pick={...air[0], route:null};
   const {a,route}=pick, spd=a.gs?Math.round(a.gs):null, hdg=toDeg(a.track);
@@ -314,8 +421,9 @@ async function planeSubject(stop){
   const sq=(a.squawk||"").trim(), em=(a.emergency||"").trim().toLowerCase();
   const emerg={"7500":"HIJACK","7600":"RADIO FAIL","7700":"EMERGENCY"}[sq] || (em&&em!=="none"?em.toUpperCase():null);
   if(emerg) chips.unshift({t:`⚠ ${emerg}`, cls:"badge-late"});
+  if(!pin && air.length>1) chips.push({t:`${air.length} aircraft up`});
   return {
-    kind:"plane", live:true, city:stop.city, feedLbl:stop.label,
+    kind:"plane", live:true, city:stop.city, feedLbl:stop.label, ref:{hex:a.hex},
     title: (route&&route.airline&&route.airline.name)||a.ownOp||(a.flight||"").trim()||"Aircraft",
     sub:[(a.flight||"").trim(), a.desc||a.t, a.r].filter(Boolean).join("  ·  "),
     oCity: route?(route.origin.municipality||route.origin.iata_code):null,
@@ -337,17 +445,26 @@ async function ensureAmtrak(){
   amTrains=tr; amAt=Date.now();
   if(st){ const m={}; for(const c in st){ const s=st[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }
 }
-async function amtrakSubject(stop){
+async function amtrakSubject(stop, pin){
   await ensureAmtrak(); const {loc}=stop, st=amStations||{}, list=[];
-  for(const arr of Object.values(amTrains)) for(const t of (arr||[])){
-    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
-    if(t.trainState && t.trainState!=="Active") continue;
-    const nm=haversineNm(loc,{lat:t.lat,lon:t.lon});
-    if(nm>260) continue;                         // keep Amtrak picks reasonably near this city
-    list.push({t, nm});
+  let t=null;
+  if(pin){ // stay mode: re-find the SAME train by number, wherever it's got to
+    outer: for(const arr of Object.values(amTrains)) for(const x of (arr||[])){
+      if(String(x.trainNum)===String(pin.num) && typeof x.lat==="number" && typeof x.lon==="number"
+         && (!x.trainState || x.trainState==="Active")){ t=x; break outer; }
+    }
+    if(!t) return null;
+  }else{
+    for(const arr of Object.values(amTrains)) for(const x of (arr||[])){
+      if(typeof x.lat!=="number"||typeof x.lon!=="number") continue;
+      if(x.trainState && x.trainState!=="Active") continue;
+      const nm=haversineNm(loc,{lat:x.lat,lon:x.lon});
+      if(nm>260) continue;                         // keep Amtrak picks reasonably near this city
+      list.push({t:x, nm});
+    }
+    list.sort((x,y)=>x.nm-y.nm); if(!list.length) return null;
+    t=list[0].t;
   }
-  list.sort((x,y)=>x.nm-y.nm); if(!list.length) return null;
-  const {t}=list[0];
   const oLL=st[t.origCode]?{lat:st[t.origCode][0],lon:st[t.origCode][1]}:null;
   const dLL=st[t.destCode]?{lat:st[t.destCode][0],lon:st[t.destCode][1]}:null;
   const hdg=toDeg(t.heading) ?? (dLL?bearingDeg({lat:t.lat,lon:t.lon},dLL):null);
@@ -358,8 +475,9 @@ async function amtrakSubject(stop){
   if(late) chips.push({t:late, cls:/late/i.test(late)?"badge-late":"badge-ok"});
   if(ns){ const tm=ns.arr||ns.dep||ns.schArr||ns.schDep; const tt=tm?new Date(tm).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
     chips.push({t:`→ ${ns.name||ns.code}${tt?` · ${tt}`:""}`}); }
+  if(!pin && list.length>1) chips.push({t:`${list.length} trains nearby`});
   return {
-    kind:"train", live:true, city:stop.city, feedLbl:stop.label,
+    kind:"train", live:true, city:stop.city, feedLbl:stop.label, ref:{num:t.trainNum},
     title:t.routeName||"Amtrak", sub:`Train ${t.trainNum} · Amtrak`,
     oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
     subline:`${t.origCode||""} → ${t.destCode||""}`,
@@ -393,10 +511,11 @@ function activeServices(s, parts){
 }
 function minClock(min){ if(typeof min!=="number") return ""; const m=((Math.round(min)%1440)+1440)%1440;
   return new Date(2000,0,1,Math.floor(m/60),m%60).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
-async function schedSubject(stop){
+async function schedSubject(stop, pin){
   const s=await ensureBundle(stop.src); if(!s) return null;
   const p=nowParts(s.tz), active=activeServices(s,p); let best=null, running=0;
   s.trips.forEach(tr=>{
+    if(pin && tr!==pin.trip) return;   // stay mode: track only the pinned trip
     if(!active.has(tr.s)) return; const seq=tr.st; if(seq.length<2) return;
     for(const now of [p.min, p.min+1440]){
       if(now<seq[0][1] || now>seq[seq.length-1][1]) continue;

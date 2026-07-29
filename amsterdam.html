@@ -151,6 +151,78 @@
   #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
   #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
   @keyframes tkmove{to{transform:translateX(-100%)}}
+
+  /* ============ tactical redesign (shared look with the DC board) ============
+     Appended overrides: later rules win at equal specificity, so the original
+     rules above stay untouched. */
+  :root{
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --grid: rgba(96,130,200,.07);
+  }
+  :root[data-theme="black"]{ --grid: rgba(96,130,200,.05); }
+  :root[data-theme="day"]{ --grid: rgba(19,32,62,.05); }
+  body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/100% 56px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/56px 100%;}
+  #app{position:relative; z-index:1}
+  header .clock .time{font-size:28px; font-weight:700; font-family:var(--mono)}
+  header .clock .meta{font-size:11px; font-family:var(--mono); letter-spacing:.02em; margin-top:3px}
+  #statStrip{display:grid; grid-template-columns:repeat(6,1fr); gap:10px; padding:10px 14px 0}
+  .stat{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:6px; padding:7px 11px 8px; min-width:0; overflow:hidden}
+  .stat .s-label{display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); white-space:nowrap}
+  .stat .s-glyph{font-size:12px}
+  .stat .s-value{font-size:26px; font-weight:700; line-height:1.15; margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .stat .s-value small{font-size:13px; font-weight:600; color:var(--muted); margin-left:2px}
+  .stat .s-sub{font-size:10.5px; color:var(--muted); font-family:var(--mono);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
+  main{padding:12px 14px 14px}
+  .card{border-radius:6px; padding:10px 12px}
+  .card h2{margin:0 0 6px; font-size:11px; letter-spacing:.14em; gap:7px; font-family:var(--mono); font-weight:700}
+  .card h2::before{content:""; width:3px; height:12px; flex:none; background:var(--sys,var(--accent))}
+  .card h2 .icon{font-size:15px}
+  .card h2 .count{font-size:10.5px; font-family:var(--mono); letter-spacing:.02em; text-transform:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .statline{font-size:10.5px; color:var(--muted); font-family:var(--mono); letter-spacing:.02em;
+    margin:-2px 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .statline:empty{display:none}
+  .statline b{color:var(--text); font-weight:700}
+  .row{border-radius:4px}
+  .row .badge{border-radius:3px; font-family:var(--mono)}
+  .row .live{font-weight:700; font-size:var(--live-fs); font-family:var(--mono)}
+  .row .sched{font-family:var(--mono)}
+  .row .live-eta{font-weight:700; font-family:var(--mono)}
+  .stop-label{font-size:11px; letter-spacing:.06em; font-family:var(--mono); text-transform:uppercase}
+  .dir-label{font-size:10.5px; letter-spacing:.04em; font-family:var(--mono)}
+  .plane .alt{font-weight:700; font-family:var(--mono)}
+  #map{border-radius:6px}
+  .range-label{color:var(--muted); font:600 9px/1 var(--mono); letter-spacing:.08em; white-space:nowrap; opacity:.75}
+  footer{font-size:11px; font-family:var(--mono)}
+  #feeds{display:flex; gap:13px; align-items:center}
+  .feed{display:flex; gap:5px; align-items:center; letter-spacing:.06em; white-space:nowrap}
+  .feed .fdot{width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 6px var(--good)}
+  .feed.stale .fdot{background:var(--warn); box-shadow:0 0 6px var(--warn)}
+  .feed.off .fdot{background:var(--muted); box-shadow:none; opacity:.5}
+  .feed.off{opacity:.55}
+  .feed b{color:var(--text); font-weight:600}
+  @media (max-width:1000px){ #statStrip{grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 10px 0} .stat .s-value{font-size:21px} }
+  @media (max-width:760px){ #feeds{display:none} }
+  @media (max-width:560px){ #statStrip{display:none} }
+
+  /* ---- minimizable stats strip: a small pull-tab hides the tiles ---- */
+  #statStrip{position:relative}
+  #statsToggle{position:absolute; top:0; right:20px; z-index:5; height:18px; padding:0 8px;
+    display:flex; align-items:center; gap:4px;
+    background:var(--panel); color:var(--muted); border:1px solid var(--line);
+    border-top:none; border-radius:0 0 7px 7px; cursor:pointer;
+    font-size:9px; font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase}
+  #statsToggle:hover{color:var(--text); border-color:var(--accent)}
+  body.stats-min #statStrip{display:flex; justify-content:flex-end; padding:0 14px}
+  body.stats-min #statStrip .stat{display:none}
+  body.stats-min #statsToggle{position:static}
 </style>
 </head>
 <body>
@@ -177,10 +249,27 @@
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
-      <div class="time" id="clock">--:--</div>
-      <div class="meta" id="date">—</div>
+      <div class="time" id="clock">--:--:--</div>
+      <div class="meta"><span id="date">—</span> · <span id="utc">--:--Z</span> · <span id="coords">—</span></div>
     </div>
   </header>
+
+
+  <!-- live statistics strip: every number is computed from data already on the board -->
+  <div id="statStrip"><button id="statsToggle" type="button">▴</button>
+    <div class="stat"><div class="s-label"><span class="s-glyph">⊕</span>Tracking</div>
+      <div class="s-value" id="stTotal">—</div><div class="s-sub" id="stTotalSub">vehicles live on map</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">✈</span>Air</div>
+      <div class="s-value" id="stAir">—</div><div class="s-sub" id="stAirSub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">🚆</span>Rail</div>
+      <div class="s-value" id="stG1">—</div><div class="s-sub" id="stG1Sub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">🚋</span>Surface</div>
+      <div class="s-value" id="stG2">—</div><div class="s-sub" id="stG2Sub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">◷</span>Next depart</div>
+      <div class="s-value" id="stNext">—</div><div class="s-sub" id="stNextSub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">⛁</span>Data</div>
+      <div class="s-value ticking" id="stData">—</div><div class="s-sub" id="stDataSub">data age</div></div>
+  </div>
 
   <main>
     <div class="col">
@@ -198,28 +287,34 @@
 
     <div class="col">
       <div class="cards">
-        <div class="card" id="metroCard">
+        <div class="card" id="metroCard" style="--sys:#E2001A">
           <h2><span class="icon">🚇</span> GVB Metro <span class="count" id="metroCount"></span></h2>
+          <div class="statline" id="metroStat"></div>
           <div class="list" id="metroList"><div class="empty">Metrodienstregeling laden…</div></div>
         </div>
-        <div class="card" id="tramCard">
+        <div class="card" id="tramCard" style="--sys:#3FA9E0">
           <h2><span class="icon">🚋</span> GVB Tram <span class="count" id="tramCount"></span></h2>
+          <div class="statline" id="tramStat"></div>
           <div class="list" id="tramList"><div class="empty">Tramdienstregeling laden…</div></div>
         </div>
-        <div class="card" id="railCard">
+        <div class="card" id="railCard" style="--sys:#FFC917">
           <h2><span class="icon">🚆</span> NS — Intercity &amp; Sprinter <span class="count" id="railCount"></span></h2>
+          <div class="statline" id="railStat"></div>
           <div class="list" id="railList"><div class="empty">NS-dienstregeling laden…</div></div>
         </div>
-        <div class="card" id="intlCard">
+        <div class="card" id="intlCard" style="--sys:#1D4E9E">
           <h2><span class="icon">🌍</span> International — Eurostar · ICE · Nightjet <span class="count" id="intlCount"></span></h2>
+          <div class="statline" id="intlStat"></div>
           <div class="list" id="intlList"><div class="empty">Internationale treinen laden…</div></div>
         </div>
-        <div class="card" id="ferryCard">
+        <div class="card" id="ferryCard" style="--sys:#00A5A0">
           <h2><span class="icon">⛴️</span> Pontjes — IJ ferries <span class="count" id="ferryCount"></span></h2>
+          <div class="statline" id="ferryStat"></div>
           <div class="list" id="ferryList"><div class="empty">Veerdiensten laden…</div></div>
         </div>
-        <div class="card" id="planeCard">
+        <div class="card" id="planeCard" style="--sys:var(--plane)">
           <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
+          <div class="statline" id="planeStat"></div>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>
       </div>
@@ -230,6 +325,7 @@
     <span class="dot" id="statusDot"></span>
     <span id="statusText">GVB + NS scheduled · planes live — airplanes.live</span>
     <span class="grow"></span>
+    <span id="feeds"></span>
   </footer>
 
   <div id="alertTicker"><span class="tk-badge">⚠ Storingen</span>
@@ -362,8 +458,10 @@ async function getJSON(url, timeout=12000){
 function tickClock(){
   const d=new Date();
   // 24-hour clock, in Amsterdam's own time -- this is an Amsterdam board.
-  $("#clock").textContent = d.toLocaleTimeString("nl-NL", {hour:"2-digit", minute:"2-digit", hour12:false, timeZone:"Europe/Amsterdam"});
+  $("#clock").textContent = d.toLocaleTimeString("nl-NL", {hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false, timeZone:"Europe/Amsterdam"});
   $("#date").textContent  = d.toLocaleDateString("en-GB", {weekday:"short", month:"short", day:"numeric", timeZone:"Europe/Amsterdam"});
+  const p=n=>String(n).padStart(2,"0");
+  $("#utc").textContent = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
 }
 
 /* ---------- location ---------- */
@@ -377,11 +475,14 @@ function applyLoc(loc){
   state.loc = loc;
   const label = loc.label || `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
   $("#loclabel").textContent = label;
+  const cEl=$("#coords"); if(cEl) cEl.textContent =
+    `${Math.abs(loc.lat).toFixed(4)}°${loc.lat>=0?"N":"S"} ${Math.abs(loc.lon).toFixed(4)}°${loc.lon>=0?"E":"W"}`;
   const curLbl=$("#curLocLbl"); if(curLbl) curLbl.textContent = label;
 }
 // Re-fetch every near-me data source for the current state.loc. Called after GPS
 // locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
+  drawRangeRings();
   refreshPlanes();
   refreshMetro(); refreshTram(); refreshRail(); refreshIntl(); refreshFerry();
   drawMetroShapes(); drawAllSchedFleets(); fetchAmsLive();
@@ -439,6 +540,7 @@ function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
   state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
+  state.ringLayer   = L.layerGroup().addTo(state.map);   // tactical range rings, beneath everything
   // ORDER = z-order (earlier = underneath): route lines first, then vehicles.
   state.railRouteLayer  = L.layerGroup().addTo(state.map);  // NS lines
   state.intlRouteLayer  = L.layerGroup().addTo(state.map);  // international lines
@@ -465,7 +567,24 @@ function initMap(){
       state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom());
     }).observe(document.getElementById("map"));
   }
-  setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);
+  setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);  drawRangeRings();
+}
+/* Tactical range rings: thin dashed distance circles around the board's
+   location, with tiny mile labels due north. Redrawn on location and accent
+   changes (SVG presentation attributes can't read CSS vars). */
+function drawRangeRings(){
+  if(!state.map || !state.ringLayer) return;
+  state.ringLayer.clearLayers();
+  const cs=getComputedStyle(document.documentElement);
+  const col=(cs.getPropertyValue("--accent")||"#4ea1ff").trim();
+  const {lat,lon}=state.loc;
+  [2,5,10,20].forEach(mi=>{
+    L.circle([lat,lon], {radius:mi*1609.34, interactive:false, fill:false,
+      color:col, weight:1, opacity:.28, dashArray:"3 6"}).addTo(state.ringLayer);
+    L.marker([lat+mi/69.0, lon], {interactive:false, keyboard:false,
+      icon:L.divIcon({className:"range-label", html:`${mi}&nbsp;MI`, iconSize:[34,10], iconAnchor:[17,5]})
+    }).addTo(state.ringLayer);
+  });
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 // A dot at the exact location + an info chip floating to its right (hidden when
@@ -634,13 +753,118 @@ function activeServices(s, parts){
   return act;
 }
 // Group a stop's upcoming departures by headsign so a card shows both directions.
-function groupDepsByDirection(deps, perDir=2, maxDirs=2){
+function groupDepsByDirection(deps, perDir=2, maxDirs=2, sys, nowMin){
   const groups=new Map();
   deps.forEach(d=>{ const key=d.hs||"—"; if(!groups.has(key)) groups.set(key, []); groups.get(key).push(d); });
-  return [...groups.values()]
+  const out=[...groups.values()]
     .map(list=>list.sort((a,b)=>a.min-b.min).slice(0,perDir))
     .sort((a,b)=>a[0].min-b[0].min)
     .slice(0,maxDirs);
+  // Tagged calls record the soonest upcoming departure for the stats strip:
+  // calls within the same render pass (≤1.5s apart) keep the smallest value,
+  // a new pass overwrites. deps are already filtered to >= now by callers.
+  if(sys && out.length){
+    const d=out[0][0];
+    if(nowMin==null) nowMin=new Date().getHours()*60+new Date().getMinutes();
+    const rec={min:Math.max(0,d.min-nowMin), label:[d.line,d.hs].filter(Boolean).join(" → "), at:Date.now()};
+    const S=(state._schedNexts=state._schedNexts||{}), ex=S[sys];
+    if(!(ex && rec.at-ex.at<1500 && ex.min<=rec.min)) S[sys]=rec;
+  }
+  return out;
+}
+
+/* ---------- live statistics (strip + statlines + feed readouts) ----------
+   Every number is computed from data the board already holds in memory — no
+   extra network calls. Runs on a 1s tick; feeds that haven't reported yet
+   show an em-dash instead of a fake zero. Same engine on every board; the
+   three consts below are this board's configuration. */
+const STATS_GROUPS=[{"v": "stG1", "short": "rail", "fleets": [["metro", "metro"], ["rail", "ns"], ["intl", "intl"]]}, {"v": "stG2", "short": "surface", "fleets": [["tram", "tram"], ["ferry", "ferry"]]}];
+const STATS_LINES={"metroStat": ["metro", "#metroList"], "tramStat": ["tram", "#tramList"], "railStat": ["rail", "#railList"], "intlStat": ["intl", "#intlList"], "ferryStat": ["ferry", "#ferryList"]};
+const STATS_FEEDS=[{name:"ADS-B", ts:()=>state.lastPlaneOk, staleMs:60000},
+  {name:"GTFS", bundled:true},
+  {name:"OVAPI", cfg:()=>!!state.liveUrl}];
+function fleetCount(f){ return Object.keys((state.fleets&&state.fleets[f])||{}).length; }
+function medianOf(arr){ if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; }
+function setTxt(id, txt){ const e=document.getElementById(id); if(e && e.textContent!==txt) e.textContent=txt; }
+function setHTML(id, html){ const e=document.getElementById(id); if(e && e.innerHTML!==html) e.innerHTML=html; }
+function feedAge(ts){ return ts? Math.max(0,Math.round((Date.now()-ts)/1000))+"s" : "—"; }
+
+/* ---- minimizable stats strip: chevron pull-tab, sticks per board ---- */
+function setStatsMin(on){
+  document.body.classList.toggle("stats-min", on);
+  try{ localStorage.setItem(`transitboard${CITY_ID}.statsMin`, on?"1":"0"); }catch(_){}
+  const b=document.getElementById("statsToggle");
+  if(b){ b.textContent = on?"▾ stats":"▴"; b.title = on?"Show statistics":"Minimize statistics"; }
+  if(typeof fitAll==="function") setTimeout(fitAll, 60);   // cards gain/lose height
+}
+(function initStatsMin(){
+  const b=document.getElementById("statsToggle"); if(!b) return;
+  b.onclick=()=>setStatsMin(!document.body.classList.contains("stats-min"));
+  setStatsMin(localStorage.getItem(`transitboard${CITY_ID}.statsMin`)==="1");   // restore + set icon
+})();
+
+function updateStats(){
+  const air=fleetCount("plane");
+  let total=air; const groupCounts=[];
+  STATS_GROUPS.forEach(g=>{
+    let n=0; const parts=[];
+    g.fleets.forEach(fl=>{ const c=fleetCount(fl[0]); n+=c; parts.push(`${c} ${fl[1]}`); });
+    total+=n; groupCounts.push(n);
+    setTxt(g.v, n? String(n):"—");
+    setTxt(g.v+"Sub", parts.join(" · ")||"—");
+  });
+  setTxt("stTotal", total? String(total):"—");
+  setTxt("stTotalSub", total? `${air} air · ${groupCounts.map((n,i)=>`${n} ${STATS_GROUPS[i].short}`).join(" · ")}` : "vehicles live on map");
+  const P=state._planes;
+  setTxt("stAir", P? String(P.length) : "—");
+  if(P && P.length){
+    const nr=Math.min(...P.map(a=>a._dist).filter(n=>n!=null));
+    const med=medianOf(P.map(a=>a.alt_baro).filter(n=>typeof n==="number"));
+    setTxt("stAirSub", `nr ${isFinite(nr)?nr.toFixed(1):"—"} nm${med!=null?` · med ${med.toLocaleString()}′`:""}`);
+  } else setTxt("stAirSub", P? `none in ${CFG.planeRadiusNm} nm` : "—");
+
+  /* NEXT DEPART: soonest departure any schedule card reported (fresh ≤2min) */
+  const SN=state._schedNexts||{}, cand=[];
+  for(const k in SN){ if(Date.now()-SN[k].at<120000 && SN[k].min<=720) cand.push(SN[k]); }
+  if(cand.length){
+    const c=cand.reduce((a,b)=>a.min<=b.min?a:b);
+    setHTML("stNext", c.min<=0 ? "now" : `${c.min}<small>min</small>`);
+    setTxt("stNextSub", c.label||"—");
+  } else { setTxt("stNext","—"); setTxt("stNextSub","—"); }
+
+  /* DATA tile */
+  const okTimes=STATS_FEEDS.filter(f=>f.ts).map(f=>f.ts()).filter(Boolean);
+  const newest=okTimes.length? Math.max(...okTimes) : 0;
+  setHTML("stData", newest? `${Math.max(0,Math.round((Date.now()-newest)/1000))}<small>s</small>` : "—");
+  setTxt("stDataSub", STATS_FEEDS.filter(f=>f.ts).map(f=>`${f.name.toLowerCase()} ${feedAge(f.ts())}`).join(" · ")||"feed ages");
+
+  /* per-card statlines */
+  if(P && P.length){
+    const nr=Math.min(...P.map(a=>a._dist).filter(n=>n!=null));
+    const mx=Math.max(...P.map(a=>a.gs||0));
+    const med=medianOf(P.map(a=>a.alt_baro).filter(n=>typeof n==="number"));
+    setHTML("planeStat", `nearest <b>${isFinite(nr)?nr.toFixed(1):"—"}</b> nm · fastest <b>${Math.round(mx)}</b> kt${med!=null?` · median <b>${med.toLocaleString()}</b>′`:""}`);
+  } else setHTML("planeStat","");
+  const A=state._amtrak;
+  if(A && A.length){
+    const avg=Math.round(A.reduce((s2,x)=>s2+(x.t.velocity||0),0)/A.length);
+    setHTML("amtrakStat", `⌀ <b>${avg}</b> mph · nearest <b>${A[0].distMi.toFixed(0)}</b> mi`);
+  } else setHTML("amtrakStat","");
+  for(const elId in STATS_LINES){
+    const [fl,sysTag]=STATS_LINES[elId], n=fleetCount(fl);
+    const nx=sysTag? SN[sysTag] : null, fresh=nx && Date.now()-nx.at<120000;
+    setHTML(elId, (n||fresh)? `<b>${n}</b> moving now${fresh?` · next in <b>${nx.min}</b> min`:""}` : "");
+  }
+
+  /* footer: per-feed link status (dot + name + age — never color alone) */
+  setHTML("feeds", STATS_FEEDS.map(f=>{
+    if(f.bundled){ const ok=Object.keys(state).some(k=>/sched/i.test(k)&&state[k]);
+      return `<span class="feed${ok?"":" off"}"><span class="fdot"></span><b>${f.name}</b> ${ok?"bundled":"—"}</span>`; }
+    if(f.cfg){ const on=!!f.cfg();
+      return `<span class="feed${on?"":" off"}"><span class="fdot"></span><b>${f.name}</b> ${on?"set":"off"}</span>`; }
+    const ts=f.ts(), cls=!ts?"feed off":(Date.now()-ts>(f.staleMs||90000)?"feed stale":"feed");
+    return `<span class="${cls}"><span class="fdot"></span><b>${f.name}</b> ${feedAge(ts)}</span>`;
+  }).join(""));
 }
 // Draw each line's route as a colored polyline from a bundled schedule (pick the
 // fullest trip per line). colorFn(line) -> hex.
@@ -701,6 +925,7 @@ async function fetchPlanes(){
 function renderPlanes(ac){
   const box=$("#planeList"); box.innerHTML="";
   const flying=ac.filter(a=>a.alt_baro!=="ground");
+  state._planes=flying; state.lastPlaneOk=Date.now();   // stats strip reads these
   if(!flying.length){ box.appendChild(el("div","empty","No aircraft overhead right now.")); }
   flying.slice(0,10).forEach(a=>{
     const row=el("div","row plane");
@@ -851,7 +1076,7 @@ async function refreshAmsCard({key, list, count, stations=2, badgeCls, noneMsg})
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${km.toFixed(1)} km`));
-    groupDepsByDirection(deps).forEach(group=>{
+    groupDepsByDirection(deps, 2, 2, list, nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||group[0].line)));
       group.forEach(d=>{
         const row=el("div","row");
@@ -1052,6 +1277,7 @@ function setMapFull(on){
 /* ---------- accent color customization ---------- */
 function setBoardAccent(hex){
   document.documentElement.style.setProperty("--accent", hex);
+  drawRangeRings();   // rings are stroked in the accent color
   localStorage.setItem(LS.accent, hex);
   document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
 }
@@ -1224,6 +1450,7 @@ function boot(){
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
+  updateStats(); setInterval(updateStats, 1000);
 
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshEverythingForNewLocation();
