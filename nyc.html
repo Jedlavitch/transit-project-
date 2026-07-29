@@ -181,7 +181,7 @@
 
   <main>
     <div class="col">
-      <div id="map"></div>
+      <div id="map"><button id="mapFsBtn" type="button" title="Map only — full screen (M)"></button></div>
       <div class="legend">
         <span>✈️ aircraft</span>
         <span style="color:#3ad0c8">▦ Amtrak</span>
@@ -1477,11 +1477,31 @@ document.addEventListener("fullscreenchange", onFsChange);
 document.addEventListener("webkitfullscreenchange", onFsChange);
 document.addEventListener("keydown", e=>{
   if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
-  if(e.key==="Escape" && state.follow) stopFollow();
+  if((e.key==="m"||e.key==="M") && !/^(input|textarea)$/i.test(e.target.tagName)) setMapFull(!mapFullOn());
+  if(e.key==="Escape"){ if(state.follow) stopFollow(); else if(mapFullOn()) setMapFull(false); }
 });
 // browsers drop the wake lock when the tab is hidden; re-acquire when visible in kiosk mode
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
 onFsChange();   // set initial icon
+
+/* ---- map-only full screen: pin the map over the whole viewport -- just the
+   map + its vehicles, no cards. Toggle: the button pinned on the map or the
+   M key; Esc (or the same button) goes back to the board. Persists per
+   board, so a kiosk display can live in map-only mode across reloads. ---- */
+function mapFullOn(){ return document.body.classList.contains("map-full"); }
+function setMapFull(on){
+  document.body.classList.toggle("map-full", on);
+  try{ localStorage.setItem("transitboardnyc.mapFull", on?"1":"0"); }catch(_){}
+  const b=$("#mapFsBtn");
+  if(b){ b.innerHTML = on?SVG_COMPRESS:SVG_EXPAND; b.title = on?"Back to the board (Esc)":"Map only — full screen (M)"; }
+  if(state.map) setTimeout(()=>{ state.map.invalidateSize(); }, 60);  // ResizeObserver catches it too; belt & suspenders
+}
+(function initMapFull(){
+  const b=$("#mapFsBtn"); if(!b) return;
+  b.onclick=()=>setMapFull(!mapFullOn());
+  if(window.L && L.DomEvent) L.DomEvent.disableClickPropagation(b);  // clicks shouldn't reach the map under the button
+  setMapFull(localStorage.getItem("transitboardnyc.mapFull")==="1");  // restore last state + set the icon
+})();
 
 /* ---- keep kiosk fullscreen across board<->board navigation ----
    Element fullscreen can't survive a page load and can't be re-entered

@@ -170,7 +170,7 @@
 
   <main>
     <div class="col">
-      <div id="map"></div>
+      <div id="map"><button id="mapFsBtn" type="button" title="Map only — full screen (M)"></button></div>
       <div class="legend">
         <span>✈️ aircraft</span>
         <span style="color:#3ad0c8">▦ Amtrak</span>
@@ -234,6 +234,13 @@
     <div class="accent-lbl">Accent color</div>
     <div class="swatches" id="accentSwatches"></div>
 
+    <div class="accent-lbl">Trains per box</div>
+    <div class="theme-row" id="rowsRow">
+      <button type="button" class="theme-btn" data-rows="fewer">Fewer</button>
+      <button type="button" class="theme-btn" data-rows="normal">Normal</button>
+      <button type="button" class="theme-btn" data-rows="more">More</button>
+    </div>
+
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
@@ -288,6 +295,8 @@ const LS = {
   accent:    `transitboard${CITY_ID}.accent`,
   theme:     `transitboard${CITY_ID}.theme`,
   hidden:    `transitboard${CITY_ID}.hiddenCards`,
+  rows:      `transitboard${CITY_ID}.rows`,      // "Trains per box" density
+  mapFull:   `transitboard${CITY_ID}.mapFull`,   // map-only full screen sticks
   // [ADD-A-SYSTEM] if a system needs an optional live-Worker URL saved, add its
   // key here, e.g.  busUrl: `transitboard${CITY_ID}.busUrl`,
 };
@@ -1052,10 +1061,30 @@ document.addEventListener("fullscreenchange", onFsChange);
 document.addEventListener("webkitfullscreenchange", onFsChange);
 document.addEventListener("keydown", e=>{
   if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
-  if(e.key==="Escape" && state.follow) stopFollow();
+  if((e.key==="m"||e.key==="M") && !/^(input|textarea)$/i.test(e.target.tagName)) setMapFull(!mapFullOn());
+  if(e.key==="Escape"){ if(state.follow) stopFollow(); else if(mapFullOn()) setMapFull(false); }
 });
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
 onFsChange();   // set initial icon
+
+/* ---- map-only full screen: pin the map over the whole viewport -- just the
+   map + its vehicles, no cards. Toggle: the button pinned on the map or the
+   M key; Esc (or the same button) goes back to the board. Persists per
+   board, so a kiosk display can live in map-only mode across reloads. ---- */
+function mapFullOn(){ return document.body.classList.contains("map-full"); }
+function setMapFull(on){
+  document.body.classList.toggle("map-full", on);
+  try{ localStorage.setItem(LS.mapFull, on?"1":"0"); }catch(_){}
+  const b=$("#mapFsBtn");
+  if(b){ b.innerHTML = on?SVG_COMPRESS:SVG_EXPAND; b.title = on?"Back to the board (Esc)":"Map only — full screen (M)"; }
+  if(state.map) setTimeout(()=>{ state.map.invalidateSize(); }, 60);  // ResizeObserver catches it too; belt & suspenders
+}
+(function initMapFull(){
+  const b=$("#mapFsBtn"); if(!b) return;
+  b.onclick=()=>setMapFull(!mapFullOn());
+  if(window.L && L.DomEvent) L.DomEvent.disableClickPropagation(b);  // clicks shouldn't reach the map under the button
+  setMapFull(localStorage.getItem(LS.mapFull)==="1");  // restore last state + set the icon
+})();
 
 /* ---------- accent color customization ---------- */
 function setBoardAccent(hex){
@@ -1087,6 +1116,23 @@ function tileUrlForTheme(theme){
 }
 function buildThemeButtons(){
   document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });
+}
+
+/* ---------- row density ("Trains per box": Fewer / Normal / More) ----------
+   Scales row size via the shared [data-rows] CSS variables (theme.css):
+   smaller rows fit more trains per box, larger fit fewer. Rebuilds the cards
+   on change (fitList only trims, so it can't re-add rows a denser setting
+   now has room for). */
+function setBoardRows(mode){
+  const changed = document.documentElement.getAttribute("data-rows")!==mode;
+  document.documentElement.setAttribute("data-rows", mode);
+  localStorage.setItem(LS.rows, mode);
+  document.querySelectorAll("#rowsRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.rows===mode));
+  if(changed && state.map) refreshEverythingForNewLocation();
+  else fitAll();
+}
+function buildRowsButtons(){
+  document.querySelectorAll("#rowsRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardRows(b.dataset.rows); });
 }
 
 /* ---------- customize: which cards show on the board ----------
@@ -1138,6 +1184,7 @@ function buildCardToggles(){
 function boot(){
   setBoardAccent(localStorage.getItem(LS.accent)||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
+  setBoardRows(localStorage.getItem(LS.rows)||"normal"); buildRowsButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
