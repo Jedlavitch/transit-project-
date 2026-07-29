@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css" />
+<script src="license.js" defer></script>
 <style>
   /* Palette, typeface, row-density vars, and header city-tabs all
      come from the shared theme.css; only page-specific styles live here. */
@@ -224,12 +225,50 @@
   body.stats-min #statStrip{display:flex; justify-content:flex-end; padding:0 14px}
   body.stats-min #statStrip .stat{display:none}
   body.stats-min #statsToggle{position:static}
+
+  /* ============ poppy gradient pass (shared look with the DC board) ============
+     Appended overrides — later rules win at equal specificity. Each stat tile
+     and card carries --sys/--sys2 hue pairs (inline in the HTML): a gradient
+     hairline across the top edge, gradient-inked headings/values, and — where
+     color-mix exists — a faint tint of the element's own color in its panel.
+     Day theme darkens the gradient inks via filter for contrast. */
+  body{
+    background:
+      radial-gradient(1000px 700px at -10% 110%, rgba(58,208,200,.10) 0%, transparent 55%),
+      radial-gradient(800px 500px at 8% -6%, rgba(181,140,255,.09) 0%, transparent 60%),
+      radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
+  }
+  header .title .t-grad{background:linear-gradient(90deg,#4ea1ff,#3ad0c8 48%,#b58cff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  :root[data-theme="day"] header .title .t-grad{filter:brightness(.72) saturate(1.2)}
+  .stat{background:
+      linear-gradient(90deg,var(--sys,var(--line)),var(--sys2,var(--sys,var(--line)))) top/100% 2px no-repeat,
+      linear-gradient(180deg,var(--panel),var(--panel2))}
+  @supports (color: color-mix(in srgb, red 10%, blue)){
+    .stat{background:
+      linear-gradient(90deg,var(--sys,var(--line)),var(--sys2,var(--sys,var(--line)))) top/100% 2px no-repeat,
+      linear-gradient(180deg, color-mix(in srgb, var(--sys,var(--panel)) 11%, var(--panel)), var(--panel2))}
+  }
+  .stat .s-glyph{color:var(--sys,var(--muted))}
+  .stat .s-value{background:linear-gradient(90deg,var(--sys,var(--text)),var(--sys2,var(--sys,var(--text))));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  .stat .s-value small{-webkit-text-fill-color:var(--muted)}
+  :root[data-theme="day"] .stat .s-value, :root[data-theme="day"] .stat .s-glyph{filter:brightness(.68) saturate(1.25)}
+  .card{background:
+      linear-gradient(90deg,var(--sys,var(--line)),var(--sys2,var(--sys,var(--line)))) top/100% 2px no-repeat,
+      linear-gradient(180deg,var(--panel),var(--panel2))}
+  .card h2::before{background:linear-gradient(180deg,var(--sys,var(--accent)),var(--sys2,var(--sys,var(--accent))))}
+  .card h2 .t{background:linear-gradient(90deg,var(--sys,var(--muted)),var(--sys2,var(--sys,var(--muted))));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  :root[data-theme="day"] .card h2 .t{filter:brightness(.6) saturate(1.3)}
+  .statline b{color:var(--sys2,var(--sys,var(--text)))}  /* --sys2 is the brighter of the pair */
+  :root[data-theme="day"] .statline b{filter:brightness(.62) saturate(1.3)}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="title">🔔 Philadelphia Live Transit <small id="loclabel">locating…</small></div>
+    <div class="title">🔔 <span class="t-grad">Philadelphia Live Transit</span> <small id="loclabel">locating…</small></div>
     <nav class="city-picker">
       <select aria-label="Switch city" title="Switch city"
         onchange="try{ if(document.fullscreenElement||document.webkitFullscreenElement) sessionStorage.setItem('kioskFS','1'); }catch(e){} window.location.href=this.value;">
@@ -258,17 +297,17 @@
 
   <!-- live statistics strip: every number is computed from data already on the board -->
   <div id="statStrip"><button id="statsToggle" type="button">▴</button>
-    <div class="stat"><div class="s-label"><span class="s-glyph">⊕</span>Tracking</div>
+    <div class="stat" style="--sys:#4ea1ff; --sys2:#b58cff"><div class="s-label"><span class="s-glyph">⊕</span>Tracking</div>
       <div class="s-value" id="stTotal">—</div><div class="s-sub" id="stTotalSub">vehicles live on map</div></div>
-    <div class="stat"><div class="s-label"><span class="s-glyph">✈</span>Air</div>
+    <div class="stat" style="--sys:#ffd166; --sys2:#ff9d5c"><div class="s-label"><span class="s-glyph">✈</span>Air</div>
       <div class="s-value" id="stAir">—</div><div class="s-sub" id="stAirSub">—</div></div>
-    <div class="stat"><div class="s-label"><span class="s-glyph">🚆</span>Rail</div>
+    <div class="stat" style="--sys:#3ad0c8; --sys2:#4ea1ff"><div class="s-label"><span class="s-glyph">🚆</span>Rail</div>
       <div class="s-value" id="stG1">—</div><div class="s-sub" id="stG1Sub">—</div></div>
-    <div class="stat"><div class="s-label"><span class="s-glyph">🚌</span>Road</div>
+    <div class="stat" style="--sys:#8ab4ff; --sys2:#c58cff"><div class="s-label"><span class="s-glyph">🚌</span>Road</div>
       <div class="s-value" id="stG2">—</div><div class="s-sub" id="stG2Sub">—</div></div>
-    <div class="stat"><div class="s-label"><span class="s-glyph">◷</span>Next depart</div>
+    <div class="stat" style="--sys:#33d17a; --sys2:#a3e635"><div class="s-label"><span class="s-glyph">◷</span>Next depart</div>
       <div class="s-value" id="stNext">—</div><div class="s-sub" id="stNextSub">—</div></div>
-    <div class="stat"><div class="s-label"><span class="s-glyph">⛁</span>Data</div>
+    <div class="stat" style="--sys:#ff9f43; --sys2:#ffd166"><div class="s-label"><span class="s-glyph">⛁</span>Data</div>
       <div class="s-value ticking" id="stData">—</div><div class="s-sub" id="stDataSub">refresh cycle</div></div>
   </div>
 
@@ -293,33 +332,33 @@
 
     <div class="col">
       <div class="cards">
-        <div class="card" id="amtrakCard" style="--sys:#3ad0c8">
-          <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
+        <div class="card" id="amtrakCard" style="--sys:#3ad0c8; --sys2:#4ea1ff">
+          <h2><span class="icon">🚄</span> <span class="t">Amtrak — regional rail</span> <span class="count" id="amtrakCount"></span></h2>
           <div class="statline" id="amtrakStat"></div>
           <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
         </div>
-        <div class="card" id="septaRailCard" style="--sys:#4F758B; display:none">
-          <h2><span class="icon">🚆</span> SEPTA Regional Rail <span class="count" id="septaRailCount"></span></h2>
+        <div class="card" id="septaRailCard" style="--sys:#4F758B; --sys2:#8fb7d1; display:none">
+          <h2><span class="icon">🚆</span> <span class="t">SEPTA Regional Rail</span> <span class="count" id="septaRailCount"></span></h2>
           <div class="statline" id="septaRailStat"></div>
           <div class="list" id="septaRailList"><div class="empty">Loading SEPTA schedule…</div></div>
         </div>
-        <div class="card" id="septaSubwayCard" style="--sys:#1c6bb0; display:none">
-          <h2><span class="icon">🚇</span> SEPTA Subway (MFL/BSL) <span class="count" id="septaSubwayCount"></span></h2>
+        <div class="card" id="septaSubwayCard" style="--sys:#1c6bb0; --sys2:#5aa9ff; display:none">
+          <h2><span class="icon">🚇</span> <span class="t">SEPTA Subway (MFL/BSL)</span> <span class="count" id="septaSubwayCount"></span></h2>
           <div class="statline" id="septaSubwayStat"></div>
           <div class="list" id="septaSubwayList"><div class="empty">Loading SEPTA schedule…</div></div>
         </div>
-        <div class="card" id="septaBusCard" style="--sys:#e8a33c; display:none">
-          <h2><span class="icon">🚌</span> SEPTA Bus — 3, 4 &amp; 16 <span class="count" id="septaBusCount"></span></h2>
+        <div class="card" id="septaBusCard" style="--sys:#e8a33c; --sys2:#ffd166; display:none">
+          <h2><span class="icon">🚌</span> <span class="t">SEPTA Bus — 3, 4 &amp; 16</span> <span class="count" id="septaBusCount"></span></h2>
           <div class="statline" id="septaBusStat"></div>
           <div class="list" id="septaBusList"><div class="empty">Loading SEPTA bus schedule…</div></div>
         </div>
-        <div class="card" id="patcoCard" style="--sys:#d1495b; display:none">
-          <h2><span class="icon">🚆</span> PATCO <span class="count" id="patcoCount"></span></h2>
+        <div class="card" id="patcoCard" style="--sys:#d1495b; --sys2:#ff8a9a; display:none">
+          <h2><span class="icon">🚆</span> <span class="t">PATCO</span> <span class="count" id="patcoCount"></span></h2>
           <div class="statline" id="patcoStat"></div>
           <div class="list" id="patcoList"><div class="empty">Loading PATCO schedule…</div></div>
         </div>
-        <div class="card" id="planeCard" style="--sys:var(--plane)">
-          <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
+        <div class="card" id="planeCard" style="--sys:var(--plane); --sys2:#ff9d5c">
+          <h2><span class="icon">✈️</span> <span class="t">Planes overhead</span> <span class="count" id="planeCount"></span></h2>
           <div class="statline" id="planeStat"></div>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>

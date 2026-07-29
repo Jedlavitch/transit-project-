@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Transit Board — Activate</title>
+<link rel="stylesheet" href="theme.css" />
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0; min-height:100%}
+  body{background:radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
+    color:var(--text); -webkit-font-smoothing:antialiased; padding:40px 20px}
+  .wrap{max-width:560px; margin:0 auto}
+  h1{font-size:26px; margin:0 0 18px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:14px; padding:24px}
+  .key{font:800 24px/1.3 ui-monospace,Menlo,monospace; letter-spacing:.08em; text-align:center;
+    background:var(--row-bg); border:1px solid var(--row-line); border-radius:10px; padding:16px; margin:14px 0}
+  p{color:var(--muted); font-size:13.5px; line-height:1.7}
+  .cta{display:inline-block; width:100%; text-align:center; margin-top:10px; padding:13px; border-radius:10px;
+    border:none; background:var(--accent); color:#04101f; font-weight:800; font-size:15px; cursor:pointer}
+  input{width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--row-bg);
+    color:var(--text); font:700 16px ui-monospace,Menlo,monospace; letter-spacing:.06em; text-transform:uppercase}
+  #msg{font-size:13px; min-height:17px; margin-top:10px}
+  .back{color:var(--accent); font-size:13px; text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← back to the board</a>
+  <h1>Activate your license</h1>
+  <div class="panel">
+    <div id="fetching" style="display:none"><p>Confirming your purchase…</p></div>
+    <div id="keyWrap" style="display:none">
+      <p>Your license key — save it somewhere safe. It works on up to 5 devices:</p>
+      <div class="key" id="keyText">—</div>
+    </div>
+    <div id="manualWrap">
+      <p>Paste your license key:</p>
+      <input id="keyInput" placeholder="TB-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" />
+    </div>
+    <button class="cta" id="activateBtn">Activate this device</button>
+    <div id="msg"></div>
+    <p style="margin-top:16px">To license another device: open any city board on it, click the
+      “◇ evaluation” chip in the corner, and enter the same key.</p>
+  </div>
+</div>
+<script>
+  const WORKER_URL = "";   // ← license-worker URL, e.g. https://tb-license.YOU.workers.dev
+  const workerUrl = (localStorage.getItem("tb.workerUrl") || WORKER_URL || "").replace(/\/+$/,"");
+  const qs = new URLSearchParams(location.search);
+  const msg = t => { document.getElementById("msg").textContent = t; };
+  const show = (id, on) => { document.getElementById(id).style.display = on ? "block" : "none"; };
+  let key = (qs.get("key") || "").trim().toUpperCase();
+
+  function showKey(k){
+    key = k;
+    document.getElementById("keyText").textContent = k;
+    show("keyWrap", true); show("manualWrap", false);
+  }
+
+  (async function boot(){
+    const session = qs.get("session_id");
+    if (key) { showKey(key); return; }
+    if (session && workerUrl) {
+      show("fetching", true); show("manualWrap", false);
+      try {
+        const r = await fetch(`${workerUrl}/claim?session=${encodeURIComponent(session)}`);
+        const data = await r.json();
+        show("fetching", false);
+        if (data.ok) showKey(data.key);
+        else { show("manualWrap", true); msg("Couldn't confirm the purchase (" + (data.error||"error") + ") — contact the seller with your Stripe receipt."); }
+      } catch (_) { show("fetching", false); show("manualWrap", true); msg("Couldn't reach the license server."); }
+    }
+  })();
+
+  document.getElementById("activateBtn").onclick = async () => {
+    const k = (key || document.getElementById("keyInput").value || "").trim().toUpperCase();
+    if (!k) { msg("Enter a key first."); return; }
+    localStorage.setItem("tb.license", k);
+    localStorage.removeItem("tb.license.okUntil");
+    if (workerUrl) {
+      msg("Checking…");
+      try {
+        let dev = localStorage.getItem("tb.device");
+        const r = await fetch(`${workerUrl}/verify?key=${encodeURIComponent(k)}&device=${dev||"activate"}`);
+        const data = await r.json();
+        if (data.ok) {
+          localStorage.setItem("tb.license.okUntil", String(Date.now()+86400000));
+          localStorage.setItem("tb.license.lastOk", String(Date.now()));
+          msg("✓ Licensed! Opening your board…");
+          setTimeout(()=>{ window.location.href = "index.html"; }, 900);
+        } else msg(data.error === "device_limit" ? "This key is already on its maximum number of devices." : "That key wasn't recognized.");
+      } catch (_) { msg("Saved. The board will verify the key when it can reach the license server."); }
+    } else msg("Saved. Open any board to finish activation.");
+  };
+</script>
+</body>
+</html>
