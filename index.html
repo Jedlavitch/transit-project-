@@ -13,12 +13,24 @@
      come from the shared theme.css; only page-specific styles live here. */
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
+  :root{
+    /* tactical voice: data values speak monospace, labels stay sans */
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --grid: rgba(96,130,200,.07);
+  }
+  :root[data-theme="black"]{ --grid: rgba(96,130,200,.05); }
+  :root[data-theme="day"]{ --grid: rgba(19,32,62,.05); }
   body{
     background:radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
     color:var(--text);
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
-  #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden}
+  /* faint ops-room plotting grid behind everything (recessive, hairline) */
+  body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/100% 56px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/56px 100%;}
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; position:relative; z-index:1}
   header{
     display:flex; align-items:center; gap:16px; padding:14px 22px;
     border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--panel2),var(--bg));
@@ -26,65 +38,95 @@
   header .title{font-size:20px; font-weight:800; letter-spacing:.3px}
   header .title small{color:var(--muted); font-weight:600; margin-left:8px}
   header .clock{margin-left:auto; text-align:right}
-  header .clock .time{font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1}
-  header .clock .meta{font-size:12px; color:var(--muted)}
+  header .clock .time{font-size:28px; font-weight:700; font-family:var(--mono); font-variant-numeric:tabular-nums; line-height:1}
+  header .clock .meta{font-size:11px; color:var(--muted); font-family:var(--mono); letter-spacing:.02em; margin-top:3px}
   header button{
     background:var(--panel); color:var(--text); border:1px solid var(--line);
     border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer;
   }
   header button:hover{border-color:var(--accent)}
 
-  main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
+  /* ---- statistics strip: KPI tiles under the command bar ---- */
+  #statStrip{display:grid; grid-template-columns:repeat(6,1fr); gap:10px; padding:10px 14px 0}
+  .stat{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:6px; padding:7px 11px 8px; min-width:0; overflow:hidden}
+  .stat .s-label{display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700;
+    letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); white-space:nowrap}
+  .stat .s-glyph{font-size:12px}
+  .stat .s-value{font-size:26px; font-weight:700; line-height:1.15; margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .stat .s-value small{font-size:13px; font-weight:600; color:var(--muted); margin-left:2px}
+  .stat .s-value.ticking{font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .stat .s-sub{font-size:10.5px; color:var(--muted); font-family:var(--mono);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
+
+  main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:12px 14px 14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
   .cards{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:12px; min-height:0; flex:1}
   .card{
     background:linear-gradient(180deg,var(--panel),var(--panel2));
-    border:1px solid var(--line); border-radius:14px; padding:11px 13px;
+    border:1px solid var(--line); border-radius:6px; padding:10px 12px;
     display:flex; flex-direction:column; min-height:0; overflow:hidden;
   }
   .card.user-hidden{display:none !important}
-  .card h2{margin:0 0 7px; font-size:13px; letter-spacing:.4px; text-transform:uppercase;
-    color:var(--muted); display:flex; align-items:center; gap:8px}
-  .card h2 .icon{font-size:17px}
-  .card h2 .count{margin-left:auto; font-size:12px; color:var(--muted); font-weight:600}
+  .card h2{margin:0 0 6px; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); display:flex; align-items:center; gap:7px; font-family:var(--mono); font-weight:700}
+  .card h2::before{content:""; width:3px; height:12px; flex:none; background:var(--sys,var(--accent))}
+  .card h2 .icon{font-size:15px}
+  .card h2 .count{margin-left:auto; font-size:10.5px; color:var(--muted); font-weight:600; font-family:var(--mono);
+    letter-spacing:.02em; text-transform:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* per-system statline: computed live numbers under each card header */
+  .statline{font-size:10.5px; color:var(--muted); font-family:var(--mono); letter-spacing:.02em;
+    margin:-2px 0 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .statline:empty{display:none}
+  .statline b{color:var(--text); font-weight:700}
   .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:var(--row-gap); padding-right:2px}
 
   .row{
     display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
-    padding:var(--row-pad); border-radius:10px; background:var(--row-bg); border:1px solid var(--row-line);
+    padding:var(--row-pad); border-radius:4px; background:var(--row-bg); border:1px solid var(--row-line);
   }
   .row .badge{
-    min-width:34px; height:var(--badge-h); padding:0 8px; border-radius:7px; display:flex; align-items:center;
-    justify-content:center; font-weight:800; font-size:13px; color:#08101f;
+    min-width:34px; height:var(--badge-h); padding:0 8px; border-radius:3px; display:flex; align-items:center;
+    justify-content:center; font-weight:800; font-size:13px; color:#08101f; font-family:var(--mono);
   }
   .row .badge.rail{color:#fff}
   .row .dest{font-weight:700; font-size:var(--dest-fs); line-height:1.15}
   .row .sub{color:var(--muted); font-size:var(--sub-fs)}
   .row .times{display:flex; flex-direction:column; align-items:flex-end; gap:2px}
-  .row .live{font-weight:800; font-size:var(--live-fs); font-variant-numeric:tabular-nums; color:var(--live)}
+  .row .live{font-weight:700; font-size:var(--live-fs); font-variant-numeric:tabular-nums; color:var(--live); font-family:var(--mono)}
   .row .live.brd{color:#fff; background:var(--good); padding:1px 7px; border-radius:6px; font-size:13px}
   .row .live.arr{color:#08101f; background:var(--warn); padding:1px 7px; border-radius:6px; font-size:13px}
-  .row .sched{font-size:11px; color:var(--sched)}
+  .row .sched{font-size:11px; color:var(--sched); font-family:var(--mono)}
   .row .sched b{color:var(--sched-b)}
-  .row .live-eta{font-weight:800; font-size:var(--live-fs); font-variant-numeric:tabular-nums}
+  .row .live-eta{font-weight:700; font-size:var(--live-fs); font-variant-numeric:tabular-nums; font-family:var(--mono)}
   .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
-  .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
-  .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
+  .stop-label{font-size:11px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.06em; font-family:var(--mono); text-transform:uppercase}
+  .dir-label{font-size:10.5px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.04em; font-family:var(--mono)}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
-  .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
+  .plane .alt{color:var(--accent); font-weight:700; font-size:15px; font-variant-numeric:tabular-nums; font-family:var(--mono)}
 
-  #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
+  #map{flex:1; border-radius:6px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
   .leaflet-container{background:var(--row-bg)}
   .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+  .range-label{color:var(--muted); font:600 9px/1 var(--mono); letter-spacing:.08em; white-space:nowrap; opacity:.75}
   .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
   .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
 
   footer{display:flex; align-items:center; gap:14px; padding:6px 22px; border-top:1px solid var(--line);
-    font-size:12px; color:var(--muted)}
+    font-size:11px; color:var(--muted); font-family:var(--mono)}
   footer .dot{width:8px; height:8px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good)}
   footer .dot.stale{background:var(--warn); box-shadow:0 0 8px var(--warn)}
   footer .grow{flex:1}
+  /* per-feed link status readouts (dot + label + age — never color alone) */
+  #feeds{display:flex; gap:13px; align-items:center}
+  .feed{display:flex; gap:5px; align-items:center; letter-spacing:.06em; white-space:nowrap}
+  .feed .fdot{width:6px; height:6px; border-radius:50%; background:var(--good); box-shadow:0 0 6px var(--good)}
+  .feed.stale .fdot{background:var(--warn); box-shadow:0 0 6px var(--warn)}
+  .feed.off .fdot{background:var(--muted); box-shadow:none; opacity:.5}
+  .feed.off{opacity:.55}
+  .feed b{color:var(--text); font-weight:600}
 
   /* Setup overlay */
   #setup{position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(6px);
@@ -128,12 +170,18 @@
     main{grid-template-columns:1fr; grid-template-rows:34dvh 1fr}
     #map{min-height:0}
     .cards{grid-template-columns:1fr 1fr}
+    #statStrip{grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 10px 0}
+    .stat .s-value{font-size:21px}
+  }
+  @media (max-width:760px){
+    #feeds{display:none}
   }
   @media (max-width:560px){
     main{grid-template-rows:22dvh 1fr; gap:10px; padding:10px}
     header{padding:10px 14px}
     header .title{font-size:16px}
     header .clock .time{font-size:22px}
+    #statStrip{display:none}
   }
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
@@ -178,10 +226,26 @@
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
-      <div class="time" id="clock">--:--</div>
-      <div class="meta" id="date">—</div>
+      <div class="time" id="clock">--:--:--</div>
+      <div class="meta"><span id="date">—</span> · <span id="utc">--:--Z</span> · <span id="coords">—</span></div>
     </div>
   </header>
+
+  <!-- live statistics strip: every number is computed from data already on the board -->
+  <div id="statStrip">
+    <div class="stat"><div class="s-label"><span class="s-glyph">⊕</span>Tracking</div>
+      <div class="s-value" id="stTotal">—</div><div class="s-sub" id="stTotalSub">vehicles live on map</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">✈</span>Air</div>
+      <div class="s-value" id="stAir">—</div><div class="s-sub" id="stAirSub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">🚆</span>Rail</div>
+      <div class="s-value" id="stRail">—</div><div class="s-sub" id="stRailSub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">🚌</span>Road</div>
+      <div class="s-value" id="stRoad">—</div><div class="s-sub" id="stRoadSub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">◷</span>Next depart</div>
+      <div class="s-value" id="stNext">—</div><div class="s-sub" id="stNextSub">—</div></div>
+    <div class="stat"><div class="s-label"><span class="s-glyph">⛁</span>Data</div>
+      <div class="s-value ticking" id="stData">—</div><div class="s-sub" id="stDataSub">refresh cycle</div></div>
+  </div>
 
   <main>
     <div class="col">
@@ -202,28 +266,34 @@
 
     <div class="col">
       <div class="cards">
-        <div class="card" id="railCard">
+        <div class="card" id="railCard" style="--sys:#BF0D3E">
           <h2><span class="icon">🚆</span> Trains — Metrorail <span class="count" id="railCount"></span></h2>
+          <div class="statline" id="railStat"></div>
           <div class="list" id="railList"><div class="empty">Loading trains…</div></div>
         </div>
-        <div class="card" id="busCard">
+        <div class="card" id="busCard" style="--sys:#6aa9ff">
           <h2><span class="icon">🚌</span> Buses — Metrobus <span class="count" id="busCount"></span></h2>
+          <div class="statline" id="busStat"></div>
           <div class="list" id="busList"><div class="empty">Loading buses…</div></div>
         </div>
-        <div class="card" id="amtrakCard">
+        <div class="card" id="amtrakCard" style="--sys:#3ad0c8">
           <h2><span class="icon">🚄</span> Amtrak — regional rail <span class="count" id="amtrakCount"></span></h2>
+          <div class="statline" id="amtrakStat"></div>
           <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
         </div>
-        <div class="card" id="marcCard" style="display:none">
+        <div class="card" id="marcCard" style="display:none; --sys:#e8792b">
           <h2><span class="icon">🚆</span> MARC — commuter rail <span class="count" id="marcCount"></span></h2>
+          <div class="statline" id="marcStat"></div>
           <div class="list" id="marcList"><div class="empty">Loading MARC schedule…</div></div>
         </div>
-        <div class="card" id="rideonCard" style="display:none">
+        <div class="card" id="rideonCard" style="display:none; --sys:#2f9e44">
           <h2><span class="icon">🚌</span> Ride On — 23 &amp; 29 <span class="count" id="rideonCount"></span></h2>
+          <div class="statline" id="rideonStat"></div>
           <div class="list" id="rideonList"><div class="empty">Loading Ride On schedule…</div></div>
         </div>
-        <div class="card" id="planeCard">
+        <div class="card" id="planeCard" style="--sys:var(--plane)">
           <h2><span class="icon">✈️</span> Planes overhead <span class="count" id="planeCount"></span></h2>
+          <div class="statline" id="planeStat"></div>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>
       </div>
@@ -234,6 +304,7 @@
     <span class="dot" id="statusDot"></span>
     <span id="statusText">starting…</span>
     <span class="grow"></span>
+    <span id="feeds"></span>
     <span id="refreshInfo">next refresh in —</span>
   </footer>
 
@@ -365,9 +436,10 @@ const wmata = (path) => `https://api.wmata.com/${path}${path.includes("?")?"&":"
 
 /* ---------- clock + status ---------- */
 function tickClock(){
-  const d=new Date();
-  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  const d=new Date(), p=n=>String(n).padStart(2,"0");
+  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
   $("#date").textContent  = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
+  $("#utc").textContent   = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
 }
 function setStatus(text, stale=false){
   $("#statusText").textContent = text;
@@ -377,6 +449,86 @@ let nextRefreshAt = Date.now()+CFG.transitEveryMs;
 function tickRefreshInfo(){
   const s=Math.max(0, Math.round((nextRefreshAt-Date.now())/1000));
   $("#refreshInfo").textContent = `next transit refresh in ${s}s`;
+}
+
+/* ---------- live statistics (strip + per-card statlines + feed readouts) ----
+   Every number is computed from data the board already holds in memory — no
+   extra network calls. Runs on a 1s tick; feeds that haven't reported yet
+   show an em-dash instead of a fake zero. */
+function fleetCount(f){ return Object.keys((state.fleets&&state.fleets[f])||{}).length; }
+function medianOf(arr){ if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; }
+function setTxt(id, txt){ const e=document.getElementById(id); if(e && e.textContent!==txt) e.textContent=txt; }
+function setHTML(id, html){ const e=document.getElementById(id); if(e && e.innerHTML!==html) e.innerHTML=html; }
+function feedAge(ts){ return ts? Math.max(0,Math.round((Date.now()-ts)/1000))+"s" : "—"; }
+function updateStats(){
+  const air=fleetCount("plane"), metro=fleetCount("metro"), amtk=fleetCount("amtrak"),
+        marc=fleetCount("marc"), mbus=fleetCount("bus"), ro=fleetCount("rideon");
+  const rail=metro+amtk+marc, road=mbus+ro, total=air+rail+road;
+
+  /* -- strip: TRACKING / AIR / RAIL / ROAD -- */
+  setTxt("stTotal", total? String(total) : "—");
+  setTxt("stTotalSub", total? `${air} air · ${rail} rail · ${road} road` : "vehicles live on map");
+  const P=state._planes;
+  setTxt("stAir", P? String(P.length) : "—");
+  if(P && P.length){
+    const nr=Math.min(...P.map(a=>a._dist).filter(n=>n!=null));
+    const med=medianOf(P.map(a=>a.alt_baro).filter(n=>typeof n==="number"));
+    setTxt("stAirSub", `nr ${isFinite(nr)?nr.toFixed(1):"—"} nm${med!=null?` · med ${med.toLocaleString()}′`:""}`);
+  } else setTxt("stAirSub", P? `none in ${CFG.planeRadiusNm} nm` : "—");
+  setTxt("stRail", rail? String(rail) : "—");
+  setTxt("stRailSub", `${metro} metro · ${amtk} amtrak · ${marc} marc`);
+  setTxt("stRoad", road? String(road) : "—");
+  setTxt("stRoadSub", `${mbus} metrobus · ${ro} ride on`);
+
+  /* -- strip: NEXT DEPART (soonest across every system that reported) -- */
+  const cand=[];
+  (state._rail||[]).forEach(t=>{
+    const m = t.Min==="BRD"||t.Min==="ARR" ? 0 : parseInt(t.Min,10);
+    if(!isNaN(m)) cand.push({min:m, label:`${t.Line||""} ${t.DestinationName||t.Destination||""}`.trim(), sys:"metro"});
+  });
+  if(state._busNext) cand.push({...state._busNext, sys:"metrobus"});
+  if(state._marcNext) cand.push({...state._marcNext, sys:"marc"});
+  if(state._rideonNext) cand.push({...state._rideonNext, sys:"ride on"});
+  if(cand.length){
+    const c=cand.reduce((a,b)=>a.min<=b.min?a:b);
+    setHTML("stNext", c.min<=0 ? "now" : `${c.min}<small>min</small>`);
+    setTxt("stNextSub", `${c.label} · ${c.sys}`);
+  } else { setTxt("stNext","—"); setTxt("stNextSub","—"); }
+
+  /* -- strip: DATA (refresh countdown + feed ages) -- */
+  const s=Math.max(0, Math.round((nextRefreshAt-Date.now())/1000));
+  setHTML("stData", `${s}<small>s</small>`);
+  setTxt("stDataSub", `wmata ${state.wmataKey?feedAge(state.lastTransitOk):"off"} · air ${feedAge(state.lastPlaneOk)} · amtk ${feedAge(state.lastAmtrakOk)}`);
+
+  /* -- per-card statlines -- */
+  setHTML("railStat", state._rail? `<b>${state._rail.length}</b> predictions · <b>${metro}</b> trains mapped` : "");
+  setHTML("busStat", state._busPreds!=null? `<b>${state._busPreds}</b> live predictions · <b>${mbus}</b> vehicles mapped` : "");
+  const A=state._amtrak;
+  if(A && A.length){
+    const avg=Math.round(A.reduce((s2,x)=>s2+(x.t.velocity||0),0)/A.length);
+    setHTML("amtrakStat", `⌀ <b>${avg}</b> mph · nearest <b>${A[0].distMi.toFixed(0)}</b> mi`);
+  } else setHTML("amtrakStat","");
+  setHTML("marcStat", marc? `<b>${marc}</b> moving now${state._marcNext?` · next in <b>${Math.max(0,state._marcNext.min)}</b> min`:""}` : "");
+  setHTML("rideonStat", ro? `<b>${ro}</b> moving now${state._rideonNext?` · next in <b>${Math.max(0,state._rideonNext.min)}</b> min`:""}` : "");
+  if(P && P.length){
+    const nr=Math.min(...P.map(a=>a._dist).filter(n=>n!=null));
+    const mx=Math.max(...P.map(a=>a.gs||0));
+    const med=medianOf(P.map(a=>a.alt_baro).filter(n=>typeof n==="number"));
+    setHTML("planeStat", `nearest <b>${isFinite(nr)?nr.toFixed(1):"—"}</b> nm · fastest <b>${Math.round(mx)}</b> kt${med!=null?` · median <b>${med.toLocaleString()}</b>′`:""}`);
+  } else setHTML("planeStat","");
+
+  /* -- footer: per-feed link status (dot + name + age, never color alone) -- */
+  const feeds=[
+    {name:"WMATA", on:!!state.wmataKey, ts:state.lastTransitOk, staleMs:90000},
+    {name:"ADS-B", on:true, ts:state.lastPlaneOk, staleMs:60000},
+    {name:"AMTRK", on:true, ts:state.lastAmtrakOk, staleMs:120000},
+    {name:"GTFS",  on:true, ts:(state.marcSched||state.roSched)?Date.now():0, staleMs:1e15, label:"bundled"},
+  ];
+  setHTML("feeds", feeds.map(f=>{
+    const cls=!f.on||!f.ts ? "feed off" : (Date.now()-f.ts>f.staleMs ? "feed stale" : "feed");
+    const age=!f.on ? "off" : (f.label && f.ts ? f.label : feedAge(f.ts));
+    return `<span class="${cls}"><span class="fdot"></span><b>${f.name}</b> ${age}</span>`;
+  }).join(""));
 }
 
 /* ---------- location ---------- */
@@ -391,12 +543,15 @@ function applyLoc(loc){
   state.loc = loc;
   const label = loc.label || `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`;
   $("#loclabel").textContent = label;
+  const c=$("#coords"); if(c) c.textContent =
+    `${Math.abs(loc.lat).toFixed(4)}°${loc.lat>=0?"N":"S"} ${Math.abs(loc.lon).toFixed(4)}°${loc.lon>=0?"E":"W"}`;
   const curLbl=$("#curLocLbl"); if(curLbl) curLbl.textContent = label;
 }
 // Re-fetch every near-me data source for the current state.loc. Called after
 // GPS locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
   state.busStops=[]; // force re-scan of nearby stops
+  drawRangeRings();
   refreshTransit(); fetchBusPositions(); fetchRailRoutes(); fetchMetroTrains();
   fetchAmtrak(); marcMapTick(); refreshMarc(); refreshRideOn(); drawRideOnScheduledMap(); refreshPlanes();
 }
@@ -453,6 +608,7 @@ function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
   state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
+  state.ringLayer   = L.layerGroup().addTo(state.map);   // tactical range rings, beneath everything
   state.routeLayer  = L.layerGroup().addTo(state.map);   // Metro rail lines, beneath everything
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes
   state.marcRouteLayer = L.layerGroup().addTo(state.map); // MARC line routes
@@ -481,6 +637,24 @@ function initMap(){
     }).observe(document.getElementById("map"));
   }
   setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); state.map.setView([state.loc.lat, state.loc.lon], state.map.getZoom()); } }, 300);
+  drawRangeRings();
+}
+/* Tactical range rings: thin dashed distance circles around the board's
+   location, with tiny mile labels due north. Redrawn on location, accent,
+   and theme changes (SVG presentation attributes can't read CSS vars). */
+function drawRangeRings(){
+  if(!state.map || !state.ringLayer) return;
+  state.ringLayer.clearLayers();
+  const cs=getComputedStyle(document.documentElement);
+  const col=(cs.getPropertyValue("--accent")||"#4ea1ff").trim();
+  const {lat,lon}=state.loc;
+  [2,5,10,20].forEach(mi=>{
+    L.circle([lat,lon], {radius:mi*1609.34, interactive:false, fill:false,
+      color:col, weight:1, opacity:.28, dashArray:"3 6"}).addTo(state.ringLayer);
+    L.marker([lat+mi/69.0, lon], {interactive:false, keyboard:false,
+      icon:L.divIcon({className:"range-label", html:`${mi}&nbsp;MI`, iconSize:[34,10], iconAnchor:[17,5]})
+    }).addTo(state.ringLayer);
+  });
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 /* follow-from-box: click a departure row to follow that trip's map vehicle.
@@ -654,6 +828,7 @@ function railMinCell(min){
 }
 function renderRail(trains){
   const box=$("#railList"); box.innerHTML="";
+  state._rail=trains;   // stats strip reads this
   // group by our stations (in order of distance)
   const byStation=new Map();
   state.nearRail.forEach(s=>byStation.set(s.Name, []));
@@ -729,7 +904,7 @@ async function fetchBus(){
   if(!state.wmataKey){ $("#busList").innerHTML=""; $("#busList").appendChild(el("div","empty","Add a WMATA key (⚙︎) to see live bus times.")); return; }
   await ensureBusStops();
   const box=$("#busList"); box.innerHTML="";
-  let any=false;
+  let any=false, predCount=0, soonest=null;
   for(const stop of state.busStops){
     let pred={}, sched={};
     try{ pred = await getJSON(wmata(`NextBusService.svc/json/jPredictions?StopID=${stop.StopID}`)); }catch(e){}
@@ -741,6 +916,8 @@ async function fetchBus(){
     box.appendChild(el("div","stop-label","◼ "+(stop.Name||("Stop "+stop.StopID))+`  ·  ${kmToMi(stop.dist).toFixed(2)} mi`));
     if(preds.length){
       preds.forEach(p=>{
+        predCount++;
+        if(soonest==null || p.Minutes<soonest.min) soonest={min:p.Minutes, label:`${p.RouteID} · ${p.DirectionText||""}`};
         const row=el("div","row");
         const b=el("div","badge", p.RouteID); b.style.background="#6aa9ff";
         const mid=el("div"); mid.appendChild(el("div","dest", p.DirectionText||"—"));
@@ -764,6 +941,7 @@ async function fetchBus(){
     }
   }
   if(!any) box.appendChild(el("div","empty","No buses predicted at nearby stops right now."));
+  state._busPreds=predCount; state._busNext=soonest;   // stats strip reads these
   $("#busCount").textContent = state.busStops.length? `${state.busStops.length} stops nearby` : "";
   fitList(box);
 }
@@ -792,6 +970,7 @@ async function fetchPlanes(){
 function renderPlanes(ac){
   const box=$("#planeList"); box.innerHTML="";
   const flying=ac.filter(a=>a.alt_baro!=="ground");
+  state._planes=flying;   // stats strip reads this
   if(!flying.length){ box.appendChild(el("div","empty","No aircraft overhead right now.")); }
   flying.slice(0,20).forEach(a=>{
     const row=el("div","row plane");
@@ -1012,6 +1191,7 @@ async function drawAmtrakRoutes(list, amSt){
 }
 function renderAmtrak(list){
   const box=$("#amtrakList"); box.innerHTML="";
+  state._amtrak=list;   // stats strip reads this
   if(!list.length){ box.appendChild(el("div","empty",`No Amtrak trains within ${CFG.amtrakRadiusMi} mi right now.`)); $("#amtrakCount").textContent=""; return; }
   list.slice(0,20).forEach(({t,distMi})=>{
     const row=el("div","row");
@@ -1143,13 +1323,15 @@ async function refreshMarc(){
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  box.innerHTML=""; let shown=0, used=0, soonest=null;
   for(const {st,mi} of near){
     if(used>=4) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
+    const sd=deps.reduce((a,b)=>a.min<=b.min?a:b);
+    if(soonest==null || sd.min-nowMin<soonest.min) soonest={min:sd.min-nowMin, label:`${sd.line} → ${marcStationName(sd.hs)}`};
     box.appendChild(el("div","stop-label","◼ "+marcStationName(st.name)+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(marcStationName(group[0].hs)||(group[0].line+" Line"))));
@@ -1170,6 +1352,7 @@ async function refreshMarc(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more MARC trains today at nearby stations."));
+  state._marcNext=soonest;   // stats strip reads this
   $("#marcCount").textContent="scheduled";
   fitList(box);
 }
@@ -1225,13 +1408,15 @@ async function refreshRideOn(){
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);                 // same calendar logic (svc/exc) as MARC
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  box.innerHTML=""; let shown=0, used=0, soonest=null;
   for(const {st,mi} of near){
     if(used>=3) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
+    const sd=deps.reduce((a,b)=>a.min<=b.min?a:b);
+    if(soonest==null || sd.min-nowMin<soonest.min) soonest={min:sd.min-nowMin, label:`${sd.line} → ${sd.hs||("Route "+sd.line)}`};
     box.appendChild(el("div","stop-label","◼ "+(st.name||st.id)+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||("Route "+group[0].line))));
@@ -1252,6 +1437,7 @@ async function refreshRideOn(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more Ride On trips today at nearby stops."));
+  state._rideonNext=soonest;   // stats strip reads this
   $("#rideonCount").textContent="scheduled";
   fitList(box);
 }
@@ -1419,6 +1605,7 @@ function setBoardAccent(hex){
   document.documentElement.style.setProperty("--accent", hex);
   localStorage.setItem("transitboard.accent", hex);
   document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
+  drawRangeRings();   // rings are stroked in the accent color
 }
 function buildAccentSwatches(){
   const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
@@ -1555,6 +1742,7 @@ function boot(){
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   setInterval(tickRefreshInfo, 1000);
+  updateStats(); setInterval(updateStats, 1000);
 
   if(!state.wmataKey) openSetup();
 
