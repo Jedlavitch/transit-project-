@@ -13,10 +13,13 @@
      It shuffles between cities and modes (planes / trains / buses / trams),
      flies a full-screen map to whatever real vehicle is nearest each stop,
      glides that vehicle across the map by dead-reckoning from its own speed +
-     heading, and overlays all the detail it can find. Standalone from the
-     boards + night.html on purpose (its own full-map layout), but it pulls the
-     SAME public sources: airplanes.live (planes), Amtrak (amtraker), the
-     bundled GTFS schedules already in this repo (local rail / bus / tram),
+     heading, and overlays all the detail it can find. The page re-tints to a
+     per-mode gradient palette on every stop, keeps the screen awake (wake
+     lock), can 📌 STAY pinned on one vehicle with live re-tracking, and has
+     ⚙ settings for pace + city/mode filters and a ⏮ back button. Standalone
+     from the boards + night.html on purpose (its own full-map layout), but it
+     pulls the SAME public sources: airplanes.live (planes), Amtrak (amtraker),
+     the bundled GTFS schedules already in this repo (local rail / bus / tram),
      adsbdb (flight routes), planespotters + Wikimedia (photos).
   --------------------------------------------------------------------------- */
   :root{
@@ -177,9 +180,13 @@
     background:linear-gradient(135deg,rgba(125,184,255,.14),rgba(89,224,193,.09))}
   #settings .note{margin-top:14px; font-size:11px; color:var(--muted); line-height:1.5}
 
+  /* the shuffle queue is decorative — give the (now larger) control row the
+     header before the queue starts fighting it for space */
+  @media (max-width:1100px){
+    .queue{display:none}
+  }
   @media (max-width:640px){
     #card{grid-template-columns:1fr} #photo{width:100%; max-height:120px}
-    .queue{display:none}
   }
   #fsHint{position:fixed; z-index:9; top:0; left:50%; transform:translate(-50%,-120%);
     background:var(--panel); color:var(--city); border:1px solid var(--faint); border-radius:0 0 12px 12px;
@@ -536,12 +543,15 @@ async function schedSubject(stop, pin){
   const chips=[]; if(speedKt>2) chips.push({t:`${Math.round(speedKt*1.15078)} mph`});
   chips.push({t:`${Math.round(heading)}° ${compassOf(heading)}`, hdg:Math.round(heading)});
   if(nextName) chips.push({t:`→ ${nextName}${nextMin!=null?` · ${minClock(nextMin)}`:""}`});
+  if(!pin && running>1) chips.push({t:`${running} running now`});
   chips.push({t:"scheduled", cls:"sched-chip"});
   // "Route 23" for buses/trams, but rail lines are named ("Penn Line", "Far
-  // Rockaway"), where a "Route" prefix reads wrong.
-  const title = (stop.kind==="bus"||stop.kind==="tram") ? `Route ${tr.line}` : String(tr.line||stop.label);
+  // Rockaway"), where a "Route" prefix reads wrong. A feed can also supply
+  // lineNames to expand terse GTFS codes (Amsterdam's EST → "Eurostar").
+  const lineName=(stop.lineNames && stop.lineNames[tr.line]) || tr.line;
+  const title = (stop.kind==="bus"||stop.kind==="tram") ? `Route ${lineName}` : String(lineName||stop.label);
   return {
-    kind:stop.kind, live:false, city:stop.city, feedLbl:stop.label,
+    kind:stop.kind, live:false, city:stop.city, feedLbl:stop.label, ref:{trip:tr},
     title, sub:`${tr.hs||""} · ${stop.label}`,
     oCity:first?first[2]:null, dCity:last?last[2]:(tr.hs||null),
     subline:"scheduled position",
@@ -551,12 +561,20 @@ async function schedSubject(stop, pin){
   };
 }
 
-async function fetchSubject(stop){
+async function fetchSubject(stop, pin){
   try{
-    if(stop.src==="plane")  return await planeSubject(stop);
-    if(stop.src==="amtrak") return await amtrakSubject(stop);
-    return await schedSubject(stop);
+    let s=null;
+    if(stop.src==="plane")       s=await planeSubject(stop, pin);
+    else if(stop.src==="amtrak") s=await amtrakSubject(stop, pin);
+    else                         s=await schedSubject(stop, pin);
+    if(s) s.stop=stop;           // keep the stop def around (stay-mode refetch, local time)
+    return s;
   }catch(e){ return null; }
+}
+// stay mode: re-fetch the SAME vehicle, searching around wherever it is now
+// (not the city center — a pinned plane can fly well past the city radius)
+function refetchPinned(c){
+  return fetchSubject({...c.stop, loc:{lat:c.pos.lat, lon:c.pos.lon}}, c.ref);
 }
 
 /* ===================== the map ========================================== */
@@ -640,6 +658,7 @@ function drawTerminator(){
 let cur=null, driftTimer=null, dashTimer=null, flying=false, flyT=null;
 function present(s){
   cur=s;
+  applyPalette(s.kind);   // pour the mode's palette into the page BEFORE drawing (route/trail read it)
   // ---- map: draw route + endpoints, fly to the vehicle ----
   routeLayer.clearLayers(); trailPts=[]; if(trail){ trail=null; }
   if(s.oLL && s.dLL){
@@ -650,6 +669,7 @@ function present(s){
     if(s.dCity) L.marker([s.dLL.lat,s.dLL.lon],{icon:L.divIcon({className:"endpt-label",html:escapeHtml(s.dCity)}),interactive:false}).addTo(routeLayer);
   }
   veh=L.marker([s.pos.lat,s.pos.lon],{icon:vehIcon(s.kind, s.heading||0),zIndexOffset:1000}).addTo(routeLayer);
+  veh.on("click", toggleStay);   // tapping the vehicle = 📌 stay with it
   trail=L.polyline([[s.pos.lat,s.pos.lon]],{color:getAccent(),weight:3,opacity:.45}).addTo(routeLayer);
   // The drift loop's edge-of-view panTo would CANCEL this flyTo mid-animation
   // (Leaflet aborts a running fly on any new map movement), stranding the map
@@ -742,17 +762,39 @@ async function loadPhoto(s){
 
 /* ===================== the shuffle loop ================================= */
 let order=[], oi=0, paused=false, holdTimer=null, holdStart=0, ringRAF=null, nextPrefetch=null;
+let hist=[];                       // recently shown subjects, for the ⏮ button
 function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function buildOrder(){ order=shuffle(STOPS.map((_,i)=>i)); oi=0; }
-function renderQueue(nowIdx){
-  const q=$("#queue"); const upcoming=[]; for(let k=0;k<6;k++){ const st=STOPS[order[(oi+k)%order.length]]; upcoming.push(st); }
-  q.innerHTML = upcoming.map((st,k)=>`<span class="chip ${k===0?"now":""}">${MODE_IC[st.kind]} ${escapeHtml(st.city)}</span>`).join("");
+/* which cities/modes are in the rotation — ⚙ settings, persisted. A key
+   missing from the pref object means "on"; everything-off falls back to all. */
+function loadPref(k){ try{ return JSON.parse(localStorage.getItem(k)||"null")||{}; }catch(e){ return {}; } }
+let cityPref=loadPref("tour.cities"), modePref=loadPref("tour.modes");
+function savePrefs(){ try{ localStorage.setItem("tour.cities",JSON.stringify(cityPref));
+  localStorage.setItem("tour.modes",JSON.stringify(modePref)); }catch(e){} }
+function stopEnabled(st){ return cityPref[st.cityKey]!==false && modePref[st.kind]!==false; }
+function activeIdx(){
+  const a=STOPS.map((_,i)=>i).filter(i=>stopEnabled(STOPS[i]));
+  return a.length ? a : STOPS.map((_,i)=>i);
+}
+function buildOrder(){ order=shuffle(activeIdx()); oi=0; }
+function renderQueue(){
+  const q=$("#queue"), html=[];
+  for(let k=0;k<6;k++){
+    const st=STOPS[order[(oi+k)%order.length]]; if(!st) break;
+    const p=MODE_PAL[st.kind]||MODE_PAL.plane, txt=`${MODE_IC[st.kind]} ${escapeHtml(st.city)}`;
+    html.push(k===0
+      ? `<span class="chip now" style="background:linear-gradient(135deg,${p.a},${p.b});border-color:${p.a};color:#04101f">${txt}</span>`
+      : `<span class="chip" style="color:${p.a};border-color:${p.a}55;background:${p.a}14">${txt}</span>`);
+  }
+  q.innerHTML=html.join("");
 }
 function flash(city){ $("#flashBig").textContent=city; $("#flash").classList.add("show"); }
 function unflash(){ $("#flash").classList.remove("show"); }
 
+function advanceNext(){ oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }
 async function advance(){
   clearTimeout(holdTimer); cancelAnimationFrame(ringRAF);
+  endStay();
+  if(oi>=order.length) oi=0;         // order can shrink when filters change
   $("#card").classList.remove("in");
   renderQueue();
   // find the next stop that actually has a vehicle (try several before giving up)
@@ -768,20 +810,21 @@ async function advance(){
   if(!s){ // nothing anywhere right now — wait and retry
     holdTimer=setTimeout(advance, 4000); return;
   }
+  if(cur){ hist.push(cur); if(hist.length>14) hist.shift(); }
   present(s);
   startRing();
   prefetchNext();
-  holdTimer=setTimeout(()=>{ oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }, HOLD_MS);
+  holdTimer=setTimeout(advanceNext, holdMs);
   holdStart=Date.now();
 }
-function buildOrderKeepPos(){ const seen=order.slice(0,oi); order=seen.concat(shuffle(STOPS.map((_,i)=>i))); }
+function buildOrderKeepPos(){ const seen=order.slice(0,oi); order=seen.concat(shuffle(activeIdx())); }
 async function prefetchNext(){
   const idx=order[(oi+1)%order.length]; const stop=STOPS[idx];
   try{ const subject=await fetchSubject(stop); nextPrefetch={idx, subject, used:true}; }catch(e){ nextPrefetch=null; }
 }
 function startRing(){
   const C=$("#ringC"), R=18.5, LEN=2*Math.PI*R; C.style.strokeDasharray=LEN;
-  const tick=()=>{ const el=Math.min(1,(Date.now()-holdStart)/HOLD_MS); C.style.strokeDashoffset=(LEN*el).toFixed(1);
+  const tick=()=>{ const el=Math.min(1,(Date.now()-holdStart)/holdMs); C.style.strokeDashoffset=(LEN*el).toFixed(1);
     if(el<1 && !paused) ringRAF=requestAnimationFrame(tick); };
   holdStart=Date.now(); ringRAF=requestAnimationFrame(tick);
 }
@@ -789,9 +832,75 @@ function startRing(){
 /* ===================== controls ======================================== */
 function togglePause(){ paused=!paused; $("#pauseBtn").textContent=paused?"▶":"⏸";
   if(paused){ clearTimeout(holdTimer); cancelAnimationFrame(ringRAF); }
-  else{ const left=Math.max(0,HOLD_MS-(Date.now()-holdStart)); holdStart=Date.now()-(HOLD_MS-left);
-    holdTimer=setTimeout(()=>{ oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }, left); startRing(); } }
-function skip(){ clearTimeout(holdTimer); oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }
+  else if(!stay){ const left=Math.max(0,holdMs-(Date.now()-holdStart)); holdStart=Date.now()-(holdMs-left);
+    holdTimer=setTimeout(advanceNext, left); startRing(); } }
+function skip(){ clearTimeout(holdTimer); advanceNext(); }
+function goBack(){
+  if(!hist.length) return;
+  clearTimeout(holdTimer); cancelAnimationFrame(ringRAF); endStay();
+  nextPrefetch=null;
+  present(hist.pop());               // its pos kept drifting while stored — resumes seamlessly
+  startRing();
+  holdTimer=setTimeout(advanceNext, holdMs);
+}
+
+/* ---- 📌 stay mode: hold the tour on this vehicle, keep its data LIVE ----
+   Unlike pause (which freezes the countdown and lets dead reckoning run
+   open-loop), stay re-fetches the same vehicle every 20 s, correcting
+   position/heading/speed and refreshing the chips. When the vehicle stops
+   reporting (landed / run ended), the tour resumes on its own. */
+let stay=false, stayTimer=null, stayMiss=0;
+function setStayUI(on){ const b=$("#stayBtn"); b.classList.toggle("on",on);
+  b.title=on?"Resume the tour (S)":"Stay with this vehicle (S)"; }
+function endStay(){ if(!stay) return; stay=false; clearInterval(stayTimer); setStayUI(false); }
+function toggleStay(){
+  if(stay){ endStay(); holdStart=Date.now(); holdTimer=setTimeout(advanceNext, holdMs); startRing(); return; }
+  if(!cur || !cur.ref) return;
+  stay=true; stayMiss=0; setStayUI(true);
+  clearTimeout(holdTimer); cancelAnimationFrame(ringRAF);
+  const C=$("#ringC"); if(C) C.style.strokeDashoffset=(2*Math.PI*18.5).toFixed(1);  // ring off while staying
+  stayTimer=setInterval(refreshStay, 20000);
+}
+async function refreshStay(){
+  if(!stay || !cur || !cur.stop || !cur.ref) return;
+  const s=await refetchPinned(cur);
+  if(!stay) return;                  // toggled off while the fetch was in flight
+  if(!s){ if(++stayMiss>=2){ endStay(); advanceNext(); } return; }
+  stayMiss=0;
+  cur.pos=s.pos; cur.heading=s.heading; cur.speedKt=s.speedKt; cur.chips=s.chips; cur.ref=s.ref;
+  veh.setLatLng([cur.pos.lat,cur.pos.lon]);
+  const el=veh.getElement&&veh.getElement(), rot=el&&el.querySelector(".rot");
+  if(rot) rot.style.transform=`rotate(${cur.heading||0}deg)`;
+  fillCard(cur);
+}
+
+/* ---- ⚙ settings: pace + city/mode filters ---- */
+function buildSettings(){
+  const seg=$("#paceSeg");
+  seg.innerHTML=PACES.map(v=>`<button data-v="${v}" class="${v===holdMs?"on":""}">${v/1000}s</button>`).join("");
+  seg.querySelectorAll("button").forEach(b=> b.onclick=()=>{
+    holdMs=parseInt(b.dataset.v,10);
+    try{ localStorage.setItem("tour.pace",String(holdMs)); }catch(e){}
+    seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    if(!paused && !stay){ clearTimeout(holdTimer); holdStart=Date.now();
+      holdTimer=setTimeout(advanceNext, holdMs); startRing(); }
+  });
+  const cc=$("#cityChecks");
+  cc.innerHTML=CITIES.map(c=>`<label data-k="${c.key}" class="${cityPref[c.key]!==false?"on":""}">${escapeHtml(c.label)}</label>`).join("");
+  cc.querySelectorAll("label").forEach(l=> l.onclick=()=>{
+    const k=l.dataset.k; cityPref[k]=!(cityPref[k]!==false);
+    l.classList.toggle("on",cityPref[k]!==false);
+    savePrefs(); buildOrderKeepPos(); renderQueue();
+  });
+  const MODES=[["plane","✈ Planes"],["train","🚆 Trains"],["bus","🚌 Buses"],["tram","🚋 Trams"]];
+  const mc=$("#modeChecks");
+  mc.innerHTML=MODES.map(([k,lbl])=>`<label data-k="${k}" class="${modePref[k]!==false?"on":""}">${lbl}</label>`).join("");
+  mc.querySelectorAll("label").forEach(l=> l.onclick=()=>{
+    const k=l.dataset.k; modePref[k]=!(modePref[k]!==false);
+    l.classList.toggle("on",modePref[k]!==false);
+    savePrefs(); buildOrderKeepPos(); renderQueue();
+  });
+}
 function fsElement(){ return document.fullscreenElement||document.webkitFullscreenElement; }
 function toggleFS(){ const el=document.documentElement;
   if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
@@ -802,19 +911,32 @@ function hintFS(){ let t=$("#fsHint"); if(!t){ t=document.createElement("div"); 
   t.textContent="Full screen is blocked here — open this page in its own tab (or the deployed link)."; t.classList.add("show");
   clearTimeout(hintT); hintT=setTimeout(()=>t.classList.remove("show"),4200); }
 
-function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+function clock(){
+  $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  // the visited city's own local time, on the card — half the fun of a world tour
+  const ct=$("#cityTime");
+  if(cur && cur.stop && cur.stop.tz){
+    try{ ct.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZone:cur.stop.tz})+" local"; }
+    catch(e){ ct.textContent=""; }
+  } else ct.textContent="";
+}
 
 function boot(){
-  // tint from the sky view's saved accent, if the user picked one there
-  try{ const a=localStorage.getItem("nightmode.accent"); if(a){ document.documentElement.style.setProperty("--accent",a); } }catch(e){}
   initMap();
   buildOrder();
+  buildSettings();
   $("#pauseBtn").onclick=togglePause; $("#skipBtn").onclick=skip; $("#fsBtn").onclick=toggleFS;
+  $("#backBtn").onclick=goBack; $("#stayBtn").onclick=toggleStay;
+  $("#setBtn").onclick=()=>$("#settings").classList.toggle("show");
   document.addEventListener("keydown",e=>{ if(/^(input|textarea)$/i.test(e.target.tagName)) return;
     if(e.key===" "){ e.preventDefault(); togglePause(); } else if(e.key==="ArrowRight") skip();
+    else if(e.key==="ArrowLeft") goBack();
+    else if(e.key==="s"||e.key==="S") toggleStay();
+    else if(e.key==="Escape") $("#settings").classList.remove("show");
     else if(e.key==="f"||e.key==="F") toggleFS(); });
   document.addEventListener("fullscreenchange", ()=>{ setTimeout(()=>map&&map.invalidateSize(),200); });
   clock(); setInterval(clock,1000);
+  keepAwake();
   advance();
 }
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot); else boot();
