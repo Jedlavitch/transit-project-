@@ -231,9 +231,11 @@
     border:none; padding:2px; display:block; flex:1;
     background:linear-gradient(135deg,var(--amber),rgba(58,208,200,.75) 55%,rgba(181,140,255,.65));
     box-shadow:0 8px 40px rgba(60,130,255,.16)}
-  /* cross-fade as the slideshow advances between photos of the same subject */
-  .photo img.ph-in{animation:phIn .8s ease}
-  @keyframes phIn{from{opacity:0; transform:scale(1.03)}to{opacity:1; transform:none}}
+  /* Cross-fade as the slideshow advances. Opacity only, no zoom: this page is
+     a kiosk you glance at, and a scaling image draws the eye every time. */
+  .photo img.ph-in{animation:phIn 1.6s ease}
+  @keyframes phIn{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){ .photo img.ph-in{animation:none} }
   .photo figcaption{margin-top:.4em; text-align:right; flex-shrink:0}
   .photo a{color:var(--muted); font-size:clamp(.7rem,1.6vw,1rem); text-decoration:none}
   #miniMap{flex:1}
@@ -299,6 +301,12 @@
       <div class="seg" id="skySeg">
         <button data-sky="on"><span class="ic">🌇</span>On</button>
         <button data-sky="off"><span class="ic">🚫</span>Off</button>
+      </div>
+      <div class="lbl">Photos</div>
+      <div class="seg" id="photoSeg">
+        <button data-photo="slow"><span class="ic">🖼</span>Slow</button>
+        <button data-photo="med"><span class="ic">🔀</span>Cycle</button>
+        <button data-photo="off"><span class="ic">📌</span>Hold</button>
       </div>
       <div class="lbl">Color</div>
       <div class="swatches" id="swatches"></div>
@@ -802,8 +810,25 @@ async function updatePhoto(key, representative, fallbackQuery){
   if(!photoList.length){ wrap.style.display="none"; return; }
   wrap.style.display="";
   showPhoto(0);
-  if(photoList.length>1)
-    photoTimer=setInterval(()=>{ photoIdx=(photoIdx+1)%photoList.length; showPhoto(photoIdx); }, 9000);
+  startPhotoRotation();
+}
+/* Rotation pace is a setting, because this page is usually left running on a
+   display: "slow" (default) is calm enough to ignore, "cycle" is the old
+   brisker pace, "hold" freezes on the first photo. */
+const PHOTO_MS={ slow:45000, med:15000, off:0 };
+function photoPace(){ const v=localStorage.getItem("nightmode.photopace"); return PHOTO_MS[v]!=null?v:"slow"; }
+function startPhotoRotation(){
+  clearInterval(photoTimer); photoTimer=null;
+  const ms=PHOTO_MS[photoPace()];
+  if(!ms || photoList.length<2) return;
+  photoTimer=setInterval(()=>{ photoIdx=(photoIdx+1)%photoList.length; showPhoto(photoIdx); }, ms);
+}
+function setPhotoPace(v){
+  if(PHOTO_MS[v]==null) v="slow";
+  localStorage.setItem("nightmode.photopace", v);
+  document.querySelectorAll("#photoSeg button").forEach(b=>b.classList.toggle("active", b.dataset.photo===v));
+  if(v==="off" && photoList.length){ photoIdx=0; showPhoto(0); }   // settle back on the first shot
+  startPhotoRotation();
 }
 function showPhoto(i){
   const v=photoList[i]; if(!v) return;
@@ -1675,6 +1700,7 @@ function initSettings(){
   $("#fleetPanel").addEventListener("click",e=>{ if(e.target.id==="fleetPanel") $("#fleetPanel").classList.remove("show"); });
   $("#themeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setNightTheme(b.dataset.theme); });
   $("#skySeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setSunSky(b.dataset.sky); });
+  $("#photoSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPhotoPace(b.dataset.photo); });
 }
 function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
 
@@ -1739,6 +1765,7 @@ function boot(){
   initSettings();
   document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.theme===(localStorage.getItem("nightmode.theme")||"dark")));
   document.querySelectorAll("#skySeg button").forEach(b=>b.classList.toggle("active", b.dataset.sky===(sunSkyEnabled()?"on":"off")));
+  document.querySelectorAll("#photoSeg button").forEach(b=>b.classList.toggle("active", b.dataset.photo===photoPace()));
   makeStars();
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
   $("#boardBtn").title = `Back to the ${CITY_CFG.cityLabel} board`;
