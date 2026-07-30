@@ -464,6 +464,23 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
       <button type="button" class="theme-btn" data-rows="more">More</button>
     </div>
 
+    <div class="accent-lbl">Display size</div>
+    <div class="theme-row" id="zoomRow">
+      <button type="button" class="theme-btn" data-zoom="0.8">80%</button>
+      <button type="button" class="theme-btn" data-zoom="0.9">90%</button>
+      <button type="button" class="theme-btn" data-zoom="1">100%</button>
+      <button type="button" class="theme-btn" data-zoom="1.15">115%</button>
+      <button type="button" class="theme-btn" data-zoom="1.3">130%</button>
+    </div>
+
+    <div class="accent-lbl">Edge fit <span style="text-transform:none; font-weight:600">(if a TV crops the edges)</span></div>
+    <div class="theme-row" id="padRow">
+      <button type="button" class="theme-btn" data-pad="0">None</button>
+      <button type="button" class="theme-btn" data-pad="1">1%</button>
+      <button type="button" class="theme-btn" data-pad="2.5">2.5%</button>
+      <button type="button" class="theme-btn" data-pad="5">5%</button>
+    </div>
+
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
@@ -2059,6 +2076,30 @@ function setBoardRows(mode){
 function buildRowsButtons(){
   document.querySelectorAll("#rowsRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardRows(b.dataset.rows); });
 }
+/* ---------- display size + edge fit ("Display" in Settings) ------------------
+   For a screen whose size you can't change: zoom scales the whole board (real
+   reflow, so cards refit), and edge fit insets it inside a TV's overscan crop.
+   Both are shared across every board (tb.* keys) since they describe the SCREEN,
+   not the city. After changing either, the map must be told its box moved and
+   the lists re-trimmed. */
+function applyDisplay(zoom, padPct){
+  const d=document.documentElement;
+  d.style.setProperty("--ui-zoom", String(zoom));
+  // percentage of the SHORTER side, so the inset looks even on any aspect ratio
+  d.style.setProperty("--safe-pad", padPct>0 ? `min(${padPct}vw, ${padPct}vh)` : "0px");
+  document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.zoom)-zoom)<0.001));
+  document.querySelectorAll("#padRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.pad)-padPct)<0.001));
+  setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); } if(typeof fitAll==="function") fitAll(); }, 120);
+}
+function setBoardZoom(z){ localStorage.setItem("tb.uiZoom", String(z)); applyDisplay(z, curPad()); }
+function setBoardPad(p){ localStorage.setItem("tb.safePad", String(p)); applyDisplay(curZoom(), p); }
+function curZoom(){ const v=parseFloat(localStorage.getItem("tb.uiZoom")); return isFinite(v)&&v>0?v:1; }
+function curPad(){ const v=parseFloat(localStorage.getItem("tb.safePad")); return isFinite(v)&&v>=0?v:0; }
+function buildDisplayButtons(){
+  document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
+  document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
+}
+
 
 /* ---------- NJ TRANSIT (bundled GTFS, zero setup) ----------------------------
    NJT's live feeds sit behind a registered developer account, but its static
@@ -2368,6 +2409,7 @@ function boot(){
   setBoardAccent(localStorage.getItem("tb.accent")||localStorage.getItem("transitboardnyc.accent")||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(localStorage.getItem("tb.theme")||localStorage.getItem("transitboardnyc.theme")||"dark"); buildThemeButtons();
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem("transitboardnyc.rows")||"normal"); buildRowsButtons();
+  applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   buildCardToggles();
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);

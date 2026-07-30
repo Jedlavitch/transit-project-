@@ -148,3 +148,23 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sa
   cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.35); }
 #mapFsBtn:hover{ border-color:var(--accent); }
 body.map-full #map{ position:fixed !important; inset:0; z-index:800; border-radius:0; border:none; }
+
+/* ---- Display size + edge fit (Settings → Display) ----------------------------
+   For kiosk screens you can't adjust: TVs overscan (they crop a few percent off
+   every edge, so tiles and card text fall off the sides), and a panel's reported
+   viewport is often bigger than what you can actually see.
+     --ui-zoom   scales the WHOLE board. `zoom` (not transform) so the layout
+                 genuinely reflows -- cards refit, fitList re-trims -- instead of
+                 being visually squashed.
+     --safe-pad  insets the board from every edge, to sit inside a TV's crop.
+   #app's own height/width must be divided by the zoom: it's sized in CSS pixels
+   (100dvh), and zoom multiplies what those pixels occupy, so without this a
+   zoom>1 overflows and a zoom<1 leaves dead space. Selector is `body #app` so it
+   beats each board's own plain `#app{height:100dvh}` rule regardless of order. */
+:root{ --ui-zoom:1; --safe-pad:0px; }
+body{ padding:var(--safe-pad); }
+body #app{
+  zoom:var(--ui-zoom);
+  height:calc((100dvh - var(--safe-pad) * 2) / var(--ui-zoom));
+  width:calc((100vw - var(--safe-pad) * 2) / var(--ui-zoom));
+}
