@@ -1799,10 +1799,18 @@ async function requestWake(){
   try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); } }catch(e){}
 }
 async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); } }catch(e){} wakeLock=null; }
-function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+/* Full screen must act on the TOP document. Boards run inside the same-origin
+   cityswitch.js shell iframe, where the fullscreen element belongs to the outer
+   document — so document.fullscreenElement reads null inside the frame and
+   document.exitFullscreen() silently no-ops, which is why Exit did nothing. */
+function fsDoc(){
+  try{ if(window.top && window.top!==window && window.top.document) return window.top.document; }catch(e){}
+  return document;
+}
+function fsElement(){ const d=fsDoc(); return d.fullscreenElement || d.webkitFullscreenElement; }
 function toggleFullscreen(){
-  const el=document.documentElement;
-  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  const d=fsDoc(), el=d.documentElement;
+  if(fsElement()){ const ex=d.exitFullscreen||d.webkitExitFullscreen; if(ex) ex.call(d); return; }
   const req=el.requestFullscreen||el.webkitRequestFullscreen;
   if(!req){ hintFS(); return; }
   try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>hintFS()); }catch(e){ hintFS(); }
@@ -1825,7 +1833,9 @@ function onFsChange(){
 }
 $("#fsBtn").onclick=toggleFullscreen;
 document.addEventListener("fullscreenchange", onFsChange);
+try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFsChange); }catch(e){}
 document.addEventListener("webkitfullscreenchange", onFsChange);
+try{ if(fsDoc()!==document) fsDoc().addEventListener("webkitfullscreenchange", onFsChange); }catch(e){}
 document.addEventListener("keydown", e=>{
   if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen();
   if((e.key==="m"||e.key==="M") && !/^(input|textarea)$/i.test(e.target.tagName)) setMapFull(!mapFullOn());

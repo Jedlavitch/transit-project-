@@ -911,9 +911,17 @@ function buildSettings(){
     savePrefs(); buildOrderKeepPos(); renderQueue();
   });
 }
-function fsElement(){ return document.fullscreenElement||document.webkitFullscreenElement; }
-function toggleFS(){ const el=document.documentElement;
-  if(fsElement()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+/* Full screen must act on the TOP document. Boards run inside the same-origin
+   cityswitch.js shell iframe, where the fullscreen element belongs to the outer
+   document — so document.fullscreenElement reads null inside the frame and
+   document.exitFullscreen() silently no-ops, which is why Exit did nothing. */
+function fsDoc(){
+  try{ if(window.top && window.top!==window && window.top.document) return window.top.document; }catch(e){}
+  return document;
+}
+function fsElement(){ const d=fsDoc(); return d.fullscreenElement || d.webkitFullscreenElement; }
+function toggleFS(){ const d=fsDoc(), el=d.documentElement;
+  if(fsElement()){ const ex=d.exitFullscreen||d.webkitExitFullscreen; if(ex) ex.call(d); return; }
   const req=el.requestFullscreen||el.webkitRequestFullscreen; if(!req){ hintFS(); return; }
   try{ const p=req.call(el); if(p&&p.catch) p.catch(hintFS); }catch(e){ hintFS(); } }
 let hintT=null;
@@ -944,7 +952,9 @@ function boot(){
     else if(e.key==="s"||e.key==="S") toggleStay();
     else if(e.key==="Escape") $("#settings").classList.remove("show");
     else if(e.key==="f"||e.key==="F") toggleFS(); });
-  document.addEventListener("fullscreenchange", ()=>{ setTimeout(()=>map&&map.invalidateSize(),200); });
+  const onFs=()=>{ setTimeout(()=>map&&map.invalidateSize(),200); };
+  document.addEventListener("fullscreenchange", onFs);
+  try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFs); }catch(e){}
   clock(); setInterval(clock,1000);
   keepAwake();
   advance();
