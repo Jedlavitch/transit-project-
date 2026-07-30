@@ -292,6 +292,25 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
   .row .live.eta.later{color:var(--live)}
   .row .sched{opacity:.85; white-space:nowrap}
   :root[data-theme="day"] .row .live.eta{filter:brightness(.72) saturate(1.25)}
+
+  /* ============ minimizable boxes ============
+     Every card can collapse to just its header — cards keep getting added
+     (Amtrak, MARC, Ride On, alerts, Spotted…), so this is applied generically
+     to whatever cards exist rather than to a hardcoded list. A collapsed card
+     shrinks to header height (align-self:start) so an expanded neighbour still
+     fills the row; when EVERY card is collapsed the grid stops stretching rows
+     and the whole column becomes a tidy stack of title bars. */
+  .card .mini-btn{margin-left:6px; flex:none; width:18px; height:18px; padding:0; line-height:1;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:4px;
+    font-family:var(--mono); font-size:10px}
+  .card .mini-btn:hover{color:var(--text); border-color:var(--accent)}
+  .card h2 .count{margin-left:auto}
+  .card.mini{align-self:start; min-height:0}
+  .card.mini .list, .card.mini .statline{display:none}
+  .card.mini h2{margin-bottom:0}
+  .cards.all-mini{grid-auto-rows:min-content; align-content:start}
+  #minAllBtn.on{border-color:var(--accent); color:var(--accent)}
 </style>
 </head>
 <body>
@@ -317,6 +336,7 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
       <a id="flipBtn" href="flipboard.html?city=la" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=la'; return false;">Board</a>
     </nav>
     <button id="fsBtn" title="Full screen (F)"></button>
+    <button id="minAllBtn" type="button" title="Minimize all boxes">▣</button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
       <div class="time" id="clock">--:--:--</div>
@@ -859,6 +879,51 @@ function setStatsMin(on){
   setStatsMin(localStorage.getItem(`transitboard${CITY_ID}.statsMin`)==="1");   // restore + set icon
 })();
 
+/* ---- minimizable boxes: per-card collapse + one "minimize all" control ----
+   Generic on purpose: it walks whatever .cards .card elements exist at boot,
+   so any card added later gets a chevron for free. Collapsed ids persist per
+   board in the same style as hiddenCards. */
+const MINI_KEY="transitboard.miniCards";
+function miniSet(){ try{ return new Set(JSON.parse(localStorage.getItem(MINI_KEY)||"[]")); }catch(_){ return new Set(); } }
+function miniSave(set){ try{ localStorage.setItem(MINI_KEY, JSON.stringify([...set])); }catch(_){} }
+function allCards(){ return [...document.querySelectorAll(".cards .card")].filter(c=>c.id); }
+function applyMini(){
+  const set=miniSet(), cards=allCards();
+  cards.forEach(c=>{
+    const on=set.has(c.id);
+    c.classList.toggle("mini", on);
+    const b=c.querySelector(".mini-btn");
+    if(b){ b.textContent=on?"+":"−"; b.title=on?"Expand this box":"Minimize this box"; }
+  });
+  // only treat it as "all minimized" when there are visible cards and every one is collapsed
+  const vis=cards.filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
+  const box=document.querySelector(".cards");
+  if(box) box.classList.toggle("all-mini", vis.length>0 && vis.every(c=>c.classList.contains("mini")));
+  const ab=document.getElementById("minAllBtn");
+  if(ab){ const all=vis.length>0 && vis.every(c=>c.classList.contains("mini"));
+    ab.classList.toggle("on", all); ab.textContent=all?"▤":"▣";
+    ab.title=all?"Expand all boxes":"Minimize all boxes"; }
+  if(typeof fitAll==="function") setTimeout(fitAll,60);
+}
+function toggleMini(id){ const s=miniSet(); s.has(id)?s.delete(id):s.add(id); miniSave(s); applyMini(); }
+function toggleMiniAll(){
+  const cards=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
+  const everyMini=cards.length>0 && cards.every(c=>c.classList.contains("mini"));
+  const s=miniSet();
+  cards.forEach(c=> everyMini ? s.delete(c.id) : s.add(c.id));
+  miniSave(s); applyMini();
+}
+function initMiniCards(){
+  allCards().forEach(c=>{
+    const h=c.querySelector("h2"); if(!h || h.querySelector(".mini-btn")) return;
+    const b=document.createElement("button");
+    b.type="button"; b.className="mini-btn"; b.textContent="−";
+    b.onclick=e=>{ e.stopPropagation(); toggleMini(c.id); };
+    h.appendChild(b);
+  });
+  const ab=document.getElementById("minAllBtn"); if(ab) ab.onclick=toggleMiniAll;
+  applyMini();
+}
 function updateStats(){
   const air=fleetCount("plane");
   let total=air; const groupCounts=[];
@@ -1529,7 +1594,7 @@ function boot(){
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
-  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
+  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   updateStats(); setInterval(updateStats, 1000);
 

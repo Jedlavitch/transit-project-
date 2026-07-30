@@ -145,20 +145,6 @@ var r=g("tb.rows")||g("transitboardboston.rows");if(r&&r!=="normal")d.setAttribu
   @media (max-width:440px){
     .cards{grid-template-columns:1fr}
   }
-  /* ---- live service-alert ticker (bottom edge) ---- */
-  #alertTicker{position:fixed; left:0; right:0; bottom:0; z-index:70; display:none; align-items:center;
-    background:var(--scrim); backdrop-filter:blur(8px); border-top:1px solid var(--line); height:38px; overflow:hidden}
-  #alertTicker.show{display:flex}
-  #alertTicker .tk-badge{flex-shrink:0; display:flex; align-items:center; gap:6px; height:100%; padding:0 14px;
-    background:rgba(255,204,51,.12); border-right:1px solid var(--line); color:var(--warn);
-    font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; white-space:nowrap}
-  #alertTicker .tk-scroll{flex:1; overflow:hidden; height:100%; display:flex; align-items:center}
-  #alertTicker .tk-inner{display:inline-block; white-space:nowrap; padding-left:100vw;
-    animation:tkmove var(--tk-dur,60s) linear infinite; will-change:transform}
-  #alertTicker:hover .tk-inner{animation-play-state:paused}
-  #alertTicker .tk-inner span{color:var(--text); font-size:13px; font-weight:600; margin-right:64px}
-  #alertTicker .tk-inner span b{color:var(--warn); font-weight:800; margin-right:8px}
-  @keyframes tkmove{to{transform:translateX(-100%)}}
 
   /* ============ tactical redesign (shared look with the DC board) ============
      Appended overrides: later rules win at equal specificity, so the original
@@ -306,6 +292,25 @@ var r=g("tb.rows")||g("transitboardboston.rows");if(r&&r!=="normal")d.setAttribu
   .row .live.eta.later{color:var(--live)}
   .row .sched{opacity:.85; white-space:nowrap}
   :root[data-theme="day"] .row .live.eta{filter:brightness(.72) saturate(1.25)}
+
+  /* ============ minimizable boxes ============
+     Every card can collapse to just its header — cards keep getting added
+     (Amtrak, MARC, Ride On, alerts, Spotted…), so this is applied generically
+     to whatever cards exist rather than to a hardcoded list. A collapsed card
+     shrinks to header height (align-self:start) so an expanded neighbour still
+     fills the row; when EVERY card is collapsed the grid stops stretching rows
+     and the whole column becomes a tidy stack of title bars. */
+  .card .mini-btn{margin-left:6px; flex:none; width:18px; height:18px; padding:0; line-height:1;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:4px;
+    font-family:var(--mono); font-size:10px}
+  .card .mini-btn:hover{color:var(--text); border-color:var(--accent)}
+  .card h2 .count{margin-left:auto}
+  .card.mini{align-self:start; min-height:0}
+  .card.mini .list, .card.mini .statline{display:none}
+  .card.mini h2{margin-bottom:0}
+  .cards.all-mini{grid-auto-rows:min-content; align-content:start}
+  #minAllBtn.on{border-color:var(--accent); color:var(--accent)}
 </style>
 </head>
 <body>
@@ -331,6 +336,7 @@ var r=g("tb.rows")||g("transitboardboston.rows");if(r&&r!=="normal")d.setAttribu
       <a id="flipBtn" href="flipboard.html?city=boston" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=boston'; return false;">Board</a>
     </nav>
     <button id="fsBtn" title="Full screen (F)"></button>
+    <button id="minAllBtn" type="button" title="Minimize all boxes">▣</button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
     <div class="clock">
       <div class="time" id="clock">--:--:--</div>
@@ -406,8 +412,6 @@ var r=g("tb.rows")||g("transitboardboston.rows");if(r&&r!=="normal")d.setAttribu
     <span id="feeds"></span>
   </footer>
 
-  <div id="alertTicker"><span class="tk-badge">⚠ Service alerts</span>
-    <div class="tk-scroll"><div class="tk-inner" id="tkInner"></div></div></div>
 </div>
 
 <div id="setup">
@@ -914,6 +918,51 @@ function setStatsMin(on){
   setStatsMin(localStorage.getItem(`transitboard${CITY_ID}.statsMin`)==="1");   // restore + set icon
 })();
 
+/* ---- minimizable boxes: per-card collapse + one "minimize all" control ----
+   Generic on purpose: it walks whatever .cards .card elements exist at boot,
+   so any card added later gets a chevron for free. Collapsed ids persist per
+   board in the same style as hiddenCards. */
+const MINI_KEY="transitboard.miniCards";
+function miniSet(){ try{ return new Set(JSON.parse(localStorage.getItem(MINI_KEY)||"[]")); }catch(_){ return new Set(); } }
+function miniSave(set){ try{ localStorage.setItem(MINI_KEY, JSON.stringify([...set])); }catch(_){} }
+function allCards(){ return [...document.querySelectorAll(".cards .card")].filter(c=>c.id); }
+function applyMini(){
+  const set=miniSet(), cards=allCards();
+  cards.forEach(c=>{
+    const on=set.has(c.id);
+    c.classList.toggle("mini", on);
+    const b=c.querySelector(".mini-btn");
+    if(b){ b.textContent=on?"+":"−"; b.title=on?"Expand this box":"Minimize this box"; }
+  });
+  // only treat it as "all minimized" when there are visible cards and every one is collapsed
+  const vis=cards.filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
+  const box=document.querySelector(".cards");
+  if(box) box.classList.toggle("all-mini", vis.length>0 && vis.every(c=>c.classList.contains("mini")));
+  const ab=document.getElementById("minAllBtn");
+  if(ab){ const all=vis.length>0 && vis.every(c=>c.classList.contains("mini"));
+    ab.classList.toggle("on", all); ab.textContent=all?"▤":"▣";
+    ab.title=all?"Expand all boxes":"Minimize all boxes"; }
+  if(typeof fitAll==="function") setTimeout(fitAll,60);
+}
+function toggleMini(id){ const s=miniSet(); s.has(id)?s.delete(id):s.add(id); miniSave(s); applyMini(); }
+function toggleMiniAll(){
+  const cards=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
+  const everyMini=cards.length>0 && cards.every(c=>c.classList.contains("mini"));
+  const s=miniSet();
+  cards.forEach(c=> everyMini ? s.delete(c.id) : s.add(c.id));
+  miniSave(s); applyMini();
+}
+function initMiniCards(){
+  allCards().forEach(c=>{
+    const h=c.querySelector("h2"); if(!h || h.querySelector(".mini-btn")) return;
+    const b=document.createElement("button");
+    b.type="button"; b.className="mini-btn"; b.textContent="−";
+    b.onclick=e=>{ e.stopPropagation(); toggleMini(c.id); };
+    h.appendChild(b);
+  });
+  const ab=document.getElementById("minAllBtn"); if(ab) ab.onclick=toggleMiniAll;
+  applyMini();
+}
 function updateStats(){
   const air=fleetCount("plane");
   let total=air; const groupCounts=[];
@@ -1510,13 +1559,68 @@ function buildCardToggles(){
    Chronic notices (elevator outages, months-old station issues) would drown
    the ticker, so keep it to actual disruptions: delay/suspension/shuttle-type
    effects, or anything the MBTA marks high-severity. */
+/* ---------- service alerts (a card in the grid, not a scrolling ticker) ------
+   Each city's own refreshAlertTicker() still does the fetching and hands over
+   [{lbl,txt}] -- only the PRESENTATION changed. Alerts are classified by
+   severity from their wording (the feeds don't agree on a severity field, and
+   several have none at all), ranked worst-first, and the card removes itself
+   entirely when nothing is wrong so that seeing it means something IS wrong. */
+const SEV = {
+  major:  { rank:0, word:"Major",  color:"var(--late)" },
+  delay:  { rank:1, word:"Delay",  color:"var(--warn)" },
+  notice: { rank:2, word:"Notice", color:"var(--accent)" },
+};
+function alertSeverity(text){
+  const s=(text||"").toLowerCase();
+  if(/suspend|no service|no trains|closed|closure|shuttle bus|bus bridge|evacuat|emergency|police|fire |stranded|major delay|severe/.test(s)) return "major";
+  if(/delay|single.?track|slow|residual|congest|detour|reroute|holding|longer than|extra time|disruption|verstoring|vertraging/.test(s)) return "delay";
+  return "notice";
+}
+function ensureAlertCard(){
+  let card=document.getElementById("alertCard");
+  if(card) return card;
+  const cards=document.querySelector(".cards"); if(!cards) return null;
+  card=document.createElement("div"); card.className="card"; card.id="alertCard";
+  card.style.setProperty("--sys","var(--late)");
+  card.innerHTML=`<h2><span class="icon">⚠️</span> Service alerts <span class="count" id="alertCount"></span></h2>
+    <div class="statline" id="alertStat"></div>
+    <div class="list" id="alertList"></div>`;
+  cards.insertBefore(card, cards.firstChild);   // worst news first: top-left of the grid
+  // Inserting a card re-flows the whole grid, so on the very first render the
+  // list box hasn't been given its height yet and fitList() (correctly) trims
+  // every row against a box that is briefly ~30px tall. Re-render once the real
+  // height lands. Height-gated so our own row edits can't cause a render loop.
+  if("ResizeObserver" in window){
+    let lastH=-1;
+    new ResizeObserver(()=>{
+      const box=document.getElementById("alertList"); if(!box) return;
+      const h=Math.round(box.clientHeight);
+      if(h!==lastH){ lastH=h; if(lastAlerts.length) renderTicker(lastAlerts); }
+    }).observe(card);
+  }
+  return card;
+}
+let lastAlerts=[];                     // kept so a re-layout can re-render the same set
 function renderTicker(items){
-  const t=document.getElementById("alertTicker"), inner=document.getElementById("tkInner");
-  if(!items.length){ t.classList.remove("show"); document.body.style.paddingBottom=""; return; }
-  inner.innerHTML=items.map(i=>`<span>${i.lbl?`<b>${esc(i.lbl)}</b>`:""}${esc(i.txt)}</span>`).join("");
-  const chars=items.reduce((n,i)=>n+i.txt.length+(i.lbl||"").length, 0);
-  t.style.setProperty("--tk-dur", Math.max(40, Math.round(chars*0.30))+"s");
-  t.classList.add("show"); document.body.style.paddingBottom="40px";
+  if(items) lastAlerts=items;
+  const card=ensureAlertCard(); if(!card) return;
+  const ranked=(items||[]).map(i=>({...i, sev:alertSeverity(`${i.txt} ${i.lbl||""}`)}))
+    .sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank);
+  if(!ranked.length){ card.style.display="none"; return; }
+  card.style.display="";
+  const n=k=>ranked.filter(r=>r.sev===k).length;
+  const worst=ranked[0].sev;
+  card.style.setProperty("--sys", SEV[worst].color);
+  document.getElementById("alertCount").textContent=`${ranked.length} active`;
+  document.getElementById("alertStat").innerHTML=
+    [["major","major"],["delay","delays"],["notice","notices"]]
+      .filter(([k])=>n(k)).map(([k,w])=>`<b>${n(k)}</b> ${w}`).join(" · ");
+  const list=document.getElementById("alertList");
+  list.innerHTML=ranked.map(r=>`<div class="alert-row" style="--sev:${SEV[r.sev].color}">
+      <div class="sev">${SEV[r.sev].word}</div>
+      <div>${r.lbl?`<span class="who">${esc(r.lbl)}</span>`:""}<div class="msg">${esc(r.txt)}</div></div>
+    </div>`).join("");
+  fitList(list);                       // trim to the card, exactly like every other list
 }
 async function refreshAlertTicker(){
   try{
@@ -1545,7 +1649,7 @@ function boot(){
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
-  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis();
+  loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
   updateStats(); setInterval(updateStats, 1000);
 
