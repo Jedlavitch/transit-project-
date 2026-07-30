@@ -175,3 +175,26 @@ body #app{
    every board. */
 .list .stop-label{ margin:3px 2px 1px; }
 .list .dir-label{ margin:2px 2px 1px 8px; }
+
+/* ---- space efficiency inside a card -----------------------------------------
+   Three savings, worth ~45px per card (roughly two extra departures on a small
+   kiosk screen):
+   1. `.dir-label` printed "→ Headsign" and then every row beneath it repeated
+      that same headsign as its own title -- a whole line per direction for zero
+      new information. Gone.
+   2. The statline sits on the header's baseline instead of owning a line.
+   3. Slightly tighter row padding + a shorter stop label.
+   All of it is layout only: no departure, time or status is dropped. */
+.card h2{ position:relative; }
+.card .statline{ margin:0 0 3px; font-size:10px; opacity:.85; }
+.list .dir-label{ display:none; }
+.list .stop-label{ margin:2px 2px 1px; font-size:10px; }
+.list .row{ padding:2px 8px; }
+.list .row .dest{ line-height:1.1; }
+.list .row .sub{ line-height:1.15; }
+
+/* A long destination ("Center City Philadelphia") wrapped to two lines in a
+   narrow card, making rows ~50px instead of ~33px -- that wrapping, not the
+   chrome, was what kept boxes down to one departure. One line + ellipsis. */
+.list .row .dest, .list .row .sub{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.list .row{ align-items:center; }

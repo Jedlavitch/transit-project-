@@ -1586,7 +1586,7 @@ async function refreshMarc(){
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
     if(!deps.length) continue;
@@ -1663,7 +1663,7 @@ async function refreshRideOn(){
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
-    if(used>=3) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0,3);
     if(!deps.length) continue;
@@ -1771,13 +1771,13 @@ async function refreshSeptaRail(){
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(mi>40) break;         // Regional Rail spans a wide area; skip stations far from wherever you are
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 2, 2, "septaRail", nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, "septaRail", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
       group.forEach(d=>{
         const row=el("div","row");
@@ -1858,13 +1858,13 @@ async function refreshSeptaBusScheduled(){
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(mi>10) break;
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 2, 2, "septaBus", nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, "septaBus", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||("Route "+group[0].line))));
       group.forEach(d=>{
         const row=el("div","row");
@@ -2031,13 +2031,13 @@ async function refreshSeptaSubway(){
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(mi>15) break;         // subway stations only matter if genuinely nearby
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 2, 2, "septaSubway", nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, "septaSubway", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
       group.forEach(d=>{
         const row=el("div","row");
@@ -2109,13 +2109,13 @@ async function refreshPatco(){
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(mi>15) break;
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 2, 2, "patco", nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, "patco", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||"PATCO")));
       group.forEach(d=>{
         const row=el("div","row");
@@ -2205,13 +2205,13 @@ async function refreshNjt(){
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(mi>20) break;
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     box.appendChild(el("div","stop-label","◼ "+njtStation(st.name)+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 2, 2, "njt", nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, "njt", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(njtStation(group[0].hs)||njtName(group[0].line))));
       group.forEach(d=>{
         const row=el("div","row");

@@ -1179,14 +1179,14 @@ async function renderNjtCard(kind){
   box.innerHTML=""; let shown=0, used=0, soonest=null;
   for(const {st,mi} of near){
     if(mi>maxMi) break;
-    if(used>=4) break;
+    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
     const sd=deps.reduce((a,b)=>a.min<=b.min?a:b);
     if(soonest==null || sd.min-nowMin<soonest) soonest=sd.min-nowMin;
     box.appendChild(el("div","stop-label","◼ "+njtStation(st.name)+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 2, 2, kind, nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, kind, nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(njtStation(njtHeadsign(group[0].hs,group[0].line))||njtName(group[0].line))));
       group.forEach(d=>{
         const row=el("div","row");

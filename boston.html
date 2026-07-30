@@ -1297,7 +1297,7 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
       });
       continue;                       // this station is covered by live data
     }
-    groupDepsByDirection(deps, 2, 2, list, nowMin).forEach(group=>{
+    groupDepsByDirection(deps, 3, 1, list, nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||group[0].line)));
       group.forEach(d=>{
         const row=el("div","row");
