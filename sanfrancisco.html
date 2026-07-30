@@ -820,6 +820,38 @@ function showFollowBanner(label){
 }
 
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
+
+/* ---------- give unused card space back to the cards that need it -----------
+   `.cards` is a grid with `grid-auto-rows:1fr`, so EVERY row got an equal share
+   whether it was full or empty -- an empty "Planes overhead" / "Spotted" row sat
+   there at full height while a busy departures card was squeezed to one row.
+   This measures which grid rows are actually carrying departures and hands the
+   leftover height to the ones that are, by writing grid-template-rows directly:
+   a row whose cards are all empty/minimised gets min-content, the rest share 1fr.
+   Stable rather than oscillating: a row that shrinks to min-content still has no
+   rows to lose, and one that gains data flips back to 1fr on the next pass. */
+function balanceCards(){
+  const box=document.querySelector(".cards"); if(!box) return;
+  const cols=(getComputedStyle(box).gridTemplateColumns.match(/\S+/g)||["1fr","1fr"]).length;
+  const cards=[...box.children].filter(c=>c.classList.contains("card")
+    && !c.classList.contains("user-hidden") && c.style.display!=="none");
+  if(!cards.length){ box.style.gridTemplateRows=""; return; }
+  const light=c=>{
+    if(c.classList.contains("mini")) return true;          // collapsed: needs nothing
+    const l=c.querySelector(".list");
+    if(!l) return true;
+    if(l.querySelector(".empty")) return true;             // "no data right now"
+    return l.querySelectorAll(".row").length===0;          // nothing rendered/survived
+  };
+  const tracks=[];
+  for(let i=0;i<cards.length;i+=cols){
+    const row=cards.slice(i,i+cols);
+    tracks.push(row.every(light) ? "min-content" : "1fr");
+  }
+  const next=tracks.join(" ");
+  if(box.style.gridTemplateRows!==next) box.style.gridTemplateRows=next;
+}
+
 function fitList(box){
   if(!box || box.clientHeight < 8) return;    // not laid out yet -> trimming would delete everything
   // Snapshot the height ONCE. Re-reading box.clientHeight inside the loop was a
@@ -833,7 +865,10 @@ function fitList(box){
     box.removeChild(box.lastElementChild);
   }
 }
-function fitAll(){ ["#bartList","#muniList","#cableList","#ctrainList","#amtrakList","#planeList"].forEach(s=>fitList($(s))); }
+function fitAll(){
+  balanceCards();                       // resize the rows BEFORE fitting content to them
+  ["#bartList","#muniList","#cableList","#ctrainList","#amtrakList","#planeList"].forEach(s=>fitList($(s)));
+}
 
 /* ---------- shared building blocks for bundled-schedule systems ----------
    These are the exact helpers MARC/Ride On/SEPTA/PATCO/PATH use in the real
