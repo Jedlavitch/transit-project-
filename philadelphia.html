@@ -42,7 +42,7 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
   }
   header button:hover{border-color:var(--accent)}
 
-  main{flex:1; display:grid; grid-template-columns:1.05fr 1fr; gap:14px; padding:14px; min-height:0}
+  main{flex:1; display:grid; grid-template-columns:0.92fr 1fr; gap:14px; padding:14px; min-height:0}
   .col{display:flex; flex-direction:column; gap:12px; min-height:0}
   .cards{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:12px; min-height:0; flex:1}
   .card{
@@ -133,7 +133,7 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
   /* Narrower screens: stack map on top, cards fill the rest — still fits the
      screen with no page scroll (cards trim themselves to fit via fitList). */
   @media (max-width:1000px){
-    main{grid-template-columns:1fr; grid-template-rows:34dvh 1fr}
+    main{grid-template-columns:1fr; grid-template-rows:26dvh 1fr}
     #map{min-height:0}
     .cards{grid-template-columns:1fr 1fr}
   }
@@ -1003,10 +1003,12 @@ function setStatsMin(on){
 const MINI_KEY="transitboardphl.miniCards";   // per-board namespace, like every other saved setting
 function miniSet(){
   const raw=localStorage.getItem(MINI_KEY);
-  // No saved preference = first run: every box starts collapsed, so the board
-  // opens as a compact stack of title bars. A stored "[]" is a real choice
-  // (the user expanded everything) and must NOT fall back to the default.
-  if(raw==null) return new Set(allCards().map(c=>c.id));
+  // No saved preference = first run: every box starts EXPANDED. Defaulting to
+  // collapsed made a fresh board open as a stack of title bars showing no
+  // departures at all -- the data is the point, so show it and let people
+  // minimise what they don't want. A stored "[]" is a real choice (everything
+  // expanded on purpose) and must NOT fall back to any default.
+  if(raw==null) return new Set();
   try{ return new Set(JSON.parse(raw)); }catch(_){ return new Set(); }
 }
 function miniSave(set){ try{ localStorage.setItem(MINI_KEY, JSON.stringify([...set])); }catch(_){} }
