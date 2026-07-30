@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Transit Spotter</title>
+<link rel="manifest" href="spot-manifest.json" />
+<meta name="theme-color" content="#081020" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Spotter" />
+<link rel="apple-touch-icon" href="spot-icon-180.png" />
+<link rel="stylesheet" href="theme.css" />
+<script>/* pre-paint: same shared look as the boards (tb.theme / tb.accent) */
+(function(){try{var g=k=>localStorage.getItem(k),d=document.documentElement;
+var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
+var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; min-height:100%}
+  body{background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased;
+    padding:0 0 96px; overscroll-behavior-y:contain}
+  :root{--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
+
+  header{position:sticky; top:0; z-index:50; padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;
+    background:linear-gradient(180deg,var(--panel2),var(--bg)); border-bottom:1px solid var(--line)}
+  .hrow{display:flex; align-items:center; gap:10px}
+  h1{font-size:19px; margin:0; font-weight:800; letter-spacing:.2px; flex:1}
+  h1 small{display:block; font-size:11px; color:var(--muted); font-weight:600;
+    font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-top:3px}
+  .iconbtn{background:var(--panel); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; width:38px; height:38px; font-size:16px; cursor:pointer; flex:none}
+  .iconbtn:active{border-color:var(--accent)}
+
+  main{padding:14px 16px; max-width:620px; margin:0 auto}
+  .sect{font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); font-family:var(--mono); margin:20px 0 8px}
+  .sect:first-child{margin-top:4px}
+
+  /* mode picker — big thumb targets */
+  .modes{display:grid; grid-template-columns:repeat(3,1fr); gap:9px}
+  .mode{padding:14px 6px; border-radius:12px; border:1px solid var(--line); background:var(--panel);
+    color:var(--text); font-size:13px; font-weight:700; cursor:pointer; text-align:center; line-height:1.5}
+  .mode .g{display:block; font-size:24px}
+  .mode.on{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; background:var(--panel)}
+
+  /* one-tap "near you now" suggestions */
+  .sug{display:flex; align-items:center; gap:11px; width:100%; text-align:left; padding:11px 12px;
+    border-radius:11px; border:1px solid var(--row-line); background:var(--row-bg); color:var(--text);
+    margin-bottom:7px; cursor:pointer; font:inherit}
+  .sug:active{border-color:var(--accent)}
+  .sug .badge{min-width:52px; padding:5px 7px; border-radius:6px; font:800 12px/1 var(--mono);
+    color:#08101f; text-align:center; flex:none}
+  .sug .t{flex:1; min-width:0}
+  .sug .t b{display:block; font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .sug .t span{font-size:11.5px; color:var(--muted); font-family:var(--mono)}
+  .sug .plus{color:var(--accent); font-size:20px; font-weight:700; flex:none}
+  .hint{font-size:12px; color:var(--muted); line-height:1.6}
+
+  label.fld{display:block; margin-top:11px}
+  label.fld em{display:block; font-size:11px; color:var(--muted); font-style:normal;
+    font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px}
+  input[type=text], textarea{width:100%; padding:13px 12px; border-radius:11px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font-size:16px; font-family:inherit}
+  textarea{min-height:62px; resize:vertical}
+  input:focus, textarea:focus{outline:none; border-color:var(--accent)}
+
+  .ride{display:flex; align-items:center; gap:11px; margin-top:12px; padding:13px 12px;
+    border:1px solid var(--line); border-radius:11px; background:var(--panel); cursor:pointer}
+  .ride input{width:22px; height:22px; accent-color:var(--accent); flex:none}
+  .ride b{font-size:14px} .ride span{font-size:11.5px; color:var(--muted); display:block}
+
+  .logbtn{position:fixed; left:0; right:0; bottom:0; z-index:60;
+    padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    background:linear-gradient(180deg,transparent,var(--bg) 40%)}
+  .logbtn button{width:100%; max-width:588px; margin:0 auto; display:block; padding:17px;
+    border:none; border-radius:14px; background:var(--accent); color:#04101f;
+    font-size:17px; font-weight:800; cursor:pointer}
+  .logbtn button:disabled{opacity:.5}
+
+  /* stats + log */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+  .stat{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:10px; padding:9px 10px; min-width:0}
+  .stat b{display:block; font-size:22px; font-weight:800; line-height:1.2}
+  .stat span{font-size:9.5px; color:var(--muted); font-family:var(--mono); letter-spacing:.1em;
+    text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block}
+  .daygrp{font-size:11px; color:var(--muted); font-family:var(--mono); letter-spacing:.06em;
+    text-transform:uppercase; margin:14px 2px 6px; font-weight:700}
+  .entry{display:flex; align-items:flex-start; gap:10px; padding:10px 11px; border-radius:10px;
+    background:var(--row-bg); border:1px solid var(--row-line); margin-bottom:6px}
+  .entry .m{font-size:17px; flex:none; line-height:1.3}
+  .entry .b{flex:1; min-width:0}
+  .entry .b b{font-size:14px; display:block}
+  .entry .b span{font-size:11.5px; color:var(--muted); display:block; margin-top:1px}
+  .entry .b .note{color:var(--sched); font-style:italic; margin-top:3px; font-size:12px}
+  .entry .r{flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:4px}
+  .entry time{font-size:11px; color:var(--muted); font-family:var(--mono)}
+  .rode{font-size:9.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
+    color:#04101f; background:var(--good); padding:2px 6px; border-radius:5px}
+  .del{background:none; border:none; color:var(--muted); font-size:15px; cursor:pointer; padding:2px 4px}
+  .empty{color:var(--muted); font-size:13px; text-align:center; padding:26px 10px; line-height:1.7}
+
+  /* toast + settings sheet */
+  #toast{position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 84px); transform:translate(-50%,190%); z-index:99;
+    background:var(--panel); border:1px solid var(--accent); color:var(--text); padding:12px 18px;
+    border-radius:12px; font-size:14px; font-weight:700; transition:transform .3s ease;
+    box-shadow:0 10px 30px rgba(0,0,0,.5); max-width:88vw; text-align:center}
+  #toast.up{transform:translate(-50%,0)}
+  #sheet{position:fixed; inset:0; z-index:200; background:var(--scrim); display:none;
+    align-items:flex-end; justify-content:center}
+  #sheet.show{display:flex}
+  #sheet .box{background:var(--panel); border:1px solid var(--line); border-radius:16px 16px 0 0;
+    padding:20px 18px calc(env(safe-area-inset-bottom) + 20px); width:100%; max-width:620px;
+    max-height:88vh; overflow:auto}
+  #sheet h3{margin:0 0 4px; font-size:17px}
+  #sheet p{font-size:12.5px; color:var(--muted); line-height:1.6; margin:8px 0}
+  #sheet .btns{display:flex; gap:9px; margin-top:14px; flex-wrap:wrap}
+  #sheet button{flex:1; min-width:130px; padding:13px; border-radius:11px; border:none;
+    background:var(--accent); color:#04101f; font-weight:800; font-size:14px; cursor:pointer}
+  #sheet button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <h1>Transit Spotter <small id="hsub">loading…</small></h1>
+    <button class="iconbtn" id="boardBtn" title="Open the board">🚇</button>
+    <button class="iconbtn" id="setBtn" title="Settings">⚙︎</button>
+  </div>
+</header>
+
+<main>
+  <div class="sect">What did you spot?</div>
+  <div class="modes" id="modes">
+    <button class="mode on" data-mode="plane"><span class="g">✈️</span>Plane</button>
+    <button class="mode" data-mode="train"><span class="g">🚆</span>Train</button>
+    <button class="mode" data-mode="bus"><span class="g">🚌</span>Bus</button>
+  </div>
+
+  <div class="sect" id="nearLbl">Near you right now</div>
+  <div id="nearBox"><div class="hint" id="nearHint">Finding your location…</div></div>
+
+  <div class="sect">Or enter it yourself</div>
+  <label class="fld"><em id="routeLbl">Flight / route</em>
+    <input type="text" id="route" placeholder="e.g. UAL123" autocomplete="off" /></label>
+  <label class="fld"><em>Vehicle / aircraft <span style="text-transform:none">(optional)</span></em>
+    <input type="text" id="vehicle" placeholder="e.g. N12345, car 7203" autocomplete="off" /></label>
+  <label class="fld"><em>Where <span style="text-transform:none">(optional)</span></em>
+    <input type="text" id="place" placeholder="e.g. Bethesda station" autocomplete="off" /></label>
+  <label class="fld"><em>Note <span style="text-transform:none">(optional)</span></em>
+    <textarea id="note" placeholder="Anything worth remembering…"></textarea></label>
+
+  <label class="ride"><input type="checkbox" id="ridden" />
+    <b>I rode this one<span>Leave off if you just saw it go by</span></b></label>
+
+  <div class="sect">Your log</div>
+  <div class="stats">
+    <div class="stat"><b id="stAll">0</b><span>Logged</span></div>
+    <div class="stat"><b id="stRode">0</b><span>Ridden</span></div>
+    <div class="stat"><b id="stRoutes">0</b><span>Routes</span></div>
+    <div class="stat"><b id="stDays">0</b><span>Days</span></div>
+  </div>
+  <div id="log"></div>
+</main>
+
+<div class="logbtn"><button id="save">Log this sighting</button></div>
+<div id="toast"></div>
+
+<div id="sheet"><div class="box">
+  <h3>Spotter settings</h3>
+  <label class="fld"><em>Your name on shared logs</em>
+    <input type="text" id="handle" placeholder="e.g. Jack" autocomplete="off" /></label>
+  <p><b>Shared feed (optional).</b> Paste a <code>spotter-worker.js</code> URL to pool
+     sightings with friends — everyone's logs then show on the boards. Leave empty to
+     keep your log private to this phone.</p>
+  <label class="fld"><em>Shared feed URL</em>
+    <input type="text" id="feedUrl" placeholder="https://tb-spotter.you.workers.dev" autocomplete="off" spellcheck="false" /></label>
+  <div class="btns">
+    <button id="saveSet">Save</button>
+    <button class="ghost" id="exportCsv">Export CSV</button>
+    <button class="ghost" id="exportJson">Export JSON</button>
+    <button class="ghost" id="closeSet">Close</button>
+  </div>
+  <p style="margin-top:14px">Add to your home screen to use it like an app: in Safari tap
+     <b>Share → Add to Home Screen</b>; in Chrome tap <b>⋮ → Install app</b>.</p>
+</div></div>
+
+<script>
+/* ============================================================================
+   Transit Spotter — a log of the buses, trains and planes you see and ride.
+
+   Local-first by design: the log lives in localStorage ("tb.spots"), shared with
+   the boards, which render a "Spotted" card from the same key (see spotlog.js).
+   So it works with zero setup and no account. Set a spotter-worker.js URL in
+   settings and each new sighting is ALSO posted to a shared feed, which is how
+   several people's logs end up on one board.
+
+   One-tap logging uses the two keyless, CORS-open feeds the boards already use:
+   airplanes.live for aircraft overhead and amtraker for Amtrak trains. Local
+   buses/metros need a city API key, so those are manual entry.
+   ============================================================================ */
+const $ = s => document.querySelector(s);
+const LS = { spots:"tb.spots", handle:"tb.spotter", feed:"tb.spotFeedUrl" };
+const MODE_GLYPH = { plane:"✈️", train:"🚆", bus:"🚌" };
+let mode = "plane", loc = null, near = [];
+
+/* ---------- storage ---------- */
+function loadSpots(){ try{ return JSON.parse(localStorage.getItem(LS.spots)||"[]"); }catch(e){ return []; } }
+function saveSpots(a){ try{ localStorage.setItem(LS.spots, JSON.stringify(a.slice(0,500))); }catch(e){} }
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const feedUrl = () => (localStorage.getItem(LS.feed)||"").trim().replace(/\/+$/,"");
+
+function toast(msg){
+  const t=$("#toast"); t.textContent=msg; t.classList.add("up");
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("up"), 2100);
+}
+
+/* ---------- mode ---------- */
+document.querySelectorAll("#modes .mode").forEach(b=>{
+  b.onclick=()=>{
+    mode=b.dataset.mode;
+    document.querySelectorAll("#modes .mode").forEach(x=>x.classList.toggle("on", x===b));
+    $("#routeLbl").textContent = mode==="plane" ? "Flight / route" : mode==="train" ? "Line / train #" : "Route";
+    $("#route").placeholder = mode==="plane" ? "e.g. UAL123" : mode==="train" ? "e.g. Red Line, Acela 2151" : "e.g. 29, M15";
+    renderNear();
+  };
+});
+
+/* ---------- location ---------- */
+function initLoc(){
+  if(!navigator.geolocation){ $("#nearHint").textContent="This browser can't share your location — enter sightings by hand."; return; }
+  navigator.geolocation.getCurrentPosition(
+    p => { loc={lat:p.coords.latitude, lon:p.coords.longitude}; $("#hsub").textContent=
+             `${Math.abs(loc.lat).toFixed(3)}°${loc.lat>=0?"N":"S"} ${Math.abs(loc.lon).toFixed(3)}°${loc.lon>=0?"E":"W"}`;
+           fetchNear(); },
+    _ => { $("#nearHint").textContent="Location is off, so one-tap logging is unavailable — enter sightings by hand.";
+           $("#hsub").textContent="location off"; },
+    { enableHighAccuracy:false, timeout:9000, maximumAge:120000 }
+  );
+}
+async function getJSON(url, ms=9000){
+  const c=new AbortController(), t=setTimeout(()=>c.abort(), ms);
+  try{ const r=await fetch(url,{signal:c.signal, cache:"no-store"}); if(!r.ok) throw 0; return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+const R_MI = 3958.8;
+function distMi(a,b){
+  const dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const la1=a.lat*Math.PI/180, la2=b.lat*Math.PI/180;
+  const h=Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R_MI*Math.asin(Math.sqrt(h));
+}
+
+async function fetchNear(){
+  if(!loc) return;
+  near=[];
+  const jobs=[];
+  // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
+  jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
+    .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
+        const nm = a.dst!=null ? a.dst : distMi(loc,{lat:a.lat,lon:a.lon})/1.15078;
+        near.push({ mode:"plane", key:(a.flight||a.r||"").trim()||"unknown",
+          label:(a.flight||a.r||"Aircraft").trim(), sub:`${a.desc||a.t||"aircraft"}${a.ownOp?" · "+a.ownOp:""} · ${nm.toFixed(1)} nm`,
+          vehicle:(a.r||"").trim(), color:"#ffd166", d:nm });
+      }); }).catch(()=>{}));
+  // Amtrak (amtraker — keyless, CORS-open)
+  jobs.push(getJSON("https://api-v3.amtraker.com/v3/trains", 11000)
+    .then(d=>{ const seen={};
+      for(const arr of Object.values(d||{})) for(const t of (arr||[])){
+        if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
+        if(t.trainState && t.trainState!=="Active") continue;
+        const mi=distMi(loc,{lat:t.lat,lon:t.lon}); if(mi>25) continue;
+        if(seen[t.trainNum] && seen[t.trainNum]<=mi) continue; seen[t.trainNum]=mi;
+        near.push({ mode:"train", key:String(t.trainNum||""),
+          label:`${t.routeName||"Amtrak"} ${t.trainNum||""}`.trim(),
+          sub:`→ ${t.destName||"?"} · ${mi.toFixed(1)} mi`, vehicle:"", color:"#3ad0c8", d:mi });
+      } }).catch(()=>{}));
+  await Promise.allSettled(jobs);
+  near.sort((a,b)=>a.d-b.d);
+  renderNear();
+}
+
+function renderNear(){
+  const box=$("#nearBox"), list=near.filter(n=>n.mode===mode).slice(0,6);
+  box.innerHTML="";
+  if(!loc){ box.innerHTML=`<div class="hint" id="nearHint">Finding your location…</div>`; return; }
+  if(!list.length){
+    box.innerHTML=`<div class="hint">${ mode==="bus"
+      ? "Local buses need a city API key, so tap-to-log isn't available for them — type the route below and it still lands in your log."
+      : `No ${mode}s detected near you right now. Pull down to refresh, or enter it by hand below.` }</div>`;
+    return;
+  }
+  list.forEach(n=>{
+    const b=document.createElement("button"); b.className="sug";
+    b.innerHTML=`<span class="badge" style="background:${n.color}">${esc(n.key.slice(0,7)||"—")}</span>
+      <span class="t"><b>${esc(n.label)}</b><span>${esc(n.sub)}</span></span><span class="plus">＋</span>`;
+    b.onclick=()=>{ $("#route").value=n.label; $("#vehicle").value=n.vehicle||"";
+      logIt({ route:n.label, vehicle:n.vehicle||"", source:"nearby" }); };
+    box.appendChild(b);
+  });
+}
+
+/* ---------- logging ---------- */
+function logIt(over){
+  const o=over||{};
+  const route=(o.route!=null?o.route:$("#route").value).trim();
+  if(!route){ toast("Add a route or flight first"); $("#route").focus(); return; }
+  const s={
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+    ts: Date.now(), mode,
+    route, vehicle:(o.vehicle!=null?o.vehicle:$("#vehicle").value).trim(),
+    place: $("#place").value.trim(), note: $("#note").value.trim(),
+    ridden: $("#ridden").checked,
+    by: (localStorage.getItem(LS.handle)||"").trim(),
+    lat: loc?+loc.lat.toFixed(4):null, lon: loc?+loc.lon.toFixed(4):null,
+  };
+  const all=loadSpots(); all.unshift(s); saveSpots(all);
+  $("#route").value=""; $("#vehicle").value=""; $("#note").value=""; $("#ridden").checked=false;
+  render();
+  toast(s.ridden ? `Logged a ride: ${s.route}` : `Logged: ${s.route}`);
+  push(s);
+}
+// Optional shared feed: fire-and-forget, queued if offline so nothing is lost.
+async function push(s){
+  const url=feedUrl(); if(!url) return;
+  try{
+    const r=await fetch(url+"/log",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(s)});
+    if(!r.ok) throw 0;
+  }catch(e){
+    try{ const q=JSON.parse(localStorage.getItem("tb.spotQueue")||"[]"); q.push(s);
+         localStorage.setItem("tb.spotQueue", JSON.stringify(q.slice(-100))); }catch(_){}
+  }
+}
+async function flushQueue(){
+  const url=feedUrl(); if(!url) return;
+  let q=[]; try{ q=JSON.parse(localStorage.getItem("tb.spotQueue")||"[]"); }catch(e){ return; }
+  if(!q.length) return;
+  const left=[];
+  for(const s of q){
+    try{ const r=await fetch(url+"/log",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(s)});
+         if(!r.ok) throw 0; }catch(e){ left.push(s); }
+  }
+  localStorage.setItem("tb.spotQueue", JSON.stringify(left));
+  if(q.length && !left.length) toast(`Synced ${q.length} queued sighting${q.length>1?"s":""}`);
+}
+
+function delSpot(id){
+  saveSpots(loadSpots().filter(s=>s.id!==id)); render();
+}
+
+/* ---------- render ---------- */
+function dayKey(ts){ const d=new Date(ts); return d.toLocaleDateString([], {weekday:"long", month:"short", day:"numeric"}); }
+function render(){
+  const all=loadSpots(), box=$("#log");
+  $("#stAll").textContent=all.length;
+  $("#stRode").textContent=all.filter(s=>s.ridden).length;
+  $("#stRoutes").textContent=new Set(all.map(s=>(s.route||"").toLowerCase())).size;
+  $("#stDays").textContent=new Set(all.map(s=>new Date(s.ts).toDateString())).size;
+  box.innerHTML="";
+  if(!all.length){
+    box.innerHTML=`<div class="empty">Nothing logged yet.<br>Tap something in “Near you right now”,
+      or type a route and hit <b>Log this sighting</b>.</div>`;
+    return;
+  }
+  let day="";
+  all.slice(0,120).forEach(s=>{
+    const dk=dayKey(s.ts);
+    if(dk!==day){ day=dk; const h=document.createElement("div"); h.className="daygrp"; h.textContent=dk; box.appendChild(h); }
+    const e=document.createElement("div"); e.className="entry";
+    const bits=[s.vehicle, s.place].filter(Boolean).join(" · ");
+    e.innerHTML=`<span class="m">${MODE_GLYPH[s.mode]||"•"}</span>
+      <span class="b"><b>${esc(s.route)}</b>${bits?`<span>${esc(bits)}</span>`:""}
+        ${s.note?`<span class="note">“${esc(s.note)}”</span>`:""}</span>
+      <span class="r">
+        <time>${new Date(s.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</time>
+        ${s.ridden?`<span class="rode">rode</span>`:""}
+        <button class="del" title="Delete" data-id="${s.id}">✕</button></span>`;
+    box.appendChild(e);
+  });
+  box.querySelectorAll(".del").forEach(b=>{ b.onclick=()=>delSpot(b.dataset.id); });
+}
+
+/* ---------- export ---------- */
+function download(name, text, type){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function toCsv(){
+  const rows=[["when","mode","route","vehicle","place","ridden","note","lat","lon"]];
+  loadSpots().forEach(s=>rows.push([new Date(s.ts).toISOString(), s.mode, s.route, s.vehicle||"",
+    s.place||"", s.ridden?"yes":"no", s.note||"", s.lat??"", s.lon??""]));
+  return rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+}
+
+/* ---------- settings sheet ---------- */
+$("#setBtn").onclick=()=>{
+  $("#handle").value=localStorage.getItem(LS.handle)||"";
+  $("#feedUrl").value=localStorage.getItem(LS.feed)||"";
+  $("#sheet").classList.add("show");
+};
+$("#closeSet").onclick=()=>$("#sheet").classList.remove("show");
+$("#sheet").addEventListener("click", e=>{ if(e.target.id==="sheet") $("#sheet").classList.remove("show"); });
+$("#saveSet").onclick=()=>{
+  localStorage.setItem(LS.handle, $("#handle").value.trim());
+  localStorage.setItem(LS.feed, $("#feedUrl").value.trim().replace(/\/+$/,""));
+  $("#sheet").classList.remove("show"); toast("Settings saved"); flushQueue();
+};
+$("#exportCsv").onclick=()=>download("transit-spotter.csv", toCsv(), "text/csv");
+$("#exportJson").onclick=()=>download("transit-spotter.json", JSON.stringify(loadSpots(),null,2), "application/json");
+$("#save").onclick=()=>logIt();
+$("#route").addEventListener("keydown", e=>{ if(e.key==="Enter") logIt(); });
+$("#boardBtn").onclick=()=>{ window.location.href="index.html"; };
+
+/* pull-to-refresh the nearby list (only at the very top of the page) */
+let touchY=0;
+document.addEventListener("touchstart", e=>{ touchY=e.touches[0].clientY; }, {passive:true});
+document.addEventListener("touchend", e=>{
+  if(window.scrollY<=0 && e.changedTouches[0].clientY-touchY>90){ $("#nearBox").innerHTML=
+    `<div class="hint">Refreshing…</div>`; loc?fetchNear():initLoc(); }
+}, {passive:true});
+
+render(); initLoc(); flushQueue();
+setInterval(()=>{ if(loc && document.visibilityState==="visible") fetchNear(); }, 30000);
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") flushQueue(); });
+if("serviceWorker" in navigator) navigator.serviceWorker.register("spot-sw.js").catch(()=>{});
+</script>
+</body>
+</html>

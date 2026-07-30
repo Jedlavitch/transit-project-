@@ -1,0 +1,16 @@
+{
+  "name": "Transit Spotter",
+  "short_name": "Spotter",
+  "description": "Log the buses, trains and planes you spot and ride — shows up on your transit board.",
+  "start_url": "spot.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#081020",
+  "theme_color": "#081020",
+  "icons": [
+    { "src": "spot-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "spot-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "spot-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
