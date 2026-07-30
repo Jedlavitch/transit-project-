@@ -144,7 +144,14 @@
     <span class="clock" id="clock">—</span>
     <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)">⤢</button>
+    <!-- href is a fallback only (rewritten from CITY_CFG.board later); resolve it from ?city=
+         up front so a script error can never bounce you to the DC board. -->
     <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
+    <script>(function(){try{var m={dc:"index.html",philly:"philadelphia.html",nj:"newjersey.html",
+      nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
+      sf:"sanfrancisco.html"};
+      var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
+      if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
   <div id="settings">
     <div class="panel">

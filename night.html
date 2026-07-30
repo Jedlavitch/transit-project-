@@ -278,7 +278,16 @@
     <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)"></button>
     <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city on one live map" onclick="window.location.href=this.href; return false;">tour ›</a>
+    <!-- href is a fallback only: it is rewritten from CITY_CFG.board in boot(). It used to be
+         hardcoded "index.html", so ANY script error before boot() finished sent you to the DC
+         board instead of the city you came from. Resolve it up front from ?city= instead. -->
     <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
+    <script>/* set the back-link from ?city= immediately, before any other JS can fail */
+    (function(){try{var m={dc:"index.html",philly:"philadelphia.html",nj:"newjersey.html",
+      nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
+      sf:"sanfrancisco.html"};
+      var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
+      if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
 
   <div id="settings">
