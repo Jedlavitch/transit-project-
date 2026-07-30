@@ -123,6 +123,19 @@
   #settings .sys-toggle input{margin:0; cursor:pointer}
   #settings .done{margin-top:22px; width:100%; padding:12px; border-radius:10px; border:none;
     background:var(--accent); color:#071528; font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
+
+  /* ============ blue depth pass (shared design language) ============
+     Deep-navy floors + bright-blue highlights, same tokens as the city boards.
+     Deliberately avoids .flap/.cell so the split-flap animation is untouched. */
+  body{background:
+      radial-gradient(900px 600px at 108% 14%, rgba(78,161,255,.12) 0%, transparent 55%),
+      radial-gradient(1300px 850px at 50% 122%, var(--blue-deep,#0a1a3d) 0%, transparent 62%),
+      var(--bg)}
+  header{background:linear-gradient(180deg, var(--blue-deep,#0a1a3d), transparent)}
+  header .title{background:linear-gradient(90deg,var(--accent),#3ad0c8 55%,#b58cff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  :root[data-theme="day"] header .title{filter:brightness(.7) saturate(1.2)}
+  .op-logo{box-shadow:0 0 0 1px rgba(124,192,255,.25)}
 </style>
 </head>
 <body>

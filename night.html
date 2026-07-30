@@ -249,6 +249,16 @@
   footer b{color:var(--muted)}
   .pulse{animation:pulse 3s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.72}}
+
+  /* ============ blue depth pass ============
+     night.html already carries the sunset/aurora palette, so this only adds a
+     deep-navy floor under the text column (over #sky, which is z-index:-1) and
+     bright-blue edges — it must not wash out the real sky gradient above. */
+  body::after{content:""; position:fixed; left:0; right:0; bottom:0; height:38vh; z-index:-1;
+    pointer-events:none; background:linear-gradient(0deg, var(--blue-deep,#0a1a3d) 0%, transparent 100%);
+    opacity:.55}
+  :root[data-theme="day"] body::after{display:none}
+  header a:hover, header button:hover{border-color:var(--blue-bright,#7cc0ff); color:var(--blue-bright,#7cc0ff)}
 </style>
 </head>
 <body>
