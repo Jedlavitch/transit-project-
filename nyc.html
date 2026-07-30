@@ -1112,13 +1112,35 @@ function delayForVehicle(v, updates){
 /* Predicted arrival (POSIX seconds) for this vehicle's current/next stop, so a
    live row can show a real countdown + clock instead of the word "live". */
 function arrivalForVehicle(v, updates){
-  const u = updates[v.tripId]; if(!u) return null;
   const now = Date.now()/1000;
-  const here = u.stops.find(s => s.stopId === v.stopId && s.timeSec);
-  if(here) return here.timeSec;
-  // otherwise the soonest stop still in the future (feeds keep passed stops)
-  const up = u.stops.filter(s => s.timeSec && s.timeSec > now - 60).sort((a,b)=>a.timeSec-b.timeSec)[0];
-  return up ? up.timeSec : null;
+  const u = updates[v.tripId];
+  if(u){
+    const here = u.stops.find(s => s.stopId === v.stopId && s.timeSec && s.timeSec > now-180);
+    if(here) return here.timeSec;
+    // otherwise the soonest stop still ahead (feeds keep already-passed stops)
+    const up = u.stops.filter(s => s.timeSec && s.timeSec > now-60).sort((a,b)=>a.timeSec-b.timeSec)[0];
+    return up ? up.timeSec : null;
+  }
+  /* Metro-North is a special case, verified against the live feed: its
+     VehiclePosition trip ids are train numbers ("1299") while its TripUpdate
+     trip ids are internal ids ("3154817") -- two id spaces with ZERO overlap,
+     and its TripUpdates carry no vehicle descriptor either, so there is no key
+     to join them on. Fall back to the prediction for this vehicle's own next
+     stop, but only when exactly one train is due there: with several trains
+     approaching the same station we would otherwise print another train's
+     time, which is worse than printing none. */
+  if(!v.stopId) return null;
+  let found=null;
+  for(const k in updates){
+    const soonest=(updates[k].stops||[])
+      .filter(s => s.timeSec && s.timeSec > now-120)
+      .sort((a,b)=>a.timeSec-b.timeSec)[0];
+    if(soonest && soonest.stopId===v.stopId){
+      if(found) return null;                    // ambiguous -- keep the plain "live" tag
+      found=soonest.timeSec;
+    }
+  }
+  return found;
 }
 
 /* Delay -> color/text, shared convention with SEPTA's live rows (green "on
@@ -1132,11 +1154,28 @@ function liveLateInfo(late){
   const text = late<=0 ? "on time" : `+${late} min`;
   return {color, text};
 }
-function appendLiveTimes(row, late){
+/* Live rows read like every other row: countdown on top, clock underneath.
+   `arrSec` is the feed's predicted arrival; subtracting the reported delay
+   recovers the published schedule, so both times can be shown. Falls back to
+   the old lateness/"live" tag when the feed gives no arrival time. */
+function appendLiveTimes(row, late, arrSec){
   const times=el("div","times");
   const li=liveLateInfo(late);
-  if(li){ const eta=el("div","live-eta"); eta.style.color=li.color; eta.textContent=li.text; times.appendChild(eta); }
-  times.appendChild(el("div","live-tag","live"));
+  const staleArr = arrSec && (arrSec*1000-Date.now())/60000 < -3;   // prediction well past: don't claim "now"
+  if(arrSec && !staleArr){
+    const mins=Math.round((arrSec*1000-Date.now())/60000);
+    const big=el("div","live", countdownText(Math.max(0,mins)));
+    big.classList.add("eta", etaClass(mins));
+    times.appendChild(big);
+    const clk=t=>new Date(t*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    const schedSec = (typeof late==="number" && isFinite(late) && Math.abs(late)<=90) ? arrSec-late*60 : null;
+    const sub=el("div","sched", schedSec ? `sched ${clk(schedSec)}` : `live · ≈ ${clk(arrSec)}`);
+    times.appendChild(sub);
+    if(li && li.text!=="on time"){ const tag=el("div","live-tag"); tag.textContent=li.text; tag.style.color=li.color; times.appendChild(tag); }
+  } else {
+    if(li){ const eta=el("div","live-eta"); eta.style.color=li.color; eta.textContent=li.text; times.appendChild(eta); }
+    times.appendChild(el("div","live-tag","live"));
+  }
   row.appendChild(times);
 }
 
@@ -1211,7 +1250,8 @@ async function fetchSubwayLive(){
     if(!coord) return null;
     const late = delayForVehicle(v, updates);
     const lateMin = late!=null ? Math.round(late/60) : null;
-    return { v, lat:coord[0], lon:coord[1], lateMin, mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
+    return { v, lat:coord[0], lon:coord[1], lateMin, arrSec: arrivalForVehicle(v, updates),
+      mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
       stationName: scheduleStationName(sched, v.stopId) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
   renderSubway(list);
@@ -1221,7 +1261,7 @@ function renderSubway(list){
   state.lastMtaOk=Date.now();   // feed readout
   const box=$("#subwayList"); if(!box) return; box.innerHTML="";
   if(!list.length){ box.appendChild(el("div","empty","No subway trains found nearby right now.")); $("#subwayCount").textContent=""; return; }
-  list.slice(0,20).forEach(({v,lateMin,mi,stationName})=>{
+  list.slice(0,20).forEach(({v,lateMin,arrSec,mi,stationName})=>{
     const row=el("div","row");
     const b=el("div","badge", v.routeId||"?"); b.style.background=SUBWAY_COL[v.routeId]||"#888";
     if(["N","Q","R","W","GS"].includes(v.routeId)) b.style.color="#000";
@@ -1229,7 +1269,7 @@ function renderSubway(list){
     mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : (v.routeId+" train")));
     mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
     row.append(b, mid, el("div"));
-    appendLiveTimes(row, lateMin);
+    appendLiveTimes(row, lateMin, arrSec);
     // live rows map 1:1 to their marker -- follow directly by trip id
     row.classList.add("followable"); row.title="Follow this train on the map";
     row.onclick=()=>startFollow("subway", "sw"+v.tripId);
@@ -1547,21 +1587,22 @@ async function fetchRailLive(feedPath, ensureSched, lineOf){
     if(!coord) return null;
     const late = delayForVehicle(v, updates);
     const lateMin = late!=null ? Math.round(late/60) : null;
-    return { v, lat:coord[0], lon:coord[1], lateMin, mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
+    return { v, lat:coord[0], lon:coord[1], lateMin, arrSec: arrivalForVehicle(v, updates),
+      mi: kmToMi(haversine(here,{lat:coord[0],lon:coord[1]})),
       stationName: scheduleStationName(sched, v.stopId), line: lineOf(v, sched) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
 }
 function renderRailCard(listId, countId, list, color, fleet){
   const box=$(listId); if(!box) return; box.innerHTML="";
   if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent=""; return; }
-  list.slice(0,20).forEach(({v,lateMin,mi,stationName,line})=>{
+  list.slice(0,20).forEach(({v,lateMin,arrSec,mi,stationName,line})=>{
     const row=el("div","row");
     const b=el("div","badge rail", line||"?"); b.style.background=color;
     const mid=el("div");
     mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : (line||"Train")));
     mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
     row.append(b, mid, el("div"));
-    appendLiveTimes(row, lateMin);
+    appendLiveTimes(row, lateMin, arrSec);
     if(fleet){ // live rows map 1:1 to their marker (drawRailFleet keys fleet+tripId)
       row.classList.add("followable"); row.title="Follow this train on the map";
       row.onclick=()=>startFollow(fleet, fleet+v.tripId);
@@ -1696,7 +1737,8 @@ async function fetchBusLive(){
     if(typeof v.lat!=="number") return null;   // MTA Bus reports real GPS for every vehicle; skip if somehow absent
     const late = delayForVehicle(v, updates);
     const lateMin = late!=null ? Math.round(late/60) : null;
-    return { v, lat:v.lat, lon:v.lon, lateMin, mi: kmToMi(haversine(here,{lat:v.lat,lon:v.lon})),
+    return { v, lat:v.lat, lon:v.lon, lateMin, arrSec: arrivalForVehicle(v, updates),
+      mi: kmToMi(haversine(here,{lat:v.lat,lon:v.lon})),
       stationName: scheduleStationName(sched, v.stopId), line: railRouteIdLineOf(v) };
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
   renderRailCard("#busList", "#busCount", list, BUS_COL, "bus");
