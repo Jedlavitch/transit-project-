@@ -116,9 +116,9 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
     background:var(--accent); color:#04101f; font-weight:800; cursor:pointer; font-size:13px}
   #setup #addrGpsBtn{background:transparent; color:var(--text); white-space:nowrap}
   #setup #addrStatus{font-size:12px; min-height:16px; margin-top:6px; color:var(--muted)}
-  #setup .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:9px}
-  #setup .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
-  #setup .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.2)}
+  #setup .swatches{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:9px}
+  #setup .sw{flex:none; width:26px; height:26px; border-radius:50%; border:2px solid transparent; cursor:pointer; padding:0}
+  #setup .sw.active{border-color:var(--text); box-shadow:0 0 0 2px var(--line)}
   #setup .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a); position:relative; overflow:hidden}
   #setup .theme-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:9px}
   #setup .theme-btn{flex:1; min-width:70px; padding:9px 6px; border-radius:10px; border:1px solid var(--line);
@@ -292,6 +292,20 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
     #map{border-color:color-mix(in srgb, var(--blue-bright,#7cc0ff) 30%, var(--line))}
     .card, .stat{border-color:color-mix(in srgb, var(--blue-bright,#7cc0ff) 14%, var(--line))}
   }
+
+  /* ============ unified departure box ============
+     One row object everywhere: a system-colored stripe down the left (the
+     color code — --sys comes from the card), the badge, dest+sub, then a
+     right-aligned two-line time block (countdown over scheduled clock).
+     Countdown hue encodes urgency; live rows keep their lateness colors. */
+  .row{border-left:3px solid var(--sys,var(--accent)); padding-left:9px; position:relative}
+  .row .times{min-width:5.6em; text-align:right}
+  .row .live.eta{font-variant-numeric:tabular-nums; letter-spacing:.01em}
+  .row .live.eta.due{color:var(--good)}
+  .row .live.eta.soon{color:var(--warn)}
+  .row .live.eta.later{color:var(--live)}
+  .row .sched{opacity:.85; white-space:nowrap}
+  :root[data-theme="day"] .row .live.eta{filter:brightness(.72) saturate(1.25)}
 </style>
 </head>
 <body>
@@ -498,7 +512,7 @@ const LS = {
   septa: "transitboardphl.septaUrl",
 };
 const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
-const ACCENTS=["#4ea1ff","#ffb454","#3ad0c8","#5ad17a","#b39dff","#ff8fab"];
+const ACCENTS=["#ff5a5a","#ff7a1a","#fb923c","#ffb454","#ffd166","#fde047","#d9e021","#a3e635","#5ad17a","#34d399","#2dd4bf","#3ad0c8","#22d3ee","#38bdf8","#4ea1ff","#60a5fa","#818cf8","#a78bfa","#b39dff","#c084fc","#e879f9","#f0abfc","#ff8fab","#ff7a8f","#cbd5e1","#94a3b8"];
 
 let state = {
   wmataKey: localStorage.getItem(LS.key) || "",
@@ -882,6 +896,18 @@ function railKey(m){ return m==="BRD"?-2 : m==="ARR"?-1 : (parseInt(m,10)||99); 
    separately instead of one merged, hard-to-scan list. Returns up to
    maxDirs direction-groups, each an array of up to perDir departures,
    soonest direction first. */
+/* Unified departure box: every scheduled row reads the same way — the big line
+   is the countdown (color-coded by how soon), the small line keeps the clock
+   time it replaced, labelled "sched". Mutates the passed .live element and
+   returns the secondary line so each caller appends it where it already did. */
+function dualTime(t, rel){
+  const clk=t.textContent;
+  t.textContent = rel<=0 ? "now" : rel<60 ? `in ${rel} min`
+    : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+  t.classList.add("eta", rel<=0?"due":rel<=5?"soon":"later");
+  t.style.color="";                       // let the .eta color code win over the per-line hue
+  return el("div","sched","sched "+clk);
+}
 function groupDepsByDirection(deps, perDir=2, maxDirs=2, sys, nowMin){
   const groups=new Map();
   deps.forEach(d=>{ const key=d.hs||"—"; if(!groups.has(key)) groups.set(key, []); groups.get(key).push(d); });
@@ -1407,7 +1433,7 @@ async function refreshMarc(){
       mid.appendChild(el("div","sub", d.line+" Line · "+relTxt));
       const times=el("div","times");
       const t=el("div","live"); t.style.color="#e8a34a"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
+      times.append(t, dualTime(t, rel));
       row.append(b, mid, el("div"), times);
       box.appendChild(row); shown++;
     });
@@ -1484,7 +1510,7 @@ async function refreshRideOn(){
       mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
       const times=el("div","times");
       const t=el("div","live"); t.style.color="#8ab4ff"; t.textContent=marcClock(d.t);
-      times.append(t, el("div","sched","scheduled"));
+      times.append(t, dualTime(t, rel));
       row.append(b, mid, el("div"), times);
       box.appendChild(row); shown++;
     });
@@ -1594,7 +1620,7 @@ async function refreshSeptaRail(){
         mid.appendChild(el("div","sub", d.line+" · "+relTxt));
         const times=el("div","times");
         const t=el("div","live"); t.style.color="#8fb3c7"; t.textContent=marcClock(d.t);
-        times.append(t, el("div","sched","scheduled"));
+        times.append(t, dualTime(t, rel));
         row.append(b, mid, el("div"), times);
         wireFollowRow(row, "septaRail", "sr", d);
         box.appendChild(row); shown++;
@@ -1681,7 +1707,7 @@ async function refreshSeptaBusScheduled(){
         mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
         const times=el("div","times");
         const t=el("div","live"); t.style.color="#e0b466"; t.textContent=marcClock(d.t);
-        times.append(t, el("div","sched","scheduled"));
+        times.append(t, dualTime(t, rel));
         row.append(b, mid, el("div"), times);
         wireFollowRow(row, "septaBus", "sb", d);
         box.appendChild(row); shown++;
@@ -1854,7 +1880,7 @@ async function refreshSeptaSubway(){
         mid.appendChild(el("div","sub", d.line+" · "+relTxt));
         const times=el("div","times");
         const t=el("div","live"); t.style.color="#7fb0e0"; t.textContent=marcClock(d.t);
-        times.append(t, el("div","sched","scheduled"));
+        times.append(t, dualTime(t, rel));
         row.append(b, mid, el("div"), times);
         wireFollowRow(row, "septaSubway", "ss", d);
         box.appendChild(row); shown++;
@@ -1932,7 +1958,7 @@ async function refreshPatco(){
         mid.appendChild(el("div","sub", "PATCO · "+relTxt));
         const times=el("div","times");
         const t=el("div","live"); t.style.color="#e0708a"; t.textContent=marcClock(d.t);
-        times.append(t, el("div","sched","scheduled"));
+        times.append(t, dualTime(t, rel));
         row.append(b, mid, el("div"), times);
         wireFollowRow(row, "patco", "pt", d);
         box.appendChild(row); shown++;
