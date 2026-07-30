@@ -111,6 +111,25 @@ body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sa
 .row.followable{ cursor:pointer; }
 .row.followable:hover{ border-color:var(--accent); }
 
+/* ---- Service alerts card (replaced the bottom scrolling ticker) ----
+   Alerts are ranked by severity and sit still so they can actually be read
+   from across a room. Severity is carried by a WORD as well as a colour (and a
+   left bar), never colour alone. The whole card is hidden when nothing is
+   wrong, so its mere presence means "something is up". */
+.alert-row{ display:grid; grid-template-columns:auto 1fr; gap:9px; align-items:start;
+  padding:var(--row-pad); border-radius:4px; background:var(--row-bg);
+  border:1px solid var(--row-line); border-left:3px solid var(--sev,var(--accent)); }
+.alert-row .sev{ font:800 9px/1.6 var(--mono,ui-monospace,Menlo,monospace); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--sev,var(--accent)); white-space:nowrap; padding-top:1px; }
+/* one line, ellipsised: some feeds put a whole sentence in the "affected" label
+   (MBTA names both stop directions), which would wrap into a very tall row and
+   push every other alert out of the card */
+.alert-row .who{ font-weight:800; font-size:var(--sub-fs,11px); color:var(--text);
+  display:block; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.alert-row .msg{ font-size:var(--sub-fs,11px); color:var(--muted); line-height:1.45;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+#alertCard .list{ gap:var(--row-gap); }
+
 /* ---- Map-only full screen (every board) ----
    The button pinned top-right on the map pins #map over the whole viewport:
    just the map + its vehicles, no cards/header/ticker. position needs

@@ -7,7 +7,7 @@
 <title>Los Angeles Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="theme.css?v=7" />
 <script src="license.js" defer></script>
 <script src="cityswitch.js"></script>
 <script src="spotlog.js" defer></script>
@@ -883,8 +883,15 @@ function setStatsMin(on){
    Generic on purpose: it walks whatever .cards .card elements exist at boot,
    so any card added later gets a chevron for free. Collapsed ids persist per
    board in the same style as hiddenCards. */
-const MINI_KEY="transitboard.miniCards";
-function miniSet(){ try{ return new Set(JSON.parse(localStorage.getItem(MINI_KEY)||"[]")); }catch(_){ return new Set(); } }
+const MINI_KEY="transitboardla.miniCards";   // per-board namespace, like every other saved setting
+function miniSet(){
+  const raw=localStorage.getItem(MINI_KEY);
+  // No saved preference = first run: every box starts collapsed, so the board
+  // opens as a compact stack of title bars. A stored "[]" is a real choice
+  // (the user expanded everything) and must NOT fall back to the default.
+  if(raw==null) return new Set(allCards().map(c=>c.id));
+  try{ return new Set(JSON.parse(raw)); }catch(_){ return new Set(); }
+}
 function miniSave(set){ try{ localStorage.setItem(MINI_KEY, JSON.stringify([...set])); }catch(_){} }
 function allCards(){ return [...document.querySelectorAll(".cards .card")].filter(c=>c.id); }
 function applyMini(){
@@ -907,10 +914,13 @@ function applyMini(){
 }
 function toggleMini(id){ const s=miniSet(); s.has(id)?s.delete(id):s.add(id); miniSave(s); applyMini(); }
 function toggleMiniAll(){
-  const cards=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
-  const everyMini=cards.length>0 && cards.every(c=>c.classList.contains("mini"));
+  const vis=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
+  const everyMini=vis.length>0 && vis.every(c=>c.classList.contains("mini"));
+  // act on EVERY card, not just the visible ones: cards that are hidden right
+  // now (alerts with nothing wrong, a schedule still loading) would otherwise
+  // reappear later in the opposite state to the one that was asked for.
   const s=miniSet();
-  cards.forEach(c=> everyMini ? s.delete(c.id) : s.add(c.id));
+  allCards().forEach(c=> everyMini ? s.delete(c.id) : s.add(c.id));
   miniSave(s); applyMini();
 }
 function initMiniCards(){
@@ -923,6 +933,17 @@ function initMiniCards(){
   });
   const ab=document.getElementById("minAllBtn"); if(ab) ab.onclick=toggleMiniAll;
   applyMini();
+  // Cards can be injected AFTER boot (spotlog.js adds the Spotted card, alert
+  // cards appear with the first alert). Watch for them so a late arrival gets
+  // its chevron and honours the saved/default state instead of standing open.
+  const host=document.querySelector(".cards");
+  if(host && !host._miniObs){
+    host._miniObs=new MutationObserver(muts=>{
+      if(muts.some(m=>[...m.addedNodes].some(n=>n.nodeType===1 && n.classList && n.classList.contains("card"))))
+        initMiniCards();
+    });
+    host._miniObs.observe(host,{childList:true});
+  }
 }
 function updateStats(){
   const air=fleetCount("plane");

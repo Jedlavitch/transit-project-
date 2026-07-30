@@ -7,7 +7,7 @@
 <title>Boston Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="theme.css?v=7" />
 <script src="license.js" defer></script>
 <script src="cityswitch.js"></script>
 <script src="spotlog.js" defer></script>
@@ -922,8 +922,15 @@ function setStatsMin(on){
    Generic on purpose: it walks whatever .cards .card elements exist at boot,
    so any card added later gets a chevron for free. Collapsed ids persist per
    board in the same style as hiddenCards. */
-const MINI_KEY="transitboard.miniCards";
-function miniSet(){ try{ return new Set(JSON.parse(localStorage.getItem(MINI_KEY)||"[]")); }catch(_){ return new Set(); } }
+const MINI_KEY="transitboardboston.miniCards";   // per-board namespace, like every other saved setting
+function miniSet(){
+  const raw=localStorage.getItem(MINI_KEY);
+  // No saved preference = first run: every box starts collapsed, so the board
+  // opens as a compact stack of title bars. A stored "[]" is a real choice
+  // (the user expanded everything) and must NOT fall back to the default.
+  if(raw==null) return new Set(allCards().map(c=>c.id));
+  try{ return new Set(JSON.parse(raw)); }catch(_){ return new Set(); }
+}
 function miniSave(set){ try{ localStorage.setItem(MINI_KEY, JSON.stringify([...set])); }catch(_){} }
 function allCards(){ return [...document.querySelectorAll(".cards .card")].filter(c=>c.id); }
 function applyMini(){
@@ -946,10 +953,13 @@ function applyMini(){
 }
 function toggleMini(id){ const s=miniSet(); s.has(id)?s.delete(id):s.add(id); miniSave(s); applyMini(); }
 function toggleMiniAll(){
-  const cards=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
-  const everyMini=cards.length>0 && cards.every(c=>c.classList.contains("mini"));
+  const vis=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
+  const everyMini=vis.length>0 && vis.every(c=>c.classList.contains("mini"));
+  // act on EVERY card, not just the visible ones: cards that are hidden right
+  // now (alerts with nothing wrong, a schedule still loading) would otherwise
+  // reappear later in the opposite state to the one that was asked for.
   const s=miniSet();
-  cards.forEach(c=> everyMini ? s.delete(c.id) : s.add(c.id));
+  allCards().forEach(c=> everyMini ? s.delete(c.id) : s.add(c.id));
   miniSave(s); applyMini();
 }
 function initMiniCards(){
@@ -962,6 +972,17 @@ function initMiniCards(){
   });
   const ab=document.getElementById("minAllBtn"); if(ab) ab.onclick=toggleMiniAll;
   applyMini();
+  // Cards can be injected AFTER boot (spotlog.js adds the Spotted card, alert
+  // cards appear with the first alert). Watch for them so a late arrival gets
+  // its chevron and honours the saved/default state instead of standing open.
+  const host=document.querySelector(".cards");
+  if(host && !host._miniObs){
+    host._miniObs=new MutationObserver(muts=>{
+      if(muts.some(m=>[...m.addedNodes].some(n=>n.nodeType===1 && n.classList && n.classList.contains("card"))))
+        initMiniCards();
+    });
+    host._miniObs.observe(host,{childList:true});
+  }
 }
 function updateStats(){
   const air=fleetCount("plane");
@@ -1570,6 +1591,26 @@ const SEV = {
   delay:  { rank:1, word:"Delay",  color:"var(--warn)" },
   notice: { rank:2, word:"Notice", color:"var(--accent)" },
 };
+/* Feeds write alerts for a web page, not a kiosk: rambling sentences, repeated
+   "we apologize for the inconvenience" boilerplate, and labels that name every
+   affected stop in both directions. Tidy both so a row is one scannable line
+   of who + one of what. */
+function tidyAlertText(txt){
+  let s=(txt||"").replace(/\s+/g," ").trim();
+  s=s.replace(/^(attention|attn|notice|alert|update|service advisory)[:\s-]+/i,"");
+  s=s.replace(/\s*(we apologize|please (allow|seek|use|expect)|customers (should|may)|allow (extra|additional)|for more info\w*|seek alternate|thank you for your patience)\b[^.]*\.?/ig,"");
+  s=s.replace(/\s+([.,;])/g,"$1").replace(/\s+/g," ").trim();
+  if(s.length>115){
+    const m=s.match(/^(.{40,115}?[.!])(\s|$)/);
+    s = m ? m[1] : s.slice(0,112).replace(/\s+\S*$/,"")+"…";
+  }
+  return s;
+}
+function tidyAlertLabel(lbl){
+  let s=(lbl||"").replace(/\s+/g," ").trim().replace(/[,;]\s*$/,"");
+  if(s.length>32) s=s.slice(0,30).replace(/\s+\S*$/,"")+"…";
+  return s;
+}
 function alertSeverity(text){
   const s=(text||"").toLowerCase();
   if(/suspend|no service|no trains|closed|closure|shuttle bus|bus bridge|evacuat|emergency|police|fire |stranded|major delay|severe/.test(s)) return "major";
@@ -1591,20 +1632,34 @@ function ensureAlertCard(){
   // every row against a box that is briefly ~30px tall. Re-render once the real
   // height lands. Height-gated so our own row edits can't cause a render loop.
   if("ResizeObserver" in window){
-    let lastH=-1;
-    new ResizeObserver(()=>{
-      const box=document.getElementById("alertList"); if(!box) return;
-      const h=Math.round(box.clientHeight);
-      if(h!==lastH){ lastH=h; if(lastAlerts.length) renderTicker(lastAlerts); }
-    }).observe(card);
+    // Debounced TRAILING paint. A height-gated immediate paint isn't enough:
+    // collapsing/expanding a box moves through intermediate heights, and a paint
+    // fitted to one of those sticks (the row count would stay whatever fitted
+    // mid-animation). Painting ~140ms after the last size change means we always
+    // fit the settled height. Idempotent, so extra paints are free.
+    let t=null;
+    new ResizeObserver(()=>{ clearTimeout(t); t=setTimeout(paintAlerts, 140); }).observe(card);
   }
+  // The minimize-boxes system watches for injected cards, but wire this one up
+  // directly too: it can be injected before that observer exists (the first
+  // alert fetch resolves during boot), which would leave it the one card with
+  // no chevron and ignoring the saved collapsed/expanded state.
+  if(typeof initMiniCards==="function") setTimeout(initMiniCards, 0);
   return card;
 }
-let lastAlerts=[];                     // kept so a re-layout can re-render the same set
+let lastAlerts=[], lastRanked=[];      // kept so a re-layout can repaint the same set
 function renderTicker(items){
   if(items) lastAlerts=items;
   const card=ensureAlertCard(); if(!card) return;
-  const ranked=(items||[]).map(i=>({...i, sev:alertSeverity(`${i.txt} ${i.lbl||""}`)}))
+  const seen=new Set();
+  const ranked=(items||[])
+    .map(i=>({ lbl:tidyAlertLabel(i.lbl), txt:tidyAlertText(i.txt),
+               sev:alertSeverity(`${i.txt} ${i.lbl||""}`) }))
+    .filter(i=>{                                   // drop empties + near-duplicates
+      if(!i.txt) return false;
+      const k=i.txt.slice(0,60).toLowerCase();
+      if(seen.has(k)) return false; seen.add(k); return true;
+    })
     .sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank);
   if(!ranked.length){ card.style.display="none"; return; }
   card.style.display="";
@@ -1615,12 +1670,42 @@ function renderTicker(items){
   document.getElementById("alertStat").innerHTML=
     [["major","major"],["delay","delays"],["notice","notices"]]
       .filter(([k])=>n(k)).map(([k,w])=>`<b>${n(k)}</b> ${w}`).join(" · ");
-  const list=document.getElementById("alertList");
-  list.innerHTML=ranked.map(r=>`<div class="alert-row" style="--sev:${SEV[r.sev].color}">
+  lastRanked=ranked;
+  paintAlerts();
+  // Two cards are injected into this grid (alerts + Spotted), so each one's
+  // insertion re-flows the other; a trim that lands mid-reflow measures a
+  // transient height. Painting again next frame fixes that -- and because every
+  // paint rebuilds from the FULL ranked set, an over-trim self-heals instead of
+  // permanently losing rows (fitList only ever removes).
+  requestAnimationFrame(paintAlerts);
+}
+function alertRowHTML(r){
+  return `<div class="alert-row" style="--sev:${SEV[r.sev].color}">
       <div class="sev">${SEV[r.sev].word}</div>
       <div>${r.lbl?`<span class="who">${esc(r.lbl)}</span>`:""}<div class="msg">${esc(r.txt)}</div></div>
-    </div>`).join("");
-  fitList(list);                       // trim to the card, exactly like every other list
+    </div>`;
+}
+/* Deliberately NOT fitList() here. The boards' fitList trims one row at a time,
+   which works for their fixed cards but not for this injected one: the grid is
+   `grid-auto-rows:1fr`, so removing a row shrinks the card, which shrinks this
+   box, which makes fitList remove another -- a feedback loop that cascades all
+   the way to an empty card. Instead: measure ONE row, compute how many fit, and
+   render that many + a "+N more" line. Deterministic, and it can never render
+   zero rows while alerts exist (an empty alerts card is the worst outcome). */
+function paintAlerts(){
+  const list=document.getElementById("alertList");
+  if(!list || !lastRanked.length) return;
+  list.innerHTML=alertRowHTML(lastRanked[0]);
+  const rowH=list.firstElementChild ? list.firstElementChild.getBoundingClientRect().height : 0;
+  const avail=list.clientHeight;
+  let n=1;
+  if(rowH>0 && avail>0){
+    const gap=parseFloat(getComputedStyle(list).rowGap)||0;
+    n=Math.max(1, Math.min(lastRanked.length, Math.floor((avail+gap)/(rowH+gap))));
+  }
+  // No "+N more" footer: the header already reads "N active", so a footer would
+  // restate it AND cost a row's worth of the little height this card gets.
+  list.innerHTML=lastRanked.slice(0,n).map(alertRowHTML).join("");
 }
 async function refreshAlertTicker(){
   try{
