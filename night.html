@@ -231,6 +231,9 @@
     border:none; padding:2px; display:block; flex:1;
     background:linear-gradient(135deg,var(--amber),rgba(58,208,200,.75) 55%,rgba(181,140,255,.65));
     box-shadow:0 8px 40px rgba(60,130,255,.16)}
+  /* cross-fade as the slideshow advances between photos of the same subject */
+  .photo img.ph-in{animation:phIn .8s ease}
+  @keyframes phIn{from{opacity:0; transform:scale(1.03)}to{opacity:1; transform:none}}
   .photo figcaption{margin-top:.4em; text-align:right; flex-shrink:0}
   .photo a{color:var(--muted); font-size:clamp(.7rem,1.6vw,1rem); text-decoration:none}
   #miniMap{flex:1}
@@ -480,17 +483,21 @@ async function lookupRoute(callsign){
 /* ---- aircraft photo (planespotters.net public API, by ADS-B hex) ---- */
 const photoCache = (function(){ try{ return JSON.parse(localStorage.getItem("nightmode.photos")||"{}"); }catch(e){ return {}; } })();
 function savePhotoCache(){ try{ localStorage.setItem("nightmode.photos", JSON.stringify(photoCache)); }catch(e){} }
+/* Returns a LIST of photos of this exact airframe (planespotters often has
+   several) so the view can cycle through them instead of showing one still.
+   Cache key is versioned ("p2:") because older entries hold a single object. */
 async function lookupPhoto(hex){
-  if(!hex) return null;
-  const hit=photoCache[hex];
-  if(hit && Date.now()-hit.t < 864e5) return hit.v;            // cache 24h
-  let v=null;
+  if(!hex) return [];
+  const key="p2:"+hex, hit=photoCache[key];
+  if(hit && Date.now()-hit.t < 864e5) return hit.v||[];        // cache 24h
+  let v=[];
   try{
     const d=await getJSON(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
-    const p=d && d.photos && d.photos[0];
-    if(p) v={ src:(p.thumbnail_large||p.thumbnail||{}).src||"", link:p.link||"", cred:p.photographer||"" };
+    v=(d && d.photos ? d.photos : []).slice(0,6)
+      .map(p=>({ src:(p.thumbnail_large||p.thumbnail||{}).src||"", link:p.link||"", cred:p.photographer||"" }))
+      .filter(p=>p.src);
   }catch(e){}
-  photoCache[hex]={ t:Date.now(), v }; savePhotoCache();
+  photoCache[key]={ t:Date.now(), v }; savePhotoCache();
   return v;
 }
 /* ---- representative train/bus photos (Wikimedia Commons search, CORS-open
@@ -500,24 +507,42 @@ async function lookupPhoto(hex){
    hex -- so it's a representative photo of that line/system, clearly labeled
    as such and cached for a month since the "right" photo for a line doesn't
    change. */
-async function fetchWikiPhoto(query){
+/* Asks for a whole PAGE of candidates (not just the top hit) so buses/trains —
+   which have no per-vehicle photo source — still get a varied slideshow.
+   Commons' image search mixes in maps, logos, timetables and route diagrams,
+   which look wrong on a photo panel, so those are filtered out by file type
+   and title keyword. `index` preserves Commons' own relevance ranking. */
+async function fetchWikiPhoto(query, limit=8){
   try{
-    const url=`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=1&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1600&format=json&origin=*`;
+    const url=`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrnamespace=6&gsrlimit=${limit}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1600&format=json&origin=*`;
     const d=await getJSON(url, 10000);
     const pages=d && d.query && d.query.pages;
-    const page=pages && Object.values(pages)[0];
-    const info=page && page.imageinfo && page.imageinfo[0];
-    if(!info) return null;
-    const artist=(((info.extmetadata||{}).Artist||{}).value||"").replace(/<[^>]+>/g,"").trim();
-    return { src:info.thumburl||info.url, link:info.descriptionurl||"", cred:artist };
-  }catch(e){ return null; }
+    if(!pages) return [];
+    return Object.values(pages)
+      .sort((a,b)=>(a.index||0)-(b.index||0))
+      .map(page=>{
+        const info=page && page.imageinfo && page.imageinfo[0];
+        if(!info) return null;
+        const title=String(page.title||"");
+        if(!/\.(jpe?g|png|webp)$/i.test(title)) return null;                       // no SVG/PDF/video
+        if(/\b(map|diagram|logo|icon|seal|chart|schematic|timetable|sign|ticket)\b/i.test(title)) return null;
+        const artist=(((info.extmetadata||{}).Artist||{}).value||"").replace(/<[^>]+>/g,"").trim();
+        return { src:info.thumburl||info.url, link:info.descriptionurl||"", cred:artist };
+      })
+      .filter(v=>v && v.src);
+  }catch(e){ return []; }
 }
 async function lookupWikiPhoto(query, fallbackQuery){
-  const key="wiki:"+query;
+  const key="wikiN:"+query;                                     // versioned: old entries held ONE photo
   const hit=photoCache[key];
-  if(hit && Date.now()-hit.t < 30*864e5) return hit.v;          // cache 30 days -- these don't change
+  if(hit && Date.now()-hit.t < 30*864e5) return hit.v||[];      // cache 30 days -- these don't change
   let v=await fetchWikiPhoto(query);
-  if(!v && fallbackQuery && fallbackQuery!==query) v=await fetchWikiPhoto(fallbackQuery);
+  // thin result? widen with the fallback query rather than replacing, so a
+  // sparse line ("Ride On bus") still fills out from the broader system search
+  if(v.length<4 && fallbackQuery && fallbackQuery!==query){
+    const seen=new Set(v.map(x=>x.src));
+    (await fetchWikiPhoto(fallbackQuery)).forEach(x=>{ if(!seen.has(x.src)){ seen.add(x.src); v.push(x); } });
+  }
   photoCache[key]={ t:Date.now(), v }; savePhotoCache();
   return v;
 }
@@ -753,21 +778,34 @@ function setSunSky(v){
   updateSunSky();
 }
 
-let photoShownFor=null;
+/* The panel is a slideshow, not a still: whatever photos the subject has cycle
+   every 9 s with a cross-fade, and the credit line tracks the current frame
+   (each photo has its OWN photographer, so the credit must change with it). */
+let photoShownFor=null, photoList=[], photoIdx=0, photoTimer=null, photoRep=false;
 async function updatePhoto(key, representative, fallbackQuery){
   const wrap=$("#photoWrap");
-  if(photoShownFor===key) return;                              // same subject — keep photo
+  if(photoShownFor===key) return;                              // same subject — keep the running slideshow
   const v = representative ? await lookupWikiPhoto(key, fallbackQuery) : await lookupPhoto(key);
-  photoShownFor=key;
-  if(v && v.src){
-    $("#photo").src=v.src;
-    $("#photo").alt = representative ? "Representative photo of this line" : "Photo of this aircraft";
-    const a=$("#photoCredit"); a.href=v.link||"#";
-    a.textContent = representative
-      ? (v.cred?`${v.cred} · Wikimedia Commons`:"Wikimedia Commons")+" (representative photo)"
-      : (v.cred?`photo © ${v.cred} · planespotters.net`:"planespotters.net");
-    wrap.style.display="";
-  } else wrap.style.display="none";
+  photoShownFor=key; photoRep=!!representative; photoIdx=0;
+  photoList=(Array.isArray(v)?v:(v?[v]:[])).filter(x=>x && x.src);
+  clearInterval(photoTimer); photoTimer=null;
+  if(!photoList.length){ wrap.style.display="none"; return; }
+  wrap.style.display="";
+  showPhoto(0);
+  if(photoList.length>1)
+    photoTimer=setInterval(()=>{ photoIdx=(photoIdx+1)%photoList.length; showPhoto(photoIdx); }, 9000);
+}
+function showPhoto(i){
+  const v=photoList[i]; if(!v) return;
+  const img=$("#photo");
+  img.classList.remove("ph-in"); void img.offsetWidth; img.classList.add("ph-in");   // restart the fade
+  img.src=v.src;
+  img.alt = photoRep ? "Representative photo of this line" : "Photo of this aircraft";
+  const a=$("#photoCredit"); a.href=v.link||"#";
+  a.textContent = (photoRep
+    ? (v.cred?`${v.cred} · Wikimedia Commons`:"Wikimedia Commons")+" (representative photo)"
+    : (v.cred?`photo © ${v.cred} · planespotters.net`:"planespotters.net"))
+    + (photoList.length>1?`  ·  ${i+1}/${photoList.length}`:"");
 }
 
 /* ===== subject producers: each returns a normalized subject or null ===== */
