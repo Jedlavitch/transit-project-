@@ -1088,9 +1088,15 @@ function groupDepsByDirection(deps, perDir=2, maxDirs=2){
 }
 /* trim trailing rows so a list fits its card exactly — no clipping, no scrollbar */
 function fitList(box){
-  if(!box || box.clientHeight < 8) return;    // skip only when not laid out yet (height ~0)
+  if(!box || box.clientHeight < 8) return;    // not laid out yet -> trimming would delete everything
+  // Snapshot the height ONCE. Re-reading box.clientHeight inside the loop was a
+  // feedback loop: these cards live in a `grid-auto-rows:1fr` grid, so removing a
+  // row can shrink the card, which shrinks this box, which makes the next pass
+  // remove another -- cascading until the card was empty. That is why boxes with
+  // ~95px of room were rendering ZERO departures.
+  const avail = box.clientHeight;
   let guard=0;
-  while(box.scrollHeight > box.clientHeight + 1 && box.lastElementChild && guard++ < 80){
+  while(box.scrollHeight > avail + 1 && box.lastElementChild && guard++ < 80){
     box.removeChild(box.lastElementChild);
   }
 }

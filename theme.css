@@ -168,3 +168,10 @@ body #app{
   height:calc((100dvh - var(--safe-pad) * 2) / var(--ui-zoom));
   width:calc((100vw - var(--safe-pad) * 2) / var(--ui-zoom));
 }
+
+/* Reclaim vertical space inside a card: the stop + direction labels were using
+   ~45px of a ~95px list on a small screen, leaving no room for the departures
+   they label. Higher specificity than each board's own rule, so one edit covers
+   every board. */
+.list .stop-label{ margin:3px 2px 1px; }
+.list .dir-label{ margin:2px 2px 1px 8px; }
