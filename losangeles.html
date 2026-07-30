@@ -1164,6 +1164,10 @@ async function refreshMlink(){
         line, dest:r.TrainDestination||"", train:r.TrainDesignation||"",
         t:mlDateMs(r.CalcTrainMovementTime||r.TrainMovementTime),
         clock:r.FormattedCalcTrainMovementTime||r.FormattedTrainMovementTime||"",
+        // the feed carries BOTH times: TrainMovementTime is the timetable and
+        // CalcTrainMovementTime the live estimate, so keep the timetable one
+        // and the row can show scheduled and live together
+        schedClk:r.FormattedTrainMovementTime||"",
         status:(r.CalculatedStatus||"").trim(), ev:r.EventType||"" });
     });
     const here=state.loc;
@@ -1186,7 +1190,18 @@ async function refreshMlink(){
         const late=/late|delay/i.test(e.status);
         mid.appendChild(el("div","sub", `${e.ev.toLowerCase()} · train ${e.train}`));
         const times=el("div","times");
-        times.appendChild(el("div","live", e.clock||"—"));
+        // countdown over clock, like every other row: live estimate on top,
+        // the timetable time underneath. A time more than 3 min past is stale
+        // (the train has gone) — show the clock rather than claim "now".
+        const mins = e.t!=null ? Math.round((e.t-Date.now())/60000) : null;
+        if(mins!=null && mins>=-3){
+          const big=el("div","live", countdownText(Math.max(0,mins)));
+          big.classList.add("eta", etaClass(mins));
+          times.appendChild(big);
+          times.appendChild(el("div","sched", e.schedClk ? `sched ${e.schedClk}` : `live · ≈ ${e.clock}`));
+        } else {
+          times.appendChild(el("div","live", e.clock||"—"));
+        }
         const stat=el("div","live-tag"); stat.textContent=e.status||"live";
         stat.style.color = late?"var(--late)":"var(--good)";
         times.append(stat);

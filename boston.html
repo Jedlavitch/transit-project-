@@ -1154,19 +1154,88 @@ function mbtaRoute(fleet, line){
 }
 // One renderer for all three cards: nearest stations with upcoming scheduled
 // departures, grouped by direction (same pattern as MARC/Ride On/SEPTA/PATH).
-async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2, noneMsg}){
+/* Live arrivals from the MBTA v3 API (CORS-open, no key — the same endpoint
+   the vehicle popups already use). Rows are built FROM the predictions rather
+   than matched onto the bundled schedule: MBTA reissues trip ids with every
+   schedule rating, so the bundle's ids (76189500) and the live feed's
+   (77805412) are different id spaces and never join. `include=schedule` hands
+   back each prediction's own timetable time, which is what lets a row show
+   scheduled and live together. Returns [] on any failure so the bundled
+   schedule still renders. */
+async function mbtaPredictions(stopIds, routeTypes){
+  if(!stopIds.length) return [];
+  try{
+    const j=await getJSON(`https://api-v3.mbta.com/predictions?filter[stop]=${encodeURIComponent(stopIds.join(","))}`+
+      `&sort=arrival_time&include=trip,schedule,stop`+
+      (routeTypes?`&filter[route_type]=${routeTypes}`:""), 9000);
+    const inc={}; (j.included||[]).forEach(o=>{ inc[o.type+":"+o.id]=o; });
+    const rel=(p,k)=>p.relationships && p.relationships[k] && p.relationships[k].data;
+    const out=[];
+    (j.data||[]).forEach(p=>{
+      const a=p.attributes||{};
+      const tms=Date.parse(a.arrival_time||a.departure_time||"");
+      if(!isFinite(tms)) return;
+      const trip=inc["trip:"+((rel(p,"trip")||{}).id)];
+      const sch=inc["schedule:"+((rel(p,"schedule")||{}).id)];
+      const sa=sch&&sch.attributes ? Date.parse(sch.attributes.arrival_time||sch.attributes.departure_time||"") : NaN;
+      const stop=inc["stop:"+((rel(p,"stop")||{}).id)];
+      const parent=stop && rel(stop,"parent_station") ? rel(stop,"parent_station").id : ((rel(p,"stop")||{}).id);
+      out.push({ station:parent, route:((rel(p,"route")||{}).id)||"",
+        hs:(trip&&trip.attributes&&trip.attributes.headsign)||"", tms,
+        sms:isFinite(sa)?sa:null, status:(a.status||"").trim() });
+    });
+    return out;
+  }catch(e){ return []; }
+}
+async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2, noneMsg, routeTypes}){
   const s=await ensure(); const box=$(list); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=activeServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  // pick the stations first, so their live predictions can be fetched in one go
+  const chosen=[];
   for(const {st,mi} of near){
-    if(used>=stations) break;
+    if(chosen.length>=stations) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
-    if(!deps.length) continue;
-    used++;
+    if(deps.length) chosen.push({st, mi, deps});
+  }
+  const pred=await mbtaPredictions(chosen.map(c=>c.st.id), routeTypes);
+  const predByStation={};
+  pred.forEach(p=>{ (predByStation[p.station]=predByStation[p.station]||[]).push(p); });
+  box.innerHTML=""; let shown=0, anyLive=false;
+  for(const {st,mi,deps} of chosen){
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    // live first: real predictions for this station, grouped by direction
+    const lp=(predByStation[st.id]||[]).filter(p=>p.tms>Date.now()-90000).sort((a,b)=>a.tms-b.tms);
+    if(lp.length){
+      anyLive=true;
+      const byDir={}; lp.forEach(p=>{ (byDir[p.hs||p.route]=byDir[p.hs||p.route]||[]).push(p); });
+      Object.keys(byDir).slice(0,2).forEach(dir=>{
+        box.appendChild(el("div","dir-label","→ "+dir));
+        byDir[dir].slice(0,2).forEach(p=>{
+          const row=el("div","row");
+          const line=p.route;
+          const cls = badgeCls ? badgeCls(line) : "badge rail";
+          const b=el("div",cls, line); b.style.background=color(line);
+          const mid=el("div"); mid.appendChild(el("div","dest", p.hs||line));
+          const mins=Math.round((p.tms-Date.now())/60000);
+          const lateMin = p.sms!=null ? Math.round((p.tms-p.sms)/60000) : null;
+          mid.appendChild(el("div","sub", line+(p.status?" · "+p.status.toLowerCase():"")
+            +(isRealLate(lateMin)?` · ${lateMin} min late`:"")));
+          const times=el("div","times");
+          const big=el("div","live", countdownText(Math.max(0,mins)));
+          big.classList.add("eta", etaClass(mins));
+          const clk=ms=>new Date(ms).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+          times.append(big, el("div","sched", p.sms!=null ? "sched "+clk(p.sms) : "live · ≈ "+clk(p.tms)));
+          const tag=el("div","live-tag"); tag.textContent="live"; tag.style.color="var(--good)";
+          times.appendChild(tag);
+          row.append(b, mid, el("div"), times);
+          box.appendChild(row); shown++;
+        });
+      });
+      continue;                       // this station is covered by live data
+    }
     groupDepsByDirection(deps, 2, 2, list, nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||group[0].line)));
       group.forEach(d=>{
@@ -1178,7 +1247,20 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
         mid.appendChild(el("div","sub", d.line+" · "+(rel<=0?"now":rel<60?`in ${rel} min`:`in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`)));
         const times=el("div","times");
         const t=el("div","live"); t.style.color=color(d.line); t.textContent=schedClock(d.t);
-        times.append(t, dualTime(t, rel));
+        // a live prediction for this exact trip beats the timetable countdown;
+        // the scheduled clock stays underneath either way
+        const liveMs = d.id ? pred[d.id] : null;
+        const liveMin = liveMs!=null ? Math.round((liveMs-Date.now())/60000) : null;
+        if(liveMin!=null && liveMin>=-3){
+          t.textContent=countdownText(Math.max(0,liveMin));
+          t.classList.add("eta", etaClass(liveMin));
+          t.style.color="";
+          times.append(t, el("div","sched","sched "+schedClock(d.t)));
+          const tag=el("div","live-tag"); tag.textContent="live"; tag.style.color="var(--good)";
+          times.appendChild(tag); anyLive=true;
+        } else {
+          times.append(t, dualTime(t, rel));
+        }
         row.append(b, mid, el("div"), times);
         // follow-from-box: click a departure to follow that train on the map,
         // if it's currently live (matched to a moving vehicle by trip_id).
@@ -1193,16 +1275,16 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
     });
   }
   if(!shown) box.appendChild(el("div","empty",noneMsg||"No more departures today at nearby stations."));
-  const c=$(count); if(c && !c.dataset.live) c.textContent="scheduled";
+  const c=$(count); if(c && !c.dataset.live) c.textContent = anyLive ? "live" : "scheduled";
   fitList(box);
 }
 const refreshSubway=()=>refreshMbtaCard({ ensure:ensureSubwaySchedule, list:"#subwayList", count:"#subwayCount",
-  color:l=>MBTA_COL[l]||"#888", stations:3, noneMsg:"No more T trains today at nearby stations." });
+  color:l=>MBTA_COL[l]||"#888", stations:3, routeTypes:"0,1", noneMsg:"No more T trains today at nearby stations." });
 const refreshCr=()=>refreshMbtaCard({ ensure:ensureCrSchedule, list:"#crList", count:"#crCount",
-  color:()=>CR_COL, stations:2, noneMsg:"No more commuter rail trains today at nearby stations." });
+  color:()=>CR_COL, stations:2, routeTypes:"2", noneMsg:"No more commuter rail trains today at nearby stations." });
 const refreshBus=()=>refreshMbtaCard({ ensure:ensureBusSchedule, list:"#busList", count:"#busCount",
   color:busColor, badgeCls:l=>l.startsWith("SL")?"badge rail":"badge",   // dark text on Rt 1's yellow
-  stations:2, noneMsg:"No more SL / Route 1 buses today at nearby stops." });
+  stations:2, routeTypes:"3", noneMsg:"No more SL / Route 1 buses today at nearby stops." });
 // Live positions: one JSON:API call for every MBTA route, split into fleets.
 async function fetchMbtaLive(){
   let j;
