@@ -929,7 +929,12 @@ function railMinCell(min){
   if(min==="BRD"){ v.textContent="BRD"; v.className="live brd"; }
   else if(min==="ARR"){ v.textContent="ARR"; v.className="live arr"; }
   else if(min===""||min==="---"||min==null){ v.textContent="—"; v.style.color="var(--muted)"; }
-  else { v.textContent=min; const u=el("div","sched"); u.innerHTML=`min · <b>live</b>`; wrap.append(v,u); return wrap; }
+  else { const n=parseInt(min,10);
+    if(isFinite(n)){ v.textContent=countdownText(n); v.classList.add("eta", etaClass(n)); }
+    else v.textContent=min;
+    const u=el("div","sched");
+    u.innerHTML = isFinite(n) ? `live · <b>≈ ${etaClock(n)}</b>` : `min · <b>live</b>`;
+    wrap.append(v,u); return wrap; }
   wrap.append(v); return wrap;
 }
 function renderRail(trains){
@@ -1042,7 +1047,8 @@ async function fetchBus(){
         const schedT=schedByRoute[p.RouteID];
         mid.appendChild(el("div","sub", schedT?`sched ${schedT}`:""));
         const times=el("div","times");
-        const live=el("div","live", p.Minutes<=0?"now":p.Minutes); times.append(live, el("div","sched","min · live"));
+        const live=el("div","live", countdownText(p.Minutes)); live.classList.add("eta", etaClass(p.Minutes));
+        times.append(live, el("div","sched","live · ≈ "+etaClock(p.Minutes)));
         row.append(b, mid, el("div"), times);
         box.appendChild(row);
       });
@@ -1252,6 +1258,22 @@ async function fetchBusPositions(){
 }
 
 /* ---------- AMTRAK (regional / intercity rail) ---------- */
+/* ---- unified time helpers: every departure row reads countdown-over-clock ----
+   Live feeds give a countdown but no wall time; timetables give a wall time but
+   no countdown. These derive whichever half is missing so both always show.
+   A derived arrival is marked "≈" — it moves with the live prediction and is
+   not a published time. */
+function countdownText(min){
+  return min<=0 ? "now" : min<60 ? `in ${min} min`
+    : `in ${Math.floor(min/60)}h ${String(min%60).padStart(2,"0")}m`;
+}
+function etaClass(min){ return min<=0?"due":min<=5?"soon":"later"; }
+function etaClock(min){
+  return new Date(Date.now()+Math.max(0,min)*60000)
+    .toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+function minsUntil(x){ const d=(x instanceof Date)?x:new Date(x);
+  return isNaN(d) ? null : Math.round((d-Date.now())/60000); }
 function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
 async function ensureAmtrakStations(){
@@ -1321,7 +1343,12 @@ function renderAmtrak(list){
       `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
     const times=el("div","times");
     if(ns){
-      times.appendChild(el("div","live", fmtTime(ns.arr||ns.dep)||"—"));
+      const am=minsUntil(ns.arr||ns.dep);
+      // a next-stop time well in the past means it just called there — show the
+      // clock rather than a misleading "now"
+      const lv=el("div","live", (am==null||am<-2)?(fmtTime(ns.arr||ns.dep)||"—"):countdownText(am));
+      if(am!=null && am>=-2) lv.classList.add("eta", etaClass(am));
+      times.appendChild(lv);
       const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
     } else { times.appendChild(el("div","sched", t.trainState||"")); }
     row.append(b, mid, el("div"), times);

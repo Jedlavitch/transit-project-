@@ -1215,6 +1215,22 @@ function drawPlanes(ac){
 }
 
 /* ---------- AMTRAK (works anywhere in the US, no key) ---------- */
+/* ---- unified time helpers: every departure row reads countdown-over-clock ----
+   Live feeds give a countdown but no wall time; timetables give a wall time but
+   no countdown. These derive whichever half is missing so both always show.
+   A derived arrival is marked "≈" — it moves with the live prediction and is
+   not a published time. */
+function countdownText(min){
+  return min<=0 ? "now" : min<60 ? `in ${min} min`
+    : `in ${Math.floor(min/60)}h ${String(min%60).padStart(2,"0")}m`;
+}
+function etaClass(min){ return min<=0?"due":min<=5?"soon":"later"; }
+function etaClock(min){
+  return new Date(Date.now()+Math.max(0,min)*60000)
+    .toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+function minsUntil(x){ const d=(x instanceof Date)?x:new Date(x);
+  return isNaN(d) ? null : Math.round((d-Date.now())/60000); }
 function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
 async function ensureAmtrakStations(){
@@ -1282,7 +1298,12 @@ function renderAmtrak(list){
       `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
     const times=el("div","times");
     if(ns){
-      times.appendChild(el("div","live", fmtTime(ns.arr||ns.dep)||"—"));
+      const am=minsUntil(ns.arr||ns.dep);
+      // a next-stop time well in the past means it just called there — show the
+      // clock rather than a misleading "now"
+      const lv=el("div","live", (am==null||am<-2)?(fmtTime(ns.arr||ns.dep)||"—"):countdownText(am));
+      if(am!=null && am>=-2) lv.classList.add("eta", etaClass(am));
+      times.appendChild(lv);
       const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
     } else { times.appendChild(el("div","sched", t.trainState||"")); }
     row.append(b, mid, el("div"), times);
