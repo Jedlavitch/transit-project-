@@ -392,6 +392,19 @@ const CITY_CONFIG = {
     lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"MARC", localBusSystem:"Ride On", busPhotoQuery:"Ride On bus Montgomery County Maryland",
     cityLabel:"Washington DC" },
+  // New Jersey: no live NJT Worker is wired yet (njt-worker.js is ready but needs
+  // the user's BusTime key), so buses come from the bundled trunk-route schedule
+  // and "nearest train" is Amtrak -- which runs the NEC through NJ constantly, so
+  // it always finds a real train near Newark. lsBusUrl stays null on purpose:
+  // njt-worker.js speaks its own /vehicles shape, NOT SEPTA's transitview shape
+  // that produceLiveBus() expects, so pointing this at it would fetch the wrong API.
+  nj: { defaultLoc:{ lat:40.7346, lon:-74.1643, label:"Newark Penn Station, NJ" },
+    lsLoc:"transitboardnj.loc", lsManual:"transitboardnj.locManual", board:"newjersey.html",
+    busSchedule:"njt-state-bus-schedule.json", busTag:"🚌 Nearest NJ Transit bus",
+    busRange:"NJ Transit bus (bundled trunk routes)",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
+    localRailSystem:"NJ Transit", localBusSystem:"NJ Transit",
+    busPhotoQuery:"NJ Transit bus New Jersey", cityLabel:"New Jersey" },
   philly: { defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
     lsLoc:"transitboardphl.loc", lsManual:"transitboardphl.locManual", board:"philadelphia.html",
     busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16",

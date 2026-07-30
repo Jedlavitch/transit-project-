@@ -191,6 +191,11 @@ const CITY_CONFIG = {
     lsLoc:"transitboard.loc", board:"index.html", cityLabel:"Washington DC",
     lsWmataKey:"transitboard.wmataKey", lsHidden:"transitboard.hiddenCards",
   },
+  nj: {
+    defaultLoc:{ lat:40.7346, lon:-74.1643, label:"Newark Penn Station, NJ" },
+    lsLoc:"transitboardnj.loc", board:"newjersey.html", cityLabel:"New Jersey",
+    lsWmataKey:null, lsHidden:"transitboardnj.hiddenCards",
+  },
   philly: {
     defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
     lsLoc:"transitboardphl.loc", board:"philadelphia.html", cityLabel:"Philadelphia",
@@ -539,6 +544,13 @@ const SYSTEM_DEFS_BY_CITY = {
     {id:"amsintl", logo:"INT'L", label:"International", collect:()=>collectScheduleRows({url:"ams-intl-schedule.json", stationCount:2, perStation:2,
       colorFn:l=>({EST:"#1D4E9E",ICE:"#C8141C",NJ:"#4B3F94",EC:"#7A4FA3",ECD:"#7A4FA3",ICD:"#E6007E",ES:"#175C54",GV:"#E8B10F"}[l]||"#D23A4E")})},
     {id:"amsferry", logo:"PONT", label:"IJ ferries", collect:()=>collectScheduleRows({url:"ams-ferry-schedule.json", stationCount:2, perStation:2, color:"#00A5A0"})},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  nj: [
+    {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
+    {id:"njtrail", logo:"NJ TRANSIT", label:"NJ Transit Rail", collect:()=>collectScheduleRows({url:"njt-state-rail-schedule.json", stationCount:3, perStation:2,
+      colorFn:l=>({ATLC:"#00a6e2",RVLN:"#005daa",NEC:"#ef3e42",NJCL:"#009aa6",NJCLL:"#009aa6",MNE:"#16b14b",MNEG:"#a2c037",MNBN:"#ffc72c",MNBNP:"#a05eb5",BNTN:"#e87200",BNTNM:"#e87200",PASC:"#7c2e86",RARV:"#f0ab00",HBLR:"#0086c7",NLR:"#e31837",MRL:"#8a8d8f",PRIN:"#9b9b9b"}[l]||"#f0ab00")})},
+    {id:"njtbus", logo:"NJT BUS", label:"NJ Transit Bus", collect:()=>collectScheduleRows({url:"njt-state-bus-schedule.json", stationCount:2, perStation:2, color:"#00a1de"})},
     {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
   ],
   la: [
