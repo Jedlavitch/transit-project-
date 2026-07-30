@@ -315,7 +315,7 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
   <header>
     <div class="title">🗽 <span class="t-grad">New York Live Transit</span> <small id="loclabel">locating…</small></div>
     <nav class="city-picker">
-      <select aria-label="Switch city" title="Switch city"
+      <select aria-label="Switch city" title="Switch city" autocomplete="off"
         onchange="switchCity(this.value)">
         <option value="index.html">Washington DC</option>
         <option value="philadelphia.html">Philadelphia</option>
@@ -369,6 +369,7 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
         <span style="color:#A72650">▦ Metro-North</span>
         <span style="color:#6E6E6E">▦ MTA Bus</span>
         <span style="color:#00A9E0">▦ PATH</span>
+        <span style="color:#f0ab00">▦ NJ Transit</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
         <span style="opacity:.7">┈ subway lines (real colors)</span>
         <span style="opacity:.7">vehicles move live · zoom in for labels</span>
@@ -406,6 +407,11 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
           <h2><span class="icon">🚄</span> <span class="t">Amtrak — regional rail</span> <span class="count" id="amtrakCount"></span></h2>
           <div class="statline" id="amtrakStat"></div>
           <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
+        </div>
+        <div class="card" id="njtCard" style="--sys:#f0ab00; --sys2:#ffd166">
+          <h2><span class="icon">🚆</span> <span class="t">NJ Transit — rail &amp; light rail</span> <span class="count" id="njtCount"></span></h2>
+          <div class="statline" id="njtStat"></div>
+          <div class="list" id="njtList"><div class="empty">Loading NJ Transit schedule…</div></div>
         </div>
         <div class="card" id="planeCard" style="--sys:var(--plane); --sys2:#ff9d5c">
           <h2><span class="icon">✈️</span> <span class="t">Planes overhead</span> <span class="count" id="planeCount"></span></h2>
@@ -574,7 +580,7 @@ function refreshEverythingForNewLocation(){
   drawRangeRings();
   fetchAmtrak(); refreshPlanes(); refreshSubway(); refreshLirr(); refreshMnr();
   refreshBusScheduled(); busMapTick();
-  refreshPathScheduled(); drawPathScheduledMap();
+  refreshPathScheduled(); drawPathScheduledMap(); refreshNjt(); drawNjtScheduledMap();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
@@ -641,6 +647,8 @@ function initMap(){
   state.busRouteLayer = L.layerGroup().addTo(state.map);  // MTA Bus route lines
   state.busLayer    = L.layerGroup().addTo(state.map);
   state.pathRouteLayer = L.layerGroup().addTo(state.map); // PATH route line
+  state.njtLayer = L.layerGroup().addTo(state.map);       // NJ Transit trains (scheduled)
+  state.njtRouteLayer = L.layerGroup().addTo(state.map);  // NJ Transit line routes
   state.pathLayer   = L.layerGroup().addTo(state.map);
   state.planeLayer  = L.layerGroup().addTo(state.map);
   const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
@@ -707,9 +715,9 @@ function planeIcon(track, label){
 /* ---------- animated vehicle markers (smooth "live" movement) ----------
    Markers persist by id and glide from their last position to each new
    fix over `dur` ms, so trains/planes visibly move between updates. */
-state.fleets = { amtrak:{}, plane:{}, subway:{}, lirr:{}, mnr:{}, bus:{}, path:{} };
+state.fleets = { amtrak:{}, plane:{}, subway:{}, lirr:{}, mnr:{}, bus:{}, path:{}, njt:{} };
 function fleetLayer(f){
-  return { amtrak:state.trainLayer, plane:state.planeLayer, subway:state.subwayLayer,
+  return { amtrak:state.trainLayer, njt:state.njtLayer, plane:state.planeLayer, subway:state.subwayLayer,
            lirr:state.lirrLayer, mnr:state.mnrLayer, bus:state.busLayer, path:state.pathLayer }[f];
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
@@ -2051,11 +2059,111 @@ function buildRowsButtons(){
   document.querySelectorAll("#rowsRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardRows(b.dataset.rows); });
 }
 
+/* ---------- NJ TRANSIT (bundled GTFS, zero setup) ----------------------------
+   NJT's live feeds sit behind a registered developer account, but its static
+   GTFS zip is public, so this works the same way MARC/SEPTA/PATCO/PATH do: a
+   bundled timetable, positions interpolated between the two stops each trip's
+   schedule puts it between right now. See gen-njt-schedule.py. Line codes are
+   NJT's own GTFS route_short_names. */
+const NJT_NAME = { ATLC:"Atlantic City Line", RVLN:"River LINE", NEC:"Northeast Corridor",
+  NJCL:"North Jersey Coast", NJCLL:"North Jersey Coast", MNE:"Morris & Essex",
+  MNEG:"Gladstone Branch", MNBN:"Main/Bergen", MNBNP:"Port Jervis Line",
+  BNTN:"Montclair-Boonton", BNTNM:"Montclair-Boonton", PASC:"Pascack Valley",
+  RARV:"Raritan Valley", HBLR:"Hudson-Bergen Light Rail", NLR:"Newark Light Rail",
+  MRL:"Meadowlands Rail" };
+const NJT_COL = { ATLC:"#00a6e2", RVLN:"#005daa", NEC:"#ef3e42", NJCL:"#009aa6", NJCLL:"#009aa6",
+  MNE:"#16b14b", MNEG:"#a2c037", MNBN:"#ffc72c", MNBNP:"#a05eb5", BNTN:"#e87200",
+  BNTNM:"#e87200", PASC:"#7c2e86", RARV:"#f0ab00", HBLR:"#0086c7", NLR:"#e31837",
+  MRL:"#8a8d8f" };
+const njtName = l => NJT_NAME[l] || l || "NJ Transit";
+const njtCol  = l => NJT_COL[l] || "#f0ab00";
+async function ensureNjtSchedule(){
+  if(state.njtSched) return state.njtSched;
+  try{
+    const s=await getJSON("njt-nyc-schedule.json", 20000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._dep={};
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    state.njtSched=s;
+    drawScheduleRouteLines(s, state.njtRouteLayer, tr=>njtCol(tr.line));
+  }catch(e){}
+  return state.njtSched;
+}
+// NJT writes station names in ALL CAPS ("NEW YORK PENN STATION"); title-case them
+// so they sit alongside every other agency's names instead of shouting.
+function njtStation(n){
+  return (n||"").toLowerCase().replace(/\b[a-z]/g, c=>c.toUpperCase())
+    .replace(/\bSt\.?\b/g,"St").replace(/\bHblr\b/g,"HBLR").replace(/\bNy\b/g,"NY").replace(/\bNj\b/g,"NJ");
+}
+async function refreshNjt(){
+  const s=await ensureNjtSchedule(); const box=$("#njtList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","NJ Transit schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(mi>25) break;
+    if(used>=4) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
+      .filter(d=>d.min>=nowMin);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+njtStation(st.name)+`  ·  ${mi.toFixed(1)} mi`));
+    groupDepsByDirection(deps, 2, 2, "njt", nowMin).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(njtStation(group[0].hs)||njtName(group[0].line))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail", d.line.slice(0,4)); b.style.background=njtCol(d.line);
+        const mid=el("div");
+        mid.appendChild(el("div","dest", njtStation(d.hs)||njtName(d.line)));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", njtName(d.line)+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color=njtCol(d.line); t.textContent=busClock(d.t);
+        times.append(t, dualTime(t, rel));
+        row.append(b, mid, el("div"), times);
+        row.classList.add("followable"); row.title="Follow this train on the map";
+        row.onclick=()=>{ const fid="nj"+d.ti;
+          if(state.fleets.njt && state.fleets.njt[fid]) startFollow("njt", fid);
+          else row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450}); };
+        box.appendChild(row); shown++;
+      });
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No NJ Transit nearby (or none scheduled soon)."));
+  $("#njtCount").textContent="scheduled";
+  fitList(box);
+}
+async function drawNjtScheduledMap(){
+  const s=await ensureNjtSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      const lbl=`${tr.line} → ${njtStation(tr.hs)}`;
+      items.push({ id:"nj"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(njtCol(tr.line), lbl), ik:"nj-"+i,
+        tip:`NJ Transit ${njtName(tr.line)} → ${njtStation(tr.hs)} (scheduled)`,
+        color:njtCol(tr.line), label:`NJT ${lbl}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
+      break;
+    }
+  });
+  updateFleet("njt", items, CFG.pathEveryMs);
+}
+
 /* ---------- customize: which cards show on the board ---------- */
 const CARD_DEFS=[
   {id:"subwayCard", label:"Subway"}, {id:"lirrCard", label:"LIRR"}, {id:"mnrCard", label:"Metro-North"},
   {id:"busCard", label:"MTA Bus"}, {id:"pathCard", label:"PATH"},
-  {id:"amtrakCard", label:"Amtrak"}, {id:"planeCard", label:"Planes"},
+  {id:"amtrakCard", label:"Amtrak"}, {id:"njtCard", label:"NJ Transit"}, {id:"planeCard", label:"Planes"},
 ];
 // Which map layer(s) each card's "show on board" toggle also controls -- hiding
 // a card means turning off that whole system, not just its departure-list card.
@@ -2065,6 +2173,7 @@ const CARD_LAYERS={
   mnrCard:    ["mnrLayer","mnrRouteLayer"],
   busCard:    ["busLayer","busRouteLayer"],
   pathCard:   ["pathLayer","pathRouteLayer"],
+  njtCard:    ["njtLayer","njtRouteLayer"],
   amtrakCard: ["trainLayer","amtrakRouteLayer"],
   planeCard:  ["planeLayer"],
 };
@@ -2274,6 +2383,8 @@ function boot(){
   setInterval(busMapTick, CFG.busEveryMs);   // MTA Bus positions on the map (scheduled, or live via Worker)
   setInterval(refreshPathScheduled, 30000);  // PATH departures card (scheduled, or live via Worker)
   setInterval(drawPathScheduledMap, CFG.pathEveryMs); // PATH positions on the map (always scheduled)
+  setInterval(refreshNjt, 30000);                 // next scheduled NJ Transit (card)
+  setInterval(drawNjtScheduledMap, CFG.pathEveryMs); // NJ Transit positions on the map (scheduled)
   refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 
   // re-fit cards to the new layout when the window/display changes size

@@ -319,7 +319,7 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
   <header>
     <div class="title">🔔 <span class="t-grad">Philadelphia Live Transit</span> <small id="loclabel">locating…</small></div>
     <nav class="city-picker">
-      <select aria-label="Switch city" title="Switch city"
+      <select aria-label="Switch city" title="Switch city" autocomplete="off"
         onchange="switchCity(this.value)">
         <option value="index.html">Washington DC</option>
         <option value="philadelphia.html" selected>Philadelphia</option>
@@ -372,6 +372,7 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
         <span><span style="color:#1c6bb0">▦</span> SEPTA MFL <span style="color:#f7941d">▦</span> BSL</span>
         <span style="color:#e8a33c">▦ SEPTA bus</span>
         <span style="color:#BC0035">▦ PATCO</span>
+        <span style="color:#f0ab00">▦ NJ Transit</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
         <span style="color:#4F758B">━ SEPTA rail lines</span>
         <span><span style="color:#1c6bb0">━</span> MFL <span style="color:#f7941d">━</span> BSL</span>
@@ -407,6 +408,11 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
           <h2><span class="icon">🚆</span> <span class="t">PATCO</span> <span class="count" id="patcoCount"></span></h2>
           <div class="statline" id="patcoStat"></div>
           <div class="list" id="patcoList"><div class="empty">Loading PATCO schedule…</div></div>
+        </div>
+        <div class="card" id="njtCard" style="--sys:#f0ab00; --sys2:#ffd166; display:none">
+          <h2><span class="icon">🚆</span> <span class="t">NJ Transit — Atlantic City &amp; River LINE</span> <span class="count" id="njtCount"></span></h2>
+          <div class="statline" id="njtStat"></div>
+          <div class="list" id="njtList"><div class="empty">Loading NJ Transit schedule…</div></div>
         </div>
         <div class="card" id="planeCard" style="--sys:var(--plane); --sys2:#ff9d5c">
           <h2><span class="icon">✈️</span> <span class="t">Planes overhead</span> <span class="count" id="planeCount"></span></h2>
@@ -585,7 +591,7 @@ function applyLoc(loc){
 function refreshEverythingForNewLocation(){
   drawRangeRings();
   fetchAmtrak(); refreshSeptaRail(); refreshSeptaSubway(); refreshSeptaBusScheduled(); septaMapTick();
-  refreshPatco(); drawPatcoScheduledMap(); refreshPlanes();
+  refreshPatco(); drawPatcoScheduledMap(); refreshNjt(); drawNjtScheduledMap(); refreshPlanes();
 }
 function requestGeo(){
   if(!navigator.geolocation) return;
@@ -653,6 +659,8 @@ function initMap(){
   state.septaRailLayer = L.layerGroup().addTo(state.map);
   state.septaSubwayLayer = L.layerGroup().addTo(state.map);
   state.patcoLayer = L.layerGroup().addTo(state.map);
+  state.njtLayer = L.layerGroup().addTo(state.map);       // NJ Transit trains (scheduled)
+  state.njtRouteLayer = L.layerGroup().addTo(state.map);  // NJ Transit line routes
   state.patcoRouteLayer = L.layerGroup().addTo(state.map);   // PATCO high-speed line route
   state.septaBusLayer  = L.layerGroup().addTo(state.map);
   state.trainLayer  = L.layerGroup().addTo(state.map);
@@ -733,11 +741,11 @@ function planeIcon(track, label){
 /* ---------- animated vehicle markers (smooth "live" movement) ----------
    Markers persist by id and glide from their last position to each new
    fix over `dur` ms, so trains/buses/planes visibly move between updates. */
-state.fleets = { bus:{}, marc:{}, rideon:{}, septaRail:{}, septaSubway:{}, septaBus:{}, patco:{}, amtrak:{}, metro:{}, plane:{} };
+state.fleets = { bus:{}, marc:{}, rideon:{}, septaRail:{}, septaSubway:{}, septaBus:{}, patco:{}, amtrak:{}, metro:{}, plane:{}, njt:{} };
 function fleetLayer(f){
   return { bus:state.busVehLayer, marc:state.marcLayer, rideon:state.rideonLayer,
            septaRail:state.septaRailLayer, septaSubway:state.septaSubwayLayer, septaBus:state.septaBusLayer,
-           patco:state.patcoLayer, amtrak:state.trainLayer, metro:state.metroLayer, plane:state.planeLayer }[f];
+           patco:state.patcoLayer, amtrak:state.trainLayer, metro:state.metroLayer, njt:state.njtLayer, plane:state.planeLayer }[f];
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
 function updateFleet(fleet, items, dur){
@@ -2091,9 +2099,107 @@ async function drawPatcoScheduledMap(){
   updateFleet("patco", items, CFG.septaEveryMs);
 }
 
+/* ---------- NJ TRANSIT (bundled GTFS, zero setup) ----------------------------
+   NJT's live feeds sit behind a registered developer account, but its static
+   GTFS zip is public, so this works the same way MARC/SEPTA/PATCO/PATH do: a
+   bundled timetable, positions interpolated between the two stops each trip's
+   schedule puts it between right now. See gen-njt-schedule.py. Line codes are
+   NJT's own GTFS route_short_names. */
+const NJT_NAME = { ATLC:"Atlantic City Line", RVLN:"River LINE", NEC:"Northeast Corridor",
+  NJCL:"North Jersey Coast", NJCLL:"North Jersey Coast", MNE:"Morris & Essex",
+  MNEG:"Gladstone Branch", MNBN:"Main/Bergen", MNBNP:"Port Jervis Line",
+  BNTN:"Montclair-Boonton", BNTNM:"Montclair-Boonton", PASC:"Pascack Valley",
+  RARV:"Raritan Valley", HBLR:"Hudson-Bergen Light Rail", NLR:"Newark Light Rail",
+  MRL:"Meadowlands Rail" };
+const NJT_COL = { ATLC:"#00a6e2", RVLN:"#005daa", NEC:"#ef3e42", NJCL:"#009aa6", NJCLL:"#009aa6",
+  MNE:"#16b14b", MNEG:"#a2c037", MNBN:"#ffc72c", MNBNP:"#a05eb5", BNTN:"#e87200",
+  BNTNM:"#e87200", PASC:"#7c2e86", RARV:"#f0ab00", HBLR:"#0086c7", NLR:"#e31837",
+  MRL:"#8a8d8f" };
+const njtName = l => NJT_NAME[l] || l || "NJ Transit";
+const njtCol  = l => NJT_COL[l] || "#f0ab00";
+async function ensureNjtSchedule(){
+  if(state.njtSched) return state.njtSched;
+  try{
+    const s=await getJSON("njt-phl-schedule.json", 20000);
+    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._dep={};
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    state.njtSched=s;
+    drawScheduleRouteLines(s, state.njtRouteLayer, tr=>njtCol(tr.line));
+  }catch(e){}
+  return state.njtSched;
+}
+// NJT writes station names in ALL CAPS ("NEW YORK PENN STATION"); title-case them
+// so they sit alongside every other agency's names instead of shouting.
+function njtStation(n){
+  return (n||"").toLowerCase().replace(/\b[a-z]/g, c=>c.toUpperCase())
+    .replace(/\bSt\.?\b/g,"St").replace(/\bHblr\b/g,"HBLR").replace(/\bNy\b/g,"NY").replace(/\bNj\b/g,"NJ");
+}
+async function refreshNjt(){
+  const s=await ensureNjtSchedule(); const box=$("#njtList"); if(!box) return;
+  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","NJ Transit schedule unavailable.")); return; }
+  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const active=marcActiveServices(s, now);
+  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  box.innerHTML=""; let shown=0, used=0;
+  for(const {st,mi} of near){
+    if(mi>20) break;
+    if(used>=4) break;
+    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
+      .filter(d=>d.min>=nowMin);
+    if(!deps.length) continue;
+    used++;
+    box.appendChild(el("div","stop-label","◼ "+njtStation(st.name)+`  ·  ${mi.toFixed(1)} mi`));
+    groupDepsByDirection(deps, 2, 2, "njt", nowMin).forEach(group=>{
+      box.appendChild(el("div","dir-label","→ "+(njtStation(group[0].hs)||njtName(group[0].line))));
+      group.forEach(d=>{
+        const row=el("div","row");
+        const b=el("div","badge rail", d.line.slice(0,4)); b.style.background=njtCol(d.line);
+        const mid=el("div");
+        mid.appendChild(el("div","dest", njtStation(d.hs)||njtName(d.line)));
+        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+        mid.appendChild(el("div","sub", njtName(d.line)+" · "+relTxt));
+        const times=el("div","times");
+        const t=el("div","live"); t.style.color=njtCol(d.line); t.textContent=marcClock(d.t);
+        times.append(t, dualTime(t, rel));
+        row.append(b, mid, el("div"), times);
+        wireFollowRow(row, "njt", "nj", d);
+        box.appendChild(row); shown++;
+      });
+    });
+  }
+  if(!shown) box.appendChild(el("div","empty","No NJ Transit nearby (or none scheduled soon)."));
+  $("#njtCount").textContent="scheduled";
+  fitList(box);
+}
+async function drawNjtScheduledMap(){
+  const s=await ensureNjtSchedule(); if(!s || !s.trips) return;
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
+  const items=[];
+  s.trips.forEach((tr,i)=>{
+    if(!active.has(tr.s)) return;
+    const seq=tr.st; if(seq.length<2) return;
+    for(const nm of [nowMin, nowMin+1440]){
+      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
+      const lbl=`${tr.line} → ${njtStation(tr.hs)}`;
+      items.push({ id:"nj"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
+        icon:()=>labelIcon(njtCol(tr.line), lbl), ik:"nj-"+i,
+        tip:`NJ Transit ${njtName(tr.line)} → ${njtStation(tr.hs)} (scheduled)`,
+        color:njtCol(tr.line), label:`NJT ${lbl}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
+      break;
+    }
+  });
+  updateFleet("njt", items, CFG.septaEveryMs);
+}
+
 /* show/hide the optional cards based on whether their source is configured */
 function applyOptionalCards(){
   document.getElementById("septaRailCard").style.display = "flex"; // bundled schedule — zero setup
+  document.getElementById("njtCard").style.display = "flex";   // bundled GTFS — zero setup
   document.getElementById("septaSubwayCard").style.display = "flex"; // bundled schedule — zero setup
   document.getElementById("septaBusCard").style.display  = "flex"; // bundled schedule (routes 3/4/16) — zero setup
   document.getElementById("patcoCard").style.display     = "flex";   // bundled schedule — zero setup
@@ -2274,7 +2380,7 @@ function buildRowsButtons(){
 const CARD_DEFS=[
   {id:"amtrakCard", label:"Amtrak"}, {id:"septaRailCard", label:"SEPTA Rail"},
   {id:"septaSubwayCard", label:"SEPTA Subway"}, {id:"septaBusCard", label:"SEPTA Bus"},
-  {id:"patcoCard", label:"PATCO"}, {id:"planeCard", label:"Planes"},
+  {id:"patcoCard", label:"PATCO"}, {id:"njtCard", label:"NJ Transit"}, {id:"planeCard", label:"Planes"},
 ];
 // Which map layer(s) each card's "show on board" toggle also controls -- hiding
 // a card means turning off that whole system, not just its departure-list card.
@@ -2284,6 +2390,7 @@ const CARD_LAYERS={
   septaSubwayCard: ["septaSubwayLayer","septaSubwayRouteLayer"],
   septaBusCard:    ["septaBusLayer","septaBusRouteLayer"],
   patcoCard:       ["patcoLayer","patcoRouteLayer"],
+  njtCard:         ["njtLayer","njtRouteLayer"],
   planeCard:       ["planeLayer"],
 };
 function loadHiddenCards(){
@@ -2493,6 +2600,8 @@ function boot(){
   setInterval(septaMapTick, CFG.septaEveryMs); // SEPTA positions on the map (scheduled, or live via Worker)
   setInterval(refreshPatco, 30000);            // recompute next scheduled PATCO (card)
   setInterval(drawPatcoScheduledMap, CFG.septaEveryMs); // PATCO positions on the map (scheduled)
+  setInterval(refreshNjt, 30000);               // next scheduled NJ Transit (card)
+  setInterval(drawNjtScheduledMap, CFG.septaEveryMs);  // NJ Transit positions on the map (scheduled)
   refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 
   // re-fit cards to the new layout when the window/display changes size
