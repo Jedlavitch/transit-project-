@@ -305,6 +305,41 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   .airport-mark .ap{color:var(--plane); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
   .airport-mark .apc{color:var(--plane); font:800 10px/1 var(--mono); margin-left:3px;
     text-shadow:0 1px 5px #000,0 0 2px #000}
+
+  /* ============ settings panel redesign ============
+     The panel had grown into one long scroll of a dozen unlabelled-looking
+     sections. Each label + its controls is now wrapped (by groupSettings())
+     into a card, the cards flow in a responsive grid so a wide screen uses
+     its width instead of scrolling, and the title and action buttons are
+     pinned so Save/Done is always reachable. Markup is only re-parented —
+     every id and handler stays exactly as it was. */
+  #setup .box{max-width:min(860px, 96vw); padding:0; display:flex; flex-direction:column;
+    max-height:min(90vh, 900px); overflow:hidden}
+  #setup .set-head{position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:12px;
+    padding:16px 20px 13px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--blue-deep,#0a1a3d),var(--panel))}
+  #setup .set-head h3{margin:0; font-size:17px; letter-spacing:.02em;
+    background:linear-gradient(90deg,var(--text),var(--blue-bright,#7cc0ff));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  #setup .set-head .set-x{margin-left:auto; width:30px; height:30px; flex:none; border-radius:8px;
+    border:1px solid var(--line); background:var(--row-bg); color:var(--muted); cursor:pointer; font-size:15px;
+    display:flex; align-items:center; justify-content:center}
+  #setup .set-head .set-x:hover{color:var(--text); border-color:var(--accent)}
+  #setup .set-body{overflow:auto; padding:14px 16px 4px; display:grid; gap:12px;
+    grid-template-columns:repeat(auto-fit, minmax(268px, 1fr)); align-content:start}
+  #setup .set-group{background:var(--row-bg); border:1px solid var(--row-line); border-radius:10px;
+    padding:11px 13px 13px; break-inside:avoid; min-width:0}
+  #setup .set-group > .section-lbl:first-child, #setup .set-group > .accent-lbl:first-child{margin-top:0}
+  #setup .set-group.wide{grid-column:1 / -1}
+  #setup .set-group p{font-size:12px; line-height:1.5; margin:6px 0}
+  #setup .set-body .theme-row{margin-top:8px}
+  #setup .set-foot{position:sticky; bottom:0; z-index:2; padding:12px 16px 14px;
+    border-top:1px solid var(--line); background:linear-gradient(0deg,var(--blue-deep,#0a1a3d),var(--panel))}
+  #setup .set-foot .btns{margin:0}
+  @media (max-width:620px){
+    #setup .set-body{grid-template-columns:1fr}
+    #setup .box{max-height:94vh}
+  }
 </style>
 </head>
 <body>
@@ -1790,7 +1825,7 @@ async function refreshPlanes(){
 function openSetup(){
   $("#keyInput").value=state.wmataKey;
   $("#marcInput").value=state.marcUrl;
-  $("#setup").classList.add("show"); $("#keyInput").focus();
+  groupSettings(); $("#setup").classList.add("show"); $("#keyInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
 $("#settingsBtn").onclick=openSetup;
@@ -2379,6 +2414,44 @@ function drawBigStops(){
     state.map.on("zoomend moveend", drawBigStops);      // viewport-scoped: redraw on pan too
   }, 600);
 })();
+
+
+/* ---- settings panel: group each label + its controls into a card ----------
+   Purely structural: nodes are MOVED, never rebuilt, so every id, listener and
+   value survives. Runs once, lazily, the first time the panel is opened. */
+function groupSettings(){
+  const box=document.querySelector("#setup .box");
+  if(!box || box.dataset.grouped) return;
+  box.dataset.grouped="1";
+  const kids=[...box.children];
+  const head=document.createElement("div"); head.className="set-head";
+  const body=document.createElement("div"); body.className="set-body";
+  const foot=document.createElement("div"); foot.className="set-foot";
+  const isLabel=n=>n.classList && (n.classList.contains("section-lbl")||n.classList.contains("accent-lbl"));
+  let group=null;
+  kids.forEach(n=>{
+    if(n.tagName==="H3"){ head.appendChild(n); return; }
+    if(n.classList && n.classList.contains("btns")){ foot.appendChild(n); return; }
+    if(isLabel(n)){
+      group=document.createElement("div"); group.className="set-group";
+      body.appendChild(group); group.appendChild(n); return;
+    }
+    if(group) group.appendChild(n);
+    else { const g=document.createElement("div"); g.className="set-group wide"; g.appendChild(n); body.appendChild(g); }
+  });
+  // the biggest groups read better full width than squeezed into one column
+  ["#cardToggles","#accentSwatches"].forEach(sel=>{
+    const el=body.querySelector(sel), g=el&&el.closest(".set-group");
+    if(g) g.classList.add("wide");
+  });
+  if(!head.querySelector("h3")){ const h=document.createElement("h3"); h.textContent="Settings"; head.appendChild(h); }
+  const x=document.createElement("button");
+  x.type="button"; x.className="set-x"; x.textContent="\u2715"; x.title="Close settings";
+  x.onclick=()=>{ const done=box.querySelector("#skipKey, #setDone, .btns .ghost");
+    if(done) done.click(); else document.getElementById("setup").classList.remove("show"); };
+  head.appendChild(x);
+  box.append(head, body, foot);
+}
 
 </script>
 </body>
