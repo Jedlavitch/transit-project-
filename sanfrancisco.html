@@ -311,6 +311,16 @@ var r=g("tb.rows")||g("transitboardsf.rows");if(r&&r!=="normal")d.setAttribute("
   .card.mini h2{margin-bottom:0}
   .cards.all-mini{grid-auto-rows:min-content; align-content:start}
   #minAllBtn.on{border-color:var(--accent); color:var(--accent)}
+
+  /* big stops: rail interchanges + airports */
+  .hub-dot{filter:drop-shadow(0 0 6px var(--accent))}
+  .hub-label{white-space:nowrap; color:var(--text); font:700 10px/1 var(--mono);
+    letter-spacing:.04em; text-shadow:0 1px 5px #000,0 0 2px #000; pointer-events:none}
+  .hub-label b{color:var(--accent); margin-left:3px}
+  .airport-mark{white-space:nowrap; pointer-events:auto}
+  .airport-mark .ap{color:var(--plane); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
+  .airport-mark .apc{color:var(--plane); font:800 10px/1 var(--mono); margin-left:3px;
+    text-shadow:0 1px 5px #000,0 0 2px #000}
 </style>
 </head>
 <body>
@@ -1900,6 +1910,38 @@ function ensureAlertCard(){
   if(typeof initMiniCards==="function") setTimeout(initMiniCards, 0);
   return card;
 }
+
+/* ---------- announce alerts that appear while you're watching ----------------
+   The card quietly gaining a row is easy to miss on a glance device, so a NEW
+   alert slides in as a dismissable toast. `alertSeen===null` means this is the
+   first render since load: seed it silently, otherwise every boot would throw a
+   stack of toasts for alerts that have been running all day. */
+let alertSeen=null;
+function announceNewAlerts(ranked){
+  const key=r=>(r.lbl+"|"+r.txt).slice(0,140);
+  if(alertSeen===null){ alertSeen=new Set(ranked.map(key)); return; }
+  const fresh=ranked.filter(r=>!alertSeen.has(key(r)));
+  ranked.forEach(r=>alertSeen.add(key(r)));
+  fresh.slice(0,3).forEach(showAlertToast);      // a burst shouldn't bury the board
+}
+function showAlertToast(a){
+  let host=document.getElementById("alertToasts");
+  if(!host){ host=document.createElement("div"); host.id="alertToasts"; document.body.appendChild(host); }
+  const t=document.createElement("div");
+  t.className="atoast"; t.style.setProperty("--sev", SEV[a.sev].color);
+  t.innerHTML=`<div class="at-hd"><span class="at-sev">${SEV[a.sev].word}</span>
+      <span class="at-new">new alert</span><button class="at-x" title="Dismiss">✕</button></div>
+    ${a.lbl?`<div class="at-who">${esc(a.lbl)}</div>`:""}
+    <div class="at-msg">${esc(a.txt)}</div>`;
+  host.appendChild(t);
+  requestAnimationFrame(()=>t.classList.add("in"));
+  let gone=false;
+  const dismiss=()=>{ if(gone) return; gone=true; t.classList.remove("in"); setTimeout(()=>t.remove(), 350); };
+  t.querySelector(".at-x").onclick=dismiss;
+  t.onclick=dismiss;
+  setTimeout(dismiss, 20000);                    // long enough to read, short enough to be a kiosk
+}
+
 let lastAlerts=[], lastRanked=[];      // kept so a re-layout can repaint the same set
 function renderTicker(items){
   if(items) lastAlerts=items;
@@ -1923,6 +1965,7 @@ function renderTicker(items){
   document.getElementById("alertStat").innerHTML=
     [["major","major"],["delay","delays"],["notice","notices"]]
       .filter(([k])=>n(k)).map(([k,w])=>`<b>${n(k)}</b> ${w}`).join(" · ");
+  announceNewAlerts(ranked);
   lastRanked=ranked;
   paintAlerts();
   // Two cards are injected into this grid (alerts + Spotted), so each one's
@@ -2016,6 +2059,100 @@ function boot(){
 // retry shortly after instead of leaving the page stuck uninitialized.
 function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
+
+/* ================= big stops: rail transfer hubs + airports =================
+   Drawn from the bundled schedules ALREADY loaded for the departure cards, so
+   this costs no extra network. Any station served by 2+ distinct rail lines is
+   a hub; the marker grows with the number of lines. Schedules are discovered by
+   shape (an object on `state` with .stations and .trips) rather than by name,
+   so a board gains hubs for a new rail system automatically — bus/tram/ferry
+   bundles are excluded by key name, since the ask was trains only. Stations
+   within ~250 m across different bundles merge into one hub, which is what
+   makes a genuine interchange (e.g. regional rail + subway) score highest. */
+const BIGSTOP_AIRPORTS=[
+  {c:"DCA",n:"Reagan National",lat:38.8512,lon:-77.0402},{c:"IAD",n:"Dulles",lat:38.9531,lon:-77.4565},
+  {c:"BWI",n:"Baltimore/Washington",lat:39.1754,lon:-76.6683},{c:"PHL",n:"Philadelphia",lat:39.8729,lon:-75.2437},
+  {c:"JFK",n:"John F. Kennedy",lat:40.6413,lon:-73.7781},{c:"LGA",n:"LaGuardia",lat:40.7769,lon:-73.8740},
+  {c:"EWR",n:"Newark Liberty",lat:40.6895,lon:-74.1745},{c:"BOS",n:"Logan",lat:42.3656,lon:-71.0096},
+  {c:"SFO",n:"San Francisco",lat:37.6213,lon:-122.3790},{c:"OAK",n:"Oakland",lat:37.7126,lon:-122.2197},
+  {c:"SJC",n:"San Jose",lat:37.3639,lon:-121.9289},{c:"LAX",n:"Los Angeles",lat:33.9416,lon:-118.4085},
+  {c:"BUR",n:"Hollywood Burbank",lat:34.2007,lon:-118.3587},{c:"SNA",n:"John Wayne",lat:33.6757,lon:-117.8682},
+  {c:"LGB",n:"Long Beach",lat:33.8177,lon:-118.1516},{c:"AMS",n:"Schiphol",lat:52.3105,lon:4.7683},
+];
+function bigStopMi(a,b){                 // self-contained: boards differ on helper names
+  const R=3958.8, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+// "trains only" — road/water/street modes are excluded by key name. roSched is
+// Ride On (buses) and reads as rail-ish, so it is named explicitly.
+const NOT_RAIL=/bus|rideon|rosched|tram|ferry|cable|muni|surface|trolley/i;
+function railBundles(){
+  const out=[], seen=new Set();
+  const take=(k,v)=>{
+    if(NOT_RAIL.test(k) || !v || typeof v!=="object") return;
+    if(!Array.isArray(v.stations) || !Array.isArray(v.trips) || seen.has(v)) return;
+    seen.add(v); out.push(v);
+  };
+  for(const k in state) if(/sched/i.test(k)) take(k, state[k]);
+  // SF/LA/Amsterdam keep their bundles on SYSTEMS[key].sched, not on state
+  try{ if(typeof SYSTEMS==="object" && SYSTEMS) for(const k in SYSTEMS) take(k, SYSTEMS[k] && SYSTEMS[k].sched); }catch(e){}
+  return out;
+}
+function computeHubs(){
+  const byKey=new Map();                 // rounded lat/lon -> merged hub
+  railBundles().forEach(s=>{
+    const lines={};                      // station id -> Set(line)
+    (s.trips||[]).forEach(tr=>{
+      if(!tr || !Array.isArray(tr.st)) return;
+      tr.st.forEach(([sid])=>{ (lines[sid]=lines[sid]||new Set()).add(String(tr.line)); });
+    });
+    (s.stations||[]).forEach(st=>{
+      const set=lines[st.id]; if(!set || !set.size) return;
+      if(typeof st.lat!=="number" || typeof st.lon!=="number") return;
+      const key=st.lat.toFixed(2)+","+st.lon.toFixed(2);      // ~1km cell, merges interchanges
+      let h=byKey.get(key);
+      if(!h){ h={name:st.name, lat:st.lat, lon:st.lon, lines:new Set()}; byKey.set(key,h); }
+      set.forEach(l=>h.lines.add(l));
+      if(String(st.name||"").length > String(h.name||"").length) h.name=st.name;   // prefer the fuller name
+    });
+  });
+  return [...byKey.values()].filter(h=>h.lines.size>=2).sort((a,b)=>b.lines.size-a.lines.size);
+}
+function drawBigStops(){
+  if(!state.map) return;
+  if(!state.bigStopLayer) state.bigStopLayer=L.layerGroup().addTo(state.map);
+  const layer=state.bigStopLayer; layer.clearLayers();
+  const zoom=state.map.getZoom(), showLabels=zoom>=10;
+  computeHubs().slice(0,40).forEach(h=>{
+    const n=h.lines.size, r=Math.min(9, 4+n);
+    const lines=[...h.lines].sort().join(", ");
+    L.circleMarker([h.lat,h.lon],{radius:r, color:"#ffffff", weight:2, opacity:.9,
+      fillColor:"var(--accent)", fillOpacity:.55, className:"hub-dot"})
+      .bindTooltip(`<b>${h.name}</b><br>${n} lines · ${lines}`, {sticky:true})
+      .addTo(layer);
+    if(showLabels)
+      L.marker([h.lat,h.lon],{interactive:false, icon:L.divIcon({className:"hub-label",
+        html:`${String(h.name||"").replace(/[<>&]/g,"")} <b>${n}</b>`, iconSize:[0,0], iconAnchor:[-(r+4),6]})}).addTo(layer);
+  });
+  const here=state.loc;
+  if(here) BIGSTOP_AIRPORTS.forEach(a=>{
+    if(bigStopMi(here,a)>70) return;                    // only airports near this board
+    L.marker([a.lat,a.lon],{interactive:true, icon:L.divIcon({className:"airport-mark",
+      html:`<span class="ap">✈</span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
+      iconSize:[0,0], iconAnchor:[8,8]})}).bindTooltip(`<b>${a.c}</b> — ${a.n}`,{sticky:true}).addTo(layer);
+  });
+}
+(function initBigStops(){
+  const t=setInterval(()=>{
+    if(!window.state || !state.map) return;
+    clearInterval(t);
+    drawBigStops();
+    setInterval(drawBigStops, 20000);                   // schedules load lazily; keep it current
+    state.map.on("zoomend", drawBigStops);              // labels appear only when zoomed in
+  }, 600);
+})();
+
 </script>
 </body>
 </html>
