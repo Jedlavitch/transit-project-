@@ -456,6 +456,13 @@ var r=g("tb.rows")||g("transitboardsf.rows");if(r&&r!=="normal")d.setAttribute("
     <div class="accent-lbl">Accent color</div>
     <div class="swatches" id="accentSwatches"></div>
 
+    <div class="accent-lbl">Big stops on the map</div>
+    <div class="theme-row" id="bigStopRow">
+      <button type="button" class="theme-btn" data-big="off">Off</button>
+      <button type="button" class="theme-btn" data-big="trains">Trains</button>
+      <button type="button" class="theme-btn" data-big="all">+ Buses</button>
+    </div>
+
     <div class="accent-lbl">Trains per box</div>
     <div class="theme-row" id="rowsRow">
       <button type="button" class="theme-btn" data-rows="fewer">Fewer</button>
@@ -1763,6 +1770,24 @@ function setBoardRows(mode){
   if(changed && state.map) refreshEverythingForNewLocation();
   else fitAll();
 }
+/* Big-stops control: off / rail interchanges only / include bus & street modes.
+   "trains" is the default because a busy bus corridor turns half the map into
+   hubs, which is why it was rail-only to begin with. */
+const BIGSTOP_KEY="transitboardsf.bigStops";
+function bigStopsMode(){
+  const v=localStorage.getItem(BIGSTOP_KEY);
+  return (v==="off"||v==="all"||v==="trains") ? v : "trains";
+}
+function setBigStops(mode){
+  if(!["off","trains","all"].includes(mode)) mode="trains";
+  localStorage.setItem(BIGSTOP_KEY, mode);
+  document.querySelectorAll("#bigStopRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.big===mode));
+  if(typeof drawBigStops==="function") drawBigStops();
+}
+function buildBigStopButtons(){
+  document.querySelectorAll("#bigStopRow .theme-btn").forEach(b=>{ b.onclick=()=>setBigStops(b.dataset.big); });
+  setBigStops(bigStopsMode());
+}
 function buildRowsButtons(){
   document.querySelectorAll("#rowsRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardRows(b.dataset.rows); });
 }
@@ -2023,7 +2048,7 @@ async function refreshAlertTicker(){
 function boot(){
   setBoardAccent(localStorage.getItem("tb.accent")||localStorage.getItem(LS.accent)||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(localStorage.getItem("tb.theme")||localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
-  setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons();
+  setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
@@ -2089,14 +2114,15 @@ function bigStopMi(a,b){                 // self-contained: boards differ on hel
 const NOT_RAIL=/bus|rideon|rosched|tram|ferry|cable|muni|surface|trolley/i;
 function railBundles(){
   const out=[], seen=new Set();
-  const take=(k,v)=>{
-    if(NOT_RAIL.test(k) || !v || typeof v!=="object") return;
+  const take=(k,v,railOnly)=>{
+    if((railOnly!==false && NOT_RAIL.test(k)) || !v || typeof v!=="object") return;
     if(!Array.isArray(v.stations) || !Array.isArray(v.trips) || seen.has(v)) return;
     seen.add(v); out.push(v);
   };
-  for(const k in state) if(/sched/i.test(k)) take(k, state[k]);
+  const railOnly = bigStopsMode()!=="all";
+  for(const k in state) if(/sched/i.test(k)) take(k, state[k], railOnly);
   // SF/LA/Amsterdam keep their bundles on SYSTEMS[key].sched, not on state
-  try{ if(typeof SYSTEMS==="object" && SYSTEMS) for(const k in SYSTEMS) take(k, SYSTEMS[k] && SYSTEMS[k].sched); }catch(e){}
+  try{ if(typeof SYSTEMS==="object" && SYSTEMS) for(const k in SYSTEMS) take(k, SYSTEMS[k] && SYSTEMS[k].sched, railOnly); }catch(e){}
   return out;
 }
 function computeHubs(){
@@ -2123,6 +2149,7 @@ function drawBigStops(){
   if(!state.map) return;
   if(!state.bigStopLayer) state.bigStopLayer=L.layerGroup().addTo(state.map);
   const layer=state.bigStopLayer; layer.clearLayers();
+  if(bigStopsMode()==="off") return;                  // Settings > Big stops
   const zoom=state.map.getZoom(), showLabels=zoom>=12;
   // Only what's on screen, and fewer of them when zoomed out — 40 labelled
   // hubs on a city-wide view is unreadable clutter (checked on the NYC map).
@@ -2148,8 +2175,11 @@ function drawBigStops(){
   });
 }
 (function initBigStops(){
+  // `state` is declared with const, so it lives in script scope and is NOT on
+  // window — checking window.state meant this loop never fired and nothing was
+  // ever drawn. typeof is the safe way to poll for it.
   const t=setInterval(()=>{
-    if(!window.state || !state.map) return;
+    if(typeof state==="undefined" || !state || !state.map) return;
     clearInterval(t);
     drawBigStops();
     setInterval(drawBigStops, 20000);                   // schedules load lazily; keep it current
