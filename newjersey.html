@@ -1741,8 +1741,12 @@ function drawBigStops(){
   if(!state.map) return;
   if(!state.bigStopLayer) state.bigStopLayer=L.layerGroup().addTo(state.map);
   const layer=state.bigStopLayer; layer.clearLayers();
-  const zoom=state.map.getZoom(), showLabels=zoom>=10;
-  computeHubs().slice(0,40).forEach(h=>{
+  const zoom=state.map.getZoom(), showLabels=zoom>=12;
+  // Only what's on screen, and fewer of them when zoomed out — 40 labelled
+  // hubs on a city-wide view is unreadable clutter (checked on the NYC map).
+  const bounds=state.map.getBounds();
+  const cap = zoom>=13 ? 40 : zoom>=11 ? 18 : 8;
+  computeHubs().filter(h=>bounds.contains([h.lat,h.lon])).slice(0,cap).forEach(h=>{
     const n=h.lines.size, r=Math.min(9, 4+n);
     const lines=[...h.lines].sort().join(", ");
     L.circleMarker([h.lat,h.lon],{radius:r, color:"#ffffff", weight:2, opacity:.9,
@@ -1767,7 +1771,7 @@ function drawBigStops(){
     clearInterval(t);
     drawBigStops();
     setInterval(drawBigStops, 20000);                   // schedules load lazily; keep it current
-    state.map.on("zoomend", drawBigStops);              // labels appear only when zoomed in
+    state.map.on("zoomend moveend", drawBigStops);      // viewport-scoped: redraw on pan too
   }, 600);
 })();
 
