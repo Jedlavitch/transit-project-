@@ -1272,8 +1272,10 @@ async function renderNjtCard(kind){
   if(statEl) statEl.innerHTML = `<b>${moving}</b> moving now`
     + (soonest!=null?` · next in <b>${Math.max(0,soonest)}</b> min`:"")
     + (rail?` · <b>${(s._lines||[]).length}</b> lines`:` · <b>${(s._lines||[]).length}</b> bundled routes`);
-  if(cntEl) cntEl.textContent = rail ? "scheduled"
-    : (state.njtUrl && state.njtBusLive ? `live · ${state.njtBusLive.length} vehicles` : "scheduled");
+  if(cntEl){
+    const live = rail ? state.njtRailLive : state.njtBusLive;
+    cntEl.textContent = (state.njtUrl && live) ? `live · ${live.length} vehicles` : "scheduled";
+  }
   fitList(box);
 }
 const refreshNjtRail = () => renderNjtCard("rail");
@@ -1332,7 +1334,39 @@ function drawNjtBusLive(veh){
   });
   updateFleet("njtBus", items, CFG.njtBusEveryMs);
 }
-const drawNjtRailMap = () => drawNjtMap("rail");
+/* ---------- live trains (njt-worker.js -> raildata getVehicleData) ----------
+   Same contract as the buses: live replaces the bundled interpolation when the
+   Worker answers, and any failure falls straight back to the schedule so the map
+   never empties. NJT reports lateness in seconds; the Worker converts to minutes. */
+async function fetchNjtRailLive(){
+  if(!state.njtUrl) return null;
+  try{
+    const d=await getJSON(`${state.njtUrl}/rail/vehicles`, 12000);
+    if(!d || !d.ok || !Array.isArray(d.trains) || !d.trains.length) return null;
+    state.njtRailLive=d.trains; state.lastNjtRailOk=Date.now();
+    return d.trains;
+  }catch(e){ return null; }
+}
+function drawNjtRailLive(trains){
+  const items=trains.map(v=>{
+    const line=v.line||"", lbl=`${v.train||line} → ${njtStation(v.dest||"")}`;
+    const late=Math.round(v.late||0);
+    return { id:"nrl"+v.id, lat:v.lat, lon:v.lon,
+      icon:()=>labelIcon(njtCol(line), lbl), ik:"nrl-"+line+"-"+(late>5?"L":""),
+      tip:`NJ Transit ${njtName(line)} → ${njtStation(v.dest||"?")}`
+        +(v.next?` · next ${njtStation(v.next)}`:"")
+        +(late>0?` · ${late} min late`:" · on time")+" (live)",
+      color:njtCol(line), label:"NJT "+lbl };
+  });
+  updateFleet("njtRail", items, CFG.njtRailEveryMs);
+}
+async function drawNjtRailMap(){
+  if(state.njtUrl){
+    const tr=await fetchNjtRailLive();
+    if(tr){ drawNjtRailLive(tr); return; }
+  }
+  return drawNjtMap("rail");
+}
 async function drawNjtBusMap(){
   if(state.njtUrl){
     const veh=await fetchNjtBusLive();
@@ -1527,8 +1561,8 @@ state.njtUrl = localStorage.getItem(LS.njtUrl) || "";
   if(btn) btn.onclick=()=>{
     state.njtUrl=(inp.value||"").trim().replace(/\/+$/,"");
     localStorage.setItem(LS.njtUrl, state.njtUrl);
-    state.njtBusLive=null;                       // drop any stale live snapshot
-    refreshNjtBus(); drawNjtBusMap();
+    state.njtBusLive=null; state.njtRailLive=null;   // drop any stale live snapshot
+    refreshNjtBus(); drawNjtBusMap(); refreshNjtRail(); drawNjtRailMap();
     closeSetup();
   };
 })();
