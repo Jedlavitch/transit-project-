@@ -520,11 +520,16 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
-    <!-- [ADD-A-SYSTEM] optional live-Worker input: if a system's live feed has no
-         CORS (needs a Cloudflare Worker, like MTA Bus / SEPTA), add a <details>
-         block here with an <input id="xInput"> and wire it in openSetup()/#saveKey.
-         Systems whose live feed is directly fetchable (or that are schedule-only)
-         need nothing here. See ADDING-A-CITY.md. -->
+    <details style="margin-top:6px">
+      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Advanced: live NJ Transit buses</summary>
+      <p style="margin-top:10px">NJ Transit is <b>scheduled</b> by default (no setup). Rail covers every
+        line in the state; buses cover the bundled trunk routes only. Paste an
+        <code>njt-worker.js</code> URL to switch buses to <b>live</b> — that unlocks all 263 routes.
+        Your API key lives in the Worker, never in this browser.</p>
+      <input id="njtInput" type="text" placeholder="https://njt.yourname.workers.dev (optional)"
+             autocomplete="off" spellcheck="false" />
+      <div class="btns" style="margin-top:10px"><button id="saveNjt">Save</button></div>
+    </details>
 
     <div class="btns">
       <button id="skipKey">Close</button>
@@ -1267,7 +1272,8 @@ async function renderNjtCard(kind){
   if(statEl) statEl.innerHTML = `<b>${moving}</b> moving now`
     + (soonest!=null?` · next in <b>${Math.max(0,soonest)}</b> min`:"")
     + (rail?` · <b>${(s._lines||[]).length}</b> lines`:` · <b>${(s._lines||[]).length}</b> bundled routes`);
-  if(cntEl) cntEl.textContent = rail ? "scheduled" : (state.njtUrl?"live":"scheduled");
+  if(cntEl) cntEl.textContent = rail ? "scheduled"
+    : (state.njtUrl && state.njtBusLive ? `live · ${state.njtBusLive.length} vehicles` : "scheduled");
   fitList(box);
 }
 const refreshNjtRail = () => renderNjtCard("rail");
@@ -1299,8 +1305,41 @@ async function drawNjtMap(kind){
   });
   updateFleet(rail?"njtRail":"njtBus", items, rail?CFG.njtRailEveryMs:CFG.njtBusEveryMs);
 }
+/* ---------- live buses (njt-worker.js -> NJT BusTime) -------------------------
+   Only runs when a Worker URL is configured. It covers ALL 263 routes, which the
+   bundled schedule can't (see gen-njt-state.py), so when live data is present it
+   REPLACES the bundled bus positions rather than drawing both. Falls back to the
+   bundle on any error, so a Worker hiccup degrades instead of emptying the map. */
+async function fetchNjtBusLive(){
+  if(!state.njtUrl) return null;
+  // ask for the routes we know about first; the Worker batches them 10 at a time
+  const sched=await ensureNjtSched("bus");
+  const rts=(sched&&sched._lines&&sched._lines.length) ? sched._lines : ["126","1","25"];
+  try{
+    const d=await getJSON(`${state.njtUrl}/vehicles?rt=${encodeURIComponent(rts.join(","))}`, 12000);
+    if(!d || !d.ok || !Array.isArray(d.vehicles)) return null;
+    state.njtBusLive=d.vehicles; state.lastNjtBusOk=Date.now();
+    return d.vehicles;
+  }catch(e){ return null; }
+}
+function drawNjtBusLive(veh){
+  const items=veh.filter(v=>typeof v.lat==="number" && typeof v.lon==="number").map(v=>{
+    const lbl=`${v.rt} → ${njtStation(njtHeadsign(v.dest, v.rt))}`;
+    return { id:"nbl"+v.id, lat:v.lat, lon:v.lon,
+      icon:()=>labelIcon(njtCol(v.rt), lbl), ik:"nbl-"+v.rt+"-"+(v.delayed?"d":""),
+      tip:`NJ Transit ${v.rt} → ${v.dest||"?"}${v.delayed?" · delayed":""} (live)`,
+      color:njtCol(v.rt), label:"NJT "+lbl };
+  });
+  updateFleet("njtBus", items, CFG.njtBusEveryMs);
+}
 const drawNjtRailMap = () => drawNjtMap("rail");
-const drawNjtBusMap  = () => drawNjtMap("bus");
+async function drawNjtBusMap(){
+  if(state.njtUrl){
+    const veh=await fetchNjtBusLive();
+    if(veh){ drawNjtBusLive(veh); return; }     // live owns the fleet when it answers
+  }
+  return drawNjtMap("bus");                      // no Worker, or it failed -> bundled schedule
+}
 
 /* =========================================================================
    [ADD-A-SYSTEM] your systems' fetch / render / draw functions go here.
@@ -1481,8 +1520,18 @@ function openSetup(){
 function closeSetup(){ $("#setup").classList.remove("show"); }
 $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
-// [ADD-A-SYSTEM] if you added an optional live-Worker input + a Save button,
-// wire #saveKey here to persist state.busUrl to LS.busUrl then re-refresh.
+state.njtUrl = localStorage.getItem(LS.njtUrl) || "";
+(function wireNjtUrl(){
+  const inp=$("#njtInput"), btn=$("#saveNjt");
+  if(inp) inp.value=state.njtUrl;
+  if(btn) btn.onclick=()=>{
+    state.njtUrl=(inp.value||"").trim().replace(/\/+$/,"");
+    localStorage.setItem(LS.njtUrl, state.njtUrl);
+    state.njtBusLive=null;                       // drop any stale live snapshot
+    refreshNjtBus(); drawNjtBusMap();
+    closeSetup();
+  };
+})();
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
