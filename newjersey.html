@@ -529,6 +529,12 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
         Your API key lives in the Worker, never in this browser.</p>
       <input id="njtInput" type="text" placeholder="https://njt.yourname.workers.dev (optional)"
              autocomplete="off" spellcheck="false" />
+      <p style="margin-top:12px"><b>Live trains need no Worker.</b> NJT's rail API allows direct
+        browser calls, so the login below is enough for live positions on all 17 lines. It is
+        stored only in this browser, on this device - a Worker secret is more private, so prefer
+        the Worker above if you have it running.</p>
+      <input id="njtUserInput" type="text" placeholder="NJT rail API username" autocomplete="off" spellcheck="false" />
+      <input id="njtPassInput" type="password" placeholder="NJT rail API password" autocomplete="off" style="margin-top:6px" />
       <div class="btns" style="margin-top:10px"><button id="saveNjt">Save</button></div>
     </details>
 
@@ -596,7 +602,9 @@ const LS = {
   hidden:    `transitboard${CITY_ID}.hiddenCards`,
   rows:      `transitboard${CITY_ID}.rows`,      // "Trains per box" density
   mapFull:   `transitboard${CITY_ID}.mapFull`,   // map-only full screen sticks
-  njtUrl:    `transitboard${CITY_ID}.njtUrl`,   // optional njt-worker.js URL (live rail + bus)
+  njtUrl:    `transitboard${CITY_ID}.njtUrl`,   // optional njt-worker.js URL (live buses)
+  njtUser:   `transitboard${CITY_ID}.njtUser`,  // NJT rail API login - rail is CORS-open, no Worker needed
+  njtPass:   `transitboard${CITY_ID}.njtPass`,
   // [ADD-A-SYSTEM] if a system needs an optional live-Worker URL saved, add its
   // key here, e.g.  busUrl: `transitboard${CITY_ID}.busUrl`,
 };
@@ -1339,14 +1347,62 @@ function drawNjtBusLive(veh){
    Same contract as the buses: live replaces the bundled interpolation when the
    Worker answers, and any failure falls straight back to the schedule so the map
    never empties. NJT reports lateness in seconds; the Worker converts to minutes. */
-async function fetchNjtRailLive(){
-  if(!state.njtUrl) return null;
+/* NJT's rail API sends access-control-allow-origin:*, so the browser can call it
+   directly - no Worker needed for trains (buses still need one: BusTime sends no
+   CORS header). A urlencoded POST with no custom headers is a "simple" CORS
+   request, so it is not preflighted either. */
+const NJT_RAIL_API = "https://raildata.njtransit.com/api/TrainData";
+async function njtRailToken(force){
+  if(!state.njtUser || !state.njtPass) return null;
+  if(!force && state._njtTok && Date.now()-(state._njtTokAt||0) < 50*60000) return state._njtTok;
   try{
-    const d=await getJSON(`${state.njtUrl}/rail/vehicles`, 12000);
-    if(!d || !d.ok || !Array.isArray(d.trains) || !d.trains.length) return null;
-    state.njtRailLive=d.trains; state.lastNjtRailOk=Date.now();
-    return d.trains;
+    const r=await fetch(NJT_RAIL_API+"/getToken", {method:"POST",
+      body:new URLSearchParams({username:state.njtUser, password:state.njtPass})});
+    const d=await r.json().catch(()=>null);
+    const tok=d && (d.UserToken||d.userToken||d.token||d.Token);
+    if(!tok) return null;
+    state._njtTok=tok; state._njtTokAt=Date.now(); return tok;
   }catch(e){ return null; }
+}
+const njtPick=(o,...ks)=>{ for(const k of ks) if(o && o[k]!=null && o[k]!=="") return o[k]; return null; };
+function njtParseTrains(data){
+  const list = Array.isArray(data) ? data
+    : (data && (data.Trains||data.trains)) ? (data.Trains||data.trains)
+    : (data && typeof data==="object") ? Object.values(data) : [];
+  return (Array.isArray(list)?list:[]).map(v=>{
+    const lat=parseFloat(njtPick(v,"LATITUDE","Latitude","latitude","lat"));
+    const lon=parseFloat(njtPick(v,"LONGITUDE","Longitude","longitude","lon"));
+    if(!isFinite(lat)||!isFinite(lon)) return null;
+    return { id:String(njtPick(v,"ID","TRAIN_ID","TrainID")??(lat+","+lon)),
+      train:String(njtPick(v,"TRAIN_ID","TrainID","train")??""),
+      line:String(njtPick(v,"LINE","Line","line","LINECODE")??""), lat, lon,
+      dest:String(njtPick(v,"DESTINATION","Destination","dest")??"").trim(),
+      late:(Number(njtPick(v,"SEC_LATE","SecondsLate")??0)/60)||0,
+      next:String(njtPick(v,"NEXT_STOP","NextStop")??"").trim() };
+  }).filter(Boolean);
+}
+async function fetchNjtRailLive(){
+  if(state.njtUrl){                                  // Worker first: keeps the login off this device
+    try{
+      const d=await getJSON(`${state.njtUrl}/rail/vehicles`, 12000);
+      if(d && d.ok && Array.isArray(d.trains) && d.trains.length){
+        state.njtRailLive=d.trains; state.lastNjtRailOk=Date.now(); return d.trains;
+      }
+    }catch(e){}
+  }
+  let tok=await njtRailToken(false); if(!tok) return null;
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const r=await fetch(NJT_RAIL_API+"/getVehicleData", {method:"POST",
+        body:new URLSearchParams({token:tok})});
+      const d=await r.json().catch(()=>null);
+      const trains=njtParseTrains(d);
+      if(trains.length){ state.njtRailLive=trains; state.lastNjtRailOk=Date.now(); return trains; }
+    }catch(e){}
+    tok=await njtRailToken(true);                    // token likely expired -> one retry
+    if(!tok) return null;
+  }
+  return null;
 }
 function drawNjtRailLive(trains){
   const items=trains.map(v=>{
@@ -1556,12 +1612,19 @@ function closeSetup(){ $("#setup").classList.remove("show"); }
 $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
 state.njtUrl = localStorage.getItem(LS.njtUrl) || "";
+state.njtUser = localStorage.getItem(LS.njtUser) || "";
+state.njtPass = localStorage.getItem(LS.njtPass) || "";
 (function wireNjtUrl(){
   const inp=$("#njtInput"), btn=$("#saveNjt");
+  const uIn=$("#njtUserInput"), pIn=$("#njtPassInput");
   if(inp) inp.value=state.njtUrl;
+  if(uIn) uIn.value=state.njtUser||""; if(pIn) pIn.value=state.njtPass||"";
   if(btn) btn.onclick=()=>{
     state.njtUrl=(inp.value||"").trim().replace(/\/+$/,"");
+    state.njtUser=(uIn&&uIn.value||"").trim(); state.njtPass=(pIn&&pIn.value||"");
     localStorage.setItem(LS.njtUrl, state.njtUrl);
+    localStorage.setItem(LS.njtUser, state.njtUser); localStorage.setItem(LS.njtPass, state.njtPass);
+    state._njtTok=null;
     state.njtBusLive=null; state.njtRailLive=null;   // drop any stale live snapshot
     refreshNjtBus(); drawNjtBusMap(); refreshNjtRail(); drawNjtRailMap();
     closeSetup();
