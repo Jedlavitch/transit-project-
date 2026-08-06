@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Transit Board — TV Menu</title>
+<style>
+  /* tv.html — a 10-foot launcher. Everything here is sized for a couch, not a
+     desk, and driven by the four arrow keys + OK that every TV remote has. */
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:#070d18; color:#e8f0ff; overflow:hidden;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    /* TVs overscan: keep everything inside a safe margin so nothing is cut off */
+    padding:max(3vh,18px) max(4vw,24px);
+    display:flex; flex-direction:column; gap:2.2vh;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(90vw 60vh at 12% 0%, rgba(78,161,255,.16), transparent 60%),
+      radial-gradient(70vw 55vh at 95% 105%, rgba(181,140,255,.14), transparent 60%);
+  }
+  header{position:relative; z-index:1; display:flex; align-items:baseline; gap:1.2rem; flex-wrap:wrap}
+  h1{
+    margin:0; font-size:clamp(24px,3.4vw,54px); font-weight:800; letter-spacing:.5px;
+    background:linear-gradient(90deg,#8ab4ff,#3ad0c8 55%,#b58cff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub{font-size:clamp(13px,1.25vw,22px); color:#93a6c4}
+  .clock{margin-left:auto; font-variant-numeric:tabular-nums; text-align:right}
+  .clock .t{font-size:clamp(20px,2.6vw,42px); font-weight:700; letter-spacing:1px}
+  .clock .d{font-size:clamp(11px,1vw,17px); color:#93a6c4}
+
+  /* Cities take twice the leftover height of Views, so the tiles grow to fill a
+     TV instead of huddling at the top with dead space underneath. */
+  .section{position:relative; z-index:1; display:flex; flex-direction:column; min-height:0}
+  #citySec{flex:2 1 0}
+  #viewSec{flex:1 1 0}
+  .section .grid{flex:1 1 auto; grid-auto-rows:1fr; min-height:0}
+  .section h2{
+    margin:0 0 1vh; font-size:clamp(11px,1vw,17px); font-weight:700;
+    letter-spacing:.22em; text-transform:uppercase; color:#7f93b3;
+  }
+
+  .grid{display:grid; gap:clamp(10px,1.4vw,22px)}
+  #cities{grid-template-columns:repeat(4,1fr)}
+  #views{grid-template-columns:repeat(4,1fr)}
+
+  .tile{
+    position:relative; display:flex; flex-direction:column; justify-content:space-between;
+    gap:.4em; padding:clamp(12px,1.5vw,26px);
+    border-radius:14px; cursor:pointer; text-decoration:none; color:inherit;
+    background:linear-gradient(160deg,rgba(24,38,64,.95),rgba(14,23,42,.95));
+    border:2px solid rgba(120,150,200,.18);
+    transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+  }
+  .tile .num{
+    position:absolute; top:.5em; right:.7em; font-size:clamp(11px,1vw,17px);
+    font-weight:700; color:#5f7396;
+  }
+  .tile .icon{font-size:clamp(24px,3vw,46px); line-height:1}
+  .tile .name{font-size:clamp(15px,1.7vw,30px); font-weight:700; line-height:1.15}
+  .tile .desc{font-size:clamp(10px,.95vw,16px); color:#93a6c4; line-height:1.3}
+  .tile .bar{height:4px; border-radius:3px; background:var(--sys,#4ea1ff); opacity:.85}
+
+  /* The focus ring is the whole point of this page — it has to be obvious from
+     across a room, so it scales and glows rather than being a 2px outline. */
+  .tile.on{
+    transform:scale(1.045);
+    border-color:var(--sys,#4ea1ff);
+    box-shadow:0 0 0 4px color-mix(in srgb, var(--sys,#4ea1ff) 45%, transparent),
+               0 18px 50px rgba(0,0,0,.55);
+    background:linear-gradient(160deg,rgba(36,56,92,.98),rgba(18,30,54,.98));
+  }
+  .tile.on .desc{color:#c3d3ec}
+  .tile.last::after{
+    content:"last used"; position:absolute; bottom:.55em; right:.8em;
+    font-size:clamp(9px,.8vw,13px); color:#7f93b3; letter-spacing:.1em; text-transform:uppercase;
+  }
+
+  footer{
+    position:relative; z-index:1; margin-top:auto; display:flex; gap:1.6em; flex-wrap:wrap;
+    font-size:clamp(11px,1vw,17px); color:#7f93b3;
+  }
+  footer kbd{
+    background:rgba(120,150,200,.15); border:1px solid rgba(120,150,200,.3);
+    border-radius:5px; padding:.1em .45em; font-family:inherit; color:#c3d3ec;
+  }
+
+  /* Phones/tablets land here too (the header link is on every board) — stack it. */
+  @media (max-width:760px){
+    #cities{grid-template-columns:repeat(2,1fr)}
+    #views{grid-template-columns:repeat(2,1fr)}
+    body{overflow:auto}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Live Transit Board</h1>
+  <div class="sub">Pick a city — <b>arrow keys</b> to move, <b>OK</b> to open</div>
+  <div class="clock"><div class="t" id="clock">--:--</div><div class="d" id="date">—</div></div>
+</header>
+
+<section class="section" id="citySec">
+  <h2>Cities</h2>
+  <div class="grid" id="cities"></div>
+</section>
+
+<section class="section" id="viewSec">
+  <h2>Views</h2>
+  <div class="grid" id="views"></div>
+</section>
+
+<footer>
+  <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> move</span>
+  <span><kbd>OK</kbd> / <kbd>Enter</kbd> open</span>
+  <span><kbd>1</kbd>–<kbd>9</kbd> jump straight to a board</span>
+  <span><kbd>F</kbd> full screen</span>
+  <span id="hint"></span>
+</footer>
+
+<script>
+/* Every board this launcher can open. `city` is the query param night.html and
+   flipboard.html already expect, so the view tiles just append it. */
+var CITIES = [
+  {id:"dc",        file:"index.html",         icon:"🚇", name:"Washington DC", desc:"Metro · Metrobus · MARC · Ride On", sys:"#4ea1ff"},
+  {id:"philly",    file:"philadelphia.html",  icon:"🔔", name:"Philadelphia",  desc:"SEPTA rail · subway · bus · PATCO", sys:"#3ad0c8"},
+  {id:"nyc",       file:"nyc.html",           icon:"🗽", name:"New York",      desc:"Subway · LIRR · Metro-North · PATH", sys:"#ffd166"},
+  {id:"nj",        file:"newjersey.html",     icon:"🚏", name:"New Jersey",    desc:"NJ Transit rail · light rail · bus", sys:"#ff9d5c"},
+  {id:"boston",    file:"boston.html",        icon:"🦞", name:"Boston",        desc:"MBTA subway · commuter rail · bus", sys:"#33d17a"},
+  {id:"sf",        file:"sanfrancisco.html",  icon:"🌉", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
+  {id:"la",        file:"losangeles.html",    icon:"🌴", name:"Los Angeles",   desc:"Metro rail · Metrolink", sys:"#b58cff"},
+  {id:"amsterdam", file:"amsterdam.html",     icon:"🚲", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"}
+];
+
+/* Views that follow whichever city you used last. `perCity:false` = shared page. */
+var VIEWS = [
+  {icon:"🌙", name:"Sky",   desc:"Nearest flight overhead, full screen", file:"night.html",      perCity:true,  sys:"#b58cff"},
+  {icon:"🚉", name:"Board", desc:"Split-flap departure board",           file:"flipboard.html",  perCity:true,  sys:"#ffd166"},
+  {icon:"🌍", name:"Tour",  desc:"Every city's vehicles on one map",     file:"tour.html",       perCity:false, sys:"#3ad0c8"},
+  {icon:"📍", name:"Spot",  desc:"Log what you see — phone app",         file:"spot.html",       perCity:false, sys:"#33d17a"}
+];
+
+var LAST_KEY = "tb.tvLastCity";
+var lastCity = "";
+try { lastCity = localStorage.getItem(LAST_KEY) || ""; } catch (e) {}
+
+/* One flat list in DOM order — the arrow-key math below treats it as rows of
+   `cols` so ↓ from a city lands on the view directly beneath it. */
+var tiles = [];
+
+function tile(o){
+  var a = document.createElement("a");
+  a.className = "tile";
+  a.href = o.href;
+  a.style.setProperty("--sys", o.sys);
+  a.innerHTML =
+    '<span class="num">' + o.num + '</span>' +
+    '<span class="icon">' + o.icon + '</span>' +
+    '<span class="name">' + o.name + '</span>' +
+    '<span class="desc">' + o.desc + '</span>' +
+    '<span class="bar"></span>';
+  a.addEventListener("mouseenter", function(){ focusIndex(tiles.indexOf(a)); });
+  a.addEventListener("click", function(e){ e.preventDefault(); open(o.href, o.city); });
+  return a;
+}
+
+function targetCity(){ return lastCity || CITIES[0].id; }
+
+function buildViewHref(v){
+  return v.perCity ? v.file + "?city=" + targetCity() : v.file;
+}
+
+var cityWrap = document.getElementById("cities");
+CITIES.forEach(function(c, i){
+  var el = tile({href:c.file, icon:c.icon, name:c.name, desc:c.desc, sys:c.sys, num:i+1, city:c.id});
+  if (c.id === lastCity) el.classList.add("last");
+  cityWrap.appendChild(el); tiles.push(el);
+});
+
+var viewWrap = document.getElementById("views");
+VIEWS.forEach(function(v, i){
+  var el = tile({href:buildViewHref(v), icon:v.icon, name:v.name, desc:v.desc, sys:v.sys, num:i+9, city:""});
+  el.dataset.view = i;
+  viewWrap.appendChild(el); tiles.push(el);
+});
+
+/* Start on the board you opened last, so the common case is OK-and-go. */
+var idx = 0;
+if (lastCity){
+  var li = CITIES.map(function(c){ return c.id; }).indexOf(lastCity);
+  if (li >= 0) idx = li;
+}
+
+function focusIndex(n){
+  if (n < 0 || n >= tiles.length) return;
+  tiles[idx].classList.remove("on");
+  idx = n;
+  tiles[idx].classList.add("on");
+  tiles[idx].focus({preventScroll:true});
+}
+tiles.forEach(function(t){ t.tabIndex = -1; });
+tiles[idx].classList.add("on");
+tiles[idx].focus({preventScroll:true});
+
+function open(href, city){
+  if (city){ try { localStorage.setItem(LAST_KEY, city); } catch (e) {} }
+  window.location.href = href;
+}
+
+function move(dx, dy){
+  var cols = 4;
+  var n = tiles.length, cityCount = CITIES.length;
+  var next = idx;
+  if (dx){
+    next = idx + dx;
+    if (next < 0) next = n - 1;
+    if (next >= n) next = 0;
+  } else if (dy){
+    next = idx + dy * cols;
+    /* Wrap between the two sections instead of dead-ending at an edge. */
+    if (next < 0) next = idx + cityCount;                  /* up from row 1 -> views */
+    if (next >= n) next = idx % cols;                      /* down off the end -> row 1 */
+    if (next >= n) next = n - 1;
+  }
+  focusIndex(next);
+}
+
+document.addEventListener("keydown", function(e){
+  var k = e.key;
+  if (k === "ArrowRight"){ move(1,0); e.preventDefault(); }
+  else if (k === "ArrowLeft"){ move(-1,0); e.preventDefault(); }
+  else if (k === "ArrowDown"){ move(0,1); e.preventDefault(); }
+  else if (k === "ArrowUp"){ move(0,-1); e.preventDefault(); }
+  else if (k === "Enter" || k === " "){
+    var t = tiles[idx];
+    open(t.getAttribute("href"), CITIES[idx] ? CITIES[idx].id : "");
+    e.preventDefault();
+  }
+  else if (/^[1-9]$/.test(k)){
+    /* Remotes have a number pad; 1-8 are cities, 9 is the first view. */
+    var n = parseInt(k,10) - 1;
+    if (n < tiles.length) { focusIndex(n); var t2 = tiles[n]; open(t2.getAttribute("href"), CITIES[n] ? CITIES[n].id : ""); }
+  }
+  else if (k === "f" || k === "F"){
+    var el = document.documentElement;
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (el.requestFullscreen) el.requestFullscreen().catch(function(){
+      document.getElementById("hint").textContent = "full screen blocked here — try the TV's own zoom";
+    });
+  }
+});
+
+function tick(){
+  var d = new Date();
+  document.getElementById("clock").textContent =
+    d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  document.getElementById("date").textContent =
+    d.toLocaleDateString([], {weekday:"long", month:"short", day:"numeric"});
+}
+tick(); setInterval(tick, 10000);
+</script>
+</body>
+</html>
