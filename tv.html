@@ -12,6 +12,11 @@
   body{
     background:#070d18; color:#e8f0ff; overflow:hidden;
     font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    /* One scaling unit for the whole page. Sizing off width alone overflows a
+       short screen (720p TVs overlapped their own footer), so height gets a
+       vote: on 16:9 the two terms are near-identical, and anything shorter
+       shrinks type to fit instead of spilling over the row below. */
+    --u:min(1vw, 1.72vh);
     /* TVs overscan: keep everything inside a safe margin so nothing is cut off */
     padding:max(3vh,18px) max(4vw,24px);
     display:flex; flex-direction:column; gap:2.2vh;
@@ -24,14 +29,14 @@
   }
   header{position:relative; z-index:1; display:flex; align-items:baseline; gap:1.2rem; flex-wrap:wrap}
   h1{
-    margin:0; font-size:clamp(24px,3.4vw,54px); font-weight:800; letter-spacing:.5px;
+    margin:0; font-size:clamp(24px,calc(3.4*var(--u)),84px); font-weight:800; letter-spacing:.5px;
     background:linear-gradient(90deg,#8ab4ff,#3ad0c8 55%,#b58cff);
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
-  .sub{font-size:clamp(13px,1.25vw,22px); color:#93a6c4}
+  .sub{font-size:clamp(13px,calc(1.35*var(--u)),34px); color:#93a6c4}
   .clock{margin-left:auto; font-variant-numeric:tabular-nums; text-align:right}
-  .clock .t{font-size:clamp(20px,2.6vw,42px); font-weight:700; letter-spacing:1px}
-  .clock .d{font-size:clamp(11px,1vw,17px); color:#93a6c4}
+  .clock .t{font-size:clamp(20px,calc(2.7*var(--u)),68px); font-weight:700; letter-spacing:1px}
+  .clock .d{font-size:clamp(11px,calc(1.05*var(--u)),20px); color:#93a6c4}
 
   /* Cities take twice the leftover height of Views, so the tiles grow to fill a
      TV instead of huddling at the top with dead space underneath. */
@@ -40,29 +45,31 @@
   #viewSec{flex:1 1 0}
   .section .grid{flex:1 1 auto; grid-auto-rows:1fr; min-height:0}
   .section h2{
-    margin:0 0 1vh; font-size:clamp(11px,1vw,17px); font-weight:700;
+    margin:0 0 1vh; font-size:clamp(11px,calc(1.05*var(--u)),20px); font-weight:700;
     letter-spacing:.22em; text-transform:uppercase; color:#7f93b3;
   }
 
-  .grid{display:grid; gap:clamp(10px,1.4vw,22px)}
+  .grid{display:grid; gap:clamp(8px,calc(1.2*var(--u)),20px)}
   #cities{grid-template-columns:repeat(4,1fr)}
   #views{grid-template-columns:repeat(4,1fr)}
 
   .tile{
     position:relative; display:flex; flex-direction:column; justify-content:space-between;
-    gap:.4em; padding:clamp(12px,1.5vw,26px);
+    gap:.35em; padding:clamp(10px,calc(1.35*var(--u)),24px);
+    /* Hard guarantee: a tile can never paint over its neighbour or the footer. */
+    overflow:hidden;
     border-radius:14px; cursor:pointer; text-decoration:none; color:inherit;
     background:linear-gradient(160deg,rgba(24,38,64,.95),rgba(14,23,42,.95));
     border:2px solid rgba(120,150,200,.18);
     transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease;
   }
   .tile .num{
-    position:absolute; top:.5em; right:.7em; font-size:clamp(11px,1vw,17px);
+    position:absolute; top:.5em; right:.7em; font-size:clamp(11px,calc(1.05*var(--u)),20px);
     font-weight:700; color:#5f7396;
   }
-  .tile .icon{font-size:clamp(24px,3vw,46px); line-height:1}
-  .tile .name{font-size:clamp(15px,1.7vw,30px); font-weight:700; line-height:1.15}
-  .tile .desc{font-size:clamp(10px,.95vw,16px); color:#93a6c4; line-height:1.3}
+  .tile .icon{font-size:clamp(22px,calc(2.9*var(--u)),72px); line-height:1}
+  .tile .name{font-size:clamp(17px,calc(2.15*var(--u)),56px); font-weight:700; line-height:1.1}
+  .tile .desc{font-size:clamp(11px,calc(1.15*var(--u)),30px); color:#93a6c4; line-height:1.25}
   .tile .bar{height:4px; border-radius:3px; background:var(--sys,#4ea1ff); opacity:.85}
 
   /* The focus ring is the whole point of this page — it has to be obvious from
@@ -77,12 +84,12 @@
   .tile.on .desc{color:#c3d3ec}
   .tile.last::after{
     content:"last used"; position:absolute; bottom:.55em; right:.8em;
-    font-size:clamp(9px,.8vw,13px); color:#7f93b3; letter-spacing:.1em; text-transform:uppercase;
+    font-size:clamp(9px,calc(.85*var(--u)),16px); color:#7f93b3; letter-spacing:.1em; text-transform:uppercase;
   }
 
   footer{
     position:relative; z-index:1; margin-top:auto; display:flex; gap:1.6em; flex-wrap:wrap;
-    font-size:clamp(11px,1vw,17px); color:#7f93b3;
+    font-size:clamp(11px,calc(1.05*var(--u)),20px); color:#7f93b3;
   }
   footer kbd{
     background:rgba(120,150,200,.15); border:1px solid rgba(120,150,200,.3);
@@ -93,7 +100,15 @@
   @media (max-width:760px){
     #cities{grid-template-columns:repeat(2,1fr)}
     #views{grid-template-columns:repeat(2,1fr)}
-    body{overflow:auto}
+    html{height:auto}
+    body{overflow:auto; height:auto; min-height:100%}
+    /* Fit-the-viewport sizing is a TV concern. On a phone the page scrolls, so
+       rows take their natural height — otherwise the flex split squashes them
+       and the tiles' overflow:hidden silently crops the text. (ID selectors
+       here because #citySec/#viewSec set the flex ratios above.) */
+    #citySec,#viewSec{flex:none}
+    .section .grid{grid-auto-rows:auto}
+    footer{margin-top:1.5em}
   }
 </style>
 </head>
