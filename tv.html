@@ -96,6 +96,52 @@
     border-radius:5px; padding:.1em .45em; font-family:inherit; color:#c3d3ec;
   }
 
+  #castBtn{
+    display:flex; align-items:center; gap:.5em; cursor:pointer;
+    font:inherit; font-size:clamp(12px,calc(1.1*var(--u)),22px); font-weight:600;
+    color:#c3d3ec; background:rgba(120,150,200,.12);
+    border:2px solid rgba(120,150,200,.28); border-radius:10px;
+    padding:.45em .9em; transition:border-color .14s ease, background .14s ease;
+  }
+  #castBtn:hover,#castBtn:focus-visible{border-color:#4ea1ff; background:rgba(78,161,255,.18); outline:none}
+  #castBtn.casting{border-color:#33d17a; background:rgba(51,209,122,.18); color:#d6ffe7}
+  #castBtn.casting .ico{animation:pulse 1.6s ease-in-out infinite}
+  #castBtn.dim{opacity:.55}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  #toast{
+    position:fixed; left:50%; bottom:6vh; transform:translateX(-50%) translateY(1em);
+    z-index:60; max-width:min(90vw,780px); text-align:center;
+    background:rgba(10,18,34,.97); border:2px solid rgba(120,150,200,.35);
+    border-radius:12px; padding:.7em 1.2em; color:#e8f0ff;
+    font-size:clamp(12px,calc(1.15*var(--u)),24px);
+    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  #castHelp{
+    position:fixed; inset:0; z-index:70; display:none;
+    align-items:center; justify-content:center; background:rgba(4,9,18,.86);
+  }
+  #castHelp.show{display:flex}
+  #castHelp .box{
+    max-width:min(92vw,900px); max-height:88vh; overflow:auto;
+    background:#0d1728; border:2px solid rgba(120,150,200,.35); border-radius:16px;
+    padding:clamp(18px,calc(2*var(--u)),40px); color:#e8f0ff;
+    font-size:clamp(13px,calc(1.2*var(--u)),24px); line-height:1.45;
+  }
+  #castHelp h3{margin:0 0 .6em; font-size:clamp(18px,calc(1.9*var(--u)),36px)}
+  #castHelp ol{margin:.5em 0; padding-left:1.4em}
+  #castHelp li{margin:.35em 0}
+  #castHelp .url{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all;
+    background:rgba(120,150,200,.14); border-radius:8px; padding:.5em .7em; margin:.6em 0;
+  }
+  #castHelp button{
+    margin-top:1em; font:inherit; font-weight:700; cursor:pointer;
+    background:#4ea1ff; color:#06121f; border:0; border-radius:10px; padding:.5em 1.4em;
+  }
+
   /* Phones/tablets land here too (the header link is on every board) — stack it. */
   @media (max-width:760px){
     #cities{grid-template-columns:repeat(2,1fr)}
@@ -134,8 +180,12 @@
 <header>
   <h1>Live Transit Board</h1>
   <div class="sub">Pick a city — <b>arrow keys</b> to move, <b>OK</b> to open</div>
+  <button id="castBtn" type="button"><span class="ico">📺</span><span class="lbl">Cast to TV</span></button>
   <div class="clock"><div class="t" id="clock">--:--</div><div class="d" id="date">—</div></div>
 </header>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="castHelp"><div class="box" id="castHelpBox"></div></div>
 
 <section class="section" id="citySec">
   <h2>Cities</h2>
@@ -152,21 +202,30 @@
   <span><kbd>OK</kbd> / <kbd>Enter</kbd> open</span>
   <span><kbd>1</kbd>–<kbd>9</kbd> jump straight to a board</span>
   <span><kbd>F</kbd> full screen</span>
+  <span><kbd>C</kbd> cast to TV</span>
   <span id="hint"></span>
 </footer>
 
 <script>
 /* Every board this launcher can open. `city` is the query param night.html and
-   flipboard.html already expect, so the view tiles just append it. */
+   flipboard.html already expect, so the view tiles just append it.
+
+   Order is deliberate, not the order the files happen to exist in: the two home
+   boards first (so 1 and 2 are the ones actually used daily), then the rest of
+   the Northeast, then the West Coast, then Europe. Numbers are positional, so
+   this order is also the remote's number-key mapping — it should not churn.
+
+   Icons are one consistent idea — a symbol OF the place — rather than the
+   earlier mix of transit glyphs and city mascots, which read as arbitrary. */
 var CITIES = [
-  {id:"dc",        file:"index.html",         icon:"🚇", name:"Washington DC", desc:"Metro · Metrobus · MARC · Ride On", sys:"#4ea1ff"},
+  {id:"dc",        file:"index.html",         icon:"🏛", name:"Washington DC", desc:"Metro · Metrobus · MARC · Ride On", sys:"#4ea1ff"},
   {id:"philly",    file:"philadelphia.html",  icon:"🔔", name:"Philadelphia",  desc:"SEPTA rail · subway · bus · PATCO", sys:"#3ad0c8"},
   {id:"nyc",       file:"nyc.html",           icon:"🗽", name:"New York",      desc:"Subway · LIRR · Metro-North · PATH", sys:"#ffd166"},
-  {id:"nj",        file:"newjersey.html",     icon:"🚏", name:"New Jersey",    desc:"NJ Transit rail · light rail · bus", sys:"#ff9d5c"},
+  {id:"nj",        file:"newjersey.html",     icon:"🌊", name:"New Jersey",    desc:"NJ Transit rail · light rail · bus", sys:"#ff9d5c"},
   {id:"boston",    file:"boston.html",        icon:"🦞", name:"Boston",        desc:"MBTA subway · commuter rail · bus", sys:"#33d17a"},
-  {id:"sf",        file:"sanfrancisco.html",  icon:"🌉", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
   {id:"la",        file:"losangeles.html",    icon:"🌴", name:"Los Angeles",   desc:"Metro rail · Metrolink", sys:"#b58cff"},
-  {id:"amsterdam", file:"amsterdam.html",     icon:"🚲", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"}
+  {id:"sf",        file:"sanfrancisco.html",  icon:"🌉", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
+  {id:"amsterdam", file:"amsterdam.html",     icon:"🌷", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"}
 ];
 
 /* Views that follow whichever city you used last. `perCity:false` = shared page. */
@@ -264,6 +323,13 @@ function move(dx, dy){
 
 document.addEventListener("keydown", function(e){
   var k = e.key;
+  /* While the cast help is up it owns the keyboard — otherwise arrow presses
+     would silently move the selection behind the overlay. */
+  if (document.getElementById("castHelp").classList.contains("show")){
+    if (k === "Escape" || k === "Enter" || k === " ") { closeCastHelp(); e.preventDefault(); }
+    return;
+  }
+  if (k === "c" || k === "C"){ toggleCast(); e.preventDefault(); return; }
   if (k === "ArrowRight"){ move(1,0); e.preventDefault(); }
   else if (k === "ArrowLeft"){ move(-1,0); e.preventDefault(); }
   else if (k === "ArrowDown"){ move(0,1); e.preventDefault(); }
@@ -286,6 +352,162 @@ document.addEventListener("keydown", function(e){
     });
   }
 });
+
+/* ---- Casting -------------------------------------------------------------
+   No web API lets a page mirror its own tab — only the browser's own UI can do
+   that, which is why a naive "cast" button on a website does nothing. What a
+   page CAN do is the Presentation API: hand a URL to a Chromecast / Google TV,
+   which then loads that page itself. For a kiosk board that is better than
+   mirroring anyway — the TV renders the board at its own resolution, live, and
+   this laptop can be closed afterwards. Where the API doesn't exist (Safari,
+   Firefox) the button explains how to cast in THAT browser rather than
+   pretending to work. -------------------------------------------------------*/
+var castConn = null;
+var castAvail = null;   /* true / false once known, null = unknown */
+
+function absUrl(href){ return new URL(href, location.href).href; }
+function selectedName(){ return tiles[idx].querySelector(".name").textContent; }
+
+function castSupported(){
+  return typeof PresentationRequest === "function" && !!navigator.presentation;
+}
+
+/* The TV fetches the URL over the network itself, so it has to be an address
+   the TV can actually reach. localhost is a secure context (so the API exists
+   and the picker opens) but is unreachable from the TV — worth saying plainly
+   instead of letting the cast fail on the device with no explanation. */
+function castReachable(){ return location.protocol === "https:"; }
+
+function toast(msg, ms){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function(){ t.classList.remove("show"); }, ms || 5200);
+}
+
+function setCastUI(){
+  var b = document.getElementById("castBtn"), lbl = b.querySelector(".lbl");
+  b.classList.remove("dim");
+  if (castConn){
+    b.classList.add("casting"); lbl.textContent = "Stop casting";
+    b.title = "Stop casting (C)"; return;
+  }
+  b.classList.remove("casting");
+  if (!castSupported()){
+    lbl.textContent = "Cast — how?";
+    b.title = "This browser can't start a cast from a page — click for how to do it on this device";
+    return;
+  }
+  lbl.textContent = "Cast to TV";
+  if (castAvail === false){
+    b.classList.add("dim");
+    b.title = "No cast device found on this network yet — click for other ways to get a board on the TV";
+    return;
+  }
+  b.title = "Cast " + selectedName() + " to a TV (C)";
+}
+
+function castHelp(reason){
+  var ua = navigator.userAgent;
+  var isSafari  = /safari/i.test(ua) && !/chrome|chromium|crios|edg|android/i.test(ua);
+  var isFirefox = /firefox|fxios/i.test(ua);
+  var published = "https://jedlavitch.github.io/transit-project-/tv.html";
+  var body;
+
+  if (reason === "local"){
+    body = "<h3>Casting needs the published site</h3>" +
+      "<p>This page is being served from <b>localhost</b>. The TV fetches the board over " +
+      "your network by itself, and it can't reach localhost — so the cast would fail on the " +
+      "TV even though the picker opens here. Cast from the published address instead:</p>" +
+      '<div class="url">' + published + "</div>";
+  } else if (reason === "none"){
+    body = "<h3>No cast device found</h3>" +
+      "<p>Nothing on this network is advertising itself as a Chromecast or Google TV. Either " +
+      "the TV is off/asleep, or this device is on a different network (guest Wi-Fi is a common " +
+      "culprit). You can always open the menu in the TV's own browser instead:</p>" +
+      '<div class="url">' + published + "</div>";
+  } else if (isSafari){
+    body = "<h3>Casting from Safari</h3>" +
+      "<p>Safari doesn't let a page start a cast, so this has to go through AirPlay:</p>" +
+      "<ol><li>Open <b>Control Centre</b> on your Mac or iPhone</li>" +
+      "<li>Choose <b>Screen Mirroring</b></li>" +
+      "<li>Pick your Apple TV</li></ol>" +
+      "<p>Or open this menu in the TV's own browser and pick a board there — that's what it's built for:</p>" +
+      '<div class="url">' + published + "</div>";
+  } else if (isFirefox){
+    body = "<h3>Firefox can't cast</h3>" +
+      "<p>Firefox has no casting support at all, from a page or from its own menu. Two options:</p>" +
+      "<ol><li>Open this menu in your TV's browser and pick a board there</li>" +
+      "<li>Or open it in Chrome, which can cast a board straight to a Chromecast</li></ol>" +
+      '<div class="url">' + published + "</div>";
+  } else {
+    body = "<h3>Casting from this browser</h3>" +
+      "<p>This browser doesn't expose casting to a page. Try its own menu " +
+      "(<b>⋮ → Cast</b> in Chrome and Edge), or open this menu in the TV's browser:</p>" +
+      '<div class="url">' + published + "</div>";
+  }
+
+  var box = document.getElementById("castHelpBox");
+  box.innerHTML = body + '<button type="button" id="castHelpOk">Got it</button>';
+  document.getElementById("castHelp").classList.add("show");
+  document.getElementById("castHelpOk").onclick = closeCastHelp;
+  document.getElementById("castHelpOk").focus();
+}
+
+function closeCastHelp(){
+  document.getElementById("castHelp").classList.remove("show");
+  tiles[idx].focus({preventScroll:true});
+}
+
+function startCast(){
+  if (!castSupported()) { castHelp(); return; }
+  if (!castReachable()) { castHelp("local"); return; }
+  if (castAvail === false) { castHelp("none"); return; }
+
+  var name = selectedName(), req;
+  try { req = new PresentationRequest([absUrl(tiles[idx].getAttribute("href"))]); }
+  catch (e) { castHelp(); return; }
+
+  req.start().then(function(conn){
+    castConn = conn;
+    var ended = function(){ castConn = null; setCastUI(); toast("Casting stopped"); };
+    conn.onclose = ended; conn.onterminate = ended;
+    setCastUI();
+    toast(name + " is loading on the TV — it runs the board itself, so you can close this tab");
+  }).catch(function(err){
+    var n = err && err.name;
+    if (n === "NotFoundError") castHelp("none");
+    else if (n === "NotAllowedError") toast("Cast cancelled");
+    else toast("Couldn't start casting" + (n ? " (" + n + ")" : ""));
+  });
+}
+
+function stopCast(){
+  try { castConn.terminate(); } catch (e) {}
+  castConn = null; setCastUI();
+}
+
+function toggleCast(){ castConn ? stopCast() : startCast(); }
+
+function initCast(){
+  document.getElementById("castBtn").addEventListener("click", toggleCast);
+  document.getElementById("castHelp").addEventListener("click", function(e){
+    if (e.target.id === "castHelp") closeCastHelp();
+  });
+  setCastUI();
+  if (!castSupported()) return;
+  try {
+    var probe = new PresentationRequest([absUrl("tv.html")]);
+    /* Also lets the browser's own Cast menu offer this page as a target. */
+    try { navigator.presentation.defaultRequest = probe; } catch (e) {}
+    probe.getAvailability().then(function(a){
+      castAvail = a.value;
+      a.onchange = function(){ castAvail = a.value; setCastUI(); };
+      setCastUI();
+    }).catch(function(){ castAvail = null; setCastUI(); });  /* unknown: stay enabled */
+  } catch (e) {}
+}
+initCast();
 
 function tick(){
   var d = new Date();
