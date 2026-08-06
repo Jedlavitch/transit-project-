@@ -1,15 +1,38 @@
+# Publish this site with GitHub Actions instead of the legacy Pages builder.
+#
+# WHY: the classic "pages-build-deployment" pipeline started failing on every
+# push (deployments #100 and #101 both red) while the last good build stayed
+# stuck serving an old copy of the site. That builder runs Jekyll and gives you
+# almost nothing to debug. This workflow skips it: it uploads the repo exactly
+# as it is and publishes that artifact. The site is plain static files — HTML,
+# CSS, JSON bundles — so there is nothing to "build" in the first place.
+#
+# ONE SETTING TO FLIP (only the repo owner can): Settings -> Pages ->
+# Build and deployment -> Source -> "GitHub Actions".
+# After that every push to main publishes through this file, and the failing
+# legacy builder is out of the picture for good.
+
 name: Deploy site to Pages
+
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:        # lets you re-run a deploy by hand from the Actions tab
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
+# A stuck run must never block the next one. The legacy "pages build and
+# deployment" pipeline and this workflow both claim the github-pages
+# environment, and with cancel-in-progress:false they deadlocked -- each waiting
+# on the other, both stuck in_progress forever. Superseding is the safe choice
+# here: the newest commit is the one worth publishing.
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
+
 jobs:
   deploy:
     environment:
@@ -19,8 +42,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Stage only what the site actually serves. Uploading `path: .` sent the
+      # whole checkout -- including the 36MB .git directory -- into the artifact,
+      # which is what left the deploy hanging. Generators and CI config aren't
+      # served either, so they go too.
+      - name: Stage the site
+        run: |
+          mkdir -p _site
+          rsync -a --exclude='.git' --exclude='_site' --exclude='.github' \
+                --exclude='*.py' ./ _site/
+          touch _site/.nojekyll
+          du -sh _site
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
