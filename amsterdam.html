@@ -1665,8 +1665,35 @@ function applyDisplay(zoom, padPct){
 }
 function setBoardZoom(z){ localStorage.setItem("tb.uiZoom", String(z)); applyDisplay(z, curPad()); }
 function setBoardPad(p){ localStorage.setItem("tb.safePad", String(p)); applyDisplay(curZoom(), p); }
-function curZoom(){ const v=parseFloat(localStorage.getItem("tb.uiZoom")); return isFinite(v)&&v>0?v:1; }
-function curPad(){ const v=parseFloat(localStorage.getItem("tb.safePad")); return isFinite(v)&&v>=0?v:0; }
+/* First open on a TV looked enormous: TV browsers report a small CSS viewport
+   (often 1280x720) for a big panel, so a layout designed around ~1600x900 gets
+   painted about 25% oversized and spills off the screen. So when nothing has
+   been chosen yet, fit the board to the screen instead of assuming 100%:
+   scale by how the viewport compares to that design size, floored at 70% so it
+   never turns into ants. A TV-ish device (remote/no hover, big screen) also
+   starts with a small edge inset, because TVs crop their own borders. Any
+   manual choice in Settings wins forever after -- this only fills the blank. */
+function looksLikeTv(){
+  try{
+    return innerWidth>=1100 &&
+      (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches);
+  }catch(e){ return false; }
+}
+function autoDisplay(){
+  const fit = Math.min(innerWidth/1600, innerHeight/900);
+  const z = Math.max(0.7, Math.min(1, Math.round(fit*20)/20));   // 5% steps, 70-100%
+  return { z, pad: looksLikeTv() ? 2.5 : 0 };
+}
+function curZoom(){ const v=parseFloat(localStorage.getItem("tb.uiZoom")); return isFinite(v)&&v>0?v:autoDisplay().z; }
+function curPad(){ const v=parseFloat(localStorage.getItem("tb.safePad")); return isFinite(v)&&v>=0?v:autoDisplay().pad; }
+/* TV browsers frequently report one viewport while the page is loading and a
+   different one once it settles (and a projector/monitor can be re-sized), so a
+   size picked once at boot can be wrong by the time anyone looks at it. Re-fit
+   on resize -- but ONLY while no size has been chosen in Settings, so a manual
+   choice is never overridden. */
+addEventListener("resize", ()=>{
+  try{ if(localStorage.getItem("tb.uiZoom")==null) applyDisplay(autoDisplay().z, curPad()); }catch(e){}
+});
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
