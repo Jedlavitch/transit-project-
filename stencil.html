@@ -358,6 +358,23 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     #setup .box{max-height:94vh}
   }
 </style>
+<script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
+   the whole site and cached every board, so a device that installed it keeps serving
+   old copies no matter how many times the site is redeployed - which looks exactly
+   like "GitHub isn't deploying". Drop that old cache, force any worker to re-check
+   for a new version, and never let a worker own these pages again. */
+(function(){try{
+  if(window.caches && caches.keys) caches.keys().then(function(ks){
+    ks.forEach(function(k){ if(k!=="spotter-v2") caches.delete(k); });
+  });
+  if(navigator.serviceWorker && navigator.serviceWorker.getRegistrations)
+    navigator.serviceWorker.getRegistrations().then(function(rs){
+      rs.forEach(function(r){
+        // a worker whose scope covers this page must not be caching boards
+        if(r.scope && location.href.indexOf(r.scope)===0 && !/spot\.html$/.test(location.pathname)) r.update();
+      });
+    });
+}catch(e){}})();</script>
 </head>
 <body>
 <div id="app">
