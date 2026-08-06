@@ -223,3 +223,12 @@ body #app{
 .atoast .at-who{ font-weight:800; font-size:12px; }
 .atoast .at-msg{ font-size:12px; color:var(--muted); line-height:1.45;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* A TV remote can't chase a hidden scrollbar: make the Settings panel's one
+   visible and thick enough to see from across a room, and give focused controls
+   a clear ring so you can tell where the D-pad is. */
+#setup .box{ scrollbar-width:auto; scrollbar-color:var(--accent) var(--row-bg); }
+#setup .box::-webkit-scrollbar{ width:12px; }
+#setup .box::-webkit-scrollbar-track{ background:var(--row-bg); border-radius:8px; }
+#setup .box::-webkit-scrollbar-thumb{ background:var(--accent); border-radius:8px; }
+#setup .box :focus-visible{ outline:3px solid var(--accent); outline-offset:2px; border-radius:8px; }

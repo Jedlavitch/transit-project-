@@ -2580,6 +2580,28 @@ function curPad(){ const v=parseFloat(localStorage.getItem("tb.safePad")); retur
 addEventListener("resize", ()=>{
   try{ if(localStorage.getItem("tb.uiZoom")==null) applyDisplay(autoDisplay().z, curPad()); }catch(e){}
 });
+/* Scrolling with a TV remote. The boards themselves never scroll by design, but
+   the Settings panel is taller than a screen -- and a remote has no pointer or
+   wheel, so it was effectively unreachable past the fold. Map the D-pad onto it:
+   up/down nudge, page up/down jump, and the panel scrolls to keep whatever is
+   focused in view. Typing in a field still behaves normally. */
+addEventListener("keydown", e=>{
+  const box=document.querySelector("#setup.show .box");
+  if(!box) return;
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||"")) return;
+  const big = e.key==="PageDown"||e.key==="PageUp";
+  const dn = e.key==="ArrowDown"||e.key==="PageDown";
+  const up = e.key==="ArrowUp"||e.key==="PageUp";
+  if(!dn && !up) return;
+  box.scrollBy({ top:(dn?1:-1)*(big?Math.round(box.clientHeight*0.85):110), behavior:"smooth" });
+  e.preventDefault();
+}, true);
+// keep D-pad focus visible inside the scrolling panel
+addEventListener("focusin", e=>{
+  const box=document.querySelector("#setup.show .box");
+  if(box && e.target && box.contains(e.target) && e.target.scrollIntoView)
+    e.target.scrollIntoView({block:"nearest"});
+});
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
