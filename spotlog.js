@@ -14,7 +14,7 @@
 (function () {
   "use strict";
   const LS = { spots: "tb.spots", feed: "tb.spotFeedUrl", hide: "tb.spotCardHidden",
-               scope: "tb.spotScope", sheet: "tb.sheetUrl" };
+               scope: "tb.spotScope", sheet: "tb.sheetUrl", blob: "tb.spotBlob" };
   const GLYPH = { plane: "✈️", train: "🚆", bus: "🚌" };
   const COLOR = { plane: "#ffd166", train: "#3ad0c8", bus: "#6aa9ff" };
   const NEAR_MI = 60;          // "around here" — generous enough to cover a metro area
@@ -70,7 +70,21 @@
   const feedUrl = () => { try { return (localStorage.getItem(LS.feed) || "").trim().replace(/\/+$/, ""); } catch (_) { return ""; } };
   const sheetUrl = () => { try { return (localStorage.getItem(LS.sheet) || "").trim(); } catch (_) { return ""; } };
   const isSheet = u => /script\.google\.com/i.test(u);
-  const anyFeed = () => sheetUrl() || feedUrl();
+  const anyFeed = () => blobId() || sheetUrl() || feedUrl();
+
+  /* ---- share code (jsonblob.com) -------------------------------------------
+     The default way to get sightings off a phone and onto a board. Needs no
+     account, no deployment and no key: the phone PUTs the log to a blob it
+     created, the board GETs it. Both ends are plain CORS-open REST, verified.
+     Stored as the bare blob id so the board only ever has to be given a code. */
+  const BLOB_API = "https://jsonblob.com/api/jsonBlob/";
+  const blobId = () => { try { return (localStorage.getItem(LS.blob) || "").trim(); } catch (_) { return ""; } };
+  // accepts a bare id, or any jsonblob URL it was pasted inside
+  function parseBlobId(v) {
+    const s = String(v || "").trim();
+    const m = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    return m ? m[0] : "";
+  }
 
   /* One field, two kinds of backend. A Google Apps Script URL goes in the Sheet
      slot (the key the phone app already uses for its mirror, so pasting the same
@@ -78,8 +92,10 @@
      spotter-worker deployment. */
   function setFeedUrl(v) {
     const u = String(v || "").trim().replace(/\/+$/, "");
+    const id = parseBlobId(u);
     try {
-      if (!u) { localStorage.setItem(LS.feed, ""); localStorage.setItem(LS.sheet, ""); }
+      if (!u) { localStorage.setItem(LS.feed, ""); localStorage.setItem(LS.sheet, ""); localStorage.setItem(LS.blob, ""); }
+      else if (id) localStorage.setItem(LS.blob, id);          // a share code
       else if (isSheet(u)) localStorage.setItem(LS.sheet, u);
       else localStorage.setItem(LS.feed, u);
     } catch (_) {}
@@ -164,15 +180,13 @@
       "background:var(--row-bg,rgba(255,255,255,.04));border:1px solid var(--row-line,rgba(255,255,255,.08))";
     box.innerHTML =
       `<div style="font-size:11px;color:var(--muted,#8fa3bf);line-height:1.45;margin-bottom:7px">
-         Sightings are saved on the device that logged them. To see your phone's here,
-         paste your <b>Google Sheet web-app URL</b> — the same
-         <code style="font-size:10px">script.google.com/…/exec</code> URL from the Spotter's
-         ⚙ settings (see SPREADSHEET.md; no Cloudflare needed). A
-         <b>spotter-worker</b> URL works here too.
+         Sightings are saved on the device that logged them. On your phone open the
+         Spotter, tap <b>⚙ → Share to my boards</b>, and it shows a <b>share code</b>.
+         Type that code here. No account, no setup, nothing to deploy.
        </div>
        <div style="display:flex;gap:6px;flex-wrap:wrap">
          <input type="text" id="spotFeedInput" spellcheck="false" autocomplete="off"
-           placeholder="https://script.google.com/macros/s/…/exec"
+           placeholder="paste the share code from your phone"
            style="flex:1 1 200px;min-width:0;font:inherit;font-size:12px;padding:5px 8px;border-radius:4px;
                   background:var(--panel,rgba(0,0,0,.25));color:inherit;
                   border:1px solid var(--row-line,rgba(255,255,255,.15))" />
@@ -262,8 +276,8 @@
         ? `<div class="empty">No sightings yet.${remoteErr
              ? ` Shared feed unreachable (${esc(remoteErr)}) — check the URL with ⇄ above.` : ""}</div>`
         : `<div class="empty">Nothing logged on <i>this</i> device. Sightings stay on the
-             device that logged them — if you log on your phone, tap <b>⇄</b> above and
-             paste your Google Sheet URL to pull them in.</div>`;
+             device that logged them — on your phone tap <b>⚙ → Share to my boards</b>,
+             then enter that share code here with <b>⇄</b> above.</div>`;
       stat.innerHTML = ""; count.textContent = "";
       return;
     }
@@ -306,11 +320,16 @@
   }
 
   async function pull() {
-    const sh = sheetUrl(), url = feedUrl();
-    if (!sh && !url) { remote = []; remoteErr = ""; return; }
+    const id = blobId(), sh = sheetUrl(), url = feedUrl();
+    if (!id && !sh && !url) { remote = []; remoteErr = ""; return; }
     try {
       let spots;
-      if (sh) {
+      if (id) {
+        const r = await fetch(BLOB_API + id, { cache: "no-store" });
+        if (!r.ok) throw new Error(r.status === 404 ? "share code not found" : "HTTP " + r.status);
+        const d = await r.json();
+        spots = Array.isArray(d) ? d : (d && d.spots);
+      } else if (sh) {
         const d = await jsonp(sh);
         spots = d && d.spots;
       } else {

@@ -287,6 +287,16 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   <h3>Spotter settings</h3>
   <label class="fld"><em>Your name on shared logs</em>
     <input type="text" id="handle" placeholder="e.g. Jack" autocomplete="off" /></label>
+  <p><b>Share to my boards.</b> Your log lives on this phone. Tap below to publish it,
+     then type the share code into any board's Spotted card (the ⇄ button). No account,
+     nothing to set up. Re-publishes automatically each time you log something.</p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0">
+    <button type="button" id="shareBtn" style="flex:0 0 auto;padding:11px 16px">Share to my boards</button>
+    <button type="button" id="shareCopy" class="ghost" style="flex:0 0 auto;padding:11px 14px;display:none">Copy code</button>
+  </div>
+  <div id="shareCode" style="font:700 13px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;
+       color:var(--accent);margin:-2px 0 10px"></div>
+
   <p><b>Shared feed (optional).</b> Paste a <code>spotter-worker.js</code> URL to pool
      sightings with friends — everyone's logs then show on the boards. Leave empty to
      keep your log private to this phone.</p>
@@ -677,6 +687,7 @@ function logIt(over){
   toSheet(s);
   toast(s.first ? `New one! ${s.route}` : (s.ridden ? `Logged a ride: ${s.route}` : `Logged: ${s.route}`));
   push(s);
+  resyncShare();      // boards see it on their next poll
 }
 
 /* ---------- Google Sheet mirror ----------
@@ -697,6 +708,32 @@ async function toSheet(s){
         first:s.first?"yes":"no", by:s.by||"", id:s.id })});
   }catch(e){ /* never block logging on the mirror */ }
 }
+/* ---------- share to my boards (jsonblob.com) ----------
+   The zero-setup way to get this log onto a board: no account, no key, nothing to
+   deploy. First publish POSTs and keeps the returned blob id; later ones PUT over
+   it, so the code you typed into a board never changes. Failure is never allowed
+   to cost a sighting -- the local log stays the source of truth. */
+const BLOB_API="https://jsonblob.com/api/jsonBlob";
+const blobId = () => (localStorage.getItem("tb.spotBlob")||"").trim();
+async function publishLog(){
+  const body=JSON.stringify({spots:loadSpots().slice(0,200)});
+  const id=blobId();
+  if(id){
+    const r=await fetch(BLOB_API+"/"+id,{method:"PUT",headers:{"content-type":"application/json"},body});
+    if(r.ok) return id;
+    if(r.status!==404) throw new Error("HTTP "+r.status);   // 404 => blob expired, make a new one
+  }
+  const r=await fetch(BLOB_API,{method:"POST",headers:{"content-type":"application/json"},body});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const loc=r.headers.get("Location")||"";
+  const m=loc.match(/[0-9a-f-]{36}/i);
+  if(!m) throw new Error("no share code returned");
+  localStorage.setItem("tb.spotBlob", m[0]);
+  return m[0];
+}
+// keep an already-published log current, quietly
+function resyncShare(){ if(blobId()) publishLog().catch(()=>{}); }
+
 // Optional shared feed: fire-and-forget, queued if offline so nothing is lost.
 async function push(s){
   const url=feedUrl(); if(!url) return;
@@ -1009,7 +1046,24 @@ function toCsv(){
 }
 
 /* ---------- settings sheet ---------- */
+function paintShare(){
+  const id=blobId();
+  $("#shareCode").textContent = id ? id : "";
+  $("#shareCopy").style.display = id ? "" : "none";
+  $("#shareBtn").textContent = id ? "Re-publish now" : "Share to my boards";
+}
+$("#shareBtn").onclick=async()=>{
+  const b=$("#shareBtn"); const was=b.textContent; b.disabled=true; b.textContent="Publishing…";
+  try{ await publishLog(); paintShare(); toast("Published — type this code into your board"); }
+  catch(e){ toast("Couldn't publish: "+(e.message||"no connection")); b.textContent=was; }
+  finally{ b.disabled=false; }
+};
+$("#shareCopy").onclick=async()=>{
+  try{ await navigator.clipboard.writeText(blobId()); toast("Share code copied"); }
+  catch(_){ toast("Copy failed — read it off the screen"); }
+};
 $("#setBtn").onclick=()=>{
+  paintShare();
   $("#handle").value=localStorage.getItem(LS.handle)||"";
   $("#feedUrl").value=localStorage.getItem(LS.feed)||"";
   $("#sheetUrl").value=localStorage.getItem(LS.sheet)||"";
