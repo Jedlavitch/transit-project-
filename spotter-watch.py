@@ -181,10 +181,34 @@ def run_once(blob_id):
     return 0
 
 
+CONFIG_PATH = os.path.expanduser("~/.config/transit-spotter/blob")
+
+
+def configured_blob():
+    """Share code from the environment, or from a config file.
+
+    The file matters for the always-on setup: a launchd agent or a systemd unit
+    would otherwise need the code baked into the job definition, so changing it
+    would mean editing and reloading the job. A file is one line to edit.
+    """
+    env = (os.environ.get("SPOT_BLOB") or "").strip()
+    if env:
+        return env
+    try:
+        with open(CONFIG_PATH) as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    return line
+    except OSError:
+        pass
+    return ""
+
+
 def main():
-    blob_id = (os.environ.get("SPOT_BLOB") or "").strip()
+    blob_id = configured_blob()
     if not blob_id:
-        print("SPOT_BLOB is not set — add the share code as a repository secret",
+        print(f"No share code. Put it in {CONFIG_PATH}, or set SPOT_BLOB.",
               file=sys.stderr)
         return 1
     once = os.environ.get("SPOT_ONCE", "1") != "0"
