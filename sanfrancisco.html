@@ -7,7 +7,7 @@
 <title>San Francisco Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=8" />
+<link rel="stylesheet" href="theme.css?v=9" />
 <script src="license.js" defer></script>
 <script src="cityswitch.js"></script>
 <script src="spotlog.js" defer></script>
@@ -484,7 +484,6 @@ var r=g("tb.rows")||g("transitboardsf.rows");if(r&&r!=="normal")d.setAttribute("
     <span class="dot" id="statusDot"></span>
     <span id="statusText">live — BART + Amtrak + airplanes.live · Muni/Caltrain scheduled</span>
     <span class="grow"></span>
-    <span id="feeds"></span>
   </footer>
 
 </div>
@@ -543,6 +542,12 @@ var r=g("tb.rows")||g("transitboardsf.rows");if(r&&r!=="normal")d.setAttribute("
       <button type="button" class="theme-btn" data-pad="1">1%</button>
       <button type="button" class="theme-btn" data-pad="2.5">2.5%</button>
       <button type="button" class="theme-btn" data-pad="5">5%</button>
+    </div>
+
+    <div class="accent-lbl">Map legend</div>
+    <div class="theme-row" id="legendRow">
+      <button type="button" class="theme-btn" data-legend="off">Hidden</button>
+      <button type="button" class="theme-btn" data-legend="on">Shown</button>
     </div>
 
     <div class="accent-lbl">Show on board</div>
@@ -2084,6 +2089,19 @@ addEventListener("focusin", e=>{
   if(box && e.target && box.contains(e.target) && e.target.scrollIntoView)
     e.target.scrollIntoView({block:"nearest"});
 });
+
+/* The legend was two dense lines of 11px keys under the map -- reference you
+   read once and then never again, and unreadable from across a room anyway.
+   Hidden by default, still one click away for anyone who wants it. */
+function setLegend(mode){
+  document.documentElement.setAttribute("data-legend", mode);
+  localStorage.setItem("tb.legend", mode);
+  document.querySelectorAll("#legendRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.legend===mode));
+  if(state.map) setTimeout(()=>{ state.map.invalidateSize(); fitAll(); }, 100);
+}
+function buildLegendButtons(){
+  document.querySelectorAll("#legendRow .theme-btn").forEach(b=>{ b.onclick=()=>setLegend(b.dataset.legend); });
+}
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
@@ -2324,6 +2342,7 @@ function boot(){
   setBoardTheme(localStorage.getItem("tb.theme")||localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
+  setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();

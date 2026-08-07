@@ -232,3 +232,13 @@ body #app{
 #setup .box::-webkit-scrollbar-track{ background:var(--row-bg); border-radius:8px; }
 #setup .box::-webkit-scrollbar-thumb{ background:var(--accent); border-radius:8px; }
 #setup .box :focus-visible{ outline:3px solid var(--accent); outline-offset:2px; border-radius:8px; }
+
+/* ---- decluttering the board ------------------------------------------------
+   Legend hidden unless asked for (Settings -> Map legend), and the header's
+   view links stop shouting: they were five boxed buttons competing with the
+   board's own title for attention. Quieter until hovered/focused. */
+:root[data-legend="off"] .legend{ display:none; }
+.view-links a{ background:transparent; border-color:transparent; color:var(--muted);
+  padding:6px 9px; font-weight:600; }
+.view-links a:hover, .view-links a:focus-visible{ color:var(--text); background:var(--panel);
+  border-color:var(--line); }

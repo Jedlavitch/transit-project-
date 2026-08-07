@@ -55,6 +55,14 @@
     border:2px solid var(--bg); box-shadow:0 0 8px var(--accent-dim)}
   .endpt-label{white-space:nowrap; transform:translate(10px,-8px); color:var(--city); font-size:12px;
     font-weight:700; text-shadow:0 1px 6px #000, 0 0 2px #000; letter-spacing:.5px}
+  /* intermediate calling points: route texture, deliberately quieter than the
+     two endpoint markers — stops already passed fade back further still */
+  .tour-stopdot{display:block; width:7px; height:7px; border-radius:50%;
+    background:var(--accent); opacity:.75; box-shadow:0 0 4px var(--accent)}
+  .tour-stopdot.done{opacity:.28; box-shadow:none}
+  .tour-nextdot{display:block; width:13px; height:13px; border-radius:50%;
+    background:var(--bg); border:3px solid var(--accent); box-shadow:0 0 10px var(--accent)}
+  .endpt-label.next{color:var(--accent); font-size:11px; transform:translate(11px,-7px)}
 
   /* ---- top bar: what we're watching + the shuffle queue + controls ---- */
   header{position:fixed; z-index:5; top:0; left:0; right:0; display:flex; align-items:center; gap:14px;
@@ -68,12 +76,23 @@
   .brand .dot{width:9px; height:9px; border-radius:50%; background:var(--good); box-shadow:0 0 10px var(--good);
     animation:blink 2s ease-in-out infinite}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
-  .queue{display:flex; gap:7px; margin-left:8px; overflow:hidden; flex:1; min-width:0}
-  .queue .chip{font-size:11px; font-weight:700; color:var(--muted); border:1px solid var(--faint);
-    border-radius:999px; padding:5px 11px; white-space:nowrap; opacity:.7; background:rgba(6,12,22,.5)}
-  .queue .chip.now{color:var(--bg); background:var(--accent); border-color:var(--accent); opacity:1}
+  .upnext{display:flex; align-items:center; gap:9px; margin-left:8px; flex:1; min-width:0}
+  .qlabel{font-size:9px; font-weight:800; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--muted); opacity:.55; white-space:nowrap}
+  .queue{display:flex; gap:7px; overflow:hidden; flex:1; min-width:0}
+  .queue .chip{display:inline-flex; align-items:baseline; gap:5px;
+    font:inherit; font-size:11px; font-weight:700; color:var(--muted); border:1px solid var(--faint);
+    border-radius:999px; padding:5px 11px; white-space:nowrap; opacity:.7; background:rgba(6,12,22,.5);
+    /* the header itself is click-through; the chips are the exception */
+    pointer-events:auto; cursor:pointer; transition:opacity .15s ease, transform .15s ease}
+  .queue .chip:hover,.queue .chip:focus-visible{opacity:1; transform:translateY(-1px); outline:none}
+  .queue .chip.now{color:var(--bg); background:var(--accent); border-color:var(--accent); opacity:1; cursor:default}
+  .queue .chip.now:hover{transform:none}
+  .queue .chip i{font-style:normal; font-weight:600; opacity:.72; font-size:10px}
+  .queue .chip .qn{font-size:9px; opacity:.6; font-weight:800}
   .clock{margin-left:auto; font-variant-numeric:tabular-nums; color:var(--muted); font-size:15px; font-weight:700}
-  .ctrls{display:flex; gap:8px}
+  .ctrls{display:flex; gap:8px; align-items:center}
+  .ctrls .cdiv{width:1px; height:22px; background:var(--faint); margin:0 3px}
   .ctrls button, .ctrls a{display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px;
     border-radius:11px; border:1px solid var(--faint); background:rgba(8,14,24,.7); color:var(--muted);
     cursor:pointer; font-size:16px; text-decoration:none; font-family:inherit}
@@ -135,6 +154,15 @@
   .chips .c.badge-late{color:var(--late); background:rgba(255,107,90,.12); border-color:rgba(255,107,90,.4)}
   .hdg-arrow{display:inline-block; font-weight:900}
 
+  /* weather where the vehicle actually is — arrives after the card, so it gets
+     its own row rather than being folded into the chips innerHTML */
+  .wx{display:none; align-items:center; gap:8px; margin-top:10px; font-size:12px;
+    font-weight:600; color:var(--muted)}
+  .wx.show{display:flex}
+  .wx .ic{font-size:16px; line-height:1}
+  .wx .t{color:var(--city); font-weight:800; font-variant-numeric:tabular-nums}
+  .wx .sep{opacity:.4}
+
   .prog{margin-top:14px}
   .prog .bar{position:relative; height:6px; border-radius:99px; background:var(--faint)}
   .prog .fill{position:absolute; left:0; top:0; bottom:0; border-radius:99px;
@@ -159,6 +187,30 @@
     background:linear-gradient(90deg,var(--accent),var(--accent2),var(--city));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent}
 
+  /* ---- tour log (📜): what this session has already shown ---- */
+  #log{position:fixed; z-index:7; top:0; right:0; bottom:0; width:min(92vw,400px);
+    background:rgba(6,11,20,.97); border-left:1px solid var(--faint);
+    box-shadow:-20px 0 60px rgba(0,0,0,.6); display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform .28s ease; pointer-events:auto}
+  #log.show{transform:none}
+  .log-head{display:flex; align-items:center; gap:10px; padding:16px 18px;
+    border-bottom:1px solid var(--faint)}
+  .log-title{font-weight:800; letter-spacing:.5px; color:var(--city)}
+  .log-count{font-size:11px; color:var(--muted); font-weight:700; margin-right:auto}
+  .log-head button{font:inherit; font-size:11px; font-weight:700; cursor:pointer;
+    color:var(--muted); background:rgba(8,14,24,.7); border:1px solid var(--faint);
+    border-radius:8px; padding:5px 10px}
+  .log-head button:hover{color:var(--accent); border-color:var(--accent-dim)}
+  .log-body{flex:1; overflow-y:auto; padding:8px 0}
+  .log-row{display:grid; grid-template-columns:auto 1fr; gap:10px; padding:9px 18px;
+    border-bottom:1px solid rgba(255,255,255,.04)}
+  .log-row .ic{font-size:15px; line-height:1.3}
+  .log-row .l1{font-size:13px; font-weight:700; color:var(--city)}
+  .log-row .l2{font-size:11px; color:var(--muted); font-weight:600; margin-top:1px}
+  .log-row .l3{font-size:10px; color:var(--muted); opacity:.65; margin-top:2px;
+    font-variant-numeric:tabular-nums}
+  .log-empty{padding:24px 18px; font-size:12px; color:var(--muted)}
+
   /* ---- tour settings (⚙): pace + city/mode filters, persisted ---- */
   #settings{position:fixed; z-index:8; top:74px; right:22px; width:min(320px,calc(100vw - 44px));
     background:var(--panel); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
@@ -180,10 +232,11 @@
     background:linear-gradient(135deg,rgba(125,184,255,.14),rgba(89,224,193,.09))}
   #settings .note{margin-top:14px; font-size:11px; color:var(--muted); line-height:1.5}
 
-  /* the shuffle queue is decorative — give the (now larger) control row the
-     header before the queue starts fighting it for space */
+  /* Narrow screens: the control row wins the header. The queue is no longer
+     decorative (its chips jump the tour), but number keys 1-6 still do the same
+     job, so dropping it here costs reachability, not the feature. */
   @media (max-width:1100px){
-    .queue{display:none}
+    .upnext{display:none}
   }
   @media (max-width:640px){
     #card{grid-template-columns:1fr} #photo{width:100%; max-height:120px}
@@ -210,15 +263,22 @@
 
   <header>
     <div class="brand"><span class="dot"></span><span class="t">Grand Tour</span></div>
-    <div class="queue" id="queue"></div>
+    <div class="upnext">
+      <span class="qlabel">Up next</span>
+      <div class="queue" id="queue"></div>
+    </div>
     <span class="clock" id="clock">—</span>
+    <!-- transport controls and utilities are different jobs; the divider keeps
+         one undifferentiated row of eight buttons from reading as a jumble -->
     <div class="ctrls">
       <button id="backBtn" title="Previous stop (←)">⏮</button>
       <button id="pauseBtn" title="Pause / resume (space)">⏸</button>
       <button class="ring" id="skipBtn" title="Skip to next (→)">⏭
         <svg viewBox="0 0 40 40"><circle id="ringC" cx="20" cy="20" r="18.5"></circle></svg>
       </button>
+      <span class="cdiv"></span>
       <button id="stayBtn" title="Stay with this vehicle (S)">📌</button>
+      <button id="logBtn" title="Tour log — everything this session has shown (L)">📜</button>
       <button id="setBtn" title="Tour settings">⚙</button>
       <button id="fsBtn" title="Full screen (F)">⛶</button>
       <a id="boardBtn" href="index.html" title="Back to the board">‹</a>
@@ -239,6 +299,16 @@
 
   <div id="flash"><span id="flashSmall">Tuning in…</span><span class="big" id="flashBig"></span></div>
 
+  <div id="log">
+    <div class="log-head">
+      <span class="log-title">Tour log</span>
+      <span class="log-count" id="logCount"></span>
+      <button id="logClear" type="button" title="Clear the log">Clear</button>
+      <button id="logClose" type="button" title="Close (Esc)">✕</button>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+
   <div id="card">
     <div class="txt">
       <div class="kicker"><span class="mode-ic" id="modeIc">✈</span><span id="feedLbl">—</span><span id="liveTag"></span></div>
@@ -247,6 +317,7 @@
       <div class="sub" id="sub"></div>
       <div class="route" id="route" style="display:none"></div>
       <div class="chips" id="chips"></div>
+      <div class="wx" id="wx"></div>
       <div class="prog" id="prog" style="display:none">
         <div class="bar"><div class="fill" id="progFill"></div><div class="dot" id="progDot"></div></div>
         <div class="lbl"><span id="progFlown"></span><span class="pct" id="progPct"></span><span id="progToGo"></span></div>
@@ -367,13 +438,97 @@ function moveLL(ll, deg, nm){
   return { lat:ll.lat+dLat, lon:ll.lon+dLon };
 }
 // a lifted bezier arc between two points (classic flight-map curve)
-function arc(o,d,bend=0.22){
-  const mid={lat:(o.lat+d.lat)/2,lon:(o.lon+d.lon)/2};
-  const dx=d.lon-o.lon, dy=d.lat-o.lat, len=Math.hypot(dx,dy)||1;
-  const ctrl={ lat:mid.lat + (-dx/len)*len*bend, lon:mid.lon + (dy/len)*len*bend };
-  const pts=[]; for(let t=0;t<=1;t+=1/48){ const u=1-t;
-    pts.push([ u*u*o.lat+2*u*t*ctrl.lat+t*t*d.lat, u*u*o.lon+2*u*t*ctrl.lon+t*t*d.lon ]); }
+/* The real path a flight takes: the great circle between the two airports,
+   sampled as a polyline. This replaces a decorative quadratic Bézier that bowed
+   the line sideways by 22% of the route length — on a 400nm hop that put the
+   drawn line ~90nm off the truth, so the aircraft marker never sat on its own
+   route. Slerp on the unit sphere, which is the actual shortest path; the
+   apparent curve on a Mercator map is then real, not ornamental. */
+function greatCircle(o,d,steps=64){
+  const rad=Math.PI/180, deg=180/Math.PI;
+  const φ1=o.lat*rad, λ1=o.lon*rad, φ2=d.lat*rad, λ2=d.lon*rad;
+  const sinφ1=Math.sin(φ1), cosφ1=Math.cos(φ1), sinφ2=Math.sin(φ2), cosφ2=Math.cos(φ2);
+  const Δ=2*Math.asin(Math.sqrt(Math.sin((φ2-φ1)/2)**2 + cosφ1*cosφ2*Math.sin((λ2-λ1)/2)**2));
+  if(!(Δ>1e-9)) return [[o.lat,o.lon],[d.lat,d.lon]];
+  const pts=[];
+  for(let i=0;i<=steps;i++){
+    const f=i/steps, a=Math.sin((1-f)*Δ)/Math.sin(Δ), b=Math.sin(f*Δ)/Math.sin(Δ);
+    const x=a*cosφ1*Math.cos(λ1)+b*cosφ2*Math.cos(λ2);
+    const y=a*cosφ1*Math.sin(λ1)+b*cosφ2*Math.sin(λ2);
+    const z=a*sinφ1+b*sinφ2;
+    pts.push([Math.atan2(z,Math.hypot(x,y))*deg, Math.atan2(y,x)*deg]);
+  }
+  return unwrapLons(pts);
+}
+/* A great circle can cross the antimeridian; Leaflet draws a full-width streak
+   back across the map unless successive longitudes stay continuous. */
+function unwrapLons(pts){
+  for(let i=1;i<pts.length;i++){
+    let d=pts[i][1]-pts[i-1][1];
+    if(d>180) pts[i][1]-=360; else if(d<-180) pts[i][1]+=360;
+  }
   return pts;
+}
+
+/* Amtrak's own published track geometry, same bundle the boards use. */
+let amtrakShapes=null;
+function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"").trim(); }
+async function ensureAmtrakShapes(){
+  if(amtrakShapes) return amtrakShapes;
+  try{
+    const data=await getJSON("amtrak-routes.json",15000);
+    const m={}; for(const name in data) m[normAmtrakName(name)]=data[name];
+    amtrakShapes=m;
+  }catch(e){ amtrakShapes={}; }
+  return amtrakShapes;
+}
+
+/* A stored shape's point order is arbitrary — GTFS shapes are just as likely to
+   run destination-to-origin, and a station list can come back either way too.
+   pathProgress measures from path[0], so an unoriented path reports a train
+   ARRIVING at its destination as 1% travelled. Flip the path when its ends
+   match the trip's endpoints better the other way round. */
+function orientPath(path, oLL, dLL){
+  if(!path || path.length<2 || !oLL || !dLL) return path;
+  const a={lat:path[0][0], lon:path[0][1]};
+  const z={lat:path[path.length-1][0], lon:path[path.length-1][1]};
+  const asStored = haversineNm(a,oLL)+haversineNm(z,dLL);
+  const flipped  = haversineNm(a,dLL)+haversineNm(z,oLL);
+  return flipped<asStored ? path.slice().reverse() : path;
+}
+
+/* Does this route shape actually describe this particular trip? Stations sit
+   essentially on the track, so a genuine match puts both ends within a mile or
+   two; a mismatched variant is out by tens of miles. */
+function nearestOnPathNm(p, path){
+  let b=Infinity;
+  for(const q of path){ const d=haversineNm(p,{lat:q[0],lon:q[1]}); if(d<b) b=d; }
+  return b;
+}
+function shapeCoversTrip(shape, callPath){
+  if(!shape || shape.length<2 || !callPath || callPath.length<2) return false;
+  const a={lat:callPath[0][0], lon:callPath[0][1]};
+  const z={lat:callPath[callPath.length-1][0], lon:callPath[callPath.length-1][1]};
+  return nearestOnPathNm(a,shape)<15 && nearestOnPathNm(z,shape)<15;
+}
+
+/* Distance along a polyline to the point on it nearest `p`, and the total —
+   so "% of the way there" follows the route actually being travelled instead
+   of the straight line between endpoints. */
+function pathProgress(path, p){
+  if(!path || path.length<2) return null;
+  let total=0, best=Infinity, bestRun=0, run=0;
+  for(let i=1;i<path.length;i++){
+    const a={lat:path[i-1][0],lon:path[i-1][1]}, b={lat:path[i][0],lon:path[i][1]};
+    const seg=haversineNm(a,b);
+    const d=haversineNm(p,a);
+    if(d<best){ best=d; bestRun=run; }
+    run+=seg; total+=seg;
+  }
+  const last={lat:path[path.length-1][0],lon:path[path.length-1][1]};
+  if(haversineNm(p,last)<best){ best=haversineNm(p,last); bestRun=total; }
+  if(!(total>0)) return null;
+  return {total, done:Math.max(0,Math.min(total,bestRun)), off:best};
 }
 
 /* ===================== route + photo lookups (planes) ==================== */
@@ -486,6 +641,21 @@ async function amtrakSubject(stop, pin){
   const dLL=st[t.destCode]?{lat:st[t.destCode][0],lon:st[t.destCode][1]}:null;
   const hdg=toDeg(t.heading) ?? (dLL?bearingDeg({lat:t.lat,lon:t.lon},dLL):null);
   const ns=(t.stations||[]).find(s=>s.status!=="Departed");
+  /* Amtrak's own track geometry gives the nicest line, but the bundle stores ONE
+     shape per route NAME while a route can run wildly different variants — the
+     "Northeast Regional" shape is a 224mi segment, and a BOS->Roanoke Regional
+     (622mi, 27 stops) sits 163nm away from it. Drawing that shape put the line
+     nowhere near the train and pinned progress at 0%. So only trust the shape
+     when it actually covers THIS train's journey; otherwise the train's own
+     station sequence is the honest path. */
+  const shapes=await ensureAmtrakShapes();
+  const shape=shapes[normAmtrakName(t.routeName)];
+  const callPts=(t.stations||[]).map(x=>({...x, ll:st[x.code]})).filter(x=>x.ll);
+  const callPath=callPts.map(x=>[x.ll[0],x.ll[1]]);
+  const amPath=(shape && shape.length>1 && shapeCoversTrip(shape, callPath)) ? shape
+             : (callPath.length>1 ? callPath : null);
+  const amStops=callPts.map(x=>({lat:x.ll[0], lon:x.ll[1], name:x.name||x.code,
+    done:x.status==="Departed", next:!!(ns && x.code===ns.code)}));
   const chips=[]; if(t.velocity) chips.push({t:`${Math.round(t.velocity)} mph`});
   if(hdg!=null) chips.push({t:`${Math.round(hdg)}° ${compassOf(hdg)}`, hdg:Math.round(hdg)});
   const late=(t.trainTimely||"").trim();
@@ -499,6 +669,7 @@ async function amtrakSubject(stop, pin){
     oCity:t.origName||t.origCode, dCity:t.destName||t.destCode,
     subline:`${t.origCode||""} → ${t.destCode||""}`,
     pos:{lat:t.lat,lon:t.lon}, oLL, dLL, heading:hdg, speedKt:(t.velocity||0)/1.15078, chips,
+    path:amPath, stops:amStops,
     photoQuery:`Amtrak ${t.routeName||"train"} train`, zoom:9,
   };
 }
@@ -543,13 +714,20 @@ async function schedSubject(stop, pin){
       running++;
       if(!best||nm<best.nm){ const first=s._coord[seq[0][0]], last=s._coord[seq[seq.length-1][0]];
         const segNm=haversineNm({lat:ca[0],lon:ca[1]},{lat:cb[0],lon:cb[1]}), segMin=Math.max(1,b[1]-a[1]);
-        best={ nm, lat, lon, tr, first, last, ca, cb, nextName:cb[2], nextMin:b[1],
+        best={ nm, lat, lon, tr, first, last, ca, cb, nextName:cb[2], nextMin:b[1], nowMin:now,
           heading: bearingDeg({lat:ca[0],lon:ca[1]},{lat:cb[0],lon:cb[1]}), speedKt: segNm/(segMin/60) }; }
       break;
     }
   });
   if(!best) return null;
-  const {tr,lat,lon,first,last,nextName,nextMin,heading,speedKt}=best;
+  const {tr,lat,lon,first,last,nextName,nextMin,heading,speedKt,nowMin}=best;
+  /* The trip's own stop sequence IS the route — every intermediate station is
+     already in the bundle, so the line can follow the timetable instead of
+     cutting a straight chord from first stop to last. */
+  const seqStops=tr.st.map(([id,min])=>{ const c=s._coord[id];
+    return c ? {lat:c[0], lon:c[1], name:c[2], min, done:min<=nowMin, next:min===nextMin} : null;
+  }).filter(Boolean);
+  const seqPath=seqStops.map(x=>[x.lat,x.lon]);
   const chips=[]; if(speedKt>2) chips.push({t:`${Math.round(speedKt*1.15078)} mph`});
   chips.push({t:`${Math.round(heading)}° ${compassOf(heading)}`, hdg:Math.round(heading)});
   if(nextName) chips.push({t:`→ ${nextName}${nextMin!=null?` · ${minClock(nextMin)}`:""}`});
@@ -566,6 +744,7 @@ async function schedSubject(stop, pin){
     oCity:first?first[2]:null, dCity:last?last[2]:(tr.hs||null),
     subline:"scheduled position",
     pos:{lat,lon}, oLL:first?{lat:first[0],lon:first[1]}:null, dLL:last?{lat:last[0],lon:last[1]}:null,
+    path:seqPath.length>1?seqPath:null, stops:seqStops,
     heading, speedKt, chips, count:running,
     photoQuery:stop.photo, zoom: stop.kind==="tram"?14:12,
   };
@@ -671,9 +850,49 @@ function present(s){
   applyPalette(s.kind);   // pour the mode's palette into the page BEFORE drawing (route/trail read it)
   // ---- map: draw route + endpoints, fly to the vehicle ----
   routeLayer.clearLayers(); trailPts=[]; if(trail){ trail=null; }
+  /* The route line. Order of preference: a real path the feed gave us (Amtrak
+     track geometry, or a timetable's own stop sequence), then a great circle
+     for flights, and only then a straight chord. */
+  s._line = s.path && s.path.length>1 ? orientPath(s.path, s.oLL, s.dLL)
+          : (s.oLL && s.dLL ? (s.arcRoute ? greatCircle(s.oLL,s.dLL)
+                                          : [[s.oLL.lat,s.oLL.lon],[s.dLL.lat,s.dLL.lon]])
+                            : null);
+  if(s._line){
+    const prog=pathProgress(s._line, s.pos);
+    /* Split the line at the vehicle so the distance already covered reads
+       differently from the distance still to run. */
+    let doneLine=null, restLine=s._line;
+    if(prog && prog.total>0){
+      let run=0, cut=0;
+      for(let i=1;i<s._line.length;i++){
+        const seg=haversineNm({lat:s._line[i-1][0],lon:s._line[i-1][1]},{lat:s._line[i][0],lon:s._line[i][1]});
+        if(run+seg>=prog.done){ cut=i; break; }
+        run+=seg; cut=i;
+      }
+      if(cut>0 && cut<s._line.length){
+        doneLine=s._line.slice(0,cut+1).concat([[s.pos.lat,s.pos.lon]]);
+        restLine=[[s.pos.lat,s.pos.lon]].concat(s._line.slice(cut));
+      }
+    }
+    if(doneLine) L.polyline(doneLine,{color:getAccent(),weight:2,opacity:.22,interactive:false}).addTo(routeLayer);
+    L.polyline(restLine,{color:getAccent(),weight:2.5,opacity:.55,dashArray:"3 10"}).addTo(routeLayer);
+
+    /* Intermediate calling points, when the feed knows them. Kept small and
+       non-interactive so they read as route texture, not clutter. */
+    (s.stops||[]).forEach(st=>{
+      if(st.next) return;   // the next stop gets its own brighter marker below
+      L.marker([st.lat,st.lon],{interactive:false,icon:L.divIcon({className:"",
+        html:`<span class="tour-stopdot${st.done?" done":""}"></span>`,iconSize:[7,7],iconAnchor:[3.5,3.5]})}).addTo(routeLayer);
+    });
+    const nextStop=(s.stops||[]).find(x=>x.next);
+    if(nextStop){
+      L.marker([nextStop.lat,nextStop.lon],{interactive:false,icon:L.divIcon({className:"",
+        html:'<span class="tour-nextdot"></span>',iconSize:[13,13],iconAnchor:[6.5,6.5]})}).addTo(routeLayer);
+      L.marker([nextStop.lat,nextStop.lon],{interactive:false,
+        icon:L.divIcon({className:"endpt-label next",html:escapeHtml(nextStop.name||"")})}).addTo(routeLayer);
+    }
+  }
   if(s.oLL && s.dLL){
-    const line=s.arcRoute? arc(s.oLL,s.dLL) : [[s.oLL.lat,s.oLL.lon],[s.dLL.lat,s.dLL.lon]];
-    L.polyline(line,{color:getAccent(),weight:2.5,opacity:.5,dashArray:"3 10"}).addTo(routeLayer);
     [s.oLL,s.dLL].forEach(p=> L.marker([p.lat,p.lon],{icon:L.divIcon({className:"",html:'<span class="tour-endpt"></span>',iconSize:[11,11],iconAnchor:[5,5]})}).addTo(routeLayer));
     if(s.oCity) L.marker([s.oLL.lat,s.oLL.lon],{icon:L.divIcon({className:"endpt-label",html:escapeHtml(s.oCity)}),interactive:false}).addTo(routeLayer);
     if(s.dCity) L.marker([s.dLL.lat,s.dLL.lon],{icon:L.divIcon({className:"endpt-label",html:escapeHtml(s.dCity)}),interactive:false}).addTo(routeLayer);
@@ -700,6 +919,8 @@ function present(s){
   startDrift();
   fillCard(s);
   loadPhoto(s);
+  loadWeather(s);
+  logStop(s);
 }
 function getAccent(){ return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#7db8ff"; }
 
@@ -743,20 +964,101 @@ function fillCard(s){
       + `<span class="r">${escapeHtml(s.dCity)}</span>` + (s.subline?`<span class="r dim">${escapeHtml(s.subline)}</span>`:"");
   } else r.style.display="none";
   $("#chips").innerHTML = (s.chips||[]).map(chipHtml).join("");
-  // progress bar (needs known origin+destination)
+  // progress bar — measured ALONG the route being travelled when we have one,
+  // so a train that curves round a bay isn't credited a straight-line shortcut.
   const prog=$("#prog");
-  if(s.oLL && s.dLL){
-    const tot=haversineNm(s.oLL,s.dLL); if(tot>1){
-      const toGo=Math.max(0,haversineNm(s.pos,s.dLL)), flown=Math.max(0,tot-toGo), pct=Math.max(0,Math.min(1,flown/tot));
-      const conv = s.kind==="plane"?1:1.15078, u = s.kind==="plane"?"nm":"mi";
-      prog.style.display=""; $("#progFill").style.width=(pct*100).toFixed(1)+"%"; $("#progDot").style.left=(pct*100).toFixed(1)+"%";
-      $("#progFlown").textContent=`${Math.round(flown*conv).toLocaleString()} ${u} flown`;
-      $("#progPct").textContent=`${Math.round(pct*100)}%`;
-      $("#progToGo").textContent=`${Math.round(toGo*conv).toLocaleString()} ${u} to go`;
-    } else prog.style.display="none";
+  const pp = s._line ? pathProgress(s._line, s.pos) : null;
+  let tot=null, flown=null, toGo=null;
+  if(pp && pp.total>1){ tot=pp.total; flown=pp.done; toGo=Math.max(0,pp.total-pp.done); }
+  else if(s.oLL && s.dLL){
+    tot=haversineNm(s.oLL,s.dLL);
+    if(tot>1){ toGo=Math.max(0,haversineNm(s.pos,s.dLL)); flown=Math.max(0,tot-toGo); } else tot=null;
+  }
+  if(tot){
+    const pct=Math.max(0,Math.min(1,flown/tot));
+    const conv = s.kind==="plane"?1:1.15078, u = s.kind==="plane"?"nm":"mi";
+    const verb = s.kind==="plane"?"flown":"travelled";
+    prog.style.display=""; $("#progFill").style.width=(pct*100).toFixed(1)+"%"; $("#progDot").style.left=(pct*100).toFixed(1)+"%";
+    $("#progFlown").textContent=`${Math.round(flown*conv).toLocaleString()} ${u} ${verb}`;
+    $("#progPct").textContent=`${Math.round(pct*100)}%`;
+    $("#progToGo").textContent=`${Math.round(toGo*conv).toLocaleString()} ${u} to go`;
   } else prog.style.display="none";
   $("#card").classList.add("in");
 }
+/* ===================== weather where the vehicle is ====================== */
+/* open-meteo: free, no key, CORS-open — the same "works straight from the
+   browser" test every other feed on these boards has to pass. */
+const WMO={0:["Clear","☀"],1:["Mainly clear","🌤"],2:["Partly cloudy","⛅"],3:["Overcast","☁"],
+  45:["Fog","🌫"],48:["Freezing fog","🌫"],51:["Light drizzle","🌦"],53:["Drizzle","🌦"],
+  55:["Heavy drizzle","🌦"],56:["Freezing drizzle","🌧"],57:["Freezing drizzle","🌧"],
+  61:["Light rain","🌧"],63:["Rain","🌧"],65:["Heavy rain","🌧"],66:["Freezing rain","🌧"],
+  67:["Freezing rain","🌧"],71:["Light snow","🌨"],73:["Snow","🌨"],75:["Heavy snow","🌨"],
+  77:["Snow grains","🌨"],80:["Rain showers","🌦"],81:["Rain showers","🌦"],82:["Heavy showers","⛈"],
+  85:["Snow showers","🌨"],86:["Snow showers","🌨"],95:["Thunderstorm","⛈"],
+  96:["Thunderstorm, hail","⛈"],99:["Thunderstorm, hail","⛈"]};
+const wxCache=new Map();
+let wxTok=0;
+async function loadWeather(s){
+  const tok=++wxTok, box=$("#wx");
+  box.className="wx"; box.innerHTML="";
+  if(!s.pos || typeof s.pos.lat!=="number") return;
+  /* Round to ~11km and cache 15 min: consecutive stops in the same city would
+     otherwise re-ask for weather that cannot meaningfully have changed. */
+  const key=`${s.pos.lat.toFixed(1)},${s.pos.lon.toFixed(1)}`;
+  let w=wxCache.get(key);
+  if(!w || Date.now()-w.at>900000){
+    try{
+      const j=await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${s.pos.lat.toFixed(3)}`+
+        `&longitude=${s.pos.lon.toFixed(3)}&current=temperature_2m,weather_code,wind_speed_10m`+
+        `&temperature_unit=fahrenheit&wind_speed_unit=mph`, 9000);
+      if(!j || !j.current) return;
+      w={at:Date.now(), c:j.current}; wxCache.set(key,w);
+    }catch(e){ return; }                      // weather is a nicety; never break the card over it
+  }
+  if(tok!==wxTok) return;                     // a newer stop took over while we waited
+  const c=w.c, d=WMO[c.weather_code]||["—","•"];
+  const wind=Math.round(c.wind_speed_10m||0);
+  box.innerHTML=`<span class="ic">${d[1]}</span><span class="t">${Math.round(c.temperature_2m)}°F</span>`+
+    `<span class="sep">·</span><span>${escapeHtml(d[0])}</span>`+
+    (wind>1?`<span class="sep">·</span><span>${wind} mph wind</span>`:"")+
+    `<span class="sep">·</span><span>at the ${s.kind==="plane"?"aircraft":"vehicle"}</span>`;
+  box.classList.add("show");
+}
+
+/* ===================== tour log ========================================== */
+const LOG_MAX=200;
+let tourLog=(()=>{ try{ return JSON.parse(localStorage.getItem("tour.log"))||[]; }catch(e){ return []; } })();
+function saveLog(){ try{ localStorage.setItem("tour.log",JSON.stringify(tourLog.slice(0,LOG_MAX))); }catch(e){} }
+function logStop(s){
+  const e={t:Date.now(), kind:s.kind, city:s.city, feed:s.feedLbl,
+           title:s.title||"", sub:s.sub||"", live:!!s.live};
+  /* Staying with one vehicle re-presents the same subject every few seconds —
+     collapse that into the single entry it really is. */
+  const p=tourLog[0];
+  if(p && p.kind===e.kind && p.city===e.city && p.title===e.title && p.sub===e.sub){ p.t=e.t; }
+  else tourLog.unshift(e);
+  if(tourLog.length>LOG_MAX) tourLog.length=LOG_MAX;
+  saveLog();
+  if($("#log").classList.contains("show")) renderLog();
+}
+function renderLog(){
+  const body=$("#logBody");
+  $("#logCount").textContent = tourLog.length ? `${tourLog.length} stop${tourLog.length===1?"":"s"}` : "";
+  if(!tourLog.length){ body.innerHTML='<div class="log-empty">Nothing yet — the tour logs each stop as it plays.</div>'; return; }
+  body.innerHTML=tourLog.map(e=>{
+    const when=new Date(e.t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    return `<div class="log-row"><div class="ic">${MODE_IC[e.kind]||"•"}</div><div>`+
+      `<div class="l1">${escapeHtml(e.title||e.city)}</div>`+
+      `<div class="l2">${escapeHtml(e.city)} · ${escapeHtml(e.feed||"")}</div>`+
+      (e.sub?`<div class="l3">${escapeHtml(e.sub)}</div>`:"")+
+      `<div class="l3">${when}${e.live?" · live":" · scheduled"}</div>`+
+      `</div></div>`;
+  }).join("");
+}
+function toggleLog(){ $("#log").classList.contains("show") ? closeLog() : openLog(); }
+function openLog(){ renderLog(); $("#log").classList.add("show"); }
+function closeLog(){ $("#log").classList.remove("show"); }
+
 let photoTok=0;
 async function loadPhoto(s){
   const tok=++photoTok, img=$("#photo"), cred=$("#photoCred");
@@ -790,12 +1092,23 @@ function renderQueue(){
   const q=$("#queue"), html=[];
   for(let k=0;k<6;k++){
     const st=STOPS[order[(oi+k)%order.length]]; if(!st) break;
-    const p=MODE_PAL[st.kind]||MODE_PAL.plane, txt=`${MODE_IC[st.kind]} ${escapeHtml(st.city)}`;
+    const p=MODE_PAL[st.kind]||MODE_PAL.plane;
+    /* A city can appear more than once in the queue with different feeds
+       (Philadelphia's Amtrak and its SEPTA rail are separate stops), so the
+       chip carries the feed name too — city alone read as a duplicate. */
+    const txt=`${MODE_IC[st.kind]} ${escapeHtml(st.city)}<i>${escapeHtml(st.label)}</i>`;
     html.push(k===0
-      ? `<span class="chip now" style="background:linear-gradient(135deg,${p.a},${p.b});border-color:${p.a};color:#04101f">${txt}</span>`
-      : `<span class="chip" style="color:${p.a};border-color:${p.a}55;background:${p.a}14">${txt}</span>`);
+      ? `<button class="chip now" data-k="0" title="Showing now" style="background:linear-gradient(135deg,${p.a},${p.b});border-color:${p.a};color:#04101f">${txt}</button>`
+      : `<button class="chip" data-k="${k}" title="Jump to ${escapeHtml(st.city)} · ${escapeHtml(st.label)} (${k+1})" style="color:${p.a};border-color:${p.a}55;background:${p.a}14"><span class="qn">${k+1}</span>${txt}</button>`);
   }
   q.innerHTML=html.join("");
+}
+/* Jump straight to a queue position instead of waiting for the shuffle to
+   reach it. k is the offset shown on the chip; 0 is what's already playing. */
+function jumpTo(k){
+  if(!order.length || !(k>0)) return;
+  oi=(oi+k)%order.length;
+  advance();
 }
 function flash(city){ $("#flashBig").textContent=city; $("#flash").classList.add("show"); }
 function unflash(){ $("#flash").classList.remove("show"); }
@@ -950,8 +1263,16 @@ function boot(){
     if(e.key===" "){ e.preventDefault(); togglePause(); } else if(e.key==="ArrowRight") skip();
     else if(e.key==="ArrowLeft") goBack();
     else if(e.key==="s"||e.key==="S") toggleStay();
-    else if(e.key==="Escape") $("#settings").classList.remove("show");
-    else if(e.key==="f"||e.key==="F") toggleFS(); });
+    else if(e.key==="Escape"){ $("#settings").classList.remove("show"); closeLog(); }
+    else if(e.key==="l"||e.key==="L") toggleLog();
+    else if(e.key==="f"||e.key==="F") toggleFS();
+    else if(/^[1-6]$/.test(e.key)) jumpTo(parseInt(e.key,10)-1); });
+  $("#queue").addEventListener("click",e=>{
+    const b=e.target.closest(".chip"); if(b) jumpTo(parseInt(b.dataset.k,10));
+  });
+  $("#logBtn").addEventListener("click",toggleLog);
+  $("#logClose").addEventListener("click",closeLog);
+  $("#logClear").addEventListener("click",()=>{ tourLog=[]; saveLog(); renderLog(); });
   const onFs=()=>{ setTimeout(()=>map&&map.invalidateSize(),200); };
   document.addEventListener("fullscreenchange", onFs);
   try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFs); }catch(e){}
