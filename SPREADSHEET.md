@@ -54,17 +54,22 @@ function doGet(e) {
     spots = sheet.getRange(start, 1, last - start + 1, HEADERS.length).getValues()
       .map(function (r) {
         const o = {}; HEADERS.forEach(function (h, i) { o[h] = r[i]; });
+        // Sheets converts the ISO timestamp the app sends into a real Date value,
+        // and Date.parse() of a Date is NaN — so handle both, or every row looks
+        // undated and disappears.
+        var t = o.when instanceof Date ? o.when.getTime() : Date.parse(o.when);
         return {
           id: String(o.id || ""),
-          ts: Date.parse(o.when) || 0,
-          mode: o.mode, route: o.route, vehicle: o.vehicle,
-          place: o.place, note: o.note, by: o.by,
+          ts: t > 0 ? t : 0,
+          mode: String(o.mode || ""), route: String(o.route || ""),
+          vehicle: String(o.vehicle || ""), place: String(o.place || ""),
+          note: String(o.note || ""), by: String(o.by || ""),
           ridden: o.ridden === "yes" || o.ridden === true,
           lat: o.lat === "" || o.lat == null ? null : Number(o.lat),
           lon: o.lon === "" || o.lon == null ? null : Number(o.lon)
         };
       })
-      .filter(function (s) { return s.id && s.ts; });
+      .filter(function (s) { return s.id; });   // an undated row is still a sighting
   }
   const body = JSON.stringify({ ok: true, spots: spots });
   return p.callback

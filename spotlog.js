@@ -105,6 +105,7 @@
   }
 
   function ago(ts) {
+    if (!ts) return "";                    // a row whose timestamp didn't survive the Sheet
     const s = Math.max(0, (Date.now() - ts) / 1000);
     if (s < 90) return "just now";
     if (s < 3600) return Math.round(s / 60) + " min ago";
