@@ -160,6 +160,10 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .newbadge{font-size:9px; font-weight:900; letter-spacing:.08em; padding:2px 6px; border-radius:999px;
     background:var(--accent); color:#04101f; margin-left:6px; vertical-align:middle}
   .entry .edit{background:transparent; border:0; color:var(--muted); font-size:14px; cursor:pointer; padding:2px 4px}
+  /* timetable-derived, not a live fix — say so on the row itself */
+  .schedtag{font-style:normal; font-size:9px; font-weight:800; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted); border:1px solid var(--line);
+    border-radius:999px; padding:1px 6px; margin-left:6px; vertical-align:middle}
 
   /* ============ blue depth pass (shared design language) ============ */
   body{background:
@@ -324,7 +328,8 @@ document.querySelectorAll("#modes .mode").forEach(b=>{
     document.querySelectorAll("#modes .mode").forEach(x=>x.classList.toggle("on", x===b));
     $("#routeLbl").textContent = mode==="plane" ? "Flight / route" : mode==="train" ? "Line / train #" : "Route";
     $("#route").placeholder = mode==="plane" ? "e.g. UAL123" : mode==="train" ? "e.g. Red Line, Acela 2151" : "e.g. 29, M15";
-    renderNear();
+    renderNear();                       // instant redraw from what's already loaded
+    if(loc) fetchNear();                // then pull the bundles this mode needs
   };
 });
 
@@ -377,10 +382,123 @@ function distMi(a,b){
   return 2*R_MI*Math.asin(Math.sqrt(h));
 }
 
+/* ===================== local transit, with no key at all ==================
+   The app used to tell you local buses and metros "need a city API key", so
+   they were manual entry only. That stopped being true once this site started
+   bundling the timetables themselves — the Grand Tour already places MARC,
+   SEPTA, Ride On and the rest on a map by interpolating each active trip
+   between the two stops its schedule puts it between right now. The same
+   arithmetic gives one-tap logging here, keyless, for exactly the modes that
+   had none.
+
+   These are SCHEDULED positions, not live GPS fixes, and every row says so —
+   a bus running late is somewhere its timetable doesn't think it is. Only
+   bundles small enough for a phone are listed; the multi-megabyte ones (NYC
+   and Boston subway, Metro-North, PATH, Muni) are deliberately left out. */
+const SPOT_CITIES = [
+  { name:"Washington DC", lat:38.9007, lon:-77.0508, tz:"America/New_York", feeds:[
+      {file:"marc-schedule.json",        label:"MARC",           mode:"train"},
+      {file:"rideon-schedule.json",      label:"Ride On",        mode:"bus"} ] },
+  { name:"Philadelphia",  lat:39.9526, lon:-75.1652, tz:"America/New_York", feeds:[
+      {file:"septa-rail-schedule.json",  label:"SEPTA Regional Rail", mode:"train"},
+      {file:"septa-subway-schedule.json",label:"SEPTA Subway",   mode:"train"},
+      {file:"patco-schedule.json",       label:"PATCO",          mode:"train"},
+      {file:"njt-phl-schedule.json",     label:"NJ Transit",     mode:"train"} ] },
+  { name:"New York",      lat:40.7506, lon:-73.9935, tz:"America/New_York", feeds:[
+      {file:"lirr-schedule.json",        label:"LIRR",           mode:"train"} ] },
+  { name:"San Francisco", lat:37.7880, lon:-122.4075, tz:"America/Los_Angeles", feeds:[
+      {file:"sf-caltrain-schedule.json", label:"Caltrain",       mode:"train"} ] },
+  { name:"Los Angeles",   lat:34.0561, lon:-118.2365, tz:"America/Los_Angeles", feeds:[
+      {file:"la-metrolink-schedule.json",label:"Metrolink",      mode:"train"} ] },
+  { name:"Amsterdam",     lat:52.3785, lon:4.9000,   tz:"Europe/Amsterdam", feeds:[
+      {file:"ams-intl-schedule.json",    label:"International rail", mode:"train"} ] },
+];
+const SCHED_RADIUS_MI = 2.5;      // you can only log what you can actually see
+const bundleCache = {};
+let cityForLoc = null;
+
+function nearestCity(){
+  if(!loc) return null;
+  let best=null;
+  SPOT_CITIES.forEach(c=>{ const d=distMi(loc,{lat:c.lat,lon:c.lon});
+    if(!best || d<best.d) best={c,d}; });
+  return best && best.d<=60 ? best.c : null;   // outside any covered metro
+}
+/* Bundles are big and immutable, so unlike the live feeds they SHOULD hit the
+   browser cache rather than being re-downloaded on every refresh. */
+async function loadBundle(file){
+  if(bundleCache[file]) return bundleCache[file];
+  const r=await fetch(file);
+  if(!r.ok) throw new Error("bundle "+file);
+  const s=await r.json(); s._coord={};
+  (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
+  bundleCache[file]=s; return s;
+}
+function cityNowParts(tz){
+  const d=new Date();
+  const p={}; new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",
+    month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"})
+    .formatToParts(d).forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
+  return { y:p.year+p.month+p.day, dow:{Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[p.weekday],
+           min:(parseInt(p.hour,10)%24)*60+parseInt(p.minute,10) };
+}
+function bundleActiveServices(s, parts){
+  const act=new Set();
+  for(const id in s.svc){ const v=s.svc[id];
+    if(parts.y>=v.start && parts.y<=v.end && v.dow[parts.dow]) act.add(id); }
+  const ex=s.exc[parts.y];
+  if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  return act;
+}
+/* Every trip running right now, placed between the two stops its timetable puts
+   it between. Checks now and now+1440 so trips that started before midnight and
+   are still going are not missed. */
+function scheduledNearby(s, feed, parts){
+  const act=bundleActiveServices(s,parts), out=[];
+  s.trips.forEach(tr=>{
+    if(!act.has(tr.s)) return;
+    const seq=tr.st; if(!seq || seq.length<2) return;
+    for(const now of [parts.min, parts.min+1440]){
+      if(now<seq[0][1] || now>seq[seq.length-1][1]) continue;
+      let k=0; while(k<seq.length-1 && seq[k+1][1]<=now) k++;
+      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
+      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
+      const f=b[1]>a[1] ? (now-a[1])/(b[1]-a[1]) : 0;
+      const lat=ca[0]+(cb[0]-ca[0])*f, lon=ca[1]+(cb[1]-ca[1])*f;
+      const mi=distMi(loc,{lat,lon});
+      if(mi<=SCHED_RADIUS_MI){
+        const line=tr.line||feed.label;
+        out.push({ mode:feed.mode, key:String(line).slice(0,7),
+          label: feed.mode==="bus" ? `Route ${line}` : String(line),
+          sub:`${feed.label} → ${tr.hs||"?"} · near ${cb[2]||"next stop"} · scheduled`,
+          vehicle:"", color: feed.mode==="bus" ? "#6aa9ff" : "#3ad0c8", d:mi, scheduled:true });
+      }
+      break;
+    }
+  });
+  return out;
+}
+async function fetchScheduled(){
+  const city=nearestCity(); cityForLoc=city;
+  if(!city) return [];
+  const parts=cityNowParts(city.tz), out=[];
+  const wanted=city.feeds.filter(f=>f.mode===mode);   // only load what this mode needs
+  await Promise.allSettled(wanted.map(async f=>{
+    try{ out.push(...scheduledNearby(await loadBundle(f.file), f, parts)); }catch(e){}
+  }));
+  /* One row per line — a busy corridor would otherwise bury everything else
+     under twenty near-identical entries for the same route. */
+  const best={};
+  out.forEach(n=>{ if(!best[n.label] || n.d<best[n.label].d) best[n.label]=n; });
+  return Object.values(best);
+}
+
 async function fetchNear(){
   if(!loc) return;
   near=[];
   const jobs=[];
+  // local trains/buses from this site's own bundled timetables — no key needed
+  jobs.push(fetchScheduled().then(rows=>{ near.push(...rows); }).catch(()=>{}));
   // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
   jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
@@ -411,17 +529,21 @@ function renderNear(){
   box.innerHTML="";
   if(!loc){ box.innerHTML=`<div class="hint" id="nearHint">Finding your location…</div>`; return; }
   if(!list.length){
-    box.innerHTML=`<div class="hint">${ mode==="bus"
-      ? "Local buses need a city API key, so tap-to-log isn't available for them — type the route below and it still lands in your log."
-      : `No ${mode}s detected near you right now. Pull down to refresh, or enter it by hand below.` }</div>`;
+    const where = cityForLoc ? cityForLoc.name : null;
+    box.innerHTML=`<div class="hint">No ${mode}s near you right now.` +
+      (where ? ` Checked live feeds and ${esc(where)}'s timetables.`
+             : ` You're outside the areas this app has timetables for, so only aircraft
+                 overhead and Amtrak are detected here.`) +
+      ` Pull down to refresh, or enter it by hand below.</div>`;
     return;
   }
   list.forEach(n=>{
     const b=document.createElement("button"); b.className="sug";
     b.innerHTML=`<span class="badge" style="background:${n.color}">${esc(n.key.slice(0,7)||"—")}</span>
-      <span class="t"><b>${esc(n.label)}</b><span>${esc(n.sub)}</span></span><span class="plus">＋</span>`;
+      <span class="t"><b>${esc(n.label)}${n.scheduled?`<i class="schedtag">sched</i>`:""}</b>
+        <span>${esc(n.sub)}</span></span><span class="plus">＋</span>`;
     b.onclick=()=>{ $("#route").value=n.label; $("#vehicle").value=n.vehicle||"";
-      logIt({ route:n.label, vehicle:n.vehicle||"", source:"nearby" }); };
+      logIt({ route:n.label, vehicle:n.vehicle||"", source:n.scheduled?"schedule":"nearby" }); };
     box.appendChild(b);
   });
 }
@@ -439,6 +561,10 @@ function logIt(over){
     ridden: $("#ridden").checked,
     by: (localStorage.getItem(LS.handle)||"").trim(),
     lat: loc?+loc.lat.toFixed(4):null, lon: loc?+loc.lon.toFixed(4):null,
+    /* Provenance: a live fix, a timetable position, or typed by hand. Was being
+       passed in and thrown away; worth keeping now that schedule-derived rows
+       exist and are less certain than a live one. */
+    source: o.source || "manual",
   };
   const all=loadSpots();
   // first time this route has ever appeared in the log?

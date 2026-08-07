@@ -5,7 +5,7 @@
    absent offline; the log itself is local, so logging never needs a network. */
 /* Bump on every spot.html change: the shell is cache-first, so an installed
    copy keeps serving the old app until this version string moves. */
-const CACHE = "spotter-v3";
+const CACHE = "spotter-v4";
 const SHELL = ["spot.html", "spot-manifest.json",
                "spot-icon-192.png", "spot-icon-512.png", "spot-icon-180.png"];
 // Everything this worker is allowed to touch. It sits at the site root, so its
