@@ -76,6 +76,10 @@ the product without swapping them is a terms-of-service violation waiting to hap
 - **airplanes.live** (planes) — free feed prohibits commercial use. Swap to a paid
   plan/alternative (FlightAware AeroAPI, ADS-B Exchange commercial). One URL in each
   board's `fetchPlanes()`.
+- **adsbdb** (flight routes, origin → destination) — free community API with no
+  published commercial terms and no rate-limit guarantee. Confirm terms with its
+  maintainer, or swap to the same paid flight API you pick above. One URL in each
+  board's `lookupRoute()`; the boards degrade gracefully to tail numbers without it.
 - **CARTO basemap tiles** — free tier is non-commercial. Swap `tileUrlForTheme()` to a
   paid MapTiler/Mapbox/CARTO plan (still one URL per theme).
 - **Nominatim geocoding** — fair-use only. Swap `geocodeAddress()` to a paid geocoder
