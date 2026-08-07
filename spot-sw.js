@@ -3,8 +3,13 @@
    (you're often underground or on a plane when you want to log something).
    Live data (airplanes.live / amtraker) is always network-first and simply
    absent offline; the log itself is local, so logging never needs a network. */
-/* Bump on every spot.html change: the shell is cache-first, so an installed
-   copy keeps serving the old app until this version string moves. */
+/* The shell is NETWORK-first (see the fetch handler): every request tries the
+   network and only falls back to the cache when there's no signal. So a shipped
+   change reaches an installed app on its next launch WITHOUT touching this
+   string — bumping it is not required to deploy.
+   What the version does control is eviction: changing it drops every previously
+   cached copy on activate. Bump it when a stale entry would actively hurt (a
+   renamed or removed shell file), not as a routine deploy step. */
 const CACHE = "spotter-v4";
 const SHELL = ["spot.html", "spot-manifest.json",
                "spot-icon-192.png", "spot-icon-512.png", "spot-icon-180.png"];
