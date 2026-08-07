@@ -288,6 +288,18 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   <h3>Spotter settings</h3>
   <label class="fld"><em>Your name on shared logs</em>
     <input type="text" id="handle" placeholder="e.g. Jack" autocomplete="off" /></label>
+  <p><b>Alerts when the app is closed.</b> The alerts above only reach you while the
+     Spotter is open — a phone can't watch the sky in the background. For alerts with
+     the app shut, install the free <b>ntfy</b> app, subscribe it to the topic below,
+     and turn on the Spotter watch in the repo (see spotter-watch.yml). No account and
+     no Apple Developer membership needed.</p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0">
+    <button type="button" id="topicBtn" style="flex:0 0 auto;padding:11px 16px">Create my alert topic</button>
+    <button type="button" id="topicCopy" class="ghost" style="flex:0 0 auto;padding:11px 14px;display:none">Copy</button>
+  </div>
+  <div id="topicCode" style="font:700 13px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;
+       color:var(--accent);margin:-2px 0 10px"></div>
+
   <p><b>Tell me when one comes past.</b> A notification when something you've logged
      is near you again — your exact aircraft by callsign or tail number, or a bus/train
      route you've ridden. Works while the Spotter is open; a phone can't be woken by
@@ -816,8 +828,21 @@ async function toSheet(s){
    to cost a sighting -- the local log stays the source of truth. */
 const BLOB_API="https://jsonblob.com/api/jsonBlob";
 const blobId = () => (localStorage.getItem("tb.spotBlob")||"").trim();
+const ALERT_TOPIC="tb.spotTopic";
+const alertTopic = () => { try{ return (localStorage.getItem(ALERT_TOPIC)||"").trim(); }catch(_){ return ""; } };
 async function publishLog(){
-  const body=JSON.stringify({spots:loadSpots().slice(0,200)});
+  /* The alert settings ride along with the log in the same blob, so the
+     background watcher needs exactly one thing configured -- the share code --
+     and picks up your topic and location from your own app. */
+  const payload={spots:loadSpots().slice(0,200)};
+  const topic=alertTopic();
+  // `loc` is declared further down, so reading it from here throws if publishing
+  // ever happens before boot finishes. Publishing without a location is fine --
+  // the watcher just waits for one -- so never let that kill the publish.
+  let at=null; try{ at=loc; }catch(_){}
+  if(topic) payload.push={topic, lat:at?+at.lat.toFixed(4):null,
+                          lon:at?+at.lon.toFixed(4):null, radiusNm:15};
+  const body=JSON.stringify(payload);
   const id=blobId();
   if(id){
     const r=await fetch(BLOB_API+"/"+id,{method:"PUT",headers:{"content-type":"application/json"},body});
@@ -1191,6 +1216,25 @@ function renderAccount(){
 }
 
 /* ---------- settings sheet ---------- */
+function paintTopic(){
+  const t=alertTopic();
+  $("#topicCode").textContent = t ? t : "";
+  $("#topicCopy").style.display = t ? "" : "none";
+  $("#topicBtn").textContent = t ? "New topic" : "Create my alert topic";
+}
+$("#topicBtn").onclick=async()=>{
+  // long and random: the topic name is the only thing keeping strangers off it
+  const r=crypto.getRandomValues(new Uint8Array(12));
+  const t="tbspot-"+[...r].map(b=>b.toString(36)).join("").slice(0,20);
+  try{ localStorage.setItem(ALERT_TOPIC, t); }catch(_){}
+  paintTopic();
+  if(blobId()){ try{ await publishLog(); }catch(_){} }   // watcher reads it from the blob
+  toast("Subscribe to this topic in the ntfy app");
+};
+$("#topicCopy").onclick=async()=>{
+  try{ await navigator.clipboard.writeText(alertTopic()); toast("Topic copied"); }
+  catch(_){ toast("Copy failed — read it off the screen"); }
+};
 function paintNotify(){
   const on=notifyOn() && ("Notification" in window) && Notification.permission==="granted";
   $("#notifyBtn").textContent = on ? "Notifications on — turn off" : "Notify me";
@@ -1227,6 +1271,7 @@ $("#shareCopy").onclick=async()=>{
 $("#setBtn").onclick=()=>{
   paintShare();
   paintNotify();
+  paintTopic();
   $("#handle").value=localStorage.getItem(LS.handle)||"";
   $("#feedUrl").value=localStorage.getItem(LS.feed)||"";
   $("#sheetUrl").value=localStorage.getItem(LS.sheet)||"";
