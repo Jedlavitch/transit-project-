@@ -36,6 +36,11 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-top:3px}
   .iconbtn{background:var(--panel); border:1px solid var(--line); color:var(--text);
     border-radius:10px; width:38px; height:38px; font-size:16px; cursor:pointer; flex:none}
+  /* five buttons now share the header — shrink them before the title has to wrap */
+  @media (max-width:420px){
+    .iconbtn{width:33px; height:33px; font-size:14px}
+    .hrow{gap:6px}
+  }
   .iconbtn:active{border-color:var(--accent)}
 
   main{padding:14px 16px; max-width:620px; margin:0 auto}
@@ -182,6 +187,8 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   <div class="hrow">
     <h1>Transit Spotter <small id="hsub">loading…</small></h1>
     <button class="iconbtn" id="boardBtn" title="Open the board">🚇</button>
+    <button class="iconbtn" id="nightBtn" title="Sky view — nearest flight overhead">🌙</button>
+    <button class="iconbtn" id="flipBtn" title="Departure board — split-flap display">🚉</button>
     <button class="iconbtn" id="setBtn" title="Settings">⚙︎</button>
   </div>
 </header>
@@ -418,38 +425,38 @@ function distMi(a,b){
    behind a 7MB Metro-North download. Bundles are cached after the first load,
    and only the mode you are actually logging gets fetched. */
 const SPOT_CITIES = [
-  { name:"Washington DC", lat:38.9007, lon:-77.0508, tz:"America/New_York", feeds:[
+  { name:"Washington DC", code:"dc", board:"index.html", lat:38.9007, lon:-77.0508, tz:"America/New_York", feeds:[
       {file:"marc-schedule.json",        label:"MARC",           mode:"train"},
       {file:"rideon-schedule.json",      label:"Ride On",        mode:"bus"} ] },
-  { name:"Philadelphia",  lat:39.9526, lon:-75.1652, tz:"America/New_York", feeds:[
+  { name:"Philadelphia", code:"philly", board:"philadelphia.html",  lat:39.9526, lon:-75.1652, tz:"America/New_York", feeds:[
       {file:"septa-rail-schedule.json",  label:"SEPTA Regional Rail", mode:"train"},
       {file:"septa-subway-schedule.json",label:"SEPTA Subway",   mode:"train"},
       {file:"septa-bus-schedule.json",   label:"SEPTA Bus",      mode:"bus"},
       {file:"patco-schedule.json",       label:"PATCO",          mode:"train"},
       {file:"njt-phl-schedule.json",     label:"NJ Transit",     mode:"train"} ] },
-  { name:"New York",      lat:40.7506, lon:-73.9935, tz:"America/New_York", feeds:[
+  { name:"New York", code:"nyc", board:"nyc.html",      lat:40.7506, lon:-73.9935, tz:"America/New_York", feeds:[
       {file:"mta-subway-schedule.json",  label:"Subway",         mode:"train"},
       {file:"path-schedule.json",        label:"PATH",           mode:"train"},
       {file:"lirr-schedule.json",        label:"LIRR",           mode:"train"},
       {file:"mnr-schedule.json",         label:"Metro-North",    mode:"train"},
       {file:"njt-nyc-schedule.json",     label:"NJ Transit",     mode:"train"},
       {file:"mta-bus-schedule.json",     label:"MTA Bus",        mode:"bus"} ] },
-  { name:"New Jersey",    lat:40.7346, lon:-74.1643, tz:"America/New_York", feeds:[
+  { name:"New Jersey", code:"nj", board:"newjersey.html",    lat:40.7346, lon:-74.1643, tz:"America/New_York", feeds:[
       {file:"njt-state-rail-schedule.json", label:"NJ Transit",  mode:"train"},
       {file:"njt-state-bus-schedule.json",  label:"NJ Transit Bus", mode:"bus"} ] },
-  { name:"Boston",        lat:42.3554, lon:-71.0605, tz:"America/New_York", feeds:[
+  { name:"Boston", code:"boston", board:"boston.html",        lat:42.3554, lon:-71.0605, tz:"America/New_York", feeds:[
       {file:"mbta-subway-schedule.json", label:"the T",          mode:"train"},
       {file:"mbta-cr-schedule.json",     label:"MBTA Commuter Rail", mode:"train"},
       {file:"mbta-bus-schedule.json",    label:"MBTA Bus",       mode:"bus"} ] },
-  { name:"San Francisco", lat:37.7880, lon:-122.4075, tz:"America/Los_Angeles", feeds:[
+  { name:"San Francisco", code:"sf", board:"sanfrancisco.html", lat:37.7880, lon:-122.4075, tz:"America/Los_Angeles", feeds:[
       {file:"sf-bart-schedule.json",     label:"BART",           mode:"train"},
       {file:"sf-muni-schedule.json",     label:"Muni Metro",     mode:"train"},
       {file:"sf-cablecar-schedule.json", label:"Cable Car",      mode:"train"},
       {file:"sf-caltrain-schedule.json", label:"Caltrain",       mode:"train"} ] },
-  { name:"Los Angeles",   lat:34.0561, lon:-118.2365, tz:"America/Los_Angeles", feeds:[
+  { name:"Los Angeles", code:"la", board:"losangeles.html",   lat:34.0561, lon:-118.2365, tz:"America/Los_Angeles", feeds:[
       {file:"la-rail-schedule.json",     label:"Metro Rail",     mode:"train"},
       {file:"la-metrolink-schedule.json",label:"Metrolink",      mode:"train"} ] },
-  { name:"Amsterdam",     lat:52.3785, lon:4.9000,   tz:"Europe/Amsterdam", feeds:[
+  { name:"Amsterdam", code:"amsterdam", board:"amsterdam.html",     lat:52.3785, lon:4.9000,   tz:"Europe/Amsterdam", feeds:[
       {file:"ams-metro-schedule.json",   label:"GVB Metro",      mode:"train"},
       {file:"ams-tram-schedule.json",    label:"GVB Tram",       mode:"train"},
       {file:"ams-rail-schedule.json",    label:"NS Rail",        mode:"train"},
@@ -1026,7 +1033,14 @@ $("#exportCsv").onclick=()=>download("transit-spotter.csv", toCsv(), "text/csv")
 $("#exportJson").onclick=()=>download("transit-spotter.json", JSON.stringify(loadSpots(),null,2), "application/json");
 $("#save").onclick=()=>logIt();
 $("#route").addEventListener("keydown", e=>{ if(e.key==="Enter") logIt(); });
-$("#boardBtn").onclick=()=>{ window.location.href="index.html"; };
+/* The board, sky view and departure board all exist per city, and the app
+   already works out which metro you're standing in for its timetables — so these
+   follow you there instead of always landing on Washington, falling back to DC
+   only when you're outside every covered area. */
+function hereCity(){ return nearestCity() || SPOT_CITIES[0]; }
+$("#boardBtn").onclick=()=>{ window.location.href=hereCity().board; };
+$("#nightBtn").onclick=()=>{ window.location.href="night.html?city="+hereCity().code; };
+$("#flipBtn").onclick=()=>{ window.location.href="flipboard.html?city="+hereCity().code; };
 
 /* pull-to-refresh the nearby list (only at the very top of the page) */
 let touchY=0;
