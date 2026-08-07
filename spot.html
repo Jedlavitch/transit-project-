@@ -240,6 +240,10 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   </div>
 
   <div id="viewMap">
+    <div class="fchips" style="margin-bottom:8px">
+      <button class="fchip on" id="mapLayerLog">My sightings</button>
+      <button class="fchip" id="mapLayerLive">Trackable now</button>
+    </div>
     <div id="spotMap"></div>
     <div class="hint" id="mapHint"></div>
   </div>
@@ -281,8 +285,21 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
      keep your log private to this phone.</p>
   <label class="fld"><em>Shared feed URL</em>
     <input type="text" id="feedUrl" placeholder="https://tb-spotter.you.workers.dev" autocomplete="off" spellcheck="false" /></label>
+
+  <p><b>Log to a spreadsheet (optional).</b> Every sighting can also append a row to
+     your own Google Sheet. Google needs you to create the endpoint yourself — there's
+     no keyless way in — but it's a two-minute, one-time job:</p>
+  <ol style="font-size:12.5px;color:var(--muted);line-height:1.7;padding-left:18px">
+    <li>In your Sheet: <b>Extensions → Apps Script</b></li>
+    <li>Paste the code from <a href="SPREADSHEET.md" target="_blank">SPREADSHEET.md</a></li>
+    <li><b>Deploy → New deployment → Web app</b>, access <b>“Anyone”</b></li>
+    <li>Copy the <code>/exec</code> URL into the box below</li>
+  </ol>
+  <label class="fld"><em>Google Sheet web-app URL</em>
+    <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false" /></label>
   <div class="btns">
     <button id="saveSet">Save</button>
+    <button class="ghost" id="sheetSyncAll">Send all to Sheet</button>
     <button class="ghost" id="exportCsv">Export CSV</button>
     <button class="ghost" id="exportJson">Export JSON</button>
     <button class="ghost" id="closeSet">Close</button>
@@ -306,7 +323,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
    buses/metros need a city API key, so those are manual entry.
    ============================================================================ */
 const $ = s => document.querySelector(s);
-const LS = { spots:"tb.spots", handle:"tb.spotter", feed:"tb.spotFeedUrl" };
+const LS = { spots:"tb.spots", handle:"tb.spotter", feed:"tb.spotFeedUrl", sheet:"tb.sheetUrl" };
 const MODE_GLYPH = { plane:"✈️", train:"🚆", bus:"🚌" };
 let mode = "plane", loc = null, near = [];
 
@@ -468,10 +485,12 @@ function scheduledNearby(s, feed, parts){
       const mi=distMi(loc,{lat,lon});
       if(mi<=SCHED_RADIUS_MI){
         const line=tr.line||feed.label;
+        const mins=Math.max(0,Math.round(b[1]-now));
         out.push({ mode:feed.mode, key:String(line).slice(0,7),
           label: feed.mode==="bus" ? `Route ${line}` : String(line),
-          sub:`${feed.label} → ${tr.hs||"?"} · near ${cb[2]||"next stop"} · scheduled`,
-          vehicle:"", color: feed.mode==="bus" ? "#6aa9ff" : "#3ad0c8", d:mi, scheduled:true });
+          sub:`${feed.label} → ${tr.hs||"?"} · ${cb[2]||"next stop"} in ${mins} min · scheduled`,
+          vehicle:"", color: feed.mode==="bus" ? "#6aa9ff" : "#3ad0c8", d:mi, scheduled:true,
+          lat, lon, hdg:null });
       }
       break;
     }
@@ -503,9 +522,15 @@ async function fetchNear(){
   jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
         const nm = a.dst!=null ? a.dst : distMi(loc,{lat:a.lat,lon:a.lon})/1.15078;
+        const alt=typeof a.alt_baro==="number"?a.alt_baro:null;
+        const climb=typeof a.baro_rate==="number"&&Math.abs(a.baro_rate)>=200
+          ? (a.baro_rate>0?"climbing":"descending") : null;
         near.push({ mode:"plane", key:(a.flight||a.r||"").trim()||"unknown",
-          label:(a.flight||a.r||"Aircraft").trim(), sub:`${a.desc||a.t||"aircraft"}${a.ownOp?" · "+a.ownOp:""} · ${nm.toFixed(1)} nm`,
-          vehicle:(a.r||"").trim(), color:"#ffd166", d:nm });
+          label:(a.flight||a.r||"Aircraft").trim(),
+          sub:[`${a.desc||a.t||"aircraft"}`, a.ownOp, alt!=null?`${alt.toLocaleString()} ft`:null,
+               a.gs?`${Math.round(a.gs)} kt`:null, climb, `${nm.toFixed(1)} nm`].filter(Boolean).join(" · "),
+          vehicle:(a.r||"").trim(), color:"#ffd166", d:nm,
+          lat:a.lat, lon:a.lon, hdg:typeof a.track==="number"?a.track:null });
       }); }).catch(()=>{}));
   // Amtrak (amtraker — keyless, CORS-open)
   jobs.push(getJSON("https://api-v3.amtraker.com/v3/trains", 11000)
@@ -515,13 +540,20 @@ async function fetchNear(){
         if(t.trainState && t.trainState!=="Active") continue;
         const mi=distMi(loc,{lat:t.lat,lon:t.lon}); if(mi>25) continue;
         if(seen[t.trainNum] && seen[t.trainNum]<=mi) continue; seen[t.trainNum]=mi;
+        const late=(t.trainTimely||"").trim();
         near.push({ mode:"train", key:String(t.trainNum||""),
           label:`${t.routeName||"Amtrak"} ${t.trainNum||""}`.trim(),
-          sub:`→ ${t.destName||"?"} · ${mi.toFixed(1)} mi`, vehicle:"", color:"#3ad0c8", d:mi });
+          sub:[`→ ${t.destName||"?"}`, t.velocity?`${Math.round(t.velocity)} mph`:null,
+               late||null, `${mi.toFixed(1)} mi`].filter(Boolean).join(" · "),
+          vehicle:"", color:"#3ad0c8", d:mi,
+          lat:t.lat, lon:t.lon, hdg:typeof t.heading==="number"?t.heading:null, late:late });
       } }).catch(()=>{}));
   await Promise.allSettled(jobs);
   near.sort((a,b)=>a.d-b.d);
   renderNear();
+  // the live map draws from `near`, so it has to be redrawn when data lands —
+  // otherwise it paints an empty map before the first fetch resolves
+  if(view==="map" && mapLayer==="live") renderMap();
 }
 
 function renderNear(){
@@ -572,8 +604,28 @@ function logIt(over){
   all.unshift(s); saveSpots(all);
   $("#route").value=""; $("#vehicle").value=""; $("#note").value=""; $("#ridden").checked=false;
   render();
+  toSheet(s);
   toast(s.first ? `New one! ${s.route}` : (s.ridden ? `Logged a ride: ${s.route}` : `Logged: ${s.route}`));
   push(s);
+}
+
+/* ---------- Google Sheet mirror ----------
+   Apps Script web apps don't send CORS headers, so this posts no-cors: the row
+   lands in the sheet but the browser hands back an opaque response we cannot
+   read. That means we can't confirm success — so a failure here must never cost
+   a sighting. The log stays the source of truth and "Send all" can re-mirror. */
+const sheetUrl = () => (localStorage.getItem(LS.sheet)||"").trim();
+async function toSheet(s){
+  const url=sheetUrl(); if(!url) return;
+  try{
+    await fetch(url,{method:"POST", mode:"no-cors",
+      headers:{"content-type":"text/plain;charset=utf-8"},   // avoids a CORS preflight
+      body:JSON.stringify({
+        when:new Date(s.ts).toISOString(), mode:s.mode, route:s.route,
+        vehicle:s.vehicle||"", place:s.place||"", ridden:s.ridden?"yes":"no",
+        note:s.note||"", lat:s.lat??"", lon:s.lon??"", source:s.source||"",
+        first:s.first?"yes":"no", by:s.by||"", id:s.id })});
+  }catch(e){ /* never block logging on the mirror */ }
 }
 // Optional shared feed: fire-and-forget, queued if offline so nothing is lost.
 async function push(s){
@@ -710,6 +762,7 @@ function renderMap(){
     sMap.setView([39.5,-98.35],3);
   }
   sMarkers.clearLayers();
+  if(mapLayer==="live") return renderLiveMap();
   const unplaced=loadSpots().filter(matches).length-placed.length;
   if(!placed.length){
     hint.textContent=unplaced ? `None of these ${unplaced} sightings recorded a location.`
@@ -732,6 +785,53 @@ function renderMap(){
     sMap.fitBounds(L.latLngBounds(pts).pad(0.25), {maxZoom:14});
   }
 }
+
+
+/* ---------- map of what's trackable right now ----------
+   Same markers the "near you" list is built from — planes overhead, Amtrak, and
+   schedule-interpolated local transit — plotted so you can see WHERE to look
+   rather than just how far away it is. Tapping a marker logs it. */
+let mapLayer="log";
+function renderLiveMap(){
+  const hint=$("#mapHint");
+  const rows=near.filter(n=>typeof n.lat==="number" && typeof n.lon==="number");
+  if(loc){
+    L.circleMarker([loc.lat,loc.lon],{radius:6,color:"var(--accent)",weight:2,
+      fillColor:"#fff",fillOpacity:1}).bindPopup("You are here").addTo(sMarkers);
+  }
+  if(!rows.length){
+    hint.textContent = loc ? "Nothing trackable within range right now."
+                           : "Location is off, so there's nothing to track.";
+    if(loc) sMap.setView([loc.lat,loc.lon],13);
+    return;
+  }
+  const pts = loc ? [[loc.lat,loc.lon]] : [];
+  rows.forEach(n=>{
+    pts.push([n.lat,n.lon]);
+    const rot = n.hdg!=null ? `transform:rotate(${Math.round(n.hdg)}deg)` : "";
+    L.marker([n.lat,n.lon],{icon:L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
+      html:`<span class="spot-pin" style="border-color:${n.color};${rot}">${MODE_GLYPH[n.mode]||"•"}</span>`})})
+      .bindPopup(`<b>${esc(n.label)}</b><br>${esc(n.sub)}<br>` +
+        `<a href="#" data-log="${esc(n.label)}">＋ log this one</a>`)
+      .addTo(sMarkers);
+  });
+  /* The map deliberately shows every mode at once, not just the one selected —
+     the list above is for logging, this is for looking around. So the caption
+     counts them per mode rather than claiming a single mode's total. */
+  const byMode={};
+  rows.forEach(n=>{ byMode[n.mode]=(byMode[n.mode]||0)+1; });
+  const parts=Object.keys(byMode).map(m=>`${MODE_GLYPH[m]||"•"} ${byMode[m]}`);
+  hint.textContent = `${rows.length} trackable right now · ${parts.join("  ")}`;
+  sMap.fitBounds(L.latLngBounds(pts).pad(0.3), {maxZoom:14});
+}
+/* popup links are created per render, so catch the tap at the map container */
+document.addEventListener("click", e=>{
+  const a=e.target.closest("a[data-log]"); if(!a) return;
+  e.preventDefault();
+  const n=near.find(x=>x.label===a.dataset.log); if(!n) return;
+  logIt({ route:n.label, vehicle:n.vehicle||"", source:n.scheduled?"schedule":"nearby" });
+  sMap.closePopup();
+});
 
 /* ---------- collection ---------- */
 /* Which systems can be checked against a real route list. Each bundle is a
@@ -812,6 +912,11 @@ function setView(v){
   if(v==="map") renderMap();      // Leaflet must size itself while visible
 }
 document.querySelectorAll("#tabs .tab").forEach(t=>{ t.onclick=()=>setView(t.dataset.view); });
+$("#mapLayerLog").onclick=()=>{ mapLayer="log";
+  $("#mapLayerLog").classList.add("on"); $("#mapLayerLive").classList.remove("on"); renderMap(); };
+$("#mapLayerLive").onclick=()=>{ mapLayer="live";
+  $("#mapLayerLive").classList.add("on"); $("#mapLayerLog").classList.remove("on");
+  if(loc) fetchNear(); renderMap(); };
 $("#q").addEventListener("input", e=>{ query=e.target.value.trim().toLowerCase(); render(); });
 document.querySelectorAll("#fchips .fchip").forEach(c=>{
   c.onclick=()=>{ filter=c.dataset.f;
@@ -837,6 +942,7 @@ function toCsv(){
 $("#setBtn").onclick=()=>{
   $("#handle").value=localStorage.getItem(LS.handle)||"";
   $("#feedUrl").value=localStorage.getItem(LS.feed)||"";
+  $("#sheetUrl").value=localStorage.getItem(LS.sheet)||"";
   $("#sheet").classList.add("show");
 };
 $("#closeSet").onclick=()=>$("#sheet").classList.remove("show");
@@ -844,7 +950,14 @@ $("#sheet").addEventListener("click", e=>{ if(e.target.id==="sheet") $("#sheet")
 $("#saveSet").onclick=()=>{
   localStorage.setItem(LS.handle, $("#handle").value.trim());
   localStorage.setItem(LS.feed, $("#feedUrl").value.trim().replace(/\/+$/,""));
+  localStorage.setItem(LS.sheet, $("#sheetUrl").value.trim());
   $("#sheet").classList.remove("show"); toast("Settings saved"); flushQueue();
+};
+$("#sheetSyncAll").onclick=async()=>{
+  if(!sheetUrl()){ toast("Add your Sheet URL first"); return; }
+  const all=loadSpots(); toast(`Sending ${all.length}…`);
+  for(const s of all.slice().reverse()) await toSheet(s);   // oldest first, so the sheet reads in order
+  toast(`Sent ${all.length} to your Sheet`);
 };
 $("#exportCsv").onclick=()=>download("transit-spotter.csv", toCsv(), "text/csv");
 $("#exportJson").onclick=()=>download("transit-spotter.json", JSON.stringify(loadSpots(),null,2), "application/json");
