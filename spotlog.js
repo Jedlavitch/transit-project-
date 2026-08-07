@@ -120,6 +120,37 @@
     });
   }
 
+  /* ---- which logged vehicles are passing RIGHT NOW? ------------------------
+     The board has already fetched every vehicle near its own location (its live
+     feeds are all queried around `state.loc`, so this automatically follows the
+     address picked in ⚙ rather than assuming where you are). Those fleets are
+     sitting in memory, so matching the log against them costs no extra request
+     and no new permission — a sighting lights up the moment the same flight or
+     tail number is overhead again. */
+  function liveIdents() {
+    const out = new Set();
+    const add = v => { const t = String(v == null ? "" : v).trim().toUpperCase(); if (t) out.add(t); };
+    const s = (typeof state !== "undefined" && state) ? state : null;
+    if (!s) return out;
+    try { (s._planes || []).forEach(a => { add(a.flight); add(a.r); }); } catch (_) {}
+    try { (s._amtrak || []).forEach(x => { const t = x && (x.t || x); add(t && (t.trainNum || t.trainID)); add(t && t.routeName); }); } catch (_) {}
+    try { (s._rail || []).forEach(p => { add(p && (p.TrainId || p.Line)); }); } catch (_) {}
+    // live vehicles already plotted on the map, whatever the system
+    try {
+      Object.keys(s.fleets || {}).forEach(mode => {
+        Object.keys(s.fleets[mode] || {}).forEach(id => add(String(id).replace(/^[a-z]+/i, "")));
+      });
+    } catch (_) {}
+    return out;
+  }
+  // does this sighting name something currently in range?
+  function isPassing(sp, live) {
+    if (!live || !live.size) return false;
+    const r = String(sp.route || "").trim().toUpperCase();
+    const v = String(sp.vehicle || "").trim().toUpperCase();
+    return (!!r && live.has(r)) || (!!v && live.has(v));
+  }
+
   function ago(ts) {
     if (!ts) return "";                    // a row whose timestamp didn't survive the Sheet
     const s = Math.max(0, (Date.now() - ts) / 1000);
@@ -146,6 +177,18 @@
        <div id="spotFeedBox" style="display:none"></div>
        <div class="list" id="spotList"></div>`;
     cards.appendChild(card);
+    if (!document.getElementById("spotPassCss")) {
+      const st = document.createElement("style");
+      st.id = "spotPassCss";
+      // accent edge + soft glow: readable across the room, and never colour alone
+      // (the row also says "passing now" in words)
+      st.textContent = ".row.spot-passing{border-color:var(--good,#4ade80);" +
+        "box-shadow:0 0 0 1px var(--good,#4ade80) inset, 0 0 10px -2px var(--good,#4ade80)}" +
+        ".row.spot-passing .dest{color:var(--good,#4ade80)}" +
+        "@keyframes spotPulse{0%,100%{opacity:1}50%{opacity:.55}}" +
+        ".row.spot-passing .live-tag{animation:spotPulse 2s ease-in-out infinite}";
+      document.head.appendChild(st);
+    }
     // tapping the header opens the phone app (same place you'd add a sighting)
     const h2 = card.querySelector("h2");
     h2.style.cursor = "pointer";
@@ -297,9 +340,18 @@
       (near && elsewhere ? ` · <b>${elsewhere}</b> elsewhere` : "");
 
     const miOf = {}; shown.forEach(p => { miOf[p.s.id] = p.mi; });
+    /* Anything passing right now goes to the top and stays there — it is the one
+       thing on this card you can still walk outside and look at. Everything else
+       keeps its newest-first order. */
+    const live = liveIdents();
+    const hot = {}; all.forEach(s => { hot[s.id] = isPassing(s, live); });
+    all.sort((a, b) => (hot[b.id] ? 1 : 0) - (hot[a.id] ? 1 : 0) || b.ts - a.ts);
+    const passingNow = all.filter(s => hot[s.id]).length;
+    if (passingNow) count.textContent = `${passingNow} passing now`;
+
     all.slice(0, 40).forEach(s => {
       const row = document.createElement("div");
-      row.className = "row";
+      row.className = "row" + (hot[s.id] ? " spot-passing" : "");
       // badge carries the MODE (glyph + colour); the route is the row's title, so
       // the two don't restate each other and long line names aren't truncated
       const badge = `<div class="badge" style="background:${COLOR[s.mode] || "#6aa9ff"}">${
@@ -312,8 +364,11 @@
         <div><div class="dest">${esc(s.route || "—")}</div>
              ${bits ? `<div class="sub">${esc(bits)}</div>` : ""}</div>
         <div></div>
-        <div class="times"><div class="sched">${esc(ago(s.ts))}</div>
-          ${s.ridden ? `<div class="live-tag" style="color:var(--good)">rode</div>` : ""}</div>`;
+        <div class="times">${hot[s.id]
+            ? `<div class="live-eta" style="color:var(--good)">near you</div>
+               <div class="live-tag">passing now</div>`
+            : `<div class="sched">${esc(ago(s.ts))}</div>
+               ${s.ridden ? `<div class="live-tag" style="color:var(--good)">rode</div>` : ""}`}</div>`;
       list.appendChild(row);
     });
     trim(list);
@@ -352,6 +407,9 @@
     render();
     tick();
     setInterval(tick, 60000);
+    // the shared feed is polled once a minute, but "passing now" is computed from
+    // the board's own live fleets, so repaint on their cadence -- costs no fetch
+    setInterval(render, 10000);
     // The card is injected into a CSS grid that may still be settling (web fonts,
     // sibling cards filling in), so re-render once the layout is real -- otherwise
     // the first paint's row count is fitted against a not-yet-sized box.
