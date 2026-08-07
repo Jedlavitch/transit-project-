@@ -1357,10 +1357,19 @@ function coastPlanes(fresh){
   }
   return out;
 }
+/* Aircraft feed. Defaults to airplanes.live, which is free and CORS-open but
+   PROHIBITS COMMERCIAL USE. Set "tb.adsbUrl" to an adsb-worker.js deployment to
+   switch to a commercially-usable feed (adsb.lol / adsb.fi) — those send no CORS
+   headers of their own, so the Worker is required, not optional. */
+function adsbBase(){
+  try{ var u=(localStorage.getItem("tb.adsbUrl")||"").trim().replace(/\/+$/,"");
+       if(u) return u+"/v2"; }catch(e){}
+  return "https://api.airplanes.live/v2";
+}
 async function fetchPlanes(){
   const {lat,lon}=state.loc;
   let data;
-  try{ data=await getJSON(`https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
+  try{ data=await getJSON(`${adsbBase()}/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
   catch(e){ return; }
   const ac=coastPlanes((data.ac||[]).filter(a=>a.lat&&a.lon))
     .map(a=>({...a, _dist: a.dst!=null? a.dst : kmToMi(haversine(state.loc,{lat:a.lat,lon:a.lon}))/1.15078 }))

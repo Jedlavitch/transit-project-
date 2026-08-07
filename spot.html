@@ -695,6 +695,15 @@ function idOrNull(v){
   return t;
 }
 
+/* Aircraft feed. Defaults to airplanes.live, which is free and CORS-open but
+   PROHIBITS COMMERCIAL USE. Set "tb.adsbUrl" to an adsb-worker.js deployment to
+   switch to a commercially-usable feed (adsb.lol / adsb.fi) — those send no CORS
+   headers of their own, so the Worker is required, not optional. */
+function adsbBase(){
+  try{ var u=(localStorage.getItem("tb.adsbUrl")||"").trim().replace(/\/+$/,"");
+       if(u) return u+"/v2"; }catch(e){}
+  return "https://api.airplanes.live/v2";
+}
 async function fetchNear(){
   if(!loc) return;
   near=[];
@@ -708,7 +717,7 @@ async function fetchNear(){
       paintNear();
     }).catch(()=>{}));
   // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
-  jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
+  jobs.push(getJSON(`${adsbBase()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
         /* Some transponders broadcast a placeholder callsign — all zeros, a
            single repeated character, or punctuation — which showed up in the
