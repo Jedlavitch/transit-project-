@@ -222,6 +222,17 @@
     display:flex; flex-direction:column; align-items:center; gap:4px; font-family:inherit}
   .seg button .ic{font-size:22px}
   .seg button.active{border-color:var(--amber); color:var(--amber); background:rgba(125,184,255,.08)}
+  .locrow{display:flex; gap:8px; margin:6px 0 8px}
+  .locrow input{flex:1; min-width:0; padding:10px 12px; border-radius:10px;
+    border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05);
+    color:var(--amber); font-size:15px; font-family:inherit}
+  .locrow input:focus{outline:none; border-color:var(--amber)}
+  .locrow button{flex:none; padding:0 16px; border-radius:10px; border:0;
+    background:var(--amber); color:var(--btn-text,#06121f); font-weight:800; cursor:pointer}
+  .ghostbtn{width:100%; padding:9px; border-radius:10px; background:transparent;
+    color:var(--amber-dim); border:1px solid rgba(255,255,255,.16); cursor:pointer;
+    font-size:13px; font-family:inherit}
+  #skyAddrMsg{font-size:12.5px; min-height:16px; margin:6px 0 2px; color:var(--amber-dim)}
   .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
   .sw{width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer;
     padding:0; outline:none}
@@ -322,6 +333,13 @@
   <div id="settings">
     <div class="panel">
       <h3>Customize sky view</h3>
+      <div class="lbl">Location</div>
+      <div class="locrow">
+        <input id="skyAddr" type="text" placeholder="Address, city, or zip…" autocomplete="off" spellcheck="false" />
+        <button id="skyAddrSet">Set</button>
+      </div>
+      <button class="ghostbtn" id="skyAddrGps">Use my current location</button>
+      <div id="skyAddrMsg"></div>
       <div class="lbl">Show the nearest…</div>
       <div class="seg" id="modeSeg">
         <button data-mode="planes"><span class="ic">✈</span>Plane</button>
@@ -527,6 +545,50 @@ function loadBoardLoc(){
   return null;
 }
 function boardLocIsManual(){ return localStorage.getItem(CITY_CFG.lsManual)==="1"; }
+/* Sky view had no way to change where it looks -- you had to go to the board,
+   set an address there, and come back. It writes to the SAME localStorage keys
+   the board uses, so the two stay in step in both directions rather than
+   drifting apart. Planes, trains and buses all re-scan around the new spot. */
+function skyMsg(m, kind){
+  const el=document.getElementById("skyAddrMsg"); if(!el) return;
+  el.textContent=m||"";
+  el.style.color = kind==="bad" ? "var(--late,#ff5a5a)" : kind==="good" ? "var(--good,#33d17a)" : "var(--amber-dim)";
+}
+function skyApplyLoc(next, manual){
+  loc = next;
+  try{
+    localStorage.setItem(CITY_CFG.lsLoc, JSON.stringify(next));
+    localStorage.setItem(CITY_CFG.lsManual, manual ? "1" : "0");
+  }catch(e){}
+  const l=document.getElementById("loclbl"); if(l) l.textContent = next.label ? "near "+next.label : "";
+  miniMapFor=null;                       // re-frame the mini map on the new area
+  if(typeof updateSunSky==="function") updateSunSky();
+  if(typeof updateMoon==="function") updateMoon();
+  tick();
+}
+async function skySetAddress(){
+  const inp=document.getElementById("skyAddr"); const q=(inp&&inp.value||"").trim();
+  if(!q){ skyMsg("Type an address, city, or zip first.", "bad"); return; }
+  skyMsg("Searching…");
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+    const d=await r.json();
+    if(!d || !d.length){ skyMsg("Couldn't find that — try adding a city or state.", "bad"); return; }
+    const parts=(d[0].display_name||"").split(",").map(s=>s.trim()).filter(Boolean);
+    skyApplyLoc({ lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon),
+                  label:parts.slice(0,Math.min(3,parts.length)).join(", ") }, true);
+    skyMsg("Now watching the sky over "+loc.label, "good");
+  }catch(e){ skyMsg("Search failed — check your connection.", "bad"); }
+}
+function skyUseGps(){
+  if(!navigator.geolocation){ skyMsg("This browser can't share a location.", "bad"); return; }
+  skyMsg("Finding you…");
+  navigator.geolocation.getCurrentPosition(
+    p=>{ skyApplyLoc({lat:p.coords.latitude, lon:p.coords.longitude, label:"your location"}, false);
+         skyMsg("Using your current location.", "good"); },
+    ()=>skyMsg("Couldn't get your location.", "bad"),
+    { enableHighAccuracy:false, timeout:9000, maximumAge:120000 });
+}
 let loc = loadBoardLoc() || CFG.defaultLoc;
 const routeCache = loadRouteCache();
 
@@ -1858,6 +1920,11 @@ try{ if(fsDoc()!==document) fsDoc().addEventListener("webkitfullscreenchange", o
 
 function boot(){
   initFullscreen();
+  { const s=$("#skyAddrSet"), g=$("#skyAddrGps"), i=$("#skyAddr");
+    if(s) s.onclick=skySetAddress;
+    if(g) g.onclick=skyUseGps;
+    if(i){ i.value = (loc && loc.label && loc.label!=="your location") ? loc.label : "";
+           i.addEventListener("keydown", e=>{ if(e.key==="Enter") skySetAddress(); }); } }
   document.documentElement.setAttribute("data-theme", localStorage.getItem("nightmode.theme")||"dark");
   setTheme(localStorage.getItem("nightmode.accent")||"#7db8ff");
   initSettings();
