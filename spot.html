@@ -410,11 +410,13 @@ function distMi(a,b){
 
    These are SCHEDULED positions, not live GPS fixes, and every row says so —
    a bus running late is somewhere its timetable doesn't think it is. Only
-   bundles small enough for a phone are listed. Buses matter as much as trains
-   here -- you log what goes past you -- so SEPTA/MTA/MBTA/NJT bus are in even
-   though they are the heavier files. Still deliberately out: the NYC and Boston
-   subways, Metro-North, PATH and Muni, each 4-7MB on its own, which is more
-   than a phone should pull to name one vehicle. */
+   EVERY system this site bundles is listed -- subways, regional rail, trams,
+   ferries, cable cars and buses -- because the point is to name whatever just
+   went past you. Some are large (the NYC subway, Metro-North and the Amsterdam
+   trams are 5-7MB each), so they load smallest-first and each one paints the
+   moment it lands: the nearby subway shows up immediately rather than waiting
+   behind a 7MB Metro-North download. Bundles are cached after the first load,
+   and only the mode you are actually logging gets fetched. */
 const SPOT_CITIES = [
   { name:"Washington DC", lat:38.9007, lon:-77.0508, tz:"America/New_York", feeds:[
       {file:"marc-schedule.json",        label:"MARC",           mode:"train"},
@@ -426,23 +428,35 @@ const SPOT_CITIES = [
       {file:"patco-schedule.json",       label:"PATCO",          mode:"train"},
       {file:"njt-phl-schedule.json",     label:"NJ Transit",     mode:"train"} ] },
   { name:"New York",      lat:40.7506, lon:-73.9935, tz:"America/New_York", feeds:[
+      {file:"mta-subway-schedule.json",  label:"Subway",         mode:"train"},
+      {file:"path-schedule.json",        label:"PATH",           mode:"train"},
       {file:"lirr-schedule.json",        label:"LIRR",           mode:"train"},
+      {file:"mnr-schedule.json",         label:"Metro-North",    mode:"train"},
+      {file:"njt-nyc-schedule.json",     label:"NJ Transit",     mode:"train"},
       {file:"mta-bus-schedule.json",     label:"MTA Bus",        mode:"bus"} ] },
   { name:"New Jersey",    lat:40.7346, lon:-74.1643, tz:"America/New_York", feeds:[
       {file:"njt-state-rail-schedule.json", label:"NJ Transit",  mode:"train"},
       {file:"njt-state-bus-schedule.json",  label:"NJ Transit Bus", mode:"bus"} ] },
   { name:"Boston",        lat:42.3554, lon:-71.0605, tz:"America/New_York", feeds:[
+      {file:"mbta-subway-schedule.json", label:"the T",          mode:"train"},
       {file:"mbta-cr-schedule.json",     label:"MBTA Commuter Rail", mode:"train"},
       {file:"mbta-bus-schedule.json",    label:"MBTA Bus",       mode:"bus"} ] },
   { name:"San Francisco", lat:37.7880, lon:-122.4075, tz:"America/Los_Angeles", feeds:[
-      {file:"sf-caltrain-schedule.json", label:"Caltrain",       mode:"train"},
-      {file:"sf-bart-schedule.json",     label:"BART",           mode:"train"} ] },
+      {file:"sf-bart-schedule.json",     label:"BART",           mode:"train"},
+      {file:"sf-muni-schedule.json",     label:"Muni Metro",     mode:"train"},
+      {file:"sf-cablecar-schedule.json", label:"Cable Car",      mode:"train"},
+      {file:"sf-caltrain-schedule.json", label:"Caltrain",       mode:"train"} ] },
   { name:"Los Angeles",   lat:34.0561, lon:-118.2365, tz:"America/Los_Angeles", feeds:[
+      {file:"la-rail-schedule.json",     label:"Metro Rail",     mode:"train"},
       {file:"la-metrolink-schedule.json",label:"Metrolink",      mode:"train"} ] },
   { name:"Amsterdam",     lat:52.3785, lon:4.9000,   tz:"Europe/Amsterdam", feeds:[
       {file:"ams-metro-schedule.json",   label:"GVB Metro",      mode:"train"},
+      {file:"ams-tram-schedule.json",    label:"GVB Tram",       mode:"train"},
+      {file:"ams-rail-schedule.json",    label:"NS Rail",        mode:"train"},
+      {file:"ams-ferry-schedule.json",   label:"GVB Ferry",      mode:"train"},
       {file:"ams-intl-schedule.json",    label:"International rail", mode:"train"} ] },
 ];
+const BUNDLE_KB = {"ams-ferry-schedule.json":915,"ams-intl-schedule.json":249,"ams-metro-schedule.json":1532,"ams-rail-schedule.json":2459,"ams-tram-schedule.json":7005,"la-metrolink-schedule.json":65,"la-rail-schedule.json":2678,"lirr-schedule.json":493,"marc-schedule.json":42,"mbta-bus-schedule.json":2479,"mbta-cr-schedule.json":631,"mbta-subway-schedule.json":5080,"mnr-schedule.json":7586,"mta-bus-schedule.json":1996,"mta-subway-schedule.json":5070,"njt-nyc-schedule.json":937,"njt-phl-schedule.json":101,"njt-state-bus-schedule.json":1619,"njt-state-rail-schedule.json":1053,"patco-schedule.json":107,"path-schedule.json":4310,"rideon-schedule.json":302,"septa-bus-schedule.json":1147,"septa-rail-schedule.json":408,"septa-subway-schedule.json":643,"sf-bart-schedule.json":2130,"sf-cablecar-schedule.json":1243,"sf-caltrain-schedule.json":128,"sf-muni-schedule.json":2998};  // download cost, for cheapest-first ordering
 const SCHED_RADIUS_MI = 2.5;      // you can only log what you can actually see
 const bundleCache = {};
 let cityForLoc = null;
@@ -510,13 +524,21 @@ function scheduledNearby(s, feed, parts){
   });
   return out;
 }
-async function fetchScheduled(){
+async function fetchScheduled(onPartial){
   const city=nearestCity(); cityForLoc=city;
   if(!city) return [];
   const parts=cityNowParts(city.tz), out=[];
-  const wanted=city.feeds.filter(f=>f.mode===mode);   // only load what this mode needs
+  const wanted=city.feeds.filter(f=>f.mode===mode)   // only load what this mode needs
+    .slice().sort((a,b)=>(BUNDLE_KB[a.file]||999)-(BUNDLE_KB[b.file]||999));  // cheapest first
+  /* Report each feed as it lands. Some bundles are megabytes and others are
+     tens of kilobytes, so waiting for all of them meant the bus stop across the
+     road stayed invisible behind a 7MB commuter-rail download. */
   await Promise.allSettled(wanted.map(async f=>{
-    try{ out.push(...scheduledNearby(await loadBundle(f.file), f, parts)); }catch(e){}
+    try{
+      const rows=scheduledNearby(await loadBundle(f.file), f, parts);
+      out.push(...rows);
+      if(rows.length && typeof onPartial==="function") onPartial(rows);
+    }catch(e){}
   }));
   /* One row per line — a busy corridor would otherwise bury everything else
      under twenty near-identical entries for the same route. */
@@ -549,7 +571,13 @@ async function fetchNear(){
   near=[];
   const jobs=[];
   // local trains/buses from this site's own bundled timetables — no key needed
-  jobs.push(fetchScheduled().then(rows=>{ near.push(...rows); paintNear(); }).catch(()=>{}));
+  jobs.push(fetchScheduled(rows=>{ near.push(...rows); paintNear(); })
+    .then(all=>{                       // final pass: one row per line, nearest wins
+      const best={};
+      near.filter(n=>n.scheduled).forEach(n=>{ if(!best[n.label] || n.d<best[n.label].d) best[n.label]=n; });
+      near = near.filter(n=>!n.scheduled).concat(Object.values(best));
+      paintNear();
+    }).catch(()=>{}));
   // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
   jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
