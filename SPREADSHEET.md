@@ -10,7 +10,8 @@ the app. It takes about two minutes.
 
 1. Make a new Google Sheet (or open an existing one).
 2. **Extensions → Apps Script**.
-3. Delete whatever is in the editor and paste this:
+3. Delete whatever is in the editor and paste this. **Already have this Sheet set
+   up? Skip to the second block below — leave this one exactly as it is.**
 
 ```javascript
 // Appends one row per sighting sent by the Transit Spotter app.
@@ -38,7 +39,18 @@ function ok(status) {
   return ContentService.createTextOutput(JSON.stringify({ status: status }))
     .setMimeType(ContentService.MimeType.JSON);
 }
+```
 
+### Then add this second block, so the boards can read the log back
+
+> ⚠️ **Add it below what's already there — don't re-paste the block above.**
+> If you already set this Sheet up, the editor already contains `HEADERS`,
+> `doPost` and `ok`. Pasting them a second time is a syntax error
+> (*"Identifier 'HEADERS' has already been declared"*). You want **only** the
+> function below appended to the end of the file. It uses the `HEADERS` from the
+> first block, so both must be in the same file — just once each.
+
+```javascript
 // Serves the log back, so the BOARDS can show sightings logged on your phone.
 // Returned as JSONP: Apps Script sends no CORS headers, so a browser can never
 // fetch() this — but a <script> tag isn't subject to CORS, and that is what the
