@@ -136,7 +136,12 @@
       const has = typeof s.lat === "number" && typeof s.lon === "number";
       return { s, mi: has && here ? milesBetween(here, { lat: s.lat, lon: s.lon }) : null };
     });
-    const shown = near ? placed.filter(p => p.mi != null && p.mi <= NEAR_MI) : placed;
+    /* A sighting with no coordinates (logged with location off) CANNOT be shown
+       to be far away, and dropping the user's own entries is a worse failure
+       than the one this scoping was added to fix — that was about placed
+       sightings surfacing in the wrong city. So unknown-location entries always
+       show, labelled as such; only genuinely-distant ones are filtered out. */
+    const shown = near ? placed.filter(p => p.mi == null || p.mi <= NEAR_MI) : placed;
     const elsewhere = near ? placed.length - shown.length : 0;
     const unplaced = placed.filter(p => p.mi == null).length;
 
@@ -161,8 +166,7 @@
     }
     if (!shown.length) {
       list.innerHTML = `<div class="empty">No sightings within ${NEAR_MI} mi of here.
-        ${elsewhere} logged elsewhere${unplaced ? `, ${unplaced} without a location` : ""} —
-        tap “near here” above to show them.</div>`;
+        ${elsewhere} logged elsewhere — tap “near here” above to show them.</div>`;
       stat.innerHTML = ""; count.textContent = `0 near here`;
       return;
     }
@@ -184,7 +188,8 @@
       const badge = `<div class="badge" style="background:${COLOR[s.mode] || "#6aa9ff"}">${
         GLYPH[s.mode] || "•"}</div>`;
       const mi = miOf[s.id];
-      const dist = mi == null ? "" : (mi < 1 ? "here" : `${Math.round(mi)} mi away`);
+      const dist = mi == null ? "location not recorded"
+                 : (mi < 1 ? "here" : `${Math.round(mi)} mi away`);
       const bits = [s.vehicle, s.place, dist, s.by ? "by " + s.by : ""].filter(Boolean).join(" · ");
       row.innerHTML = `${badge}
         <div><div class="dest">${esc(s.route || "—")}</div>
