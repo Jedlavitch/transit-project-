@@ -14,7 +14,7 @@
 (function () {
   "use strict";
   const LS = { spots: "tb.spots", feed: "tb.spotFeedUrl", hide: "tb.spotCardHidden",
-               scope: "tb.spotScope" };
+               scope: "tb.spotScope", sheet: "tb.sheetUrl" };
   const GLYPH = { plane: "✈️", train: "🚆", bus: "🚌" };
   const COLOR = { plane: "#ffd166", train: "#3ad0c8", bus: "#6aa9ff" };
   const NEAR_MI = 60;          // "around here" — generous enough to cover a metro area
@@ -68,9 +68,40 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const local = () => { try { return JSON.parse(localStorage.getItem(LS.spots) || "[]"); } catch (_) { return []; } };
   const feedUrl = () => { try { return (localStorage.getItem(LS.feed) || "").trim().replace(/\/+$/, ""); } catch (_) { return ""; } };
+  const sheetUrl = () => { try { return (localStorage.getItem(LS.sheet) || "").trim(); } catch (_) { return ""; } };
+  const isSheet = u => /script\.google\.com/i.test(u);
+  const anyFeed = () => sheetUrl() || feedUrl();
+
+  /* One field, two kinds of backend. A Google Apps Script URL goes in the Sheet
+     slot (the key the phone app already uses for its mirror, so pasting the same
+     URL in both places is all the setup there is); anything else is treated as a
+     spotter-worker deployment. */
   function setFeedUrl(v) {
-    try { localStorage.setItem(LS.feed, String(v || "").trim().replace(/\/+$/, "")); } catch (_) {}
+    const u = String(v || "").trim().replace(/\/+$/, "");
+    try {
+      if (!u) { localStorage.setItem(LS.feed, ""); localStorage.setItem(LS.sheet, ""); }
+      else if (isSheet(u)) localStorage.setItem(LS.sheet, u);
+      else localStorage.setItem(LS.feed, u);
+    } catch (_) {}
     remote = []; remoteErr = ""; tick();
+  }
+
+  /* Apps Script web apps send no CORS headers, so fetch() can never read one --
+     that is why the phone app posts to it no-cors and cannot see the response.
+     A <script> tag is not subject to CORS at all, so JSONP is the one way to
+     READ a Sheet from the browser with no proxy in between. */
+  function jsonp(url, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const cb = "tbSpot" + Math.random().toString(36).slice(2, 9);
+      const s = document.createElement("script");
+      let done = false;
+      const cleanup = () => { try { delete window[cb]; } catch (_) { window[cb] = undefined; } s.remove(); };
+      const timer = setTimeout(() => { if (!done) { done = true; cleanup(); reject(new Error("timed out")); } }, timeoutMs || 15000);
+      window[cb] = data => { if (done) return; done = true; clearTimeout(timer); cleanup(); resolve(data); };
+      s.onerror = () => { if (done) return; done = true; clearTimeout(timer); cleanup(); reject(new Error("couldn't load — check the URL is deployed with access set to Anyone")); };
+      s.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "limit=60&callback=" + cb;
+      document.head.appendChild(s);
+    });
   }
 
   function ago(ts) {
@@ -132,13 +163,15 @@
       "background:var(--row-bg,rgba(255,255,255,.04));border:1px solid var(--row-line,rgba(255,255,255,.08))";
     box.innerHTML =
       `<div style="font-size:11px;color:var(--muted,#8fa3bf);line-height:1.45;margin-bottom:7px">
-         Sightings are saved on the device that logged them. To see the ones from your
-         phone here, deploy <b>spotter-worker.js</b> to Cloudflare (free) and paste its
-         URL below — then paste the same URL into the Spotter app's ⚙ settings.
+         Sightings are saved on the device that logged them. To see your phone's here,
+         paste your <b>Google Sheet web-app URL</b> — the same
+         <code style="font-size:10px">script.google.com/…/exec</code> URL from the Spotter's
+         ⚙ settings (see SPREADSHEET.md; no Cloudflare needed). A
+         <b>spotter-worker</b> URL works here too.
        </div>
        <div style="display:flex;gap:6px;flex-wrap:wrap">
          <input type="text" id="spotFeedInput" spellcheck="false" autocomplete="off"
-           placeholder="https://tb-spotter.you.workers.dev"
+           placeholder="https://script.google.com/macros/s/…/exec"
            style="flex:1 1 200px;min-width:0;font:inherit;font-size:12px;padding:5px 8px;border-radius:4px;
                   background:var(--panel,rgba(0,0,0,.25));color:inherit;
                   border:1px solid var(--row-line,rgba(255,255,255,.15))" />
@@ -151,13 +184,13 @@
        </div>
        <div id="spotFeedMsg" style="font-size:11px;margin-top:6px;min-height:1em"></div>`;
     const input = box.querySelector("#spotFeedInput");
-    input.value = feedUrl();
+    input.value = anyFeed();
     box.querySelector("#spotFeedSave").onclick = async () => {
       const msg = box.querySelector("#spotFeedMsg");
       msg.style.color = "var(--muted,#8fa3bf)"; msg.textContent = "Checking…";
       setFeedUrl(input.value);
       await pull();
-      if (!feedUrl()) { msg.textContent = "Cleared — showing only this device's log."; }
+      if (!anyFeed()) { msg.textContent = "Cleared — showing only this device's log."; }
       else if (remoteErr) { msg.style.color = "var(--warn,#ffb454)"; msg.textContent = "Couldn't reach it: " + remoteErr; }
       else { msg.style.color = "var(--good,#4ade80)"; msg.textContent = `Connected — ${remote.length} shared sighting${remote.length === 1 ? "" : "s"}.`; }
       render();
@@ -224,12 +257,12 @@
       /* Two very different situations used to read the same way. If no shared
          feed is set, a log made on a phone CANNOT reach this screen, and telling
          someone to go log more on their phone is the wrong advice entirely. */
-      list.innerHTML = feedUrl()
+      list.innerHTML = anyFeed()
         ? `<div class="empty">No sightings yet.${remoteErr
              ? ` Shared feed unreachable (${esc(remoteErr)}) — check the URL with ⇄ above.` : ""}</div>`
         : `<div class="empty">Nothing logged on <i>this</i> device. Sightings stay on the
-             device that logged them — if you log on your phone, tap <b>⇄</b> above to
-             connect the shared feed and they'll appear here.</div>`;
+             device that logged them — if you log on your phone, tap <b>⇄</b> above and
+             paste your Google Sheet URL to pull them in.</div>`;
       stat.innerHTML = ""; count.textContent = "";
       return;
     }
@@ -272,13 +305,19 @@
   }
 
   async function pull() {
-    const url = feedUrl();
-    if (!url) { remote = []; remoteErr = ""; return; }
+    const sh = sheetUrl(), url = feedUrl();
+    if (!sh && !url) { remote = []; remoteErr = ""; return; }
     try {
-      const r = await fetch(url + "/feed?limit=40", { cache: "no-store" });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const d = await r.json();
-      if (d && Array.isArray(d.spots)) { remote = d.spots; remoteErr = ""; }
+      let spots;
+      if (sh) {
+        const d = await jsonp(sh);
+        spots = d && d.spots;
+      } else {
+        const r = await fetch(url + "/feed?limit=40", { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        spots = (await r.json()).spots;
+      }
+      if (Array.isArray(spots)) { remote = spots; remoteErr = ""; }
       else throw new Error("no spots in response");
     } catch (e) {
       // keep whatever we had, but remember why — a mistyped Worker URL used to

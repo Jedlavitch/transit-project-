@@ -38,6 +38,40 @@ function ok(status) {
   return ContentService.createTextOutput(JSON.stringify({ status: status }))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
+// Serves the log back, so the BOARDS can show sightings logged on your phone.
+// Returned as JSONP: Apps Script sends no CORS headers, so a browser can never
+// fetch() this — but a <script> tag isn't subject to CORS, and that is what the
+// boards use. No Cloudflare, no Worker, no key.
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  const last = sheet.getLastRow();
+  let spots = [];
+  if (last > 1) {
+    const limit = Math.min(Number(p.limit) || 60, 200);
+    const start = Math.max(2, last - limit + 1);
+    spots = sheet.getRange(start, 1, last - start + 1, HEADERS.length).getValues()
+      .map(function (r) {
+        const o = {}; HEADERS.forEach(function (h, i) { o[h] = r[i]; });
+        return {
+          id: String(o.id || ""),
+          ts: Date.parse(o.when) || 0,
+          mode: o.mode, route: o.route, vehicle: o.vehicle,
+          place: o.place, note: o.note, by: o.by,
+          ridden: o.ridden === "yes" || o.ridden === true,
+          lat: o.lat === "" || o.lat == null ? null : Number(o.lat),
+          lon: o.lon === "" || o.lon == null ? null : Number(o.lon)
+        };
+      })
+      .filter(function (s) { return s.id && s.ts; });
+  }
+  const body = JSON.stringify({ ok: true, spots: spots });
+  return p.callback
+    ? ContentService.createTextOutput(p.callback + "(" + body + ")")
+        .setMimeType(ContentService.MimeType.JAVASCRIPT)
+    : ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
+}
 ```
 
 4. **Deploy → New deployment → Web app**
@@ -46,6 +80,15 @@ function ok(status) {
 5. Copy the deployment URL — it ends in `/exec`.
 6. In the Spotter: **⚙︎ → Google Sheet web-app URL**, paste, **Save**.
 7. Tap **Send all to Sheet** to backfill everything already in your log.
+8. On each board you want the sightings to appear on: **Spotted card → ⇄**, paste
+   the *same* URL, **Save**. That's the whole cross-device setup — the Sheet is
+   the shared feed, so no Cloudflare Worker is involved.
+
+> **Already had this script deployed before `doGet` existed?** Paste the new
+> function in, then **Deploy → Manage deployments → ✏️ edit → Version: New
+> version → Deploy**. The URL stays the same. Saving the code alone does *not*
+> update a live deployment — this is the single most common reason a Sheet URL
+> "doesn't work" after an edit.
 
 ## What you should know
 
