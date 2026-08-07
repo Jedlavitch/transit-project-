@@ -81,6 +81,11 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
   .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
+  /* third line of a plane row: where it's going, where it is, how it's squawking */
+  .plane .route{font-size:11px; color:var(--sched); font-family:var(--mono); letter-spacing:.02em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
+  .plane .route b{color:var(--sched-b); font-weight:700}
+  .plane .route .ap b{color:var(--plane)}   /* airport codes carry the card's own colour */
   .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
 
   #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
@@ -1115,8 +1120,18 @@ function updateStats(){
   if(P && P.length){
     const nr=Math.min(...P.map(a=>a._dist).filter(n=>n!=null));
     const mx=Math.max(...P.map(a=>a.gs||0));
-    const med=medianOf(P.map(a=>a.alt_baro).filter(n=>typeof n==="number"));
-    setHTML("planeStat", `nearest <b>${isFinite(nr)?nr.toFixed(1):"—"}</b> nm · fastest <b>${Math.round(mx)}</b> kt${med!=null?` · median <b>${med.toLocaleString()}</b>′`:""}`);
+    const top=Math.max(...P.map(a=>typeof a.alt_baro==="number"?a.alt_baro:0));
+    const up=P.filter(a=>a.baro_rate>200).length, dn=P.filter(a=>a.baro_rate<-200).length;
+    const ops={};                       // busiest operator overhead right now
+    P.forEach(a=>{ const o=operatorFor(a); if(o) ops[o]=(ops[o]||0)+1; });
+    const busiest=Object.entries(ops).sort((x,y)=>y[1]-x[1])[0];
+    setHTML("planeStat", [
+      `nearest <b>${isFinite(nr)?nr.toFixed(1):"—"}</b> nm`,
+      `<b>${up}</b>↑ <b>${dn}</b>↓`,
+      top>0 ? `top <b>${top.toLocaleString()}</b>′` : "",
+      `fastest <b>${Math.round(mx)}</b> kt`,
+      busiest && busiest[1]>1 ? `most <b>${esc(busiest[0])}</b>` : "",
+    ].filter(Boolean).join(" · "));
   } else setHTML("planeStat","");
   const A=state._amtrak;
   if(A && A.length){
@@ -1420,6 +1435,131 @@ function pushRailLive(){
   }
 }
 
+/* ---------- flight routes ------------------------------------------------
+   airplanes.live carries no route at all, so a plane row could say what the
+   aircraft WAS but never where it was going. adsbdb.com fills that in by
+   callsign -- free, no key, and CORS-open (`access-control-allow-origin: *`,
+   verified), so it needs no Worker unlike MARC/SEPTA.
+   A flight number's route is stable, so every answer is cached in localStorage
+   for 30 days and each callsign is looked up once, ever. Misses are cached too:
+   private, GA and military callsigns have no scheduled route, and roughly half
+   the traffic overhead is exactly that -- without remembering the miss they'd
+   be re-requested on every 15s refresh forever. A network failure is cached
+   only briefly (`soft`), so an adsbdb outage doesn't blank routes for a month. */
+/* key is versioned: the cached shape gained airport coordinates for the
+   plausibility check, and an entry without them can't be checked */
+const RT_KEY="tb.flightRoutes2", RT_TTL=30*864e5, RT_SOFT_TTL=6*36e5, RT_PAR=4;
+let rtCache=null, rtBusy=0, rtWait=[], rtDirty=false;
+const rtDoing=new Set();   // callsigns fetched right now: a 15s refresh must not re-request them
+function rtLoad(){
+  if(rtCache) return rtCache;
+  rtCache={};
+  try{
+    const raw=JSON.parse(localStorage.getItem(RT_KEY)||"{}"), now=Date.now();
+    for(const k in raw){
+      const e=raw[k]; if(!e) continue;
+      if(now-(e.t||0) < (e.soft? RT_SOFT_TTL : RT_TTL)) rtCache[k]=e;
+    }
+  }catch(_){}
+  return rtCache;
+}
+function rtSave(){
+  if(!rtDirty) return; rtDirty=false;
+  try{ localStorage.setItem(RT_KEY, JSON.stringify(rtCache)); }catch(_){}
+}
+/* adsbdb answers by CALLSIGN, and airlines reuse flight numbers hard. Measured
+   live over Bethesda: of 29 aircraft it had a route for, 19 came back with one
+   the aircraft overhead could not possibly be flying -- a "LAX → OAK" climbing
+   out of DC, a "PDX → OAK" at 3,800ft over Maryland. So a route is checked
+   against where the aircraft physically is before it is shown, and one that
+   fails is dropped rather than displayed: the row falls back to the tail number
+   instead of stating something false. */
+const NM = km => km*0.539957;
+function routePlausible(a, rt){
+  if(rt.flat==null || rt.tlat==null || a.lat==null) return false;
+  const here={lat:a.lat, lon:a.lon}, o={lat:rt.flat, lon:rt.flon}, d={lat:rt.tlat, lon:rt.tlon};
+  const leg=NM(haversine(o,d)), detour=NM(haversine(here,o))+NM(haversine(here,d));
+  if(detour > leg*1.12 + 40) return false;     // nowhere near the great circle it should be on
+  // under 10,000ft an aircraft is in a terminal area, so one end has to be local
+  const alt = typeof a.alt_baro==="number" ? a.alt_baro : 99999;
+  if(alt < 10000 && Math.min(NM(haversine(state.loc,o)), NM(haversine(state.loc,d))) > 60) return false;
+  return true;
+}
+/* the cached route for an aircraft, or null if it has none / isn't known / doesn't add up */
+function routeFor(a){
+  const cs=(a.flight||"").trim(); if(!cs) return null;
+  const hit=rtLoad()[cs];
+  return (hit && hit.from && routePlausible(a, hit)) ? hit : null;
+}
+/* Who is flying it. The callsign prefix (AAL, SWA, KLM) identifies the operator
+   outright, so the airline stays usable even when that callsign's city pair was
+   rejected as stale. Worth keeping separate from the route: a US airliner's
+   REGISTERED owner is usually a leasing trust, so falling back to the ADS-B
+   `ownOp` alone labelled American Airlines jets "Wilmington Trust Trustee". */
+function operatorFor(a){
+  const cs=(a.flight||"").trim();
+  const hit=cs ? rtLoad()[cs] : null;
+  return (hit && hit.airline) || prettyOp(a.ownOp);
+}
+async function lookupRoute(cs){
+  let r=null, failed=false;
+  try{ r=await getJSON(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`, 8000); }
+  catch(_){ failed=true; }
+  const fr=r && r.response && r.response.flightroute, o=fr&&fr.origin, d=fr&&fr.destination;
+  const entry={ t:Date.now() };
+  if(fr){
+    // kept even when the city pair below gets rejected -- see operatorFor()
+    entry.airline=(fr.airline&&fr.airline.name)||"";
+    if(o&&d) Object.assign(entry, {
+      from:o.iata_code||o.icao_code||"", to:d.iata_code||d.icao_code||"",
+      fromName:o.municipality||o.name||"", toName:d.municipality||d.name||"",
+      flat:o.latitude, flon:o.longitude, tlat:d.latitude, tlon:d.longitude });
+  } else if(failed) entry.soft=1;
+  rtLoad()[cs]=entry;
+  rtDirty=true;
+}
+function queueRoutes(list){
+  const c=rtLoad();
+  list.forEach(a=>{
+    const cs=(a.flight||"").trim();
+    if(cs && !c[cs] && !rtDoing.has(cs) && rtWait.indexOf(cs)<0) rtWait.push(cs);
+  });
+  rtPump();
+}
+function rtPump(){
+  while(rtBusy<RT_PAR && rtWait.length){
+    rtBusy++;
+    const cs=rtWait.shift(); rtDoing.add(cs);
+    lookupRoute(cs).finally(()=>{
+      rtBusy--; rtDoing.delete(cs);
+      // last one home: persist, and repaint so the newly-known routes appear
+      if(!rtBusy && !rtWait.length){
+        rtSave();
+        if(state._planes && state._planes.length) renderPlanes(state._planes);
+      }
+      rtPump();
+    });
+  }
+}
+const COMPASS=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function compass(deg){
+  return (deg==null||isNaN(deg)) ? "" : COMPASS[Math.round((((deg%360)+360)%360)/22.5)%16];
+}
+/* "AMERICAN AIRLINES INC" -> "American Airlines" (the feed shouts, and pads with company suffixes) */
+function prettyOp(s){
+  if(!s) return "";
+  return String(s).replace(/\b(INC|LLC|L\.L\.C\.|CORP|CO|LTD|LTDA|PLC|DBA|GMBH|AG|SA|NV|PTY)\b\.?/gi,"")
+    .replace(/\s{2,}/g," ").replace(/[\s,\-]+$/,"").trim()
+    .toLowerCase().replace(/\b[a-z]/g, m=>m.toUpperCase());
+}
+function vertText(a){
+  const r = typeof a.baro_rate==="number" ? a.baro_rate
+          : (typeof a.geom_rate==="number" ? a.geom_rate : null);
+  if(r==null) return "level";
+  if(r>200)  return `↑ ${r.toLocaleString()} fpm`;
+  if(r<-200) return `↓ ${Math.abs(r).toLocaleString()} fpm`;
+  return "level";
+}
 /* ---------- PLANES (works anywhere in the US, no key) ---------- */
 async function fetchPlanes(){
   const {lat,lon}=state.loc;
@@ -1432,19 +1572,51 @@ async function fetchPlanes(){
   renderPlanes(ac);
   drawPlanes(ac);
 }
+/* third row line: route · where it is relative to you · heading · squawk.
+   Built as DOM nodes rather than innerHTML -- every field here is unauthenticated
+   radio the board didn't originate, so none of it is trusted as markup. */
+function planeRouteLine(a, rt){
+  const d=el("div","route");
+  const sep=()=>{ if(d.childNodes.length) d.appendChild(document.createTextNode(" · ")); };
+  if(rt){
+    sep();
+    const ap=el("span","ap");
+    ap.append(el("b",null,rt.from), document.createTextNode(" → "), el("b",null,rt.to));
+    d.appendChild(ap);
+    if(rt.fromName && rt.toName) d.title=`${rt.fromName} → ${rt.toName}`;
+  } else if(a.r){
+    sep(); d.appendChild(document.createTextNode(a.r));   // no scheduled route: show the tail number
+  }
+  if(a._dist!=null){ sep(); d.appendChild(document.createTextNode(`${a._dist.toFixed(1)} nm ${compass(a.dir)}`.trim())); }
+  const hdg = typeof a.track==="number" ? a.track : (typeof a.true_heading==="number" ? a.true_heading : null);
+  if(hdg!=null){ sep(); d.appendChild(document.createTextNode(`hdg ${String(Math.round(hdg)).padStart(3,"0")}°`)); }
+  if(a.squawk){ sep(); d.appendChild(document.createTextNode(`sqk ${a.squawk}`)); }
+  return d;
+}
 function renderPlanes(ac){
   const box=$("#planeList"); box.innerHTML="";
   const flying=ac.filter(a=>a.alt_baro!=="ground");
-  state._planes=flying; state.lastPlaneOk=Date.now();   // stats strip reads these
+  state._planes=flying;   // stats strip reads this
   if(!flying.length){ box.appendChild(el("div","empty","No aircraft overhead right now.")); }
-  flying.slice(0,10).forEach(a=>{
+  const shown=flying.slice(0,10);
+  queueRoutes(shown);     // fills in origin/destination for any callsign not cached yet
+  shown.forEach(a=>{
     const row=el("div","row plane");
+    const rt=routeFor(a);
     const mid=el("div");
     mid.appendChild(el("div","dest", (a.desc||a.t||"Aircraft")));
-    mid.appendChild(el("div","sub", `${a.ownOp?a.ownOp+" · ":""}${a.gs?Math.round(a.gs)+" kt":""}${a._dist!=null?` · ${a._dist.toFixed(1)} nm`:""}`));
+    mid.appendChild(el("div","sub", [
+      operatorFor(a),
+      a.year,
+      a.gs?Math.round(a.gs)+" kt":"",
+    ].filter(Boolean).join(" · ")));
+    mid.appendChild(planeRouteLine(a, rt));
     const times=el("div","times");
-    const alt=el("div","alt", typeof a.alt_baro==="number"? a.alt_baro.toLocaleString()+"′" : (a.alt_baro||"—"));
-    times.append(alt, el("div","sched", a.baro_rate>200?"climbing":a.baro_rate<-200?"descending":"level"));
+    times.appendChild(el("div","alt", typeof a.alt_baro==="number"? a.alt_baro.toLocaleString()+"′" : (a.alt_baro||"—")));
+    times.appendChild(el("div","sched", vertText(a)));
+    // autopilot's selected altitude -- says where a climb or descent is headed
+    if(typeof a.nav_altitude_mcp==="number")
+      times.appendChild(el("div","sched", `⇥ ${a.nav_altitude_mcp.toLocaleString()}′`));
     row.append(badge((a.flight||a.r||"—").trim().slice(0,7)), mid, el("div"), times);
     box.appendChild(row);
   });
