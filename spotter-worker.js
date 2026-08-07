@@ -15,8 +15,10 @@
           FEED_SECRET  — if set, posting requires ?s=THAT_VALUE (keeps a public
                          URL from being writable by strangers)
           MAX_FEED     — how many sightings to keep, default 200
-     5. Paste the worker URL into the app: ⚙︎ → Shared feed URL. Boards pick it
-        up from the same localStorage key automatically.
+     5. Paste the worker URL into the app: ⚙︎ → Shared feed URL, AND into each
+        board that should show the feed: Spotted card → ⇄ button. A board only
+        picks it up on its own when it is the same browser on the same device
+        that logged the sighting — which is not the case this worker is for.
 
    ROUTES
      POST /log[?s=SECRET]   body = one sighting object from the app

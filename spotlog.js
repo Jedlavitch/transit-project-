@@ -19,6 +19,7 @@
   const COLOR = { plane: "#ffd166", train: "#3ad0c8", bus: "#6aa9ff" };
   const NEAR_MI = 60;          // "around here" — generous enough to cover a metro area
   let remote = [];
+  let remoteErr = "";          // last shared-feed failure, surfaced so a bad URL isn't silent
 
   /* ---- where is the board that's showing this card? --------------------
      Every sighting carries the lat/lon it was logged at, but this card used to
@@ -67,6 +68,10 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const local = () => { try { return JSON.parse(localStorage.getItem(LS.spots) || "[]"); } catch (_) { return []; } };
   const feedUrl = () => { try { return (localStorage.getItem(LS.feed) || "").trim().replace(/\/+$/, ""); } catch (_) { return ""; } };
+  function setFeedUrl(v) {
+    try { localStorage.setItem(LS.feed, String(v || "").trim().replace(/\/+$/, "")); } catch (_) {}
+    remote = []; remoteErr = ""; tick();
+  }
 
   function ago(ts) {
     const s = Math.max(0, (Date.now() - ts) / 1000);
@@ -87,21 +92,78 @@
     card.style.setProperty("--sys", "#b39dff");   // tactical header tick (index.html); harmless elsewhere
     card.innerHTML =
       `<h2><span class="icon">📓</span> Spotted <span class="count" id="spotCount"></span>
-         <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button></h2>
+         <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button>
+         <button type="button" id="spotFeedBtn" title="Shared feed — see sightings logged on your phone">⇄</button></h2>
        <div class="statline" id="spotStat"></div>
+       <div id="spotFeedBox" style="display:none"></div>
        <div class="list" id="spotList"></div>`;
     cards.appendChild(card);
     // tapping the header opens the phone app (same place you'd add a sighting)
     const h2 = card.querySelector("h2");
     h2.style.cursor = "pointer";
     h2.title = "Open the Spotter app";
-    h2.onclick = e => { if (!e.target.closest("#spotScopeBtn")) window.location.href = "spot.html"; };
-    const btn = card.querySelector("#spotScopeBtn");
-    btn.style.cssText = "margin-left:auto;font:inherit;font-size:10px;font-weight:700;cursor:pointer;" +
-      "padding:2px 8px;border-radius:999px;border:1px solid currentColor;background:transparent;" +
+    // Any control in the header acts on the card; only bare header space opens the
+    // app. Whitelisting one button by id broke the moment a second was added.
+    h2.onclick = e => { if (!e.target.closest("button")) window.location.href = "spot.html"; };
+    const pill = "font:inherit;font-size:10px;font-weight:700;cursor:pointer;padding:2px 8px;" +
+      "border-radius:999px;border:1px solid currentColor;background:transparent;" +
       "color:var(--muted,#8fa3bf);opacity:.8;letter-spacing:.04em";
+    const btn = card.querySelector("#spotScopeBtn");
+    btn.style.cssText = "margin-left:auto;" + pill;
     btn.onclick = e => { e.stopPropagation(); setScope(scope() === "near" ? "all" : "near"); };
+    const fbtn = card.querySelector("#spotFeedBtn");
+    fbtn.style.cssText = "margin-left:6px;" + pill;
+    fbtn.onclick = e => { e.stopPropagation(); toggleFeedBox(); };
     return card;
+  }
+
+  /* ---- shared-feed setup, on the board itself ---------------------------
+     The phone app has a field for this URL; the boards had none, so a sighting
+     logged on a phone could never reach a TV or kiosk without opening devtools
+     on it — which is exactly the setup this feature is for. Lives here rather
+     than in each board's ⚙ panel because this one file is what all eight boards
+     load, and the panels differ per board. */
+  function toggleFeedBox() {
+    const box = document.getElementById("spotFeedBox");
+    if (!box) return;
+    if (box.style.display !== "none") { box.style.display = "none"; box.innerHTML = ""; render(); return; }
+    box.style.display = "";
+    box.style.cssText += ";margin:2px 0 8px;padding:9px 10px;border-radius:6px;" +
+      "background:var(--row-bg,rgba(255,255,255,.04));border:1px solid var(--row-line,rgba(255,255,255,.08))";
+    box.innerHTML =
+      `<div style="font-size:11px;color:var(--muted,#8fa3bf);line-height:1.45;margin-bottom:7px">
+         Sightings are saved on the device that logged them. To see the ones from your
+         phone here, deploy <b>spotter-worker.js</b> to Cloudflare (free) and paste its
+         URL below — then paste the same URL into the Spotter app's ⚙ settings.
+       </div>
+       <div style="display:flex;gap:6px;flex-wrap:wrap">
+         <input type="text" id="spotFeedInput" spellcheck="false" autocomplete="off"
+           placeholder="https://tb-spotter.you.workers.dev"
+           style="flex:1 1 200px;min-width:0;font:inherit;font-size:12px;padding:5px 8px;border-radius:4px;
+                  background:var(--panel,rgba(0,0,0,.25));color:inherit;
+                  border:1px solid var(--row-line,rgba(255,255,255,.15))" />
+         <button type="button" id="spotFeedSave" style="font:inherit;font-size:11px;font-weight:700;
+           cursor:pointer;padding:5px 12px;border-radius:4px;border:0;background:var(--accent,#ffd166);
+           color:#08101f">Save</button>
+         <button type="button" id="spotFeedClear" style="font:inherit;font-size:11px;cursor:pointer;
+           padding:5px 10px;border-radius:4px;background:transparent;color:var(--muted,#8fa3bf);
+           border:1px solid var(--row-line,rgba(255,255,255,.15))">Clear</button>
+       </div>
+       <div id="spotFeedMsg" style="font-size:11px;margin-top:6px;min-height:1em"></div>`;
+    const input = box.querySelector("#spotFeedInput");
+    input.value = feedUrl();
+    box.querySelector("#spotFeedSave").onclick = async () => {
+      const msg = box.querySelector("#spotFeedMsg");
+      msg.style.color = "var(--muted,#8fa3bf)"; msg.textContent = "Checking…";
+      setFeedUrl(input.value);
+      await pull();
+      if (!feedUrl()) { msg.textContent = "Cleared — showing only this device's log."; }
+      else if (remoteErr) { msg.style.color = "var(--warn,#ffb454)"; msg.textContent = "Couldn't reach it: " + remoteErr; }
+      else { msg.style.color = "var(--good,#4ade80)"; msg.textContent = `Connected — ${remote.length} shared sighting${remote.length === 1 ? "" : "s"}.`; }
+      render();
+    };
+    box.querySelector("#spotFeedClear").onclick = () => { input.value = ""; setFeedUrl(""); toggleFeedBox(); };
+    input.focus();
   }
 
   function trim(box) {                        // same "no scrollbar, no clipping" rule the boards use
@@ -159,8 +221,15 @@
     }
 
     if (!every.length) {
-      list.innerHTML = `<div class="empty">No sightings logged yet — open the Spotter app
-        on your phone to log the trains, buses and planes you see.</div>`;
+      /* Two very different situations used to read the same way. If no shared
+         feed is set, a log made on a phone CANNOT reach this screen, and telling
+         someone to go log more on their phone is the wrong advice entirely. */
+      list.innerHTML = feedUrl()
+        ? `<div class="empty">No sightings yet.${remoteErr
+             ? ` Shared feed unreachable (${esc(remoteErr)}) — check the URL with ⇄ above.` : ""}</div>`
+        : `<div class="empty">Nothing logged on <i>this</i> device. Sightings stay on the
+             device that logged them — if you log on your phone, tap <b>⇄</b> above to
+             connect the shared feed and they'll appear here.</div>`;
       stat.innerHTML = ""; count.textContent = "";
       return;
     }
@@ -204,12 +273,18 @@
 
   async function pull() {
     const url = feedUrl();
-    if (!url) { remote = []; return; }
+    if (!url) { remote = []; remoteErr = ""; return; }
     try {
       const r = await fetch(url + "/feed?limit=40", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
       const d = await r.json();
-      if (d && Array.isArray(d.spots)) remote = d.spots;
-    } catch (_) { /* keep whatever we had */ }
+      if (d && Array.isArray(d.spots)) { remote = d.spots; remoteErr = ""; }
+      else throw new Error("no spots in response");
+    } catch (e) {
+      // keep whatever we had, but remember why — a mistyped Worker URL used to
+      // fail completely silently, which looks identical to "nothing logged yet"
+      remoteErr = (e && e.message) || "unreachable";
+    }
   }
 
   async function tick() { await pull(); render(); }
