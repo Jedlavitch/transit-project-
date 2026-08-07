@@ -410,8 +410,11 @@ function distMi(a,b){
 
    These are SCHEDULED positions, not live GPS fixes, and every row says so —
    a bus running late is somewhere its timetable doesn't think it is. Only
-   bundles small enough for a phone are listed; the multi-megabyte ones (NYC
-   and Boston subway, Metro-North, PATH, Muni) are deliberately left out. */
+   bundles small enough for a phone are listed. Buses matter as much as trains
+   here -- you log what goes past you -- so SEPTA/MTA/MBTA/NJT bus are in even
+   though they are the heavier files. Still deliberately out: the NYC and Boston
+   subways, Metro-North, PATH and Muni, each 4-7MB on its own, which is more
+   than a phone should pull to name one vehicle. */
 const SPOT_CITIES = [
   { name:"Washington DC", lat:38.9007, lon:-77.0508, tz:"America/New_York", feeds:[
       {file:"marc-schedule.json",        label:"MARC",           mode:"train"},
@@ -419,15 +422,25 @@ const SPOT_CITIES = [
   { name:"Philadelphia",  lat:39.9526, lon:-75.1652, tz:"America/New_York", feeds:[
       {file:"septa-rail-schedule.json",  label:"SEPTA Regional Rail", mode:"train"},
       {file:"septa-subway-schedule.json",label:"SEPTA Subway",   mode:"train"},
+      {file:"septa-bus-schedule.json",   label:"SEPTA Bus",      mode:"bus"},
       {file:"patco-schedule.json",       label:"PATCO",          mode:"train"},
       {file:"njt-phl-schedule.json",     label:"NJ Transit",     mode:"train"} ] },
   { name:"New York",      lat:40.7506, lon:-73.9935, tz:"America/New_York", feeds:[
-      {file:"lirr-schedule.json",        label:"LIRR",           mode:"train"} ] },
+      {file:"lirr-schedule.json",        label:"LIRR",           mode:"train"},
+      {file:"mta-bus-schedule.json",     label:"MTA Bus",        mode:"bus"} ] },
+  { name:"New Jersey",    lat:40.7346, lon:-74.1643, tz:"America/New_York", feeds:[
+      {file:"njt-state-rail-schedule.json", label:"NJ Transit",  mode:"train"},
+      {file:"njt-state-bus-schedule.json",  label:"NJ Transit Bus", mode:"bus"} ] },
+  { name:"Boston",        lat:42.3554, lon:-71.0605, tz:"America/New_York", feeds:[
+      {file:"mbta-cr-schedule.json",     label:"MBTA Commuter Rail", mode:"train"},
+      {file:"mbta-bus-schedule.json",    label:"MBTA Bus",       mode:"bus"} ] },
   { name:"San Francisco", lat:37.7880, lon:-122.4075, tz:"America/Los_Angeles", feeds:[
-      {file:"sf-caltrain-schedule.json", label:"Caltrain",       mode:"train"} ] },
+      {file:"sf-caltrain-schedule.json", label:"Caltrain",       mode:"train"},
+      {file:"sf-bart-schedule.json",     label:"BART",           mode:"train"} ] },
   { name:"Los Angeles",   lat:34.0561, lon:-118.2365, tz:"America/Los_Angeles", feeds:[
       {file:"la-metrolink-schedule.json",label:"Metrolink",      mode:"train"} ] },
   { name:"Amsterdam",     lat:52.3785, lon:4.9000,   tz:"Europe/Amsterdam", feeds:[
+      {file:"ams-metro-schedule.json",   label:"GVB Metro",      mode:"train"},
       {file:"ams-intl-schedule.json",    label:"International rail", mode:"train"} ] },
 ];
 const SCHED_RADIUS_MI = 2.5;      // you can only log what you can actually see
