@@ -11,6 +11,12 @@
 <meta name="apple-mobile-web-app-title" content="Spotter" />
 <link rel="apple-touch-icon" href="spot-icon-180.png" />
 <link rel="stylesheet" href="theme.css?v=9" />
+<!-- Map view. Deliberately NOT in the service worker's shell: tiles need the
+     network anyway, so caching the library would only buy a blank grey box. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script>/* pre-paint: same shared look as the boards (tb.theme / tb.accent) */
 (function(){try{var g=k=>localStorage.getItem(k),d=document.documentElement;
 var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -107,19 +113,53 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     border-radius:12px; font-size:14px; font-weight:700; transition:transform .3s ease;
     box-shadow:0 10px 30px rgba(0,0,0,.5); max-width:88vw; text-align:center}
   #toast.up{transform:translate(-50%,0)}
-  #sheet{position:fixed; inset:0; z-index:200; background:var(--scrim); display:none;
+  .sheet{position:fixed; inset:0; z-index:200; background:var(--scrim); display:none;
     align-items:flex-end; justify-content:center}
-  #sheet.show{display:flex}
-  #sheet .box{background:var(--panel); border:1px solid var(--line); border-radius:16px 16px 0 0;
+  .sheet.show{display:flex}
+  .sheet .box{background:var(--panel); border:1px solid var(--line); border-radius:16px 16px 0 0;
     padding:20px 18px calc(env(safe-area-inset-bottom) + 20px); width:100%; max-width:620px;
     max-height:88vh; overflow:auto}
-  #sheet h3{margin:0 0 4px; font-size:17px}
-  #sheet p{font-size:12.5px; color:var(--muted); line-height:1.6; margin:8px 0}
-  #sheet .btns{display:flex; gap:9px; margin-top:14px; flex-wrap:wrap}
-  #sheet button{flex:1; min-width:130px; padding:13px; border-radius:11px; border:none;
+  .sheet h3{margin:0 0 4px; font-size:17px}
+  .sheet p{font-size:12.5px; color:var(--muted); line-height:1.6; margin:8px 0}
+  .sheet .btns{display:flex; gap:9px; margin-top:14px; flex-wrap:wrap}
+  .sheet button{flex:1; min-width:130px; padding:13px; border-radius:11px; border:none;
     background:var(--accent); color:#04101f; font-weight:800; font-size:14px; cursor:pointer}
-  #sheet button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
+  .sheet button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
   a{color:var(--accent)}
+
+  /* ---- view tabs, filters, map and collection ---- */
+  .tabs{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:12px 0 10px;
+    background:var(--panel2,#0a1220); border:1px solid var(--line); border-radius:12px; padding:4px}
+  .tab{font:inherit; font-size:13px; font-weight:700; padding:8px 6px; border-radius:9px;
+    border:0; background:transparent; color:var(--muted); cursor:pointer}
+  .tab.on{background:var(--accent); color:#04101f}
+  .filters{display:flex; flex-direction:column; gap:8px; margin-bottom:10px}
+  .filters input[type=search]{width:100%; font:inherit; font-size:15px; padding:11px 13px;
+    border-radius:11px; border:1px solid var(--line); background:var(--panel2,#0a1220); color:var(--text)}
+  .fchips{display:flex; gap:6px; flex-wrap:wrap}
+  .fchip{font:inherit; font-size:12px; font-weight:700; padding:7px 12px; border-radius:999px;
+    border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer}
+  .fchip.on{background:var(--accent); border-color:var(--accent); color:#04101f}
+  #viewMap,#viewColl{display:none}
+  #spotMap{height:min(58vh,460px); border-radius:14px; border:1px solid var(--line); overflow:hidden}
+  .leaflet-container{background:var(--panel2,#0a1220)}
+  .spot-pin{display:block; width:26px; height:26px; line-height:24px; text-align:center;
+    font-size:14px; border-radius:50%; background:var(--panel,#0d1728);
+    border:2px solid var(--accent); box-shadow:0 2px 10px rgba(0,0,0,.5)}
+  .collrow{display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center;
+    padding:10px 2px; border-bottom:1px solid var(--line)}
+  .collrow .n{font-weight:700}
+  .collrow .s{font-size:12px; color:var(--muted)}
+  .collrow .c{font-size:12px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums}
+  .missing{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+  .missing span{font-size:12px; font-weight:700; padding:6px 10px; border-radius:999px;
+    border:1px solid var(--line); color:var(--muted)}
+  .missing span.got{border-color:var(--accent); color:var(--accent)}
+  .bar{height:8px; border-radius:99px; background:var(--line); overflow:hidden; margin:10px 0 4px}
+  .bar i{display:block; height:100%; background:var(--accent)}
+  .newbadge{font-size:9px; font-weight:900; letter-spacing:.08em; padding:2px 6px; border-radius:999px;
+    background:var(--accent); color:#04101f; margin-left:6px; vertical-align:middle}
+  .entry .edit{background:transparent; border:0; color:var(--muted); font-size:14px; cursor:pointer; padding:2px 4px}
 
   /* ============ blue depth pass (shared design language) ============ */
   body{background:
@@ -173,13 +213,62 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <div class="stat"><b id="stRoutes">0</b><span>Routes</span></div>
     <div class="stat"><b id="stDays">0</b><span>Days</span></div>
   </div>
-  <div id="log"></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-view="log">List</button>
+    <button class="tab" data-view="map">Map</button>
+    <button class="tab" data-view="coll">Collection</button>
+  </div>
+
+  <div id="viewLog">
+    <div class="filters">
+      <input type="search" id="q" placeholder="Search route, vehicle, place, note…" autocomplete="off" />
+      <div class="fchips" id="fchips">
+        <button class="fchip on" data-f="all">All</button>
+        <button class="fchip" data-f="plane">✈️</button>
+        <button class="fchip" data-f="train">🚆</button>
+        <button class="fchip" data-f="bus">🚌</button>
+        <button class="fchip" data-f="rode">Rode</button>
+        <button class="fchip" data-f="new">New</button>
+      </div>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <div id="viewMap">
+    <div id="spotMap"></div>
+    <div class="hint" id="mapHint"></div>
+  </div>
+
+  <div id="viewColl">
+    <div class="hint" id="collHint"></div>
+    <div id="collList"></div>
+    <div class="sect" style="margin-top:18px">What's still out there</div>
+    <div class="hint">Pick a system to see which of its routes you've caught. The route list
+      comes from that system's own timetable, loaded only when you ask for it.</div>
+    <select id="collSys" class="fld"></select>
+    <div id="collMissing"></div>
+  </div>
 </main>
 
 <div class="logbtn"><button id="save">Log this sighting</button></div>
 <div id="toast"></div>
 
-<div id="sheet"><div class="box">
+<div id="editSheet" class="sheet"><div class="box">
+  <h3>Edit sighting</h3>
+  <label class="fld"><em>Route / flight</em><input type="text" id="eRoute" autocomplete="off" /></label>
+  <label class="fld"><em>Vehicle</em><input type="text" id="eVehicle" autocomplete="off" /></label>
+  <label class="fld"><em>Where</em><input type="text" id="ePlace" autocomplete="off" /></label>
+  <label class="fld"><em>Note</em><textarea id="eNote"></textarea></label>
+  <label class="ride"><input type="checkbox" id="eRidden" /><b>I rode this one<span>Leave off if you just saw it</span></b></label>
+  <div class="btns">
+    <button id="eSave">Save changes</button>
+    <button class="ghost" id="eDelete">Delete</button>
+    <button class="ghost" id="eClose">Cancel</button>
+  </div>
+</div></div>
+
+<div id="sheet" class="sheet"><div class="box">
   <h3>Spotter settings</h3>
   <label class="fld"><em>Your name on shared logs</em>
     <input type="text" id="handle" placeholder="e.g. Jack" autocomplete="off" /></label>
@@ -245,12 +334,36 @@ function initLoc(){
   navigator.geolocation.getCurrentPosition(
     p => { loc={lat:p.coords.latitude, lon:p.coords.longitude}; $("#hsub").textContent=
              `${Math.abs(loc.lat).toFixed(3)}°${loc.lat>=0?"N":"S"} ${Math.abs(loc.lon).toFixed(3)}°${loc.lon>=0?"E":"W"}`;
-           fetchNear(); },
+           fetchNear(); namePlace(); },
     _ => { $("#nearHint").textContent="Location is off, so one-tap logging is unavailable — enter sightings by hand.";
            $("#hsub").textContent="location off"; },
     { enableHighAccuracy:false, timeout:9000, maximumAge:120000 }
   );
 }
+/* Name where you are, so "Where" doesn't have to be typed every time. Nominatim
+   is the same free, keyless, CORS-open geocoder the boards use for address
+   lookup. Only ever fills a field the user hasn't touched, and only suggests —
+   typing over it wins, and the typed value is what gets logged. */
+let placeTouched=false;
+$("#place").addEventListener("input", ()=>{ placeTouched=true; });
+async function namePlace(){
+  if(!loc || placeTouched || $("#place").value.trim()) return;
+  try{
+    const j=await getJSON(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=18`+
+      `&lat=${loc.lat.toFixed(5)}&lon=${loc.lon.toFixed(5)}`, 8000);
+    const a=(j&&j.address)||{};
+    /* Prefer the name of a thing you'd actually be standing at over a street. */
+    const spot=[a.railway,a.public_transport,a.station,a.bus_stop,a.aeroway,
+                a.amenity,a.building,a.attraction].find(Boolean);
+    const area=[a.neighbourhood,a.suburb,a.city,a.town,a.village,a.hamlet].find(Boolean);
+    const label=[spot, spot?area:(a.road?`${a.road}${area?", "+area:""}`:area)].filter(Boolean).join(", ");
+    if(label && !placeTouched && !$("#place").value.trim()){
+      $("#place").value=label;
+      $("#place").dataset.auto="1";
+    }
+  }catch(e){ /* a name is a nicety — never block logging on it */ }
+}
+
 async function getJSON(url, ms=9000){
   const c=new AbortController(), t=setTimeout(()=>c.abort(), ms);
   try{ const r=await fetch(url,{signal:c.signal, cache:"no-store"}); if(!r.ok) throw 0; return await r.json(); }
@@ -327,10 +440,13 @@ function logIt(over){
     by: (localStorage.getItem(LS.handle)||"").trim(),
     lat: loc?+loc.lat.toFixed(4):null, lon: loc?+loc.lon.toFixed(4):null,
   };
-  const all=loadSpots(); all.unshift(s); saveSpots(all);
+  const all=loadSpots();
+  // first time this route has ever appeared in the log?
+  s.first = !all.some(x=>routeKey(x)===routeKey(s));
+  all.unshift(s); saveSpots(all);
   $("#route").value=""; $("#vehicle").value=""; $("#note").value=""; $("#ridden").checked=false;
   render();
-  toast(s.ridden ? `Logged a ride: ${s.route}` : `Logged: ${s.route}`);
+  toast(s.first ? `New one! ${s.route}` : (s.ridden ? `Logged a ride: ${s.route}` : `Logged: ${s.route}`));
   push(s);
 }
 // Optional shared feed: fire-and-forget, queued if offline so nothing is lost.
@@ -361,6 +477,17 @@ function delSpot(id){
   saveSpots(loadSpots().filter(s=>s.id!==id)); render();
 }
 
+/* ---------- search / filter ---------- */
+let query="", filter="all", view="log";
+function matches(s){
+  if(filter==="rode" && !s.ridden) return false;
+  if(filter==="new"  && !s.first)  return false;
+  if(["plane","train","bus"].includes(filter) && s.mode!==filter) return false;
+  if(!query) return true;
+  return [s.route,s.vehicle,s.place,s.note,s.by].filter(Boolean)
+    .join(" ").toLowerCase().includes(query);
+}
+
 /* ---------- render ---------- */
 function dayKey(ts){ const d=new Date(ts); return d.toLocaleDateString([], {weekday:"long", month:"short", day:"numeric"}); }
 function render(){
@@ -373,25 +500,199 @@ function render(){
   if(!all.length){
     box.innerHTML=`<div class="empty">Nothing logged yet.<br>Tap something in “Near you right now”,
       or type a route and hit <b>Log this sighting</b>.</div>`;
-    return;
+    renderMap(); renderColl(); return;
+  }
+  const list=all.filter(matches);
+  if(!list.length){
+    box.innerHTML=`<div class="empty">No sightings match that.<br>
+      <b>${all.length}</b> logged in total — clear the search or pick “All”.</div>`;
+    renderMap(); renderColl(); return;
   }
   let day="";
-  all.slice(0,120).forEach(s=>{
+  list.slice(0,120).forEach(s=>{
     const dk=dayKey(s.ts);
     if(dk!==day){ day=dk; const h=document.createElement("div"); h.className="daygrp"; h.textContent=dk; box.appendChild(h); }
     const e=document.createElement("div"); e.className="entry";
     const bits=[s.vehicle, s.place].filter(Boolean).join(" · ");
     e.innerHTML=`<span class="m">${MODE_GLYPH[s.mode]||"•"}</span>
-      <span class="b"><b>${esc(s.route)}</b>${bits?`<span>${esc(bits)}</span>`:""}
+      <span class="b"><b>${esc(s.route)}${s.first?`<span class="newbadge">NEW</span>`:""}</b>${bits?`<span>${esc(bits)}</span>`:""}
         ${s.note?`<span class="note">“${esc(s.note)}”</span>`:""}</span>
       <span class="r">
         <time>${new Date(s.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</time>
         ${s.ridden?`<span class="rode">rode</span>`:""}
-        <button class="del" title="Delete" data-id="${s.id}">✕</button></span>`;
+        <button class="edit" title="Edit" data-id="${s.id}">✎</button></span>`;
     box.appendChild(e);
   });
-  box.querySelectorAll(".del").forEach(b=>{ b.onclick=()=>delSpot(b.dataset.id); });
+  box.querySelectorAll(".edit").forEach(b=>{ b.onclick=()=>openEdit(b.dataset.id); });
+  renderMap(); renderColl();
 }
+
+/* ---------- edit ---------- */
+let editId=null;
+function openEdit(id){
+  const s=loadSpots().find(x=>x.id===id); if(!s) return;
+  editId=id;
+  $("#eRoute").value=s.route||""; $("#eVehicle").value=s.vehicle||"";
+  $("#ePlace").value=s.place||""; $("#eNote").value=s.note||"";
+  $("#eRidden").checked=!!s.ridden;
+  $("#editSheet").classList.add("show");
+}
+function closeEdit(){ editId=null; $("#editSheet").classList.remove("show"); }
+$("#eClose").onclick=closeEdit;
+$("#editSheet").addEventListener("click", e=>{ if(e.target.id==="editSheet") closeEdit(); });
+$("#eSave").onclick=()=>{
+  const all=loadSpots(), s=all.find(x=>x.id===editId); if(!s) return closeEdit();
+  const route=$("#eRoute").value.trim();
+  if(!route){ toast("A sighting needs a route"); return; }
+  s.route=route; s.vehicle=$("#eVehicle").value.trim(); s.place=$("#ePlace").value.trim();
+  s.note=$("#eNote").value.trim(); s.ridden=$("#eRidden").checked;
+  s.edited=Date.now();
+  /* Renaming a route can change which sighting was the FIRST of its kind, so
+     recompute the badges over the whole log rather than leaving a stale one. */
+  saveSpots(recomputeFirsts(all)); closeEdit(); render(); toast("Sighting updated");
+};
+$("#eDelete").onclick=()=>{
+  const all=loadSpots().filter(x=>x.id!==editId);
+  saveSpots(recomputeFirsts(all)); closeEdit(); render(); toast("Sighting deleted");
+};
+
+/* ---------- "new for you" ---------- */
+const routeKey=s=>(s.route||"").trim().toLowerCase();
+/* The first time a route appears is the oldest sighting of it, so walk the log
+   oldest-first and flag the one that introduced each route. */
+function recomputeFirsts(all){
+  const seen=new Set();
+  all.slice().sort((a,b)=>a.ts-b.ts).forEach(s=>{
+    const k=routeKey(s);
+    if(!k){ s.first=false; return; }
+    s.first=!seen.has(k);
+    seen.add(k);
+  });
+  return all;
+}
+
+/* ---------- map of sightings ---------- */
+let sMap=null, sMarkers=null;
+function renderMap(){
+  const placed=loadSpots().filter(s=>typeof s.lat==="number" && typeof s.lon==="number" && matches(s));
+  const hint=$("#mapHint");
+  if(typeof L==="undefined"){ hint.textContent="Map library still loading…"; return; }
+  if(!sMap){
+    sMap=L.map("spotMap",{zoomControl:true, attributionControl:false});
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(sMap);
+    sMarkers=L.layerGroup().addTo(sMap);
+    sMap.setView([39.5,-98.35],3);
+  }
+  sMarkers.clearLayers();
+  const unplaced=loadSpots().filter(matches).length-placed.length;
+  if(!placed.length){
+    hint.textContent=unplaced ? `None of these ${unplaced} sightings recorded a location.`
+                              : "Nothing to map yet.";
+    return;
+  }
+  const pts=[];
+  placed.forEach(s=>{
+    pts.push([s.lat,s.lon]);
+    L.marker([s.lat,s.lon],{icon:L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
+      html:`<span class="spot-pin">${MODE_GLYPH[s.mode]||"•"}</span>`})})
+      .bindPopup(`<b>${esc(s.route||"—")}</b><br>${esc([s.vehicle,s.place].filter(Boolean).join(" · "))}` +
+        `<br><small>${new Date(s.ts).toLocaleString()}${s.ridden?" · rode":""}</small>`)
+      .addTo(sMarkers);
+  });
+  hint.textContent=`${placed.length} sighting${placed.length===1?"":"s"} mapped` +
+    (unplaced?` · ${unplaced} without a location`:"");
+  if(view==="map"){
+    sMap.invalidateSize();
+    sMap.fitBounds(L.latLngBounds(pts).pad(0.25), {maxZoom:14});
+  }
+}
+
+/* ---------- collection ---------- */
+/* Which systems can be checked against a real route list. Each bundle is a
+   timetable this site already ships; loaded ONLY when picked, since some are
+   megabytes and this is a phone. */
+const COLL_SYS=[
+  {id:"septa-bus-schedule.json",      label:"SEPTA Bus (3, 4, 16)"},
+  {id:"septa-rail-schedule.json",     label:"SEPTA Regional Rail"},
+  {id:"septa-subway-schedule.json",   label:"SEPTA Subway"},
+  {id:"patco-schedule.json",          label:"PATCO"},
+  {id:"marc-schedule.json",           label:"MARC"},
+  {id:"rideon-schedule.json",         label:"Ride On (23, 29)"},
+  {id:"mta-subway-schedule.json",     label:"NYC Subway"},
+  {id:"lirr-schedule.json",           label:"LIRR"},
+  {id:"path-schedule.json",           label:"PATH"},
+  {id:"sf-bart-schedule.json",        label:"BART"},
+  {id:"mbta-subway-schedule.json",    label:"MBTA Subway"},
+];
+function renderColl(){
+  const all=loadSpots();
+  const by={};
+  all.forEach(s=>{ const k=routeKey(s); if(!k) return;
+    (by[k]=by[k]||{name:s.route, mode:s.mode, n:0, first:s.ts, last:s.ts}).n++;
+    by[k].first=Math.min(by[k].first,s.ts); by[k].last=Math.max(by[k].last,s.ts);
+  });
+  const rows=Object.values(by).sort((a,b)=>b.n-a.n);
+  $("#collHint").textContent = rows.length
+    ? `${rows.length} distinct route${rows.length===1?"":"s"} caught, ${all.length} sightings in total.`
+    : "Log a few sightings and they'll be collected here.";
+  $("#collList").innerHTML = rows.map(r=>
+    `<div class="collrow"><span>${MODE_GLYPH[r.mode]||"•"}</span>
+      <span><span class="n">${esc(r.name)}</span>
+        <span class="s">first ${new Date(r.first).toLocaleDateString()}</span></span>
+      <span class="c">×${r.n}</span></div>`).join("");
+}
+function initCollSys(){
+  const sel=$("#collSys");
+  sel.innerHTML=`<option value="">Choose a system…</option>`+
+    COLL_SYS.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join("");
+  sel.onchange=async()=>{
+    const box=$("#collMissing"); const id=sel.value;
+    if(!id){ box.innerHTML=""; return; }
+    box.innerHTML=`<div class="hint">Loading that system's timetable…</div>`;
+    try{
+      const d=await getJSON(id);
+      const routes=[...new Set((d.trips||[]).map(t=>String(t.line||"").trim()).filter(Boolean))].sort();
+      if(!routes.length){ box.innerHTML=`<div class="hint">That timetable lists no route names.</div>`; return; }
+      const mine=[...new Set(loadSpots().map(routeKey))].filter(Boolean);
+      const tokens=m=>m.split(/[^a-z0-9]+/).filter(Boolean);
+      /* "Route 3" should count for line "3", but "Route 47" must NOT count for
+         line "4" — so a short code (3, 47, L1, B2) has to match a whole word,
+         and only long, named lines ("Broad Street Line") match as a substring. */
+      const got=r=>{
+        const k=String(r).toLowerCase().trim();
+        const short=k.length<=4 && /^[a-z0-9]+$/.test(k);
+        return mine.some(m => m===k || (short ? tokens(m).includes(k)
+                                              : (m.includes(k) || k.includes(m))));
+      };
+      const hit=routes.filter(got);
+      box.innerHTML=`<div class="bar"><i style="width:${(100*hit.length/routes.length).toFixed(1)}%"></i></div>
+        <div class="hint"><b>${hit.length}</b> of <b>${routes.length}</b> routes caught</div>
+        <div class="missing">${routes.map(r=>`<span class="${got(r)?"got":""}">${esc(r)}</span>`).join("")}</div>`;
+    }catch(e){
+      box.innerHTML=`<div class="hint">Couldn't load that timetable — it may not be published on this site.</div>`;
+    }
+  };
+}
+
+/* ---------- view switching ---------- */
+function setView(v){
+  view=v;
+  document.querySelectorAll("#tabs .tab").forEach(t=>t.classList.toggle("on", t.dataset.view===v));
+  /* Explicit "block", not "": the stylesheet defaults #viewMap/#viewColl to
+     display:none, so clearing the inline style would just fall back to hidden. */
+  $("#viewLog").style.display  = v==="log"  ? "block" : "none";
+  $("#viewMap").style.display  = v==="map"  ? "block" : "none";
+  $("#viewColl").style.display = v==="coll" ? "block" : "none";
+  if(v==="map") renderMap();      // Leaflet must size itself while visible
+}
+document.querySelectorAll("#tabs .tab").forEach(t=>{ t.onclick=()=>setView(t.dataset.view); });
+$("#q").addEventListener("input", e=>{ query=e.target.value.trim().toLowerCase(); render(); });
+document.querySelectorAll("#fchips .fchip").forEach(c=>{
+  c.onclick=()=>{ filter=c.dataset.f;
+    document.querySelectorAll("#fchips .fchip").forEach(x=>x.classList.toggle("on",x===c));
+    render(); };
+});
+initCollSys();
 
 /* ---------- export ---------- */
 function download(name, text, type){

@@ -3,7 +3,9 @@
    (you're often underground or on a plane when you want to log something).
    Live data (airplanes.live / amtraker) is always network-first and simply
    absent offline; the log itself is local, so logging never needs a network. */
-const CACHE = "spotter-v2";
+/* Bump on every spot.html change: the shell is cache-first, so an installed
+   copy keeps serving the old app until this version string moves. */
+const CACHE = "spotter-v3";
 const SHELL = ["spot.html", "spot-manifest.json",
                "spot-icon-192.png", "spot-icon-512.png", "spot-icon-180.png"];
 // Everything this worker is allowed to touch. It sits at the site root, so its

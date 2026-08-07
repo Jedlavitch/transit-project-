@@ -13,10 +13,56 @@
    ============================================================================ */
 (function () {
   "use strict";
-  const LS = { spots: "tb.spots", feed: "tb.spotFeedUrl", hide: "tb.spotCardHidden" };
+  const LS = { spots: "tb.spots", feed: "tb.spotFeedUrl", hide: "tb.spotCardHidden",
+               scope: "tb.spotScope" };
   const GLYPH = { plane: "✈️", train: "🚆", bus: "🚌" };
   const COLOR = { plane: "#ffd166", train: "#3ad0c8", bus: "#6aa9ff" };
+  const NEAR_MI = 60;          // "around here" — generous enough to cover a metro area
   let remote = [];
+
+  /* ---- where is the board that's showing this card? --------------------
+     Every sighting carries the lat/lon it was logged at, but this card used to
+     render all of them on every board, so a Philadelphia sighting showed up on
+     the California boards. Scoping needs the board's own location, and this one
+     script runs on all eight of them, so ask in order of reliability:
+       1. the board's live `state.loc` — a top-level `let`, so it is a global
+          lexical binding readable by name but NOT present on `window`;
+       2. whichever `transitboard*.loc` this board saved (each board owns its
+          own namespaced key, and only one is written per page);
+       3. the map's centre, if it is up.
+     Returns null when the board's location genuinely isn't known yet, and the
+     caller then declines to filter rather than showing an arbitrary subset. */
+  function boardLoc() {
+    try {
+      if (typeof state !== "undefined" && state && state.loc &&
+          typeof state.loc.lat === "number") return { lat: state.loc.lat, lon: state.loc.lon };
+    } catch (_) {}
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!/^transitboard[a-z]*\.loc$/.test(k)) continue;
+        const v = JSON.parse(localStorage.getItem(k) || "null");
+        if (v && typeof v.lat === "number") return { lat: v.lat, lon: v.lon };
+      }
+    } catch (_) {}
+    try {
+      if (typeof map !== "undefined" && map && map.getCenter) {
+        const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function milesBetween(a, b) {
+    const R = 3958.8, rad = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+    const la1 = a.lat * rad, la2 = b.lat * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  const scope = () => { try { return localStorage.getItem(LS.scope) === "all" ? "all" : "near"; } catch (_) { return "near"; } };
+  function setScope(v) { try { localStorage.setItem(LS.scope, v); } catch (_) {} render(); }
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const local = () => { try { return JSON.parse(localStorage.getItem(LS.spots) || "[]"); } catch (_) { return []; } };
@@ -40,14 +86,21 @@
     card.id = "spotCard";
     card.style.setProperty("--sys", "#b39dff");   // tactical header tick (index.html); harmless elsewhere
     card.innerHTML =
-      `<h2><span class="icon">📓</span> Spotted <span class="count" id="spotCount"></span></h2>
+      `<h2><span class="icon">📓</span> Spotted <span class="count" id="spotCount"></span>
+         <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button></h2>
        <div class="statline" id="spotStat"></div>
        <div class="list" id="spotList"></div>`;
     cards.appendChild(card);
     // tapping the header opens the phone app (same place you'd add a sighting)
-    card.querySelector("h2").style.cursor = "pointer";
-    card.querySelector("h2").title = "Open the Spotter app";
-    card.querySelector("h2").onclick = () => { window.location.href = "spot.html"; };
+    const h2 = card.querySelector("h2");
+    h2.style.cursor = "pointer";
+    h2.title = "Open the Spotter app";
+    h2.onclick = e => { if (!e.target.closest("#spotScopeBtn")) window.location.href = "spot.html"; };
+    const btn = card.querySelector("#spotScopeBtn");
+    btn.style.cssText = "margin-left:auto;font:inherit;font-size:10px;font-weight:700;cursor:pointer;" +
+      "padding:2px 8px;border-radius:999px;border:1px solid currentColor;background:transparent;" +
+      "color:var(--muted,#8fa3bf);opacity:.8;letter-spacing:.04em";
+    btn.onclick = e => { e.stopPropagation(); setScope(scope() === "near" ? "all" : "near"); };
     return card;
   }
 
@@ -72,26 +125,57 @@
     // merge local + shared, newest first, de-duped by id
     const byId = {};
     local().concat(remote).forEach(s => { if (s && s.id) byId[s.id] = s; });
-    const all = Object.values(byId).sort((a, b) => b.ts - a.ts);
+    const every = Object.values(byId).sort((a, b) => b.ts - a.ts);
+
+    /* Scope to this board's own city. A sighting with no lat/lon (GPS refused
+       when it was logged) can't be placed, so it is never claimed as "near
+       here" — it is counted separately instead of being silently dropped. */
+    const here = boardLoc();
+    const near = scope() === "near" && here;
+    const placed = every.map(s => {
+      const has = typeof s.lat === "number" && typeof s.lon === "number";
+      return { s, mi: has && here ? milesBetween(here, { lat: s.lat, lon: s.lon }) : null };
+    });
+    const shown = near ? placed.filter(p => p.mi != null && p.mi <= NEAR_MI) : placed;
+    const elsewhere = near ? placed.length - shown.length : 0;
+    const unplaced = placed.filter(p => p.mi == null).length;
 
     const list = document.getElementById("spotList");
     const stat = document.getElementById("spotStat");
     const count = document.getElementById("spotCount");
+    const scopeBtn = document.getElementById("spotScopeBtn");
     list.innerHTML = "";
+    if (scopeBtn) {
+      scopeBtn.textContent = near ? "near here" : "everywhere";
+      scopeBtn.style.display = here ? "" : "none";   // nothing to scope by yet
+      scopeBtn.title = near
+        ? `Showing sightings within ${NEAR_MI} mi — tap to show everywhere`
+        : "Showing every sighting — tap to show only ones near this board";
+    }
 
-    if (!all.length) {
+    if (!every.length) {
       list.innerHTML = `<div class="empty">No sightings logged yet — open the Spotter app
         on your phone to log the trains, buses and planes you see.</div>`;
       stat.innerHTML = ""; count.textContent = "";
       return;
     }
+    if (!shown.length) {
+      list.innerHTML = `<div class="empty">No sightings within ${NEAR_MI} mi of here.
+        ${elsewhere} logged elsewhere${unplaced ? `, ${unplaced} without a location` : ""} —
+        tap “near here” above to show them.</div>`;
+      stat.innerHTML = ""; count.textContent = `0 near here`;
+      return;
+    }
+    const all = shown.map(p => p.s);
 
     const rode = all.filter(s => s.ridden).length;
     const today = all.filter(s => new Date(s.ts).toDateString() === new Date().toDateString()).length;
-    count.textContent = `${all.length} logged`;
+    count.textContent = near ? `${all.length} near here` : `${all.length} logged`;
     stat.innerHTML = `<b>${today}</b> today · <b>${rode}</b> ridden · <b>${
-      new Set(all.map(s => (s.route || "").toLowerCase())).size}</b> routes`;
+      new Set(all.map(s => (s.route || "").toLowerCase())).size}</b> routes` +
+      (near && elsewhere ? ` · <b>${elsewhere}</b> elsewhere` : "");
 
+    const miOf = {}; shown.forEach(p => { miOf[p.s.id] = p.mi; });
     all.slice(0, 40).forEach(s => {
       const row = document.createElement("div");
       row.className = "row";
@@ -99,7 +183,9 @@
       // the two don't restate each other and long line names aren't truncated
       const badge = `<div class="badge" style="background:${COLOR[s.mode] || "#6aa9ff"}">${
         GLYPH[s.mode] || "•"}</div>`;
-      const bits = [s.vehicle, s.place, s.by ? "by " + s.by : ""].filter(Boolean).join(" · ");
+      const mi = miOf[s.id];
+      const dist = mi == null ? "" : (mi < 1 ? "here" : `${Math.round(mi)} mi away`);
+      const bits = [s.vehicle, s.place, dist, s.by ? "by " + s.by : ""].filter(Boolean).join(" · ");
       row.innerHTML = `${badge}
         <div><div class="dest">${esc(s.route || "—")}</div>
              ${bits ? `<div class="sub">${esc(bits)}</div>` : ""}</div>

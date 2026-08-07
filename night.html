@@ -989,10 +989,37 @@ const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.loca
 function isRealLateNight(late){ return typeof late==="number" && isFinite(late) && late>0 && Math.abs(late)<=90; }
 
 /* ---- PLANES ---- */
+
+/* Keep an aircraft on screen through a tracking gap -- see the boards' copy of
+   this for the full reasoning. Short version: ADS-B receivers have a blind cone
+   directly overhead and MLAT fixes drop in and out, so the closest traffic is
+   exactly what flickers out of the feed. Carry a missing aircraft forward along
+   its last track/speed for a minute, flagged as extrapolated, instead of
+   deleting it the moment one poll omits it. */
+const PLANE_MEMORY_MS = 60000;
+const planeMemory = new Map();
+function coastPlanes(fresh){
+  const now = Date.now(), seen = new Set();
+  for(const a of fresh){ if(!a.hex) continue; seen.add(a.hex); planeMemory.set(a.hex, { a, t: now }); }
+  const out = fresh.slice();
+  for(const [hex, rec] of planeMemory){
+    if(seen.has(hex)) continue;
+    const age = now - rec.t;
+    if(age > PLANE_MEMORY_MS){ planeMemory.delete(hex); continue; }
+    const a = rec.a, gs = Number(a.gs), trk = Number(a.track);
+    if(!isFinite(gs) || !isFinite(trk) || gs <= 0) continue;
+    const nm = gs * (age / 3600000), r = trk * Math.PI / 180;
+    out.push({ ...a, lat: a.lat + (nm/60)*Math.cos(r),
+               lon: a.lon + (nm/60)*Math.sin(r)/Math.max(0.2, Math.cos(a.lat*Math.PI/180)),
+               _coasted: Math.max(1, Math.round(age/1000)) });
+  }
+  return out;
+}
 async function producePlane(){
   const data=await getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
   scanAlerts(data.ac);                              // rare-bird sweep over EVERY aircraft in range
-  const air=(data.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
+  const acAll=coastPlanes(data.ac||[]);             // survive brief tracking gaps overhead
+  const air=acAll.filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
     .map(a=>({a, nm: a.dst!=null? a.dst : haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
   let pick=null;

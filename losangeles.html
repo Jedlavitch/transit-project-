@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="theme.css?v=9" />
 <script src="license.js" defer></script>
 <script src="cityswitch.js"></script>
-<script src="spotlog.js" defer></script>
+<script src="spotlog.js?v=2" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardla.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -1558,6 +1558,9 @@ function prettyOp(s){
     .toLowerCase().replace(/\b[a-z]/g, m=>m.toUpperCase());
 }
 function vertText(a){
+  // a coasted aircraft's vertical rate is a stale reading, so say what is
+  // actually true -- we are extrapolating, not receiving
+  if(a && a._coasted) return `no signal ${a._coasted}s`;
   const r = typeof a.baro_rate==="number" ? a.baro_rate
           : (typeof a.geom_rate==="number" ? a.geom_rate : null);
   if(r==null) return "level";
@@ -1566,12 +1569,50 @@ function vertText(a){
   return "level";
 }
 /* ---------- PLANES (works anywhere in the US, no key) ---------- */
+
+/* ---------- keep an aircraft on screen through a tracking gap ----------------
+   Aircraft routinely vanish from one poll and return on the next: an ADS-B
+   receiver has a blind cone directly overhead, MLAT fixes come and go, and the
+   feed itself de-duplicates. Deleting the marker the instant one response omits
+   a plane makes the closest, most interesting traffic flicker out exactly as it
+   passes over you -- it looks like the pilot switched the transponder off.
+   So remember each aircraft briefly and, while it is missing, carry it forward
+   along its own track and speed (dead reckoning) until either it reports again
+   or the memory expires. Coasted aircraft are flagged so the UI can mark them
+   rather than pretending the position is a fresh fix. */
+const PLANE_MEMORY_MS = 60000;      // how long a silent aircraft stays on screen
+const planeMemory = new Map();      // hex -> { a, t }
+function coastPlanes(fresh){
+  const now = Date.now(), seen = new Set();
+  for(const a of fresh){
+    if(!a.hex) continue;
+    seen.add(a.hex);
+    planeMemory.set(a.hex, { a, t: now });
+  }
+  const out = fresh.slice();
+  for(const [hex, rec] of planeMemory){
+    if(seen.has(hex)) continue;
+    const age = now - rec.t;
+    if(age > PLANE_MEMORY_MS){ planeMemory.delete(hex); continue; }
+    const a = rec.a;
+    const gs = Number(a.gs), trk = Number(a.track);
+    if(!isFinite(gs) || !isFinite(trk) || gs <= 0) continue;   // nothing to extrapolate from
+    // advance along the last known ground track: knots -> nm -> degrees
+    const nm = gs * (age / 3600000), r = trk * Math.PI / 180;
+    const lat = a.lat + (nm / 60) * Math.cos(r);
+    const lon = a.lon + (nm / 60) * Math.sin(r) / Math.max(0.2, Math.cos(a.lat * Math.PI / 180));
+    // floor at 1: a sub-second gap would round to 0, which is falsy, and the
+    // aircraft would be labelled live while actually being extrapolated
+    out.push({ ...a, lat, lon, _coasted: Math.max(1, Math.round(age / 1000)) });
+  }
+  return out;
+}
 async function fetchPlanes(){
   const {lat,lon}=state.loc;
   let data;
   try{ data=await getJSON(`https://api.airplanes.live/v2/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
   catch(e){ return; }
-  const ac=(data.ac||[]).filter(a=>a.lat&&a.lon)
+  const ac=coastPlanes((data.ac||[]).filter(a=>a.lat&&a.lon))
     .map(a=>({...a, _dist: a.dst!=null? a.dst : kmToMi(haversine(state.loc,{lat:a.lat,lon:a.lon}))/1.15078 }))
     .sort((a,b)=>(a.alt_baro==='ground'?1:0)-(b.alt_baro==='ground'?1:0) || a._dist-b._dist);
   renderPlanes(ac);
