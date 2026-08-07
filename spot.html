@@ -520,6 +520,17 @@ function paintNear(){
   renderNear();
   if(view==="map" && mapLayer==="live") renderMap();
 }
+/* A usable aircraft identifier: has at least one letter or digit, isn't all
+   zeros, and isn't the same character repeated (0000000, XXXXXXX, --------). */
+function idOrNull(v){
+  const t=(v||"").trim();
+  if(t.length<2) return null;
+  if(!/[A-Za-z0-9]/.test(t)) return null;
+  if(/^0+$/.test(t)) return null;
+  if(/^(.)\1+$/.test(t)) return null;
+  return t;
+}
+
 async function fetchNear(){
   if(!loc) return;
   near=[];
@@ -529,12 +540,19 @@ async function fetchNear(){
   // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
   jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
+        /* Some transponders broadcast a placeholder callsign — all zeros, a
+           single repeated character, or punctuation — which showed up in the
+           list as "00000000". Prefer the flight number, fall back to the tail
+           number, and skip the aircraft entirely if neither is real: an
+           unidentifiable row is nothing you could usefully log. */
+        const ident = idOrNull((a.flight||"").trim()) || idOrNull((a.r||"").trim());
+        if(!ident) return;
         const nm = a.dst!=null ? a.dst : distMi(loc,{lat:a.lat,lon:a.lon})/1.15078;
         const alt=typeof a.alt_baro==="number"?a.alt_baro:null;
         const climb=typeof a.baro_rate==="number"&&Math.abs(a.baro_rate)>=200
           ? (a.baro_rate>0?"climbing":"descending") : null;
-        near.push({ mode:"plane", key:(a.flight||a.r||"").trim()||"unknown",
-          label:(a.flight||a.r||"Aircraft").trim(),
+        near.push({ mode:"plane", key:ident,
+          label:ident,
           sub:[`${a.desc||a.t||"aircraft"}`, a.ownOp, alt!=null?`${alt.toLocaleString()} ft`:null,
                a.gs?`${Math.round(a.gs)} kt`:null, climb, `${nm.toFixed(1)} nm`].filter(Boolean).join(" · "),
           vehicle:(a.r||"").trim(), color:"#ffd166", d:nm,
