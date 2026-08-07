@@ -512,12 +512,20 @@ async function fetchScheduled(){
   return Object.values(best);
 }
 
+/* Each source paints the moment it lands. The bundled timetables resolve in
+   ~10ms while airplanes.live can take seconds, and waiting for allSettled meant
+   a local bus you could already see sat invisible behind a slow plane request. */
+function paintNear(){
+  near.sort((a,b)=>a.d-b.d);
+  renderNear();
+  if(view==="map" && mapLayer==="live") renderMap();
+}
 async function fetchNear(){
   if(!loc) return;
   near=[];
   const jobs=[];
   // local trains/buses from this site's own bundled timetables — no key needed
-  jobs.push(fetchScheduled().then(rows=>{ near.push(...rows); }).catch(()=>{}));
+  jobs.push(fetchScheduled().then(rows=>{ near.push(...rows); paintNear(); }).catch(()=>{}));
   // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
   jobs.push(getJSON(`https://api.airplanes.live/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
@@ -531,7 +539,7 @@ async function fetchNear(){
                a.gs?`${Math.round(a.gs)} kt`:null, climb, `${nm.toFixed(1)} nm`].filter(Boolean).join(" · "),
           vehicle:(a.r||"").trim(), color:"#ffd166", d:nm,
           lat:a.lat, lon:a.lon, hdg:typeof a.track==="number"?a.track:null });
-      }); }).catch(()=>{}));
+      }); paintNear(); }).catch(()=>{}));
   // Amtrak (amtraker — keyless, CORS-open)
   jobs.push(getJSON("https://api-v3.amtraker.com/v3/trains", 11000)
     .then(d=>{ const seen={};
@@ -547,13 +555,9 @@ async function fetchNear(){
                late||null, `${mi.toFixed(1)} mi`].filter(Boolean).join(" · "),
           vehicle:"", color:"#3ad0c8", d:mi,
           lat:t.lat, lon:t.lon, hdg:typeof t.heading==="number"?t.heading:null, late:late });
-      } }).catch(()=>{}));
+      } paintNear(); }).catch(()=>{}));
   await Promise.allSettled(jobs);
-  near.sort((a,b)=>a.d-b.d);
-  renderNear();
-  // the live map draws from `near`, so it has to be redrawn when data lands —
-  // otherwise it paints an empty map before the first fetch resolves
-  if(view==="map" && mapLayer==="live") renderMap();
+  paintNear();                       // final pass once every source is in
 }
 
 function renderNear(){
