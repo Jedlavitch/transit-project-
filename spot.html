@@ -287,6 +287,15 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   <h3>Spotter settings</h3>
   <label class="fld"><em>Your name on shared logs</em>
     <input type="text" id="handle" placeholder="e.g. Jack" autocomplete="off" /></label>
+  <p><b>Tell me when one comes past.</b> A notification when something you've logged
+     is near you again — your exact aircraft by callsign or tail number, or a bus/train
+     route you've ridden. Works while the Spotter is open; a phone can't be woken by
+     this with the app fully closed.</p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0">
+    <button type="button" id="notifyBtn" style="flex:0 0 auto;padding:11px 16px"></button>
+    <button type="button" id="notifyTest" class="ghost" style="flex:0 0 auto;padding:11px 14px">Test</button>
+  </div>
+
   <p><b>Share to my boards.</b> Your log lives on this phone. Tap below to publish it,
      then type the share code into any board's Spotted card (the ⇄ button). No account,
      nothing to set up. Re-publishes automatically each time you log something.</p>
@@ -571,6 +580,89 @@ function paintNear(){
   near.sort((a,b)=>a.d-b.d);
   renderNear();
   if(view==="map" && mapLayer==="live") renderMap();
+  checkNotify();
+}
+
+/* ---------- notify me when something I've logged comes past ----------------
+   This has to run on the PHONE, matched against the phone's own location: a
+   notification can only come from the device it appears on, and pushing one
+   from the board would need a push server, which this project deliberately
+   doesn't have. The nearby list is already refreshed every 30s while the app is
+   open, so the match is free -- no extra request, no new permission beyond the
+   notification prompt itself.
+
+   HONEST LIMIT: this fires while the Spotter is open (foreground, or on screen
+   in the background on Android). It cannot fire with the app fully closed --
+   that requires Web Push and a server to send from. Said plainly in the UI too,
+   rather than letting you find out by missing something. */
+const NOTIFY_KEY="tb.spotNotify", NOTIFY_SEEN="tb.spotNotified", NOTIFY_COOLDOWN=30*60000;
+const notifyOn = () => { try{ return localStorage.getItem(NOTIFY_KEY)==="1"; }catch(_){ return false; } };
+function notifySeen(){ try{ return JSON.parse(localStorage.getItem(NOTIFY_SEEN)||"{}"); }catch(_){ return {}; } }
+function notifySave(m){
+  // keep it from growing forever: drop anything past its cooldown
+  const now=Date.now(), out={};
+  Object.keys(m).forEach(k=>{ if(now-m[k] < NOTIFY_COOLDOWN*4) out[k]=m[k]; });
+  try{ localStorage.setItem(NOTIFY_SEEN, JSON.stringify(out)); }catch(_){}
+}
+async function enableNotify(on){
+  if(!on){ try{ localStorage.setItem(NOTIFY_KEY,"0"); }catch(_){} return false; }
+  if(!("Notification" in window)){ toast("This browser can't show notifications"); return false; }
+  let p=Notification.permission;
+  if(p==="default"){ try{ p=await Notification.requestPermission(); }catch(_){ p="denied"; } }
+  if(p!=="granted"){
+    toast("Notifications are blocked — allow them for this site in your browser settings");
+    return false;
+  }
+  try{ localStorage.setItem(NOTIFY_KEY,"1"); }catch(_){}
+  return true;
+}
+async function fireNote(title, body, tag){
+  try{
+    const reg = ("serviceWorker" in navigator) ? await navigator.serviceWorker.getRegistration() : null;
+    // showNotification via the worker is the only form iOS home-screen apps support
+    if(reg && reg.showNotification){
+      await reg.showNotification(title, {body, tag, renotify:false,
+        icon:"spot-icon-192.png", badge:"spot-icon-192.png"});
+      return;
+    }
+    new Notification(title, {body, tag, icon:"spot-icon-192.png"});
+  }catch(_){ /* a failed notification must never disturb the app */ }
+}
+function checkNotify(){
+  if(!notifyOn() || !("Notification" in window) || Notification.permission!=="granted") return;
+  if(!near.length) return;
+  const log=loadSpots(); if(!log.length) return;
+  /* Same two tiers as the boards. A live row carries a real vehicle identity
+     (callsign, tail number, train number); a scheduled row only knows the route,
+     so it can only ever say "a 23", never "your 23". Kept per-mode so a bus 23
+     can't be matched by a train 23. */
+  const byMode={plane:{exact:new Set(),route:new Set()},
+                train:{exact:new Set(),route:new Set()},
+                bus:{exact:new Set(),route:new Set()}};
+  near.forEach(n=>{
+    const b=byMode[n.mode]; if(!b) return;
+    const add=(set,v)=>{ const t=String(v==null?"":v).trim().toUpperCase(); if(t) set.add(t); };
+    if(n.scheduled) add(b.route, n.key);
+    else { add(b.exact, n.key); add(b.exact, n.vehicle); }
+  });
+  const seen=notifySeen(), now=Date.now(); let changed=false;
+  log.forEach(sp=>{
+    const b=byMode[sp.mode]; if(!b) return;
+    const r=String(sp.route||"").trim().toUpperCase();
+    const v=String(sp.vehicle||"").trim().toUpperCase();
+    const exact = (r&&b.exact.has(r)) || (v&&b.exact.has(v));
+    const byRoute = !exact && r && b.route.has(r);
+    if(!exact && !byRoute) return;
+    const tag=(sp.mode||"")+":"+(r||v);
+    if(seen[tag] && now-seen[tag] < NOTIFY_COOLDOWN) return;   // don't nag on every 30s poll
+    seen[tag]=now; changed=true;
+    fireNote(
+      exact ? `${sp.route} is passing you now` : `A ${sp.route} is due near you`,
+      exact ? `The ${sp.mode} you logged${sp.ridden?" and rode":""} is nearby right now.`
+            : `A ${sp.route} you've logged before is coming past.`,
+      tag);
+  });
+  if(changed) notifySave(seen);
 }
 /* A usable aircraft identifier: has at least one letter or digit, isn't all
    zeros, and isn't the same character repeated (0000000, XXXXXXX, --------). */
@@ -1046,6 +1138,23 @@ function toCsv(){
 }
 
 /* ---------- settings sheet ---------- */
+function paintNotify(){
+  const on=notifyOn() && ("Notification" in window) && Notification.permission==="granted";
+  $("#notifyBtn").textContent = on ? "Notifications on — turn off" : "Notify me";
+  $("#notifyBtn").style.opacity = on ? "1" : ".85";
+}
+$("#notifyBtn").onclick=async()=>{
+  const on=notifyOn() && ("Notification" in window) && Notification.permission==="granted";
+  const now=await enableNotify(!on);
+  paintNotify();
+  toast(now ? "I'll tell you when one comes past" : "Notifications off");
+};
+$("#notifyTest").onclick=async()=>{
+  if(!("Notification" in window)) return toast("This browser can't show notifications");
+  if(Notification.permission!=="granted" && !(await enableNotify(true))) { paintNotify(); return; }
+  paintNotify();
+  fireNote("Spotter notifications are working", "This is what a sighting alert looks like.", "tb-test");
+};
 function paintShare(){
   const id=blobId();
   $("#shareCode").textContent = id ? id : "";
@@ -1064,6 +1173,7 @@ $("#shareCopy").onclick=async()=>{
 };
 $("#setBtn").onclick=()=>{
   paintShare();
+  paintNotify();
   $("#handle").value=localStorage.getItem(LS.handle)||"";
   $("#feedUrl").value=localStorage.getItem(LS.feed)||"";
   $("#sheetUrl").value=localStorage.getItem(LS.sheet)||"";
