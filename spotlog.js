@@ -143,12 +143,44 @@
     } catch (_) {}
     return out;
   }
-  // does this sighting name something currently in range?
-  function isPassing(sp, live) {
-    if (!live || !live.size) return false;
+  /* ---- route-level matching, for systems with no public vehicle identity ----
+     A plane broadcasts the same callsign and tail number you logged, so matching
+     the exact aircraft works. A bus does not: you log the route ("29"), while the
+     feed knows that vehicle as an internal fleet number, so vehicle matching can
+     never fire for one. But each board has already rendered the routes serving
+     your nearby stops into its own departure cards — so read those badges.
+     Mode is inferred from the card so a logged bus can only match a bus card,
+     and "29" on a bus can't collide with a "29" somewhere on the rail side. */
+  function liveRoutes() {
+    const byMode = { plane: new Set(), train: new Set(), bus: new Set() };
+    try {
+      document.querySelectorAll(".card").forEach(card => {
+        if (card.id === "spotCard") return;
+        const id = (card.id || "").toLowerCase();
+        const head = ((card.querySelector("h2") || {}).textContent || "").toLowerCase();
+        // Ride On is a bus system whose card says neither "bus" nor anything else
+        // a generic test would catch, so it is named outright.
+        const mode = /plane/.test(id) ? "plane"
+                   : (/bus/.test(id) || /bus/.test(head) || /rideon/.test(id)) ? "bus"
+                   : "train";
+        card.querySelectorAll(".list .row .badge").forEach(b => {
+          const t = (b.textContent || "").trim().toUpperCase();
+          if (t && t !== "—" && t !== "•") byMode[mode].add(t);
+        });
+      });
+    } catch (_) {}
+    return byMode;
+  }
+  /* "" = not here, "vehicle" = the exact one you logged, "route" = that line is
+     serving a stop near you now. Kept apart because they deserve different words:
+     one is your bus, the other is a bus. */
+  function passState(sp, live, routes) {
     const r = String(sp.route || "").trim().toUpperCase();
     const v = String(sp.vehicle || "").trim().toUpperCase();
-    return (!!r && live.has(r)) || (!!v && live.has(v));
+    if (live && live.size && ((r && live.has(r)) || (v && live.has(v)))) return "vehicle";
+    const set = routes && routes[sp.mode];
+    if (set && r && set.has(r)) return "route";
+    return "";
   }
 
   function ago(ts) {
@@ -185,6 +217,9 @@
       st.textContent = ".row.spot-passing{border-color:var(--good,#4ade80);" +
         "box-shadow:0 0 0 1px var(--good,#4ade80) inset, 0 0 10px -2px var(--good,#4ade80)}" +
         ".row.spot-passing .dest{color:var(--good,#4ade80)}" +
+        ".row.spot-route{border-color:var(--accent,#ffd166);box-shadow:0 0 0 1px var(--accent,#ffd166) inset}" +
+        ".row.spot-route .dest{color:var(--accent,#ffd166)}" +
+        ".row.spot-route .live-tag{animation:spotPulse 2s ease-in-out infinite}" +
         "@keyframes spotPulse{0%,100%{opacity:1}50%{opacity:.55}}" +
         ".row.spot-passing .live-tag{animation:spotPulse 2s ease-in-out infinite}";
       document.head.appendChild(st);
@@ -343,15 +378,17 @@
     /* Anything passing right now goes to the top and stays there — it is the one
        thing on this card you can still walk outside and look at. Everything else
        keeps its newest-first order. */
-    const live = liveIdents();
-    const hot = {}; all.forEach(s => { hot[s.id] = isPassing(s, live); });
-    all.sort((a, b) => (hot[b.id] ? 1 : 0) - (hot[a.id] ? 1 : 0) || b.ts - a.ts);
+    const live = liveIdents(), routes = liveRoutes();
+    const hot = {}; all.forEach(s => { hot[s.id] = passState(s, live, routes); });
+    const rank = s => hot[s.id] === "vehicle" ? 2 : hot[s.id] === "route" ? 1 : 0;
+    all.sort((a, b) => rank(b) - rank(a) || b.ts - a.ts);
     const passingNow = all.filter(s => hot[s.id]).length;
     if (passingNow) count.textContent = `${passingNow} passing now`;
 
     all.slice(0, 40).forEach(s => {
       const row = document.createElement("div");
-      row.className = "row" + (hot[s.id] ? " spot-passing" : "");
+      row.className = "row" + (hot[s.id] === "vehicle" ? " spot-passing"
+                                : hot[s.id] === "route" ? " spot-route" : "");
       // badge carries the MODE (glyph + colour); the route is the row's title, so
       // the two don't restate each other and long line names aren't truncated
       const badge = `<div class="badge" style="background:${COLOR[s.mode] || "#6aa9ff"}">${
@@ -364,9 +401,12 @@
         <div><div class="dest">${esc(s.route || "—")}</div>
              ${bits ? `<div class="sub">${esc(bits)}</div>` : ""}</div>
         <div></div>
-        <div class="times">${hot[s.id]
+        <div class="times">${hot[s.id] === "vehicle"
             ? `<div class="live-eta" style="color:var(--good)">near you</div>
                <div class="live-tag">passing now</div>`
+            : hot[s.id] === "route"
+            ? `<div class="live-eta" style="color:var(--accent)">a ${esc(s.route)}</div>
+               <div class="live-tag">due near you</div>`
             : `<div class="sched">${esc(ago(s.ts))}</div>
                ${s.ridden ? `<div class="live-tag" style="color:var(--good)">rode</div>` : ""}`}</div>`;
       list.appendChild(row);
