@@ -428,8 +428,12 @@
         const d = await jsonp(sh);
         spots = d && d.spots;
       } else {
-        const r = await fetch(url + "/feed?limit=40", { cache: "no-store" });
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        /* The Worker feed is secret-scoped now, so send the same secret the app
+           posts with; a configured worker answers 403 without it. */
+        let sec = ""; try { sec = (localStorage.getItem("tb.spotFeedSecret") || "").trim(); } catch (_) {}
+        const r = await fetch(url + "/feed?limit=40" + (sec ? "&s=" + encodeURIComponent(sec) : ""),
+                              { cache: "no-store" });
+        if (!r.ok) throw new Error(r.status === 403 ? "feed secret rejected" : "HTTP " + r.status);
         spots = (await r.json()).spots;
       }
       if (Array.isArray(spots)) { remote = spots; remoteErr = ""; }

@@ -58,15 +58,34 @@ function clean(b) {
   };
 }
 
+
+/* One bucket per shared secret. Hashed so the secret itself is never a KV key. */
+async function groupKey(env) {
+  if (!env.FEED_SECRET) return KEY;
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("grp|" + env.FEED_SECRET));
+  return "grp:" + [...new Uint8Array(buf)].slice(0, 12).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (url.pathname === "/health") return json({ ok: true });
 
+    /* A GROUP feed, not a public one. Everything used to live under one global
+       key that /feed served to anyone holding the URL — fine for pooling with
+       friends, a privacy leak the moment this is sold, since two customers who
+       both switched it on would read each other's sightings and coordinates.
+       Reads and writes are now scoped to a group id derived from the shared
+       secret, so a feed is only visible to people who already have its secret,
+       and different secrets can never see each other. Configure FEED_SECRET and
+       this is a private group; leave it unset and it stays the old open feed,
+       which is only appropriate for a demo. */
     if (url.pathname === "/feed") {
       const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") || "40", 10)));
-      const raw = await env.SPOTS.get(KEY);
+      if (env.FEED_SECRET && url.searchParams.get("s") !== env.FEED_SECRET)
+        return json({ ok: false, error: "forbidden" }, 403);
+      const raw = await env.SPOTS.get(await groupKey(env));
       const spots = raw ? JSON.parse(raw) : [];
       return json({ ok: true, spots: spots.slice(0, limit) });
     }
@@ -88,11 +107,11 @@ export default {
       if (!spot) return json({ ok: false, error: "missing_route" }, 400);
 
       const max = Math.min(500, parseInt(env.MAX_FEED || "200", 10));
-      const raw = await env.SPOTS.get(KEY);
+      const raw = await env.SPOTS.get(await groupKey(env));
       let spots = raw ? JSON.parse(raw) : [];
       spots = spots.filter(s => s.id !== spot.id);        // idempotent re-posts (offline queue retries)
       spots.unshift(spot);
-      await env.SPOTS.put(KEY, JSON.stringify(spots.slice(0, max)));
+      await env.SPOTS.put(await groupKey(env), JSON.stringify(spots.slice(0, max)));
       return json({ ok: true, stored: spot.id });
     }
 
