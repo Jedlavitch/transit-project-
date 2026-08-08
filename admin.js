@@ -114,6 +114,17 @@
     hash: sha256,
     isAdmin: () => !ADMIN_SHA256 || stored(),
     set(v) { store(!!v); apply(!ADMIN_SHA256 || !!v); },
+    /* Verify a typed passphrase and unlock this device on success. Lets
+       admin.html be set up by typing rather than by visiting a URL with the
+       passphrase in it — easier on a TV remote, and it leaves nothing on screen
+       or in history. Returns false on a bad one rather than throwing. */
+    async check(v) {
+      if (!ADMIN_SHA256) return true;                 // gate not configured
+      let ok = false;
+      try { ok = (await sha256(v)) === ADMIN_SHA256.toLowerCase(); } catch (_) { ok = false; }
+      if (ok) { store(true); apply(true); }
+      return ok;
+    },
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

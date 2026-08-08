@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Board setup — admin</title>
+<link rel="stylesheet" href="theme.css?v=9" />
+<script src="admin.js?v=2" defer></script>
+<style>
+  body{margin:0; background:var(--bg,#070d17); color:var(--text,#e8eefc);
+    font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:760px; margin:0 auto; padding:26px 18px 60px}
+  h1{font-size:20px; margin:0 0 4px}
+  .sub{color:var(--muted,#8fa3bf); font-size:13px; margin:0 0 22px}
+  .grp{background:var(--row-bg,rgba(255,255,255,.04)); border:1px solid var(--row-line,rgba(255,255,255,.09));
+    border-radius:10px; padding:15px 16px; margin:0 0 14px}
+  .grp h2{font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted,#8fa3bf);
+    margin:0 0 4px}
+  .grp .note{color:var(--muted,#8fa3bf); font-size:12px; margin:0 0 11px}
+  label{display:block; margin:11px 0 0}
+  label em{display:block; font-style:normal; font-size:12px; color:var(--muted,#8fa3bf); margin-bottom:4px}
+  input{width:100%; box-sizing:border-box; padding:10px 11px; border-radius:7px; font:inherit; font-size:13px;
+    background:rgba(0,0,0,.28); color:inherit; border:1px solid var(--row-line,rgba(255,255,255,.14))}
+  .bar{position:sticky; bottom:0; background:linear-gradient(transparent,var(--bg,#070d17) 40%);
+    padding:18px 0 4px; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  button{font:inherit; font-weight:700; font-size:13px; cursor:pointer; padding:11px 18px; border-radius:8px;
+    border:0; background:var(--accent,#ffd166); color:#08101f}
+  button.ghost{background:transparent; color:var(--text,#e8eefc);
+    border:1px solid var(--row-line,rgba(255,255,255,.18))}
+  #msg{font-size:13px; min-height:1.3em}
+  #gate{max-width:420px; margin:16vh auto; padding:0 18px; text-align:center}
+  #gate input{text-align:center; margin:14px 0}
+  .warn{border-color:#8a5a1f; background:rgba(255,180,84,.07)}
+  .warn h2{color:var(--warn,#ffb454)}
+  a{color:var(--accent,#ffd166)}
+  code{font-family:ui-monospace,Menlo,monospace; font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- Shown until this device is unlocked. Not a security boundary; see admin.js. -->
+<div id="gate" style="display:none">
+  <h1>Board setup</h1>
+  <p class="sub">Enter the admin passphrase to configure this screen.</p>
+  <input type="password" id="pass" placeholder="Passphrase" autocomplete="off" spellcheck="false" />
+  <button id="unlock">Unlock</button>
+  <p id="gateMsg" style="color:var(--warn,#ffb454); font-size:13px; min-height:1.3em"></p>
+</div>
+
+<div class="wrap" id="panel" style="display:none">
+  <h1>Board setup</h1>
+  <p class="sub">Worker URLs and API keys for the boards. Saved on <b>this screen only</b> —
+     browsers keep them per device, so run this once on each kiosk.</p>
+
+  <div class="grp warn">
+    <h2>Before you rely on this</h2>
+    <p class="note" style="margin:0">These values live in this browser and are readable by anyone
+       who opens developer tools on this screen. Fine for a kiosk you control; not a place for a
+       credential you would mind a customer finding. See <code>SELLING.md</code>.</p>
+  </div>
+
+  <div class="grp">
+    <h2>Washington DC board</h2>
+    <p class="note">WMATA key powers Metrorail and Metrobus. MARC runs on the bundled timetable
+       without a Worker; the URL is only for exact live positions.</p>
+    <label><em>WMATA API key</em><input data-ls="transitboard.wmataKey" placeholder="Primary key from developer.wmata.com" /></label>
+    <label><em>MARC Worker URL (optional)</em><input data-ls="transitboard.marcUrl" placeholder="https://marc.you.workers.dev" /></label>
+  </div>
+
+  <div class="grp">
+    <h2>Philadelphia board</h2>
+    <label><em>SEPTA Worker URL (optional)</em><input data-ls="transitboardphl.septaUrl" placeholder="https://septa.you.workers.dev" /></label>
+    <label><em>MARC Worker URL (optional)</em><input data-ls="transitboardphl.marcUrl" placeholder="https://marc.you.workers.dev" /></label>
+    <label><em>WMATA API key (optional)</em><input data-ls="transitboardphl.wmataKey" placeholder="only if you want DC systems here" /></label>
+  </div>
+
+  <div class="grp">
+    <h2>New York board</h2>
+    <p class="note">Subway, LIRR and Metro-North are keyless and need nothing here.</p>
+    <label><em>MTA Bus Worker URL (optional)</em><input data-ls="transitboardnyc.busUrl" placeholder="https://mtabus.you.workers.dev" /></label>
+    <label><em>PATH Worker URL (optional)</em><input data-ls="transitboardnyc.pathUrl" placeholder="https://path.you.workers.dev" /></label>
+  </div>
+
+  <div class="grp">
+    <h2>New Jersey board</h2>
+    <label><em>NJT Worker URL (optional, live buses)</em><input data-ls="transitboardnj.njtUrl" placeholder="https://njt.you.workers.dev" /></label>
+    <label><em>NJT rail API username</em><input data-ls="transitboardnj.njtUser" placeholder="raildata.njtransit.com login" /></label>
+    <label><em>NJT rail API password</em><input data-ls="transitboardnj.njtPass" placeholder="" /></label>
+  </div>
+
+  <div class="grp">
+    <h2>San Francisco board</h2>
+    <label><em>511 Worker URL (optional)</em><input data-ls="transitboardsf.liveUrl" placeholder="https://sf511.you.workers.dev" /></label>
+  </div>
+
+  <div class="grp">
+    <h2>Amsterdam board</h2>
+    <label><em>OVapi Worker URL (optional)</em><input data-ls="transitboardams.liveUrl" placeholder="https://ovapi.you.workers.dev" /></label>
+  </div>
+
+  <div class="grp">
+    <h2>Spotter feed (all boards)</h2>
+    <p class="note">A share code is the zero-setup option and is set from the phone app. These two
+       are only for the Worker or spreadsheet routes.</p>
+    <label><em>Share code</em><input data-ls="tb.spotBlob" placeholder="uuid from the Spotter app" /></label>
+    <label><em>Spotter Worker URL (optional)</em><input data-ls="tb.spotFeedUrl" placeholder="https://tb-spotter.you.workers.dev" /></label>
+    <label><em>Google Sheet web-app URL (optional)</em><input data-ls="tb.sheetUrl" placeholder="https://script.google.com/macros/s/…/exec" /></label>
+  </div>
+
+  <div class="bar">
+    <button id="save">Save to this screen</button>
+    <button class="ghost" id="lock">Lock this screen</button>
+    <span id="msg"></span>
+  </div>
+
+  <p class="sub" style="margin-top:18px">Boards: <a href="index.html">DC</a> ·
+    <a href="philadelphia.html">Philadelphia</a> · <a href="nyc.html">New York</a> ·
+    <a href="newjersey.html">New Jersey</a> · <a href="boston.html">Boston</a> ·
+    <a href="sanfrancisco.html">San Francisco</a> · <a href="losangeles.html">Los Angeles</a> ·
+    <a href="amsterdam.html">Amsterdam</a></p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const fields = () => [...document.querySelectorAll("#panel input[data-ls]")];
+
+  function load(){
+    fields().forEach(i => { try { i.value = localStorage.getItem(i.dataset.ls) || ""; } catch(_){} });
+  }
+  function save(){
+    let n = 0;
+    fields().forEach(i => {
+      const v = i.value.trim();
+      try {
+        // An empty box means "not configured", so remove the key rather than
+        // storing "" — some boards test truthiness, others test presence.
+        if (v) { localStorage.setItem(i.dataset.ls, v); n++; }
+        else localStorage.removeItem(i.dataset.ls);
+      } catch(_){}
+    });
+    $("#msg").style.color = "var(--good,#4ade80)";
+    $("#msg").textContent = `Saved — ${n} value${n===1?"":"s"} set on this screen.`;
+  }
+
+  function show(unlocked){
+    $("#gate").style.display  = unlocked ? "none" : "";
+    $("#panel").style.display = unlocked ? "" : "none";
+    if (unlocked) load();
+  }
+
+  async function tryUnlock(){
+    const v = $("#pass").value;
+    if (!v) return;
+    // Reuse the boards' own gate so there is exactly one passphrase to keep.
+    const ok = await window.TBAdmin.check(v);
+    if (ok) { show(true); }
+    else {
+      $("#gateMsg").textContent = "That passphrase doesn't match.";
+      $("#pass").value = "";
+    }
+  }
+
+  function boot(){
+    if (!window.TBAdmin) { $("#gateMsg").textContent = "admin.js failed to load."; $("#gate").style.display=""; return; }
+    show(window.TBAdmin.isAdmin());
+    $("#unlock").onclick = tryUnlock;
+    $("#pass").addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+    $("#save").onclick = save;
+    $("#lock").onclick = () => { window.TBAdmin.set(false); show(false); };
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+</body>
+</html>
