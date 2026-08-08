@@ -242,3 +242,23 @@ body #app{
   padding:6px 9px; font-weight:600; }
 .view-links a:hover, .view-links a:focus-visible{ color:var(--text); background:var(--panel);
   border-color:var(--line); }
+
+/* ---- phone layout ------------------------------------------------------------
+   The boards are kiosk dashboards: one non-scrolling viewport, cards sharing it
+   equally (grid-auto-rows:1fr), an operator zoom for TVs. On a phone all of
+   that works against you -- eight cards splitting ~770px leaves ~60px each, so
+   fitList trims every departure row and the cards go blank. Below 640px, become
+   a normal scrolling page instead: map up top, then each card sized by its own
+   content with the list capped at ~7 rows (fitList trims to the cap). The
+   kiosk zoom/overscan config is TV furniture, so it resets to 1 here. */
+@media (max-width:640px){
+  html, body{ overflow:auto; }
+  body #app{ zoom:1; height:auto; min-height:100dvh; width:auto; overflow:visible; }
+  #app main{ display:flex; flex-direction:column; padding:10px; gap:10px; min-height:0; }
+  #app #map{ flex:0 0 auto; height:34dvh; min-height:230px; }
+  #app .cards{ display:flex; flex-direction:column; gap:10px; overflow:visible; }
+  #app .card{ flex:0 0 auto; min-height:0; }
+  body .list{ flex:0 0 auto; height:auto; max-height:300px; }
+  /* bigger tap targets for follow-from-box rows on touch screens */
+  body .list .row{ padding:6px 9px; }
+}

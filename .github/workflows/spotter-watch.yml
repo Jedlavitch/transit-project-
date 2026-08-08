@@ -1,0 +1,55 @@
+# Alerts you when something you've logged comes past, with the Spotter closed.
+#
+# The in-app notifications only fire while the app is open — a phone can't poll
+# in the background. This runs the watch on GitHub's machines instead and pushes
+# through ntfy.sh, so nothing needs hosting, no account is created, and no Apple
+# Developer membership is involved.
+#
+# SETUP (once):
+#   1. In the Spotter: ⚙ → "Alerts when the app is closed" → it shows a topic.
+#      Install the free "ntfy" app on the phone and subscribe to that topic.
+#   2. Here: Settings → Secrets and variables → Actions → New repository secret
+#      Name: SPOT_BLOB   Value: your share code (the uuid from ⚙ → Share to my boards)
+#   That's all. The share code is a secret rather than committed because anyone
+#   holding it can read your log.
+#
+# HONEST LIMIT — read this before relying on it for aircraft:
+#   GitHub's minimum schedule is 5 minutes, and scheduled runs are regularly
+#   delayed 5–15 minutes when GitHub is busy; they are explicitly best-effort and
+#   can be dropped entirely. A plane crosses a 12 nm radius in roughly two
+#   minutes, so plane alerts will often arrive after it has gone. Amtrak, which
+#   is in range for far longer, works well.
+#   For alerts that keep up with aircraft, run the same script anywhere always-on
+#   with SPOT_ONCE=0 — it then polls every 60s. The script is deliberately
+#   host-agnostic so that switch costs nothing but where it runs.
+
+name: Spotter watch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"     # every 5 minutes — GitHub's floor, and best-effort
+  workflow_dispatch: {}        # lets you run it by hand to test
+
+# Never let two passes overlap: they would both read the same dedupe state and
+# could double-alert.
+concurrency:
+  group: spotter-watch
+  cancel-in-progress: false
+
+permissions: {}                # this job needs no access to the repo itself
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Look for anything logged passing by
+        env:
+          SPOT_BLOB: ${{ secrets.SPOT_BLOB }}
+        run: |
+          if [ -z "$SPOT_BLOB" ]; then
+            echo "SPOT_BLOB secret is not set — see the setup notes at the top of this file."
+            exit 0
+          fi
+          python3 spotter-watch.py
