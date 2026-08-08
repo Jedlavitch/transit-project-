@@ -72,7 +72,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   label.fld{display:block; margin-top:11px}
   label.fld em{display:block; font-size:11px; color:var(--muted); font-style:normal;
     font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px}
-  input[type=text], textarea{width:100%; padding:13px 12px; border-radius:11px; border:1px solid var(--line);
+  input[type=text], input[type=email], input[type=search], textarea{width:100%; padding:13px 12px; border-radius:11px; border:1px solid var(--line);
     background:var(--row-bg); color:var(--text); font-size:16px; font-family:inherit}
   textarea{min-height:62px; resize:vertical}
   input:focus, textarea:focus{outline:none; border-color:var(--accent)}
@@ -133,6 +133,35 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .sheet button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
   a{color:var(--accent)}
 
+
+  /* ---- front door ---- */
+  #gate{position:fixed; inset:0; z-index:500; display:none; overflow:auto;
+    background:
+      radial-gradient(800px 600px at 50% -10%, rgba(78,161,255,.18), transparent 60%),
+      radial-gradient(600px 500px at 50% 110%, var(--blue-deep,#0a1a3d), transparent 60%),
+      var(--bg);
+    padding:calc(env(safe-area-inset-top) + 8vh) 22px calc(env(safe-area-inset-bottom) + 32px)}
+  #gate.show{display:block}
+  #gate .gbox{max-width:420px; margin:0 auto; text-align:center}
+  #gate .glogo{font-size:54px; line-height:1}
+  #gate .gtitle{font-size:30px; font-weight:800; margin:14px 0 8px; letter-spacing:.2px;
+    background:linear-gradient(90deg,var(--text),var(--blue-bright,#7cc0ff));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  #gate .gsub{color:var(--muted); font-size:14px; line-height:1.65; margin:0 0 26px}
+  #gate .fld{text-align:left}
+  #gate .gbtn{width:100%; margin-top:14px; padding:16px; border:0; border-radius:13px;
+    background:var(--accent); color:#04101f; font:inherit; font-size:16px; font-weight:800; cursor:pointer}
+  #gate .gbtn:disabled{opacity:.55}
+  #gate .glink{display:block; width:100%; margin-top:14px; padding:10px; background:none; border:0;
+    color:var(--muted); font:inherit; font-size:13px; text-decoration:underline; cursor:pointer}
+  #gate .glink.quiet{margin-top:26px; font-size:12px; opacity:.65}
+  #gate .gsent{color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 4px}
+  #gate .gsent b{color:var(--text)}
+  #gate .gerr{color:var(--late,#ff6b5a); font-size:13px; line-height:1.55; margin:14px 0 0}
+  /* signed-in identity in the header, so the state is visible without digging */
+  #who{display:none; font-size:11px; color:var(--muted); font-family:var(--mono)}
+  #who.show{display:block}
+
   /* ---- view tabs, filters, map and collection ---- */
   .tabs{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:12px 0 10px;
     background:var(--panel2,#0a1220); border:1px solid var(--line); border-radius:12px; padding:4px}
@@ -184,9 +213,36 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 </style>
 </head>
 <body>
+
+<div id="gate">
+  <div class="gbox">
+    <div class="glogo">🚉</div>
+    <h1 class="gtitle">Transit Spotter</h1>
+    <p class="gsub">Log the trains, buses and planes you see.<br>Sign in and your log follows you to any device.</p>
+
+    <div id="gStep1">
+      <label class="fld"><em>Email</em>
+        <input type="email" id="gEmail" inputmode="email" autocomplete="email" placeholder="you@example.com" /></label>
+      <button class="gbtn" id="gSend">Email me a code</button>
+    </div>
+
+    <div id="gStep2" hidden>
+      <p class="gsent">We sent a six-digit code to <b id="gWho"></b>.</p>
+      <label class="fld"><em>Code</em>
+        <input type="text" id="gCode" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" placeholder="123456" /></label>
+      <button class="gbtn" id="gVerify">Sign in</button>
+      <button class="glink" id="gBack">Use a different email</button>
+    </div>
+
+    <p class="gerr" id="gErr" hidden></p>
+    <button class="glink quiet" id="gSkip">Continue without signing in</button>
+  </div>
+</div>
+
 <header>
   <div class="hrow">
-    <h1>Transit Spotter <small id="hsub">loading…</small></h1>
+    <h1>Transit Spotter <small id="hsub">loading…</small><small id="who"></small></h1>
     <button class="iconbtn" id="boardBtn" title="Open the board">🚇</button>
     <button class="iconbtn" id="nightBtn" title="Sky view — nearest flight overhead">🌙</button>
     <button class="iconbtn" id="flipBtn" title="Departure board — split-flap display">🚉</button>
@@ -1197,7 +1253,9 @@ function renderAccount(){
       <button class="ghost" id="acctOut">Sign out</button></div>`;
     $("#acctSync").onclick=async()=>{ try{ const r=await TBAccount.sync(); render();
       toast(`Synced ${r?r.count:0} sightings`); }catch(e){ toast(e.message); } };
-    $("#acctOut").onclick=async()=>{ await TBAccount.signOut(); renderAccount();
+    $("#acctOut").onclick=async()=>{ await TBAccount.signOut(); renderAccount(); whoLabel();
+      $("#sheet").classList.remove("show");
+      if(gateNeeded()){ gateStep(1); showGate(); }
       toast("Signed out — your log stays on this phone"); };
     return;
   }
@@ -1222,6 +1280,73 @@ function renderAccount(){
          toast("Code sent — check your email"); }
     catch(e){ toast(e.message); }
   };
+}
+
+
+/* ===================== the front door =====================================
+   Shown on open when an account server is configured and you're not signed in.
+   Deliberately NOT shown when no server is configured: the app has always
+   worked with no account at all, and gating a local-only install behind a login
+   it cannot perform would brick it.
+
+   "Continue without signing in" exists for a reason worth keeping: with no
+   signal you cannot receive a code, and the whole point of this app is logging
+   a train while it's in front of you. Blocking that would be the wrong failure.
+   Once signed in the session lasts about a year, so this screen is rare. */
+let gateToken=null;
+const gate = () => document.getElementById("gate");
+function gateNeeded(){
+  return !!(window.TBAccount && TBAccount.configured() && !TBAccount.signedIn());
+}
+function gateError(msg){
+  const e=document.getElementById("gErr");
+  if(!msg){ e.hidden=true; e.textContent=""; return; }
+  e.hidden=false; e.textContent=msg;
+}
+function showGate(){ gate().classList.add("show"); document.body.style.overflow="hidden"; }
+function hideGate(){ gate().classList.remove("show"); document.body.style.overflow=""; }
+function gateStep(n){
+  document.getElementById("gStep1").hidden = n!==1;
+  document.getElementById("gStep2").hidden = n!==2;
+  gateError("");
+}
+function whoLabel(){
+  const el=document.getElementById("who"); if(!el) return;
+  const on = window.TBAccount && TBAccount.signedIn();
+  el.textContent = on ? TBAccount.email() : "";
+  el.classList.toggle("show", !!on);
+}
+async function gateSend(){
+  const btn=document.getElementById("gSend"), addr=document.getElementById("gEmail").value.trim();
+  gateError(""); btn.disabled=true; btn.textContent="Sending…";
+  try{
+    gateToken=await TBAccount.start(addr);
+    document.getElementById("gWho").textContent=addr;
+    gateStep(2);
+    setTimeout(()=>document.getElementById("gCode").focus(),50);
+  }catch(e){ gateError(e.message||"Couldn't send the code."); }
+  finally{ btn.disabled=false; btn.textContent="Email me a code"; }
+}
+async function gateVerify(){
+  const btn=document.getElementById("gVerify");
+  gateError(""); btn.disabled=true; btn.textContent="Signing in…";
+  try{
+    await TBAccount.verify(gateToken, document.getElementById("gCode").value.trim());
+    gateToken=null; hideGate(); whoLabel(); render();
+    toast("Signed in — your log is synced");
+  }catch(e){ gateError(e.message||"That didn't work."); }
+  finally{ btn.disabled=false; btn.textContent="Sign in"; }
+}
+function initGate(){
+  document.getElementById("gSend").onclick=gateSend;
+  document.getElementById("gVerify").onclick=gateVerify;
+  document.getElementById("gBack").onclick=()=>{ gateToken=null; gateStep(1); };
+  document.getElementById("gSkip").onclick=()=>{ hideGate(); toast("Using this device only — sign in any time from ⚙︎"); };
+  document.getElementById("gEmail").addEventListener("keydown",e=>{ if(e.key==="Enter") gateSend(); });
+  document.getElementById("gCode").addEventListener("keydown",e=>{ if(e.key==="Enter") gateVerify(); });
+  gateStep(1);
+  whoLabel();
+  if(gateNeeded()) showGate();
 }
 
 /* ---------- settings sheet ---------- */
@@ -1294,7 +1419,10 @@ $("#saveSet").onclick=()=>{
   localStorage.setItem(LS.handle, $("#handle").value.trim());
   localStorage.setItem(LS.feed, $("#feedUrl").value.trim().replace(/\/+$/,""));
   localStorage.setItem(LS.sheet, $("#sheetUrl").value.trim());
-  if(window.TBAccount) TBAccount.setUrl($("#acctUrl").value);
+  if(window.TBAccount){
+    TBAccount.setUrl($("#acctUrl").value);
+    if(gateNeeded()){ $("#sheet").classList.remove("show"); gateStep(1); showGate(); }
+  }
   $("#sheet").classList.remove("show"); toast("Settings saved"); flushQueue();
 };
 $("#sheetSyncAll").onclick=async()=>{
@@ -1325,6 +1453,12 @@ document.addEventListener("touchend", e=>{
 }, {passive:true});
 
 render(); initLoc(); flushQueue();
+/* account.js is a deferred external script, so it hasn't executed while this
+   inline script is still running — window.TBAccount is undefined here and the
+   gate would decide it isn't needed. Deferred scripts all run before
+   DOMContentLoaded, so waiting for it is the earliest safe moment. */
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", initGate);
+else initGate();
 setInterval(()=>{ if(loc && document.visibilityState==="visible") fetchNear(); }, 30000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") flushQueue(); });
 if("serviceWorker" in navigator) navigator.serviceWorker.register("spot-sw.js").catch(()=>{});
