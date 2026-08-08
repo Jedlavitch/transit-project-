@@ -72,6 +72,29 @@
     document.documentElement.classList.toggle(CLASS, !isAdmin);
   }
 
+  /* A way in to the setup page, on the first screen you land on after signing in.
+     Injected here rather than added to nine boards' markup, and deliberately NOT
+     hidden from customers: admin.html asks for the passphrase itself, and hiding
+     the link would lock the operator out of the page that unlocks everything —
+     they would have to know the URL by heart on a TV remote. It sits last in the
+     nav, reads as one more small link, and goes nowhere without the passphrase. */
+  function addAdminLink() {
+    if (/admin\.html$/i.test(location.pathname)) return;      // already there
+    if (document.getElementById("tbAdminLink")) return;
+    const nav = document.querySelector("nav.view-links");
+    if (!nav) return;
+    const a = document.createElement("a");
+    a.id = "tbAdminLink";
+    a.href = "admin.html";
+    a.textContent = "Admin";
+    a.title = "Board setup — Worker URLs and API keys (passphrase required)";
+    a.style.opacity = ".72";
+    // the sibling links all carry this, for embedded contexts where a bare
+    // anchor click was observed not to navigate
+    a.setAttribute("onclick", "window.location.href='admin.html'; return false;");
+    nav.appendChild(a);
+  }
+
   function styles() {
     if (document.getElementById("tbAdminCss")) return;
     const st = document.createElement("style");
@@ -83,6 +106,7 @@
 
   async function boot() {
     styles();
+    addAdminLink();
     // No passphrase configured -> dormant: show everything, exactly as before.
     if (!ADMIN_SHA256) { apply(true); return; }
 
