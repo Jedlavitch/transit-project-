@@ -199,5 +199,5 @@ can't defeat.
 
 **Doesn't:** protect anything already public. Your repo has been public and the
 boards have been served openly, so treat anything currently in them as already
-out. Rotate the admin passphrase (`TBAdmin.hash(...)` → `ADMIN_SHA256` in
-`admin.js`) once the site is private.
+out. Change the admin login (open `admin.html` → **Forget this login** → create a
+new one) once the site is private.

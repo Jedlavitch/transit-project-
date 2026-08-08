@@ -13,36 +13,30 @@
      secret worth protecting, and a Worker URL that must stay private cannot be
      kept private by this. Same honest trade-off as the licence chip.
 
-   DORMANT UNTIL CONFIGURED
-     With no passphrase set, every board behaves exactly as it does today and
-     nothing is hidden. The gate only starts working once you set ADMIN_SHA256,
-     so shipping this file changes nothing for anyone who ignores it.
+   DORMANT UNTIL YOU CREATE A LOGIN
+     With no login created, every board behaves exactly as it does today and
+     nothing is hidden. There is no passphrase in this file — nothing is baked in
+     and there is nothing to edit.
 
    SETTING IT UP
-     1. Open admin-setup.html, type the password you want, and copy the line it
-        gives you. (A console still works: await TBAdmin.hash("your passphrase"))
-     2. Paste that over ADMIN_SHA256 below and redeploy.
-     3. Unlock a kiosk once:   https://…/index.html?admin=your%20passphrase
-        Lock it again:         https://…/index.html?admin=off
+     1. Open admin.html. The first visit asks you to pick a username and
+        password; after that it asks you to sign in with them.
+     2. Signing in unlocks the operator controls on this device.
+        Lock it again from admin.html, or with …/index.html?admin=off
 
-     Pick a LONG password. Only the hash ships, but the hash ships publicly, so
-     the realistic attack is offline guessing against it — where length is what
-     helps and cleverness mostly isn't. Several unrelated words beats "Tr4in!".
-     The unlock is remembered per device, so you set up a screen once and the
-     customer never sees a field. The passphrase never appears in the source —
-     only its hash — so reading the page does not reveal it.
+     The login lives on the device that created it, and only the password's
+     SHA-256 is stored. Set it up once per screen.
    ============================================================================ */
 (function () {
   "use strict";
 
-  // sha-256 of your admin passphrase, lowercase hex. Empty = gate off entirely.
-  const ADMIN_SHA256 = "f27319ee97f0a63b20e1bc948a6ab0eb7d5d359bd9945b164778540ac6ae5881";
-  /* A password saved from admin-setup.html wins over the baked-in one, so you can
-     change it on a device without editing this file or redeploying. Bake yours in
-     when you ship; override locally when you just want it changed now. */
+  /* The only password that exists is the one created in admin.html, stored as a
+     SHA-256 on that device. Nothing is baked into this file, so there is no
+     passphrase in the source for anyone to read, lift, or guess against — and
+     no value here that the owner did not choose. Empty = gate off entirely. */
   const adminHash = () => {
-    try { return (localStorage.getItem("tb.adminHash") || "").trim().toLowerCase() || ADMIN_SHA256; }
-    catch (_) { return ADMIN_SHA256; }
+    try { return (localStorage.getItem("tb.adminHash") || "").trim().toLowerCase(); }
+    catch (_) { return ""; }
   };
 
   const KEY = "tb.admin";
