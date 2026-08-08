@@ -252,7 +252,12 @@ body #app{
    content with the list capped at ~7 rows (fitList trims to the cap). The
    kiosk zoom/overscan config is TV furniture, so it resets to 1 here. */
 @media (max-width:640px){
-  html, body{ overflow:auto; }
+  /* `html body` (0,0,2) so this beats each board's own later `body{overflow:
+     hidden}` (0,0,1) -- programmatic scrollTop works under overflow:hidden,
+     which is how the first cut of this block slipped through testing, but a
+     finger on a real phone does not. */
+  html{ overflow:auto; }
+  html body{ overflow:auto; -webkit-overflow-scrolling:touch; }
   body #app{ zoom:1; height:auto; min-height:100dvh; width:auto; overflow:visible; }
   #app main{ display:flex; flex-direction:column; padding:10px; gap:10px; min-height:0; }
   #app #map{ flex:0 0 auto; height:34dvh; min-height:230px; }
