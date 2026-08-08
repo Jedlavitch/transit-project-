@@ -26,16 +26,58 @@ Customers get a six-digit code by email — no account to create, no password.
 
 ---
 
-## 1. Get a domain (~$10/yr)
+## 0. Where things stand today
 
-Any registrar. Cloudflare Registrar sells at cost and skips a step later, since
-the domain is already on Cloudflare.
+The domain already exists: **`transitproject.online`**, set as the GitHub Pages
+custom domain in `CNAME`. Checked live — it resolves to GitHub's Pages addresses
+(`185.199.108–111.153`) and answers `server: GitHub.com`, so **Cloudflare is not
+in front of it yet**. Nothing is gated: that domain, `jedlavitch.github.io`, and
+the public repo all serve the site to anyone.
 
-If you buy elsewhere: add the domain at **dash.cloudflare.com → Add a site**,
-then change the nameservers at your registrar to the two Cloudflare gives you.
-Propagation is usually under an hour.
+That gives you two routes, and they are not either/or — the first is a step
+toward the second.
 
-## 2. Make the repo private
+### Route A — proxy what you already have (about 15 minutes)
+
+Keep GitHub Pages exactly as it is and put Cloudflare in front of the domain.
+Deploys keep working unchanged. Gets a login on `transitproject.online` today.
+
+Does **not** close `jedlavitch.github.io/transit-project-/` or the public repo,
+so it gates the front door while the back door stays open. Worth doing anyway if
+you want the gate working now: everything in it carries over to Route B.
+
+### Route B — move to Cloudflare Pages (about 45 minutes)
+
+Serve the site from Cloudflare Pages and make the repo private, which closes the
+`github.io` copy and the readable source as well. This is the one that actually
+matches "they cannot view it without purchasing".
+
+**Do A first if you want it working today, then B when you have an hour.** Steps
+1–2 differ per route; from step 5 they are identical.
+
+---
+
+## 1. Put the domain on Cloudflare (both routes)
+
+**dash.cloudflare.com → Add a site → `transitproject.online`** → Free plan.
+
+Cloudflare scans your existing DNS and shows you two nameservers. Change the
+nameservers at whoever you bought the domain from to those two. Usually live
+within the hour.
+
+When it's done, check the existing records survived the import: you want the four
+`A` records to `185.199.108.153`, `.109.153`, `.110.153`, `.111.153`, and they
+must be **proxied** — the cloud icon orange, not grey. Grey means Cloudflare is
+only doing DNS and Access can't see the traffic at all.
+
+> **Set SSL/TLS → Overview → Full (strict).** GitHub Pages serves a valid
+> certificate for your domain, so strict works. Leaving it on **Flexible** causes
+> an infinite redirect loop with Pages — the single most common way this setup
+> appears broken.
+
+**On Route A, skip to step 5.** Steps 2–4 are Route B only.
+
+## 2. Make the repo private *(Route B)*
 
 This is what stops the free copies. While the repo is public, your source and
 your bundled timetables are downloadable from github.com no matter what sits in
@@ -51,7 +93,7 @@ Pages reads private repos on its free plan, so nothing is lost.
 You can also delete `.github/workflows/pages.yml` afterwards; it has nothing left
 to deploy.
 
-## 3. Deploy on Cloudflare Pages (free)
+## 3. Deploy on Cloudflare Pages (free) *(Route B)*
 
 **dash.cloudflare.com → Workers & Pages → Create → Pages → Connect to Git.**
 
@@ -69,12 +111,12 @@ Every push to `main` redeploys, same as now.
 
 You'll get `your-project.pages.dev`. Check the boards work there before going on.
 
-## 4. Point your domain at it
+## 4. Point your domain at it *(Route B)*
 
 **Your Pages project → Custom domains → Set up a custom domain** → enter your
 domain. Cloudflare adds the DNS record itself. Wait for it to go green.
 
-## 5. Turn on Access
+## 5. Turn on Access *(both routes)*
 
 **dash.cloudflare.com → Zero Trust.** First visit asks you to pick a team name
 and a plan — choose **Free** (up to 50 users, no card).
@@ -85,7 +127,10 @@ and a plan — choose **Free** (up to 50 users, no card).
 |---|---|
 | Application name | Transit boards |
 | Session duration | 1 month *(how often a customer re-verifies)* |
-| Domain | your domain |
+| Domain | `transitproject.online` |
+
+Add a second subdomain entry for `www.transitproject.online` if you use it —
+Access matches the exact hostname, so an ungated `www` is a way straight in.
 
 Then **Add policy**:
 
@@ -100,9 +145,13 @@ in with a code sent to their email, with nothing to sign up for.
 
 Save. Open your domain in a private window — you should get a login page.
 
-## 6. Close the side doors
+## 6. Close the side doors *(Route B)*
 
-Two URLs still serve the site ungated until you deal with them:
+On Route A, `jedlavitch.github.io/transit-project-/` and the public repo are
+still wide open — that route only gates the domain. Route B closes them, and
+until you do, treat the gate as a courtesy rather than a paywall.
+
+On Route B, two more URLs still serve the site ungated until you deal with them:
 
 - **`your-project.pages.dev`** — Pages' own hostname. Add a second Access
   application for it, with the same policy. Easy to forget, and it's a complete
