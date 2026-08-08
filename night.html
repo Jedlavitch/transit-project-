@@ -183,6 +183,16 @@
   .fleet-btn{cursor:pointer; border-bottom:1px dotted var(--amber-dim)}
   .fleet-btn:hover{color:var(--amber); border-bottom-color:var(--amber)}
   .frow-sub{color:var(--muted); font-weight:600}
+  /* zoom toggle pinned inside the mini map: whole route <-> close on the
+     vehicle. Above Leaflet's own panes (which top out around z-index 700). */
+  #miniZoomBtn{position:absolute; right:7px; bottom:7px; z-index:900;
+    background:rgba(8,16,30,.82); color:var(--amber); border:1px solid var(--faint);
+    border-radius:9px; padding:5px 9px; font-family:inherit; font-size:11px; font-weight:800;
+    letter-spacing:.08em; text-transform:uppercase; cursor:pointer; backdrop-filter:blur(6px);
+    display:flex; align-items:center; gap:5px; line-height:1}
+  #miniZoomBtn:hover{border-color:var(--amber-dim); color:var(--city)}
+  #miniZoomBtn .ic{font-size:12px}
+  @media (pointer:coarse){ #miniZoomBtn{padding:8px 11px; font-size:12px} }
   .mini-fleet-dot{display:block; width:7px; height:7px; border-radius:50%;
     background:var(--amber-dim); opacity:.8; box-shadow:0 0 5px var(--glow)}
 
@@ -848,6 +858,40 @@ function initMiniMap(){
     new ResizeObserver(()=>{ miniMap.invalidateSize(); applyMiniFit(); })
       .observe(document.getElementById("miniMap"));
   }
+  // zoom toggle. Appended to the map container rather than written into the
+  // page markup so it can't be wiped by a layer redraw, and stopPropagation so
+  // the tap never reaches the map underneath.
+  const btn=document.createElement("button");
+  btn.id="miniZoomBtn";
+  btn.onclick=(e)=>{ e.stopPropagation(); setMiniZoomMode(miniZoomMode==="route"?"close":"route"); };
+  document.getElementById("miniMap").appendChild(btn);
+  paintMiniZoomBtn();
+}
+/* Whole route vs close on the vehicle. Remembered across reloads: a wall
+   display and a phone in your hand want different answers, and whichever you
+   picked is almost certainly still what you want next time. */
+let miniZoomMode = (()=>{ const v=localStorage.getItem("nightmode.mapzoom");
+  return v==="close"||v==="route" ? v : "route"; })();
+let miniFrameRoute=null, miniFrameClose=null;
+function paintMiniZoomBtn(){
+  const b=document.getElementById("miniZoomBtn"); if(!b) return;
+  // label says what a tap will DO, not what you're looking at
+  b.innerHTML = miniZoomMode==="route"
+    ? '<span class="ic">⊕</span>Close up'
+    : '<span class="ic">⊖</span>Whole route';
+  b.title = miniZoomMode==="route" ? "Zoom in on the aircraft" : "Show the whole route";
+}
+function setMiniZoomMode(m){
+  miniZoomMode=m;
+  try{ localStorage.setItem("nightmode.mapzoom", m); }catch(e){}
+  paintMiniZoomBtn();
+  applyMiniZoomFrame();
+}
+function applyMiniZoomFrame(){
+  // fall back to the other frame when one isn't available (no route yet)
+  const want = miniZoomMode==="route" ? (miniFrameRoute||miniFrameClose) : (miniFrameClose||miniFrameRoute);
+  miniFitPts = (want && want.length>1) ? want : null;
+  miniFitTries=0; applyMiniFit();
 }
 let miniMapFor=null;
 function renderMiniMap(id, oLL, dLL, posLL, fleet){
@@ -907,14 +951,18 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
        what gives way. Your own position is still included so you can always see
        where the flight passes relative to you. The ISS is the exception: it
        crosses a continent in minutes, so it keeps its own hemisphere view. */
-    let frame=[[posLL.lat,posLL.lon]];
-    if(loc && typeof loc.lat==="number") frame.push([loc.lat,loc.lon]);
+    // Build BOTH frames every render so the toggle is instant and always has
+    // fresh positions; which one is used is the tap's business, not this code's.
+    const close=[[posLL.lat,posLL.lon]];
+    if(loc && typeof loc.lat==="number") close.push([loc.lat,loc.lon]);
     // every 8th arc point, so a bowed great circle is framed by its true
     // extent rather than by the straight line between its two ends
-    if(gcPath) frame=frame.concat(gcPath.filter((_,i)=>i%8===0 || i===gcPath.length-1));
-    miniFitPts = (mode!=="iss" && frame.length>1) ? frame : null;
+    let route=close.slice();
+    if(gcPath) route=route.concat(gcPath.filter((_,i)=>i%8===0 || i===gcPath.length-1));
+    miniFrameClose = mode!=="iss" ? close : null;
+    miniFrameRoute = mode!=="iss" ? route : null;
     miniFitFallback = [posLL.lat, posLL.lon];
-    miniFitTries=0; applyMiniFit();
+    applyMiniZoomFrame();
     miniMapFor=fitKey;
   }
   // Live track: the positions this screen has actually SEEN, so the path flown
