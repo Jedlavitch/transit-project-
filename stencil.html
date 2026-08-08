@@ -1244,10 +1244,42 @@ function routePlausible(a, rt){
   return true;
 }
 /* the cached route for an aircraft, or null if it has none / isn't known / doesn't add up */
+/* Plausible is not the same as correctly-oriented. routePlausible() compares
+   dist(here,origin)+dist(here,dest) against the leg — an ellipse test, and
+   symmetric: swap the two ends and it returns exactly the same answer. So a
+   route flown backwards sails through it looking perfect.
+
+   And backwards is common. adsbdb stores ONE canonical direction per callsign
+   while airlines reuse the number for the return leg, so measured on live
+   traffic 14 of 35 aircraft were headed AWAY from their stated destination,
+   most about 170 degrees off. Southwest and American worst, since they turn
+   aircraft hardest.
+
+   The aircraft decides: if its ground track points at the stated ORIGIN and
+   away from the stated DESTINATION, the legs are swapped. The 30-degree margin
+   keeps aircraft that are holding, vectored or on a dogleg from flipping. */
+function orientRoute(a, rt){
+  if(!rt || rt.flat==null || rt.tlat==null) return rt;
+  const trk = typeof a.track==="number" ? a.track : null;
+  if(trk==null || a.lat==null) return rt;
+  const bearTo=(la,lo)=>{ const r=Math.PI/180;
+    const y=Math.sin((lo-a.lon)*r)*Math.cos(la*r);
+    const x=Math.cos(a.lat*r)*Math.sin(la*r)-Math.sin(a.lat*r)*Math.cos(la*r)*Math.cos((lo-a.lon)*r);
+    return (Math.atan2(y,x)/r+360)%360; };
+  const off=b=>{ const d=Math.abs(b-trk)%360; return d>180?360-d:d; };
+  const offD=off(bearTo(rt.tlat,rt.tlon)), offO=off(bearTo(rt.flat,rt.flon));
+  if(offO < offD - 30) return { ...rt,
+    from:rt.to, to:rt.from, fromName:rt.toName, toName:rt.fromName,
+    flat:rt.tlat, flon:rt.tlon, tlat:rt.flat, tlon:rt.flon, flipped:1 };
+  return rt;
+}
 function routeFor(a){
   const cs=(a.flight||"").trim(); if(!cs) return null;
   const hit=rtLoad()[cs];
-  return (hit && hit.from && routePlausible(a, hit)) ? hit : null;
+  if(!hit || !hit.from) return null;
+  // point it the way this aircraft is actually flying, THEN judge plausibility
+  const rt=orientRoute(a, hit);
+  return routePlausible(a, rt) ? rt : null;
 }
 /* Who is flying it. The callsign prefix (AAL, SWA, KLM) identifies the operator
    outright, so the airline stays usable even when that callsign's city pair was

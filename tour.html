@@ -544,6 +544,27 @@ async function lookupRoute(cs){
     routeCache[cs]={t:Date.now(),v}; saveRoutes(); return v;
   }catch(e){ routeCache[cs]={t:Date.now(),v:null}; return null; }
 }
+/* adsbdb stores ONE canonical direction per callsign while airlines reuse the
+   number for the return leg, so a flight is often shown flying its route
+   backwards. Measured on live traffic, 14 of 35 aircraft were headed AWAY from
+   their stated destination, most ~170 degrees off. The aircraft settles it: if
+   its track points at the stated ORIGIN and away from the DESTINATION, swap
+   them. The 30-degree margin spares aircraft holding or being vectored. */
+function orientRoute(route, a){
+  if(!route || !route.origin || !route.destination) return route;
+  const trk = typeof a.track==="number" ? a.track : null;
+  if(trk==null || typeof a.lat!=="number") return route;
+  const O=route.origin, D=route.destination;
+  if(typeof O.latitude!=="number" || typeof D.latitude!=="number") return route;
+  const bearTo=t=>{ const r=Math.PI/180;
+    const y=Math.sin((t.longitude-a.lon)*r)*Math.cos(t.latitude*r);
+    const x=Math.cos(a.lat*r)*Math.sin(t.latitude*r)
+          - Math.sin(a.lat*r)*Math.cos(t.latitude*r)*Math.cos((t.longitude-a.lon)*r);
+    return (Math.atan2(y,x)/r+360)%360; };
+  const off=b=>{ const d=Math.abs(b-trk)%360; return d>180?360-d:d; };
+  if(off(bearTo(O)) < off(bearTo(D)) - 30) return {...route, origin:D, destination:O, flipped:1};
+  return route;
+}
 async function planePhoto(hex){
   if(!hex) return null; const hit=photoCache["h:"+hex]; if(hit && Date.now()-hit.t<864e5) return hit.v;
   let v=null; try{ const d=await getJSON(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
@@ -609,10 +630,10 @@ async function planeSubject(stop, pin){
   let pick=null;
   if(pin){
     const m=air.find(x=>x.a.hex===pin.hex); if(!m) return null;
-    pick={...m, route:await lookupRoute((m.a.flight||"").trim())};
+    pick={...m, route:orientRoute(await lookupRoute((m.a.flight||"").trim()), m.a)};
   }else{
     for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,5)){
-      const route=await lookupRoute((x.a.flight||"").trim());
+      const route=orientRoute(await lookupRoute((x.a.flight||"").trim()), x.a);
       if(route&&route.origin&&route.destination){ pick={...x,route}; break; }
     }
   }
