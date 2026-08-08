@@ -37,6 +37,13 @@
 
   // sha-256 of your admin passphrase, lowercase hex. Empty = gate off entirely.
   const ADMIN_SHA256 = "f27319ee97f0a63b20e1bc948a6ab0eb7d5d359bd9945b164778540ac6ae5881";
+  /* A password saved from admin-setup.html wins over the baked-in one, so you can
+     change it on a device without editing this file or redeploying. Bake yours in
+     when you ship; override locally when you just want it changed now. */
+  const adminHash = () => {
+    try { return (localStorage.getItem("tb.adminHash") || "").trim().toLowerCase() || ADMIN_SHA256; }
+    catch (_) { return ADMIN_SHA256; }
+  };
 
   const KEY = "tb.admin";
   const CLASS = "tb-customer";          // on <html>: "hide the operator controls"
@@ -113,14 +120,14 @@
     styles();
     addAdminLink();
     // No passphrase configured -> dormant: show everything, exactly as before.
-    if (!ADMIN_SHA256) { apply(true); return; }
+    if (!adminHash()) { apply(true); return; }
 
     let admin = stored();
     const q = new URLSearchParams(location.search).get("admin");
     if (q !== null) {
       if (/^(off|0|false|lock)$/i.test(q)) { admin = false; store(false); }
       else {
-        try { admin = (await sha256(q)) === ADMIN_SHA256.toLowerCase(); } catch (_) { admin = false; }
+        try { admin = (await sha256(q)) === adminHash(); } catch (_) { admin = false; }
         if (admin) store(true);
       }
       // strip it from the address bar so the passphrase isn't left on screen,
@@ -141,16 +148,16 @@
 
   window.TBAdmin = {
     hash: sha256,
-    isAdmin: () => !ADMIN_SHA256 || stored(),
-    set(v) { store(!!v); apply(!ADMIN_SHA256 || !!v); },
+    isAdmin: () => !adminHash() || stored(),
+    set(v) { store(!!v); apply(!adminHash() || !!v); },
     /* Verify a typed passphrase and unlock this device on success. Lets
        admin.html be set up by typing rather than by visiting a URL with the
        passphrase in it — easier on a TV remote, and it leaves nothing on screen
        or in history. Returns false on a bad one rather than throwing. */
     async check(v) {
-      if (!ADMIN_SHA256) return true;                 // gate not configured
+      if (!adminHash()) return true;                 // gate not configured
       let ok = false;
-      try { ok = (await sha256(v)) === ADMIN_SHA256.toLowerCase(); } catch (_) { ok = false; }
+      try { ok = (await sha256(v)) === adminHash(); } catch (_) { ok = false; }
       if (ok) { store(true); apply(true); }
       return ok;
     },

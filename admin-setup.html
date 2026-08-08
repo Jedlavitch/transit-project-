@@ -48,7 +48,13 @@
   <div class="strength" id="strength"></div>
 
   <div class="out" id="out">
-    <p style="margin:0"><b>Paste this into <code style="display:inline;padding:2px 6px">admin.js</code>, line 34:</b></p>
+    <p style="margin:0 0 14px"><b>Use it now — this device, straight away:</b></p>
+    <button id="save">Save this password</button>
+    <p id="saved" style="margin:12px 0 0; color:#5ad1a0; font-size:13px; display:none">
+      Saved. This is your admin password on this device from now on.</p>
+
+    <p style="margin:24px 0 0"><b>Shipping it to customers? Paste this into
+       <code style="display:inline;padding:2px 6px">admin.js</code> instead:</b></p>
     <code id="hash"></code>
     <button id="copy">Copy</button>
 
@@ -100,6 +106,18 @@ $("#pw").addEventListener("input", async e => {
   $("#hash").textContent = 'const ADMIN_SHA256 = "' + await sha256(v) + '";';
   $("#out").classList.add("show");
 });
+$("#save").onclick = async () => {
+  const v = $("#pw").value;
+  if(!v) return;
+  /* Saved as a hash, never the password itself — same as the shipped constant,
+     so nothing readable is left lying in storage either. */
+  try {
+    localStorage.setItem("tb.adminHash", await sha256(v));
+    $("#saved").style.display = "block";
+    $("#save").textContent = "Saved";
+    setTimeout(() => { $("#save").textContent = "Save this password"; }, 2000);
+  } catch (_) { $("#saved").textContent = "Couldn't save — storage is blocked in this browser."; $("#saved").style.display="block"; }
+};
 $("#copy").onclick = () => {
   navigator.clipboard.writeText($("#hash").textContent)
     .then(() => { $("#copy").textContent = "Copied"; setTimeout(() => $("#copy").textContent = "Copy", 1500); })
