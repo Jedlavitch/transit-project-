@@ -760,6 +760,71 @@ function vehDivIcon(kind){
     html:`<svg viewBox="-14 -15 28 30" width="26" height="26">${VEH_ICON_SVG[kind]||VEH_ICON_SVG.planes}</svg>` });
 }
 let miniMap=null, miniHereLayer=null, miniRouteLayer=null, miniVehLayer=null, miniVeh=null, miniVehKind=null, miniFleetLayer=null;
+let miniTrail=null, miniTrailPts=[], miniTrailFor=null;
+/* Leaflet computes a fit from the container's CURRENT pixel size. The mini map
+   is display:none until a subject exists, so the very first fit of a page load
+   ran against a 0-height box and silently collapsed to maxZoom -- which is why
+   the map sat zoomed in on the aircraft instead of showing its whole route.
+   Remember what we wanted to fit, apply it once layout has settled, and let the
+   existing ResizeObserver re-apply it if the box was still unsized. */
+let miniFitPts=null, miniFitFallback=null, miniFitTries=0;
+function applyMiniFit(){
+  if(!miniMap) return;
+  miniMap.invalidateSize();
+  // A part-laid-out box (say 263x20 mid-reflow) yields a technically valid but
+  // uselessly zoomed-out fit, so wait for a real height rather than any height.
+  // Retry rather than just returning: the box is display:none until the first
+  // subject arrives, and waiting on a ResizeObserver alone left the map stuck
+  // at its construction zoom when no further resize ever came.
+  if(miniMap.getSize().y < 60){
+    if(miniFitTries++ < 40) setTimeout(applyMiniFit, 120);
+    return;
+  }
+  miniFitTries=0;
+  // padding/zoom match the you+vehicle framing: extra room bottom-right so the
+  // vehicle never sits under the map's own corner furniture
+  if(miniFitPts) miniMap.fitBounds(miniFitPts, {paddingTopLeft:[30,30], paddingBottomRight:[86,30], maxZoom:13});
+  else if(miniFitFallback) miniMap.setView(miniFitFallback, mode==="iss"?2:12);
+  // deliberately NOT cleared: the photo loading beside the map resizes it later,
+  // and re-applying the same fit then is what keeps the whole route in frame.
+  // Cleared only when a new subject arrives (see renderMiniMap's fit branch).
+}
+/* ---- the real flight path ----
+   Great circle by spherical linear interpolation between the two endpoints:
+   convert to 3-D unit vectors, slerp, convert back. This is the route an
+   aircraft actually flies -- a straight line drawn on a Mercator map is a
+   rhumb line, which for anything transcontinental is hundreds of miles from
+   the truth. Also used for trains/buses, where over short distances it is
+   indistinguishable from the straight line it replaces (so no special-casing). */
+function greatCircle(a, b, steps=96){
+  const R=Math.PI/180, la1=a.lat*R, lo1=a.lon*R, la2=b.lat*R, lo2=b.lon*R;
+  const v1=[Math.cos(la1)*Math.cos(lo1), Math.cos(la1)*Math.sin(lo1), Math.sin(la1)];
+  const v2=[Math.cos(la2)*Math.cos(lo2), Math.cos(la2)*Math.sin(lo2), Math.sin(la2)];
+  let dot=v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2];
+  dot=Math.max(-1,Math.min(1,dot));
+  const ang=Math.acos(dot);
+  if(ang<1e-6) return [[a.lat,a.lon],[b.lat,b.lon]];
+  const out=[];
+  for(let i=0;i<=steps;i++){
+    const t=i/steps, s1=Math.sin((1-t)*ang)/Math.sin(ang), s2=Math.sin(t*ang)/Math.sin(ang);
+    const x=v1[0]*s1+v2[0]*s2, y=v1[1]*s1+v2[1]*s2, z=v1[2]*s1+v2[2]*s2;
+    let lon=Math.atan2(y,x)/R;
+    // keep the drawn line continuous across the antimeridian instead of
+    // snapping the whole way back across the map
+    if(out.length){ const prev=out[out.length-1][1];
+      while(lon-prev>180) lon-=360; while(prev-lon>180) lon+=360; }
+    out.push([Math.atan2(z,Math.hypot(x,y))/R, lon]);
+  }
+  return out;
+}
+function nearestIdx(path, ll){
+  let bi=0, bd=Infinity;
+  for(let i=0;i<path.length;i++){
+    const d=haversineNm({lat:path[i][0],lon:path[i][1]}, ll);
+    if(d<bd){ bd=d; bi=i; }
+  }
+  return bi;
+}
 function initMiniMap(){
   if(miniMap) return;
   miniMap=L.map("miniMap",{ zoomControl:false, attributionControl:false, dragging:false,
@@ -778,7 +843,10 @@ function initMiniMap(){
   // a visible gap until something calls invalidateSize(). Only invalidateSize()
   // here (no setView) so this doesn't fight renderMiniMap()'s own glide/pan logic.
   if("ResizeObserver" in window){
-    new ResizeObserver(()=>miniMap.invalidateSize()).observe(document.getElementById("miniMap"));
+    // invalidateSize on every resize as before, plus finish any fit that was
+    // deferred because the box had no size yet (applyMiniFit clears itself)
+    new ResizeObserver(()=>{ miniMap.invalidateSize(); applyMiniFit(); })
+      .observe(document.getElementById("miniMap"));
   }
 }
 let miniMapFor=null;
@@ -810,14 +878,28 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
       icon:L.divIcon({className:"mini-here-label",html:escapeHtml(loc.label)})}).addTo(miniHereLayer);
   }
 
-  if(miniMapFor!==id){
-    miniRouteLayer.clearLayers();
-    const pts=[[posLL.lat,posLL.lon]];
 
-    if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([oLL.lat,oLL.lon]); }
-    if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([dLL.lat,dLL.lon]); }
-    if(oLL && dLL) L.polyline([[oLL.lat,oLL.lon],[dLL.lat,dLL.lon]], {color:"#7d95c9", weight:2, opacity:.45, dashArray:"1 8"}).addTo(miniRouteLayer);
-    /* Frame YOU and the vehicle — not the whole route. Including the origin and
+  // Redraw for a new subject, AND for the same subject the moment its route
+  // endpoints turn up: the adsbdb lookup is async, so the first tick often has
+  // no origin/destination and the path would otherwise never be drawn at all.
+  const fitKey = id + (oLL && dLL ? "|route" : "");
+  if(miniMapFor!==fitKey){
+    miniRouteLayer.clearLayers(); miniTrail=null;
+    if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); }
+    if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); }
+    if(oLL && dLL){
+      // The REAL path: aircraft fly great circles, which on a Mercator map are
+      // visibly bowed -- a straight JFK->LHR line is ~400 nm from the truth.
+      // Solid+bright for the part already flown, dashed+dim for what is left,
+      // split at the great-circle point nearest the aircraft. This only changes
+      // the SHAPE of the line; framing is still you+vehicle (below).
+      const gc=greatCircle(oLL,dLL,96), k=nearestIdx(gc,posLL);
+      // dark casing: over radar and pale coastlines a bare 2px line vanishes
+      L.polyline(gc, {color:"#05070f", weight:5.5, opacity:.55, lineCap:"round"}).addTo(miniRouteLayer);
+      if(k>0) L.polyline(gc.slice(0,k+1), {color:"#8fc0ff", weight:2.4, opacity:.9}).addTo(miniRouteLayer);
+      if(k<gc.length-1) L.polyline(gc.slice(k), {color:"#7d95c9", weight:2, opacity:.42, dashArray:"1 8"}).addTo(miniRouteLayer);
+    }
+    /* Frame YOU and the vehicle -- not the whole route. Including origin and
        destination meant a Louisville->DC flight zoomed out to z4, where the two
        things you actually care about were a pixel apart and no street, suburb or
        landmark was legible. The route line is still drawn, it just no longer
@@ -825,10 +907,25 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
        minutes, so a city view would need constant re-panning. */
     const frame=[[posLL.lat,posLL.lon]];
     if(loc && typeof loc.lat==="number") frame.push([loc.lat,loc.lon]);
-    if(mode==="iss") miniMap.setView([posLL.lat,posLL.lon], 2);
-    else if(frame.length>1) miniMap.fitBounds(frame, {paddingTopLeft:[30,30], paddingBottomRight:[86,30], maxZoom:13});
-    else miniMap.setView([posLL.lat,posLL.lon], 12);
-    miniMapFor=id;
+    miniFitPts = (mode!=="iss" && frame.length>1) ? frame : null;
+    miniFitFallback = [posLL.lat, posLL.lon];
+    miniFitTries=0; applyMiniFit();
+    miniMapFor=fitKey;
+  }
+  // Live track: the positions this screen has actually SEEN, so the path flown
+  // is observed rather than assumed. Public trace archives are 403/404 without
+  // a key, so earlier track can't be fetched; this accumulates from the poll.
+  if(miniTrailFor!==id){ miniTrailPts=[]; miniTrailFor=id;
+    if(miniTrail){ miniRouteLayer.removeLayer(miniTrail); miniTrail=null; } }
+  const lastT=miniTrailPts[miniTrailPts.length-1];
+  if(!lastT || lastT[0]!==posLL.lat || lastT[1]!==posLL.lon){
+    miniTrailPts.push([posLL.lat,posLL.lon]);
+    if(miniTrailPts.length>240) miniTrailPts.shift();
+  }
+  if(miniTrailPts.length>1){
+    if(!miniTrail) miniTrail=L.polyline(miniTrailPts,{color:"#bcd9ff", weight:3, opacity:.95,
+      lineCap:"round", lineJoin:"round"}).addTo(miniRouteLayer);
+    else miniTrail.setLatLngs(miniTrailPts);
   }
   if(!miniVeh || miniVehKind!==mode){
     if(miniVeh) miniVehLayer.removeLayer(miniVeh);
