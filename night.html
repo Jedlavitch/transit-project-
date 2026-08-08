@@ -781,9 +781,9 @@ function applyMiniFit(){
     return;
   }
   miniFitTries=0;
-  // padding/zoom match the you+vehicle framing: extra room bottom-right so the
-  // vehicle never sits under the map's own corner furniture
-  if(miniFitPts) miniMap.fitBounds(miniFitPts, {paddingTopLeft:[30,30], paddingBottomRight:[86,30], maxZoom:13});
+  // even padding now that the whole route is being framed; maxZoom only caps
+  // how far IN a very short hop is allowed to go
+  if(miniFitPts) miniMap.fitBounds(miniFitPts, {padding:[22,22], maxZoom:13});
   else if(miniFitFallback) miniMap.setView(miniFitFallback, mode==="iss"?2:12);
   // deliberately NOT cleared: the photo loading beside the map resizes it later,
   // and re-applying the same fit then is what keeps the whole route in frame.
@@ -887,26 +887,31 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
     miniRouteLayer.clearLayers(); miniTrail=null;
     if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); }
     if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); }
+    let gcPath=null;
     if(oLL && dLL){
       // The REAL path: aircraft fly great circles, which on a Mercator map are
       // visibly bowed -- a straight JFK->LHR line is ~400 nm from the truth.
       // Solid+bright for the part already flown, dashed+dim for what is left,
-      // split at the great-circle point nearest the aircraft. This only changes
-      // the SHAPE of the line; framing is still you+vehicle (below).
+      // split at the great-circle point nearest the aircraft.
       const gc=greatCircle(oLL,dLL,96), k=nearestIdx(gc,posLL);
+      gcPath=gc;
       // dark casing: over radar and pale coastlines a bare 2px line vanishes
       L.polyline(gc, {color:"#05070f", weight:5.5, opacity:.55, lineCap:"round"}).addTo(miniRouteLayer);
       if(k>0) L.polyline(gc.slice(0,k+1), {color:"#8fc0ff", weight:2.4, opacity:.9}).addTo(miniRouteLayer);
       if(k<gc.length-1) L.polyline(gc.slice(k), {color:"#7d95c9", weight:2, opacity:.42, dashArray:"1 8"}).addTo(miniRouteLayer);
     }
-    /* Frame YOU and the vehicle -- not the whole route. Including origin and
-       destination meant a Louisville->DC flight zoomed out to z4, where the two
-       things you actually care about were a pixel apart and no street, suburb or
-       landmark was legible. The route line is still drawn, it just no longer
-       decides the zoom. The ISS is the exception: it crosses a continent in
-       minutes, so a city view would need constant re-panning. */
-    const frame=[[posLL.lat,posLL.lon]];
+    /* Frame the WHOLE journey: origin, destination, the vehicle and you. A
+       previous pass framed only you+vehicle because a long leg zooms out to
+       ~z4 and local streets stop being legible -- that trade is real, but the
+       point of this map is the route, so the route wins and the city detail is
+       what gives way. Your own position is still included so you can always see
+       where the flight passes relative to you. The ISS is the exception: it
+       crosses a continent in minutes, so it keeps its own hemisphere view. */
+    let frame=[[posLL.lat,posLL.lon]];
     if(loc && typeof loc.lat==="number") frame.push([loc.lat,loc.lon]);
+    // every 8th arc point, so a bowed great circle is framed by its true
+    // extent rather than by the straight line between its two ends
+    if(gcPath) frame=frame.concat(gcPath.filter((_,i)=>i%8===0 || i===gcPath.length-1));
     miniFitPts = (mode!=="iss" && frame.length>1) ? frame : null;
     miniFitFallback = [posLL.lat, posLL.lon];
     miniFitTries=0; applyMiniFit();
