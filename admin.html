@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex, nofollow" />
 <title>Board setup — admin</title>
 <link rel="stylesheet" href="theme.css?v=9" />
+<script src="config.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=3" defer></script>
 <style>
@@ -51,8 +52,10 @@
 
 <div class="wrap" id="panel" style="display:none">
   <h1>Board setup</h1>
-  <p class="sub">Worker URLs and API keys for the boards. Saved on <b>this screen only</b> —
-     browsers keep them per device, so run this once on each kiosk.</p>
+  <p class="sub"><b>Save to this screen</b> configures this one device.
+     <b>Copy config.js</b> gives you the same settings as a file — paste it over the block in
+     <code>config.js</code> and redeploy, and every customer's board picks them up with nothing
+     for them to enter.</p>
 
   <div class="grp warn">
     <h2>Before you rely on this</h2>
@@ -122,6 +125,7 @@
 
   <div class="bar">
     <button id="save">Save to this screen</button>
+    <button class="ghost" id="export">Copy config.js</button>
     <button class="ghost" id="lock">Lock this screen</button>
     <span id="msg"></span>
   </div>
@@ -181,6 +185,35 @@
     $("#unlock").onclick = tryUnlock;
     $("#pass").addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
     $("#save").onclick = save;
+    /* Saving configures THIS screen. Shipping it to every customer means putting
+       the same values in config.js and redeploying — so hand back exactly that
+       file, filled in, rather than making the operator transcribe key names. */
+    $("#export").onclick = async () => {
+      const g = k => { try { return localStorage.getItem(k) || ""; } catch (_) { return ""; } };
+      const cfg = {
+        feedProxy: g("tb.feedProxy"), licence: g("tb.license"),
+        wmataKey: g("transitboard.wmataKey"),
+        marcUrl: g("transitboard.marcUrl"), septaUrl: g("transitboardphl.septaUrl"),
+        nycBusUrl: g("transitboardnyc.busUrl"), pathUrl: g("transitboardnyc.pathUrl"),
+        njtUrl: g("transitboardnj.njtUrl"), njtUser: g("transitboardnj.njtUser"),
+        njtPass: g("transitboardnj.njtPass"),
+        sfLiveUrl: g("transitboardsf.liveUrl"), amsLiveUrl: g("transitboardams.liveUrl"),
+        spotBlob: g("tb.spotBlob"), spotFeedUrl: g("tb.spotFeedUrl"),
+      };
+      const body = "window.TB_CONFIG = {\n" +
+        Object.keys(cfg).map(k => `  ${k}: ${JSON.stringify(cfg[k])},`).join("\n") +
+        "\n};";
+      const m = $("#msg");
+      try {
+        await navigator.clipboard.writeText(body);
+        m.style.color = "var(--good,#4ade80)";
+        m.textContent = "Copied — paste over the TB_CONFIG block in config.js, then redeploy.";
+      } catch (_) {
+        m.style.color = "var(--muted,#8fa3bf)";
+        m.textContent = "Copy failed — it's in the console instead.";
+        console.log(body);
+      }
+    };
     $("#testLic").onclick = async () => {
       const m = $("#licMsg");
       m.style.color = "var(--muted,#8fa3bf)"; m.textContent = "Checking…";
