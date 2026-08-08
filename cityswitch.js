@@ -1,3 +1,20 @@
+/* Upgrade http:// to https:// on the custom domain.
+   The old jedlavitch.github.io address is on the browsers' HSTS preload list,
+   so it was ALWAYS https and nobody could land on an insecure copy. A custom
+   domain has no such protection: type "transitproject.online" into a phone and
+   you get plain http, where the whole secure-context half of the platform is
+   switched off — navigator.wakeLock is undefined (the screen sleeps), and so
+   are geolocation and the service worker. GitHub Pages' own "Enforce HTTPS"
+   setting does this server-side; this is the client-side belt to go with it,
+   and it costs one redirect on a visit that would otherwise be broken.
+   localhost is left alone so local testing over http still works. */
+(function(){
+  var h = location.hostname;
+  if (location.protocol === "http:" && h !== "localhost" && h !== "127.0.0.1" && !/^\[?::1\]?$/.test(h)) {
+    location.replace("https://" + location.host + location.pathname + location.search + location.hash);
+  }
+})();
+
 /* cityswitch.js — switch cities WITHOUT dropping kiosk full screen.
    A real navigation always ends a JS-API fullscreen session (the document that
    requested it is destroyed), and the next page can't re-enter without a user

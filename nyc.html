@@ -2285,11 +2285,41 @@ $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAd
 /* ---------- full-screen kiosk mode + keep-awake ---------- */
 const SVG_EXPAND=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
 const SVG_COMPRESS=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m8 0v-3a2 2 0 0 1 2-2h3"/></svg>`;
-let wakeLock=null;
+let wakeLock=null, wakeWanted=true;
+/* Keep the display awake. Two things this used to get wrong, both of which the
+   move to transitproject.online exposed:
+   1. The lock was tied to FULL SCREEN. iPhone Safari has no Fullscreen API at
+      all, so fsElement() was always null there and the lock was never taken --
+      the phone dimmed on schedule. It is now independent of full screen.
+   2. The OS silently releases the lock whenever the page is hidden (tab switch,
+      lock, even a pull-down). Re-acquiring was ALSO gated on full screen, so it
+      never came back. We now re-acquire on the lock's own release event, on
+      every visibility change, and on the first touch/key as a gesture fallback
+      for browsers that want one.
+   Wake Lock needs a SECURE context: over plain http:// navigator.wakeLock does
+   not exist (see the https upgrade in cityswitch.js). */
 async function requestWake(){
-  try{ if("wakeLock" in navigator){ wakeLock=await navigator.wakeLock.request("screen"); } }catch(e){}
+  if(!wakeWanted || document.visibilityState!=="visible") return;
+  try{
+    if(!("wakeLock" in navigator)) return;
+    if(wakeLock && !wakeLock.released) return;
+    wakeLock=await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", ()=>{ if(wakeWanted) setTimeout(requestWake, 400); });
+  }catch(e){}
 }
-async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); } }catch(e){} wakeLock=null; }
+async function releaseWake(){ wakeWanted=false; try{ if(wakeLock) await wakeLock.release(); }catch(e){} wakeLock=null; }
+
+/* some browsers only grant the lock off a user gesture */
+let wakeGestureHooked=false;
+function hookWakeGesture(){ if(wakeGestureHooked) return; wakeGestureHooked=true;
+  const go=()=>{ wakeWanted=true; requestWake(); };
+  document.addEventListener("pointerdown", go, {passive:true});
+  document.addEventListener("keydown", go);
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") requestWake(); });
+  go();
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", hookWakeGesture); else hookWakeGesture();
+
 /* Full screen must act on the TOP document. Boards run inside the same-origin
    cityswitch.js shell iframe, where the fullscreen element belongs to the outer
    document — so document.fullscreenElement reads null inside the frame and
@@ -2319,7 +2349,7 @@ function onFsChange(){
   const on=!!fsElement();
   const b=$("#fsBtn");
   if(b){ b.innerHTML=on?SVG_COMPRESS:SVG_EXPAND; b.title=on?"Exit full screen (F)":"Full screen (F)"; }
-  if(on) requestWake(); else releaseWake();          // keep display awake only in kiosk mode
+  wakeWanted=true; requestWake();   // awake in or out of kiosk full screen
   if(state.map) setTimeout(()=>{ state.map.invalidateSize(); fitAll(); }, 120);
 }
 $("#fsBtn").onclick=toggleFullscreen;
@@ -2333,7 +2363,7 @@ document.addEventListener("keydown", e=>{
   if(e.key==="Escape"){ if(state.follow) stopFollow(); else if(mapFullOn()) setMapFull(false); }
 });
 // browsers drop the wake lock when the tab is hidden; re-acquire when visible in kiosk mode
-document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && fsElement()) requestWake(); });
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") requestWake(); });
 onFsChange();   // set initial icon
 
 /* ---- map-only full screen: pin the map over the whole viewport -- just the
