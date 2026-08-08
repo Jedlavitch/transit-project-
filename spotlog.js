@@ -204,9 +204,9 @@
     card.innerHTML =
       `<h2><span class="icon">📓</span> Spotted <span class="count" id="spotCount"></span>
          <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button>
-         <button type="button" id="spotFeedBtn" title="Shared feed — see sightings logged on your phone">⇄</button></h2>
+         <button type="button" id="spotFeedBtn" data-admin title="Shared feed — see sightings logged on your phone">⇄</button></h2>
        <div class="statline" id="spotStat"></div>
-       <div id="spotFeedBox" style="display:none"></div>
+       <div id="spotFeedBox" data-admin style="display:none"></div>
        <div class="list" id="spotList"></div>`;
     cards.appendChild(card);
     if (!document.getElementById("spotPassCss")) {

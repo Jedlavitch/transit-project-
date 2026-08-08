@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Spotter" />
 <link rel="apple-touch-icon" href="spot-icon-180.png" />
 <link rel="stylesheet" href="theme.css?v=9" />
+<script src="admin.js?v=1" defer></script>
 <!-- Map view. Deliberately NOT in the service worker's shell: tiles need the
      network anyway, so caching the library would only buy a blank grey box. -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -385,11 +386,13 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   <div id="shareCode" style="font:700 13px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;
        color:var(--accent);margin:-2px 0 10px"></div>
 
+  <div data-admin>
   <p><b>Shared feed (optional).</b> Paste a <code>spotter-worker.js</code> URL to pool
      sightings with friends — everyone's logs then show on the boards. Leave empty to
      keep your log private to this phone.</p>
   <label class="fld"><em>Shared feed URL</em>
     <input type="text" id="feedUrl" placeholder="https://tb-spotter.you.workers.dev" autocomplete="off" spellcheck="false" /></label>
+  </div>
 
   <p><b>Account (optional).</b> Sign in to keep the same log on more than one device.
      There's no password — we email you a six-digit code. Leave this empty and the app
@@ -398,6 +401,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <input type="text" id="acctUrl" placeholder="https://tb-accounts.you.workers.dev" autocomplete="off" spellcheck="false" /></label>
   <div id="acctBox"></div>
 
+  <div data-admin>
   <p><b>Log to a spreadsheet (optional).</b> Every sighting can also append a row to
      your own Google Sheet. Google needs you to create the endpoint yourself — there's
      no keyless way in — but it's a two-minute, one-time job:</p>
@@ -409,6 +413,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   </ol>
   <label class="fld"><em>Google Sheet web-app URL</em>
     <input type="text" id="sheetUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false" /></label>
+  </div>
   <div class="btns">
     <button id="saveSet">Save</button>
     <button class="ghost" id="sheetSyncAll">Send all to Sheet</button>
