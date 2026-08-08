@@ -50,13 +50,16 @@
      behind explaining a control that is no longer there. */
   const FIELD_IDS = ["marcInput", "septaInput", "pathInput", "njtInput", "njtUserInput",
                      "njtPassInput", "busInput", "liveUrlInput", "tlInput",
-                     "feedUrl", "sheetUrl"];
+                     "feedUrl", "sheetUrl", "keyInput"];
 
   function markup() {
     FIELD_IDS.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
-      const box = el.closest("details") || el.closest("label") || el;
+      // .set-group first: the boards wrap each settings section in one, and
+      // hiding only the input would leave its heading and instructions behind
+      // describing a field that is no longer there.
+      const box = el.closest("details") || el.closest(".set-group") || el.closest("label") || el;
       box.setAttribute("data-admin", "");
     });
     // "Advanced: …" disclosures are operator territory by definition

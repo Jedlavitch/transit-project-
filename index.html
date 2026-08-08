@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="theme.css?v=9" />
 <script src="license.js" defer></script>
 <script src="cityswitch.js"></script>
-<script src="admin.js?v=1" defer></script>
+<script src="admin.js?v=2" defer></script>
 <script src="spotlog.js?v=9" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -2586,7 +2586,11 @@ function boot(){
   setInterval(tickRefreshInfo, 1000);
   updateStats(); setInterval(updateStats, 1000);
 
-  if(!state.wmataKey) openSetup();
+  // Only nag for a key if this device is allowed to set one. On a locked board a
+  // customer would otherwise be met by a modal demanding an API key they have no
+  // field to enter -- the board runs fine without one (planes, Amtrak, and the
+  // bundled MARC/Ride On schedules all work keyless).
+  if(!state.wmataKey && (!window.TBAdmin || TBAdmin.isAdmin())) openSetup();
 
   applyOptionalCards();
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
