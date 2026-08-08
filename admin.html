@@ -44,9 +44,12 @@
 <!-- Shown until this device is unlocked. Not a security boundary; see admin.js. -->
 <div id="gate" style="display:none">
   <h1>Board setup</h1>
-  <p class="sub">Enter the admin passphrase to configure this screen.</p>
-  <input type="password" id="pass" placeholder="Passphrase" autocomplete="off" spellcheck="false" />
-  <button id="unlock">Unlock</button>
+  <p class="sub" id="gateSub">Sign in to configure this screen.</p>
+  <input type="text" id="user" placeholder="Username" autocomplete="username" spellcheck="false" />
+  <input type="password" id="pass" placeholder="Password" autocomplete="current-password" />
+  <input type="password" id="pass2" placeholder="Confirm password" autocomplete="new-password" style="display:none" />
+  <button id="unlock">Sign in</button>
+  <button class="ghost" id="forget" style="display:none; margin-top:10px">Forget this login</button>
   <p id="gateMsg" style="color:var(--warn,#ffb454); font-size:13px; min-height:1.3em"></p>
 </div>
 
@@ -167,23 +170,66 @@
     if (unlocked) load();
   }
 
+  /* You choose the username and password here, the first time you open this
+     page. The password is kept only as a SHA-256 hash; the username is stored
+     as-is because it isn't the secret half. Both live on this screen only,
+     like every other value on this page. */
+  const UK = "tb.adminUser", HK = "tb.adminHash";
+  const ls = k => { try { return localStorage.getItem(k) || ""; } catch(_) { return ""; } };
+  const lset = (k,v) => { try { localStorage.setItem(k,v); } catch(_) {} };
+  const firstRun = () => !(ls(UK) && ls(HK));
+
+  async function sha(t){
+    const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t)));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("");
+  }
+
+  function paintGate(){
+    const make = firstRun();
+    $("#gateSub").textContent = make
+      ? "Pick a username and password. You'll use these to unlock setup on your screens."
+      : "Sign in to configure this screen.";
+    $("#pass2").style.display  = make ? "" : "none";
+    $("#forget").style.display = make ? "none" : "";
+    $("#unlock").textContent   = make ? "Create login" : "Sign in";
+    $("#pass").autocomplete    = make ? "new-password" : "current-password";
+  }
+
   async function tryUnlock(){
-    const v = $("#pass").value;
-    if (!v) return;
-    // Reuse the boards' own gate so there is exactly one passphrase to keep.
-    const ok = await window.TBAdmin.check(v);
-    if (ok) { show(true); }
+    const u = $("#user").value.trim(), v = $("#pass").value;
+    if (!u || !v) { $("#gateMsg").textContent = "Fill in both boxes."; return; }
+
+    if (firstRun()) {
+      if (v !== $("#pass2").value) { $("#gateMsg").textContent = "The two passwords don't match."; return; }
+      if (v.length < 6) { $("#gateMsg").textContent = "Use at least 6 characters."; return; }
+      lset(UK, u); lset(HK, await sha(v));
+      window.TBAdmin.set(true); show(true);
+      return;
+    }
+
+    const ok = u.toLowerCase() === ls(UK).toLowerCase() && (await sha(v)) === ls(HK);
+    if (ok) { window.TBAdmin.set(true); show(true); }
     else {
-      $("#gateMsg").textContent = "That passphrase doesn't match.";
+      // One message for both halves, so a wrong guess reveals nothing.
+      $("#gateMsg").textContent = "Wrong username or password.";
       $("#pass").value = "";
     }
   }
 
   function boot(){
     if (!window.TBAdmin) { $("#gateMsg").textContent = "admin.js failed to load."; $("#gate").style.display=""; return; }
-    show(window.TBAdmin.isAdmin());
+    paintGate();
+    show(!firstRun() && window.TBAdmin.isAdmin());
     $("#unlock").onclick = tryUnlock;
-    $("#pass").addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+    $("#forget").onclick = () => {
+      if (!confirm("Forget the admin login on this screen? You'll create a new one.")) return;
+      [UK, HK].forEach(k => { try { localStorage.removeItem(k); } catch(_) {} });
+      window.TBAdmin.set(false);
+      $("#user").value = $("#pass").value = $("#pass2").value = "";
+      paintGate(); show(false); $("#gateMsg").textContent = "Cleared — create a new login.";
+    };
+    ["#user","#pass","#pass2"].forEach(sel =>
+      $(sel).addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); }));
     $("#save").onclick = save;
     /* Saving configures THIS screen. Shipping it to every customer means putting
        the same values in config.js and redeploying — so hand back exactly that
