@@ -14,11 +14,17 @@
 (function () {
   "use strict";
 
+  /* Bake the account server in here before shipping a paid copy — a buyer has
+     no way to know the URL, and leaving it blank means the app starts unlocked.
+     localStorage still overrides it, which is what makes local development and
+     self-hosting possible. */
+  const CFG = { workerUrl: "" };   // e.g. "https://tbaccounts.you.workers.dev"
+
   const LS = { url: "tb.acctUrl", session: "tb.acctSession", email: "tb.acctEmail", spots: "tb.spots" };
   const get = k => { try { return localStorage.getItem(k) || ""; } catch (_) { return ""; } };
   const set = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (_) {} };
 
-  const url = () => get(LS.url).trim().replace(/\/+$/, "");
+  const url = () => (get(LS.url) || CFG.workerUrl).trim().replace(/\/+$/, "");
   const session = () => get(LS.session);
   const configured = () => !!url();
   const signedIn = () => !!(url() && session());

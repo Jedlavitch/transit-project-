@@ -226,6 +226,16 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
       <button class="gbtn" id="gSend">Email me a code</button>
     </div>
 
+    <div id="gPaid" hidden>
+      <p class="gsent">Signed in as <b id="gPaidWho"></b>.</p>
+      <p class="gsub" style="margin:14px 0 0">This copy needs a licence key to unlock.</p>
+      <label class="fld"><em>Licence key</em>
+        <input type="text" id="gKey" autocomplete="off" spellcheck="false" placeholder="TB-XXXX-XXXX-XXXX" /></label>
+      <button class="gbtn" id="gKeyGo">Unlock</button>
+      <button class="glink" id="gBuy">Buy access</button>
+      <button class="glink" id="gPaidOut">Sign in as someone else</button>
+    </div>
+
     <div id="gStep2" hidden>
       <p class="gsent">We sent a six-digit code to <b id="gWho"></b>.</p>
       <label class="fld"><em>Code</em>
@@ -1295,8 +1305,22 @@ function renderAccount(){
    Once signed in the session lasts about a year, so this screen is rare. */
 let gateToken=null;
 const gate = () => document.getElementById("gate");
-function gateNeeded(){
+/* Two locks, and the door stays shut until both are open: who you are
+   (account) and whether you paid (licence). Either module being unconfigured
+   makes its own lock a no-op, so a self-hosted or evaluation build still runs —
+   a shipped paid build bakes both URLs in and is therefore gated by default. */
+function needsSignIn(){
   return !!(window.TBAccount && TBAccount.configured() && !TBAccount.signedIn());
+}
+function needsLicence(){
+  return !!(window.TBLicense && window.TBLicense.configured && !window.TBLicense.licensed);
+}
+function gateNeeded(){ return needsSignIn() || needsLicence(); }
+function hardGated(){
+  /* With nothing configured there is nothing to check, and a door with no key
+     would simply brick the app. */
+  return !!(window.TBAccount && TBAccount.configured()) ||
+         !!(window.TBLicense && window.TBLicense.configured);
 }
 function gateError(msg){
   const e=document.getElementById("gErr");
@@ -1308,7 +1332,20 @@ function hideGate(){ gate().classList.remove("show"); document.body.style.overfl
 function gateStep(n){
   document.getElementById("gStep1").hidden = n!==1;
   document.getElementById("gStep2").hidden = n!==2;
+  document.getElementById("gPaid").hidden  = n!==3;
+  const skip=document.getElementById("gSkip");
+  if(skip) skip.hidden = hardGated();     // no way past on a paid build
   gateError("");
+}
+/* Where should the door be right now? */
+function gateRoute(){
+  if(needsSignIn()) return gateStep(gateToken?2:1);
+  if(needsLicence()){
+    document.getElementById("gPaidWho").textContent =
+      (window.TBAccount && TBAccount.email()) || "this device";
+    return gateStep(3);
+  }
+  hideGate(); whoLabel(); render();
 }
 function whoLabel(){
   const el=document.getElementById("who"); if(!el) return;
@@ -1332,8 +1369,9 @@ async function gateVerify(){
   gateError(""); btn.disabled=true; btn.textContent="Signing in…";
   try{
     await TBAccount.verify(gateToken, document.getElementById("gCode").value.trim());
-    gateToken=null; hideGate(); whoLabel(); render();
+    gateToken=null; whoLabel();
     toast("Signed in — your log is synced");
+    gateRoute();                       // may still owe us a licence
   }catch(e){ gateError(e.message||"That didn't work."); }
   finally{ btn.disabled=false; btn.textContent="Sign in"; }
 }
@@ -1344,9 +1382,24 @@ function initGate(){
   document.getElementById("gSkip").onclick=()=>{ hideGate(); toast("Using this device only — sign in any time from ⚙︎"); };
   document.getElementById("gEmail").addEventListener("keydown",e=>{ if(e.key==="Enter") gateSend(); });
   document.getElementById("gCode").addEventListener("keydown",e=>{ if(e.key==="Enter") gateVerify(); });
-  gateStep(1);
+  document.getElementById("gKeyGo").onclick=async()=>{
+    const btn=document.getElementById("gKeyGo"); gateError(""); btn.disabled=true; btn.textContent="Checking…";
+    try{
+      const res=await TBLicense.enterKey(document.getElementById("gKey").value.trim());
+      if(res && res.ok) gateRoute();
+      else gateError((res && res.error==="device_limit")
+        ? "That key is already on its maximum number of devices."
+        : "That key wasn't accepted.");
+    }catch(e){ gateError("Couldn't reach the licence server."); }
+    finally{ btn.disabled=false; btn.textContent="Unlock"; }
+  };
+  document.getElementById("gBuy").onclick=()=>{ window.location.href="buy.html"; };
+  document.getElementById("gPaidOut").onclick=async()=>{
+    if(window.TBAccount) await TBAccount.signOut();
+    gateToken=null; whoLabel(); gateRoute();
+  };
   whoLabel();
-  if(gateNeeded()) showGate();
+  if(gateNeeded()){ showGate(); gateRoute(); } else gateStep(1);
 }
 
 /* ---------- settings sheet ---------- */
