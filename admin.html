@@ -6,7 +6,8 @@
 <meta name="robots" content="noindex, nofollow" />
 <title>Board setup — admin</title>
 <link rel="stylesheet" href="theme.css?v=9" />
-<script src="admin.js?v=2" defer></script>
+<script src="licence-proxy.js?v=1"></script>
+<script src="admin.js?v=3" defer></script>
 <style>
   body{margin:0; background:var(--bg,#070d17); color:var(--text,#e8eefc);
     font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -100,6 +101,17 @@
   </div>
 
   <div class="grp">
+    <h2>Licensed feed proxy</h2>
+    <p class="note">Routes the live feeds through <code>feed-proxy-worker.js</code> so a copied
+       build has no data. Leave the URL empty and the boards fetch feeds directly, as they do now.
+       Mint keys with <code>gen-licence.py</code>.</p>
+    <label><em>Feed proxy URL</em><input data-ls="tb.feedProxy" placeholder="https://tb-feeds.you.workers.dev" /></label>
+    <label><em>Licence key for this screen</em><input data-ls="tb.license" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" /></label>
+    <p style="margin:10px 0 0"><button class="ghost" id="testLic" type="button">Test licence</button>
+       <span id="licMsg" style="font-size:12px; margin-left:10px"></span></p>
+  </div>
+
+  <div class="grp">
     <h2>Spotter feed (all boards)</h2>
     <p class="note">A share code is the zero-setup option and is set from the phone app. These two
        are only for the Worker or spreadsheet routes.</p>
@@ -169,6 +181,14 @@
     $("#unlock").onclick = tryUnlock;
     $("#pass").addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
     $("#save").onclick = save;
+    $("#testLic").onclick = async () => {
+      const m = $("#licMsg");
+      m.style.color = "var(--muted,#8fa3bf)"; m.textContent = "Checking…";
+      save();                                   // test what is actually in the boxes
+      const r = await window.TBLicence.check();
+      m.style.color = r.ok ? "var(--good,#4ade80)" : "var(--warn,#ffb454)";
+      m.textContent = r.why;
+    };
     $("#lock").onclick = () => { window.TBAdmin.set(false); show(false); };
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
