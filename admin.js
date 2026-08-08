@@ -19,10 +19,15 @@
      so shipping this file changes nothing for anyone who ignores it.
 
    SETTING IT UP
-     1. In a board's console:  await TBAdmin.hash("your passphrase")
-     2. Paste that hash into ADMIN_SHA256 below and redeploy.
+     1. Open admin-setup.html, type the password you want, and copy the line it
+        gives you. (A console still works: await TBAdmin.hash("your passphrase"))
+     2. Paste that over ADMIN_SHA256 below and redeploy.
      3. Unlock a kiosk once:   https://…/index.html?admin=your%20passphrase
         Lock it again:         https://…/index.html?admin=off
+
+     Pick a LONG password. Only the hash ships, but the hash ships publicly, so
+     the realistic attack is offline guessing against it — where length is what
+     helps and cleverness mostly isn't. Several unrelated words beats "Tr4in!".
      The unlock is remembered per device, so you set up a screen once and the
      customer never sees a field. The passphrase never appears in the source —
      only its hash — so reading the page does not reveal it.
