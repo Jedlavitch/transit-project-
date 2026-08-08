@@ -202,6 +202,14 @@
   #miniMap{width:100%; min-height:0; border-radius:1.4vmin; border:1px solid rgba(124,192,255,.35);
     display:none; overflow:hidden; position:relative; z-index:0}
   #miniMap .leaflet-container{background:var(--panel2)}
+  /* where YOU are — the map showed the vehicle and its route but never the
+     place you're standing, so "the sky over here" had no "here" on it */
+  .mini-here{display:block; width:11px; height:11px; border-radius:50%;
+    background:var(--accent,#7cc0ff); border:2px solid var(--bg,#070d17);
+    box-shadow:0 0 0 2px var(--accent,#7cc0ff), 0 0 10px var(--accent,#7cc0ff)}
+  .mini-here-label{white-space:nowrap; font-size:10px; font-weight:700; letter-spacing:.04em;
+    color:var(--text,#e8eefc); text-shadow:0 1px 5px #000, 0 0 2px #000;
+    transform:translate(10px,-7px)}
   .mini-veh-icon svg{overflow:visible; filter:drop-shadow(0 0 6px rgba(120,180,255,.9))}
   .mini-veh-icon path, .mini-veh-icon rect{fill:#bcd9ff}
   .mini-veh-icon{transition:transform 1.4s linear}
@@ -721,7 +729,7 @@ function vehDivIcon(kind){
   return L.divIcon({ className:"mini-veh-icon", iconSize:[26,26], iconAnchor:[13,13],
     html:`<svg viewBox="-14 -15 28 30" width="26" height="26">${VEH_ICON_SVG[kind]||VEH_ICON_SVG.planes}</svg>` });
 }
-let miniMap=null, miniRouteLayer=null, miniVehLayer=null, miniVeh=null, miniVehKind=null, miniFleetLayer=null;
+let miniMap=null, miniHereLayer=null, miniRouteLayer=null, miniVehLayer=null, miniVeh=null, miniVehKind=null, miniFleetLayer=null;
 function initMiniMap(){
   if(miniMap) return;
   miniMap=L.map("miniMap",{ zoomControl:false, attributionControl:false, dragging:false,
@@ -761,16 +769,35 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
   // 12s refresh -- even though the vehicle barely moved -- was what made the
   // map feel janky (the whole view jumping/rezooming constantly). For the
   // same subject, just glide the marker and gently pan if it nears the edge.
+  /* Your own position, drawn every render so it survives the route layer being
+     rebuilt, and labelled with the saved place name rather than a bare dot. */
+  if(!miniHereLayer) miniHereLayer=L.layerGroup().addTo(miniMap);
+  miniHereLayer.clearLayers();
+  if(loc && typeof loc.lat==="number"){
+    L.marker([loc.lat,loc.lon],{interactive:false,icon:L.divIcon({className:"",
+      html:'<span class="mini-here"></span>',iconSize:[11,11],iconAnchor:[5.5,5.5]})}).addTo(miniHereLayer);
+    if(loc.label) L.marker([loc.lat,loc.lon],{interactive:false,
+      icon:L.divIcon({className:"mini-here-label",html:escapeHtml(loc.label)})}).addTo(miniHereLayer);
+  }
+
   if(miniMapFor!==id){
     miniRouteLayer.clearLayers();
     const pts=[[posLL.lat,posLL.lon]];
+
     if(oLL){ L.marker([oLL.lat,oLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([oLL.lat,oLL.lon]); }
     if(dLL){ L.marker([dLL.lat,dLL.lon],{icon:L.divIcon({className:"mini-endpt-wrap",html:'<span class="mini-endpt"></span>',iconSize:[9,9],iconAnchor:[4,4]})}).addTo(miniRouteLayer); pts.push([dLL.lat,dLL.lon]); }
     if(oLL && dLL) L.polyline([[oLL.lat,oLL.lon],[dLL.lat,dLL.lon]], {color:"#7d95c9", weight:2, opacity:.45, dashArray:"1 8"}).addTo(miniRouteLayer);
-    // The ISS crosses a continent in minutes -- a city-level zoom would need
-    // constant re-panning, so give it a hemisphere view instead.
-    if(pts.length>1) miniMap.fitBounds(pts, {padding:[26,26], maxZoom:11});
-    else miniMap.setView([posLL.lat,posLL.lon], mode==="iss"?2:11);
+    /* Frame YOU and the vehicle — not the whole route. Including the origin and
+       destination meant a Louisville->DC flight zoomed out to z4, where the two
+       things you actually care about were a pixel apart and no street, suburb or
+       landmark was legible. The route line is still drawn, it just no longer
+       decides the zoom. The ISS is the exception: it crosses a continent in
+       minutes, so a city view would need constant re-panning. */
+    const frame=[[posLL.lat,posLL.lon]];
+    if(loc && typeof loc.lat==="number") frame.push([loc.lat,loc.lon]);
+    if(mode==="iss") miniMap.setView([posLL.lat,posLL.lon], 2);
+    else if(frame.length>1) miniMap.fitBounds(frame, {paddingTopLeft:[30,30], paddingBottomRight:[86,30], maxZoom:13});
+    else miniMap.setView([posLL.lat,posLL.lon], 12);
     miniMapFor=id;
   }
   if(!miniVeh || miniVehKind!==mode){
