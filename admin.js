@@ -31,7 +31,7 @@
   "use strict";
 
   // sha-256 of your admin passphrase, lowercase hex. Empty = gate off entirely.
-  const ADMIN_SHA256 = "";
+  const ADMIN_SHA256 = "f27319ee97f0a63b20e1bc948a6ab0eb7d5d359bd9945b164778540ac6ae5881";
 
   const KEY = "tb.admin";
   const CLASS = "tb-customer";          // on <html>: "hide the operator controls"
