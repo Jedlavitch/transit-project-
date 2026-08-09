@@ -316,16 +316,36 @@ body #app{
   --bg-glow:#152a52;  --bg-glow:color-mix(in srgb, var(--accent) 30%, #152a52);
   --line:#22345a;     --line:color-mix(in srgb, var(--accent) 20%, #22345a);
   --row-line:#1c2c4e; --row-line:color-mix(in srgb, var(--accent) 14%, #1c2c4e);
+  /* The page itself. Kept well under the point where light text stops being
+     comfortable — the panels are mixed LESS than the page so cards still lift
+     off the background instead of dissolving into it. */
+  --bg:#081020;       --bg:color-mix(in srgb, var(--accent) 13%, #081020);
+  --panel:#111d36;    --panel:color-mix(in srgb, var(--accent) 9%, #111d36);
+  --panel2:#0c1628;   --panel2:color-mix(in srgb, var(--accent) 9%, #0c1628);
+  --row-bg:#0d1830;   --row-bg:color-mix(in srgb, var(--accent) 7%, #0d1830);
 }
 :root[data-theme="black"]{
   --bg-glow:#0a0f1a;  --bg-glow:color-mix(in srgb, var(--accent) 16%, #0a0f1a);
   --line:#1a2338;     --line:color-mix(in srgb, var(--accent) 18%, #1a2338);
   --row-line:#141c2e; --row-line:color-mix(in srgb, var(--accent) 12%, #141c2e);
+  /* Black exists to be black on an OLED panel in a dark room. It gets a hint of
+     the colour and no more — tinting this to match the others would defeat the
+     only reason to pick it. */
+  --bg:#000000;       --bg:color-mix(in srgb, var(--accent) 5%, #000000);
+  --panel:#060910;    --panel:color-mix(in srgb, var(--accent) 7%, #060910);
+  --panel2:#000000;   --panel2:color-mix(in srgb, var(--accent) 4%, #000000);
+  --row-bg:#04070d;   --row-bg:color-mix(in srgb, var(--accent) 5%, #04070d);
 }
 :root[data-theme="day"]{
   --bg-glow:#d7e3fa;  --bg-glow:color-mix(in srgb, var(--accent) 24%, #d7e3fa);
   --line:#d0dcf2;     --line:color-mix(in srgb, var(--accent) 26%, #d0dcf2);
   --row-line:#dde6f7; --row-line:color-mix(in srgb, var(--accent) 18%, #dde6f7);
+  /* Light surfaces show a tint far more readily than dark ones, and dark text
+     on them loses contrast faster, so these ratios are lower than they look. */
+  --bg:#e9eefb;       --bg:color-mix(in srgb, var(--accent) 15%, #e9eefb);
+  --panel:#ffffff;    --panel:color-mix(in srgb, var(--accent) 6%, #ffffff);
+  --panel2:#f1f5fd;   --panel2:color-mix(in srgb, var(--accent) 9%, #f1f5fd);
+  --row-bg:#ffffff;   --row-bg:color-mix(in srgb, var(--accent) 5%, #ffffff);
 }
 
 /* Selection and the scrollbars a touchscreen kiosk actually shows. */
