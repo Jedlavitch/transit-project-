@@ -455,6 +455,20 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
   @media (prefers-reduced-motion:reduce){
     .card .list, .card .statline, .card .mini-btn{transition:none}
   }
+
+  /* --- a short card hugs its content, instead of padding itself out ------
+     Two cards in a row share the row's height, so the shorter one used to
+     stretch and carry the difference as empty space inside its own border.
+
+     align-self:start alone collapsed every card to its title bar, and it took
+     three goes to see why: .list was flex:1 1 0, and a flex-basis-0 child in a
+     container that is now sized BY its content resolves to zero height. The
+     basis has to come from the content instead — flex:0 1 auto grows to the
+     rows and still shrinks (and scrolls) when the row cannot fit them. */
+  .card{align-self:start; max-height:100%}
+  .card .list{flex:0 1 auto; min-height:0}
+  /* the collapsed card is driven by the animation's pixel max-height */
+  .card.mini .list, .card.mini .statline{flex:0 0 auto}
 </style>
 <script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
    the whole site and cached every board, so a device that installed it keeps serving
@@ -1050,60 +1064,53 @@ function balanceCards(){
     && !c.classList.contains("user-hidden") && c.style.display!=="none");
   if(!cards.length){ box.style.gridTemplateRows=""; return; }
 
-  /* How much room does this card actually want?
-       0     collapsed, or nothing to show -> it should take only its header
-       n     the pixel height its content asked for before being trimmed
-     Rows are then sized in proportion, so a busy departures card gets more of
-     the screen than a quiet one instead of all of them getting an equal slice
-     -- which was simultaneously clipping the full ones and leaving dead space
-     under the empty ones. */
+  const HEAD=34;            // header + statline, roughly, above the list
+  const MINI=30;            // a collapsed card is its title bar and nothing else
   const want=c=>{
-    if(c.classList.contains("mini")) return 0;
+    if(c.classList.contains("mini")) return MINI;
     const l=c.querySelector(".list");
-    if(!l) return 0;
-    /* An "empty" card still has a sentence to show. Asking for nothing starved
-       it to a height its own message didn't fit in -- clipped text, which looks
-       worse than the dead space this was fixing. Ask for what the message needs
-       and no more. */
-    if(l.querySelector(".empty")) return Math.min(l.scrollHeight||0, 110);
-    if(!l.querySelectorAll(".row").length) return 0;
-    return Number(l.dataset.want||0) || l.scrollHeight || 0;
+    if(!l) return MINI;
+    return HEAD + Math.max(28, Number(l.dataset.want||0) || l.scrollHeight || 0);
   };
 
   const rows=[];
   for(let i=0;i<cards.length;i+=cols) rows.push(cards.slice(i,i+cols));
-  const demand=rows.map(r=>Math.max(...r.map(want)));
-  const live=demand.filter(d=>d>0);
-  if(!live.length){ box.style.gridTemplateRows=""; return; }
-  const avg=live.reduce((a,b)=>a+b,0)/live.length;
+  const need=rows.map(r=>Math.max(...r.map(want)));
+  const gap=parseFloat(getComputedStyle(box).rowGap)||12;
+  let free=box.clientHeight - gap*(rows.length-1);
+  if(!(free>0)){ box.style.gridTemplateRows=""; return; }
 
-  /* Clamped to 0.7x-1.8x of average: without a ceiling one very busy card
-     squeezes every other row down to a single line, which reads worse than a
-     little clipping did. */
-  const tracks=demand.map(d=>{
-    if(d<=0) return "min-content";
-    const w=Math.max(0.7, Math.min(1.8, d/avg));
-    return w.toFixed(3)+"fr";
-  });
-  const next=tracks.join(" ");
+  /* Water-filling. Share the height out evenly, but a row that wants less than
+     its share takes only what it wants and hands the rest back; repeat until
+     nothing is left over or everyone is satisfied. That is what stops a quiet
+     card sitting on empty space while a busy one scrolls. */
+  const out=new Array(rows.length).fill(0);
+  let open=rows.map((_,i)=>i);
+  while(open.length && free>0.5){
+    const share=free/open.length;
+    const done=open.filter(i=>need[i]<=share);
+    if(!done.length){ open.forEach(i=>out[i]=share); free=0; break; }
+    done.forEach(i=>{ out[i]=need[i]; free-=need[i]; });
+    open=open.filter(i=>need[i]>share);
+  }
+  // anything still open shares whatever is left
+  if(open.length && free>0.5){ const share=free/open.length; open.forEach(i=>out[i]=share); }
+
+  const next=out.map(h=>Math.max(MINI, Math.round(h))+"px").join(" ");
   if(box.style.gridTemplateRows!==next) box.style.gridTemplateRows=next;
 }
 
 function fitList(box){
-  /* This used to DELETE every row that didn't fit, so a card holding twelve
-     departures silently showed three and the rest were gone. The lists scroll
-     now, so nothing is thrown away -- all this does is record how much room the
-     content wanted, which is what balanceCards() shares the screen out by.
-     Still a function because every renderer calls it. */
+  /* Records how much room the content wants; nothing is deleted, the box
+     scrolls. The inline max-height is cleared BEFORE measuring: it is this
+     function's own value from last time, and measuring through it would make the
+     card shrink a little on every pass until it vanished. */
   if(!box) return;
-  box.dataset.want = String(Math.max(box.scrollHeight, box.clientHeight));
-  /* Keep a concrete pixel max-height on the box at all times. It matches the
-     height flex already gave it, so it changes nothing visually -- but it means
-     collapsing has a real number to animate FROM. max-height cannot transition
-     out of "none", which is why the collapse used to snap while the expand
-     (which starts from 0px) animated fine. */
   const card=box.closest(".card");
-  if(card && !card.classList.contains("mini")) box.style.maxHeight=box.clientHeight+"px";
+  if(card && card.classList.contains("mini")) return;   // don't disturb a collapse
+  box.style.maxHeight="";
+  box.dataset.want=String(box.scrollHeight);
+  box.style.maxHeight=box.clientHeight+"px";
 }
 const LIST_IDS=["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList"];
 function fitAll(){
