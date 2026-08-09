@@ -449,8 +449,13 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
      container that is now sized BY its content resolves to zero height. The
      basis has to come from the content instead — flex:0 1 auto grows to the
      rows and still shrinks (and scrolls) when the row cannot fit them. */
-  .card{align-self:start; max-height:100%}
-  .card .list{flex:0 1 auto; min-height:0}
+  /* Cards fill their row. Letting a short card hug its content did not remove
+     the empty space, it moved it from inside the card's border to beside it in
+     the row -- the same hole, one pixel to the left. With rows now sized by
+     demand, a quiet card gets a small row and the airiness inside it is slight.
+     .list keeps flex:0 1 auto so it can still be measured and collapsed. */
+  .card{align-self:stretch}
+  .card .list{flex:1 1 auto; min-height:0}
   /* the collapsed card is driven by the animation's pixel max-height */
   .card.mini .list, .card.mini .statline{flex:0 0 auto}
 </style>
@@ -1394,52 +1399,60 @@ function balanceCards(){
     && !c.classList.contains("user-hidden") && c.style.display!=="none");
   if(!cards.length){ box.style.gridTemplateRows=""; return; }
 
-  const HEAD=34;            // header + statline, roughly, above the list
-  const MINI=30;            // a collapsed card is its title bar and nothing else
+  const HEAD=34, MINI=30, FLOOR=62;   // FLOOR: a header plus one line of "nothing nearby"
   const want=c=>{
     if(c.classList.contains("mini")) return MINI;
     const l=c.querySelector(".list");
-    if(!l) return MINI;
-    return HEAD + Math.max(28, Number(l.dataset.want||0) || l.scrollHeight || 0);
+    if(!l) return FLOOR;
+    return HEAD + Math.max(24, Number(l.dataset.want||0) || l.scrollHeight || 0);
   };
 
   const rows=[];
   for(let i=0;i<cards.length;i+=cols) rows.push(cards.slice(i,i+cols));
   const need=rows.map(r=>Math.max(...r.map(want)));
   const gap=parseFloat(getComputedStyle(box).rowGap)||12;
-  let free=box.clientHeight - gap*(rows.length-1);
+  const free=box.clientHeight - gap*(rows.length-1);
   if(!(free>0)){ box.style.gridTemplateRows=""; return; }
 
-  /* Water-filling. Share the height out evenly, but a row that wants less than
-     its share takes only what it wants and hands the rest back; repeat until
-     nothing is left over or everyone is satisfied. That is what stops a quiet
-     card sitting on empty space while a busy one scrolls. */
-  const out=new Array(rows.length).fill(0);
-  let open=rows.map((_,i)=>i);
-  while(open.length && free>0.5){
-    const share=free/open.length;
-    const done=open.filter(i=>need[i]<=share);
-    if(!done.length){ open.forEach(i=>out[i]=share); free=0; break; }
-    done.forEach(i=>{ out[i]=need[i]; free-=need[i]; });
-    open=open.filter(i=>need[i]>share);
-  }
-  // anything still open shares whatever is left
-  if(open.length && free>0.5){ const share=free/open.length; open.forEach(i=>out[i]=share); }
+  /* Hand out ALL of the height, in proportion to what each row wants, with a
+     floor so a collapsed or empty row keeps its title bar.
+
+     Capping a row at what it needs (water-filling) sounds tidier and is worse:
+     when nothing wants the surplus it goes nowhere and you get a hole. There is
+     no surplus to be tidy about anyway — measured on Philadelphia, the cards
+     want ~896px of a ~847px screen. The space was never spare, it was being
+     wasted by pairing. */
+  const mins=rows.map((r,i)=> r.every(c=>c.classList.contains("mini")) ? MINI : Math.min(need[i], FLOOR));
+  const fixed=mins.reduce((a,b)=>a+b,0);
+  const extra=Math.max(0, free-fixed);
+  const hunger=need.map((n,i)=>Math.max(0, n-mins[i]));
+  const totalHunger=hunger.reduce((a,b)=>a+b,0) || 1;
+  const out=rows.map((_,i)=> mins[i] + extra*(hunger[i]/totalHunger));
 
   const next=out.map(h=>Math.max(MINI, Math.round(h))+"px").join(" ");
   if(box.style.gridTemplateRows!==next) box.style.gridTemplateRows=next;
 }
 function fitList(box){
-  /* Records how much room the content wants; nothing is deleted, the box
-     scrolls. The inline max-height is cleared BEFORE measuring: it is this
-     function's own value from last time, and measuring through it would make the
-     card shrink a little on every pass until it vanished. */
+  /* Records how much room the content wants. Nothing is deleted -- the box
+     scrolls -- so this is purely a measurement, and it has to be a measurement
+     of the CONTENT, not of the box.
+
+     scrollHeight is no good here: the list is stretched to fill its card, so an
+     empty card's scrollHeight equals its (large) box and it claims to be as
+     hungry as a card with twelve departures. Every row then asks for the same
+     thing and they all come out identical -- the equal-height problem this was
+     supposed to remove, wearing a disguise. First child's top to last child's
+     bottom is the real answer at any box size. */
   if(!box) return;
   const card=box.closest(".card");
   if(card && card.classList.contains("mini")) return;   // don't disturb a collapse
-  box.style.maxHeight="";
-  box.dataset.want=String(box.scrollHeight);
-  box.style.maxHeight=box.clientHeight+"px";
+  const kids=box.children;
+  let content=0;
+  if(kids.length){
+    const first=kids[0].getBoundingClientRect(), last=kids[kids.length-1].getBoundingClientRect();
+    content=Math.ceil(last.bottom-first.top);
+  }
+  box.dataset.want=String(content);
 }
 /* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
 const LIST_IDS=["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList"];
