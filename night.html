@@ -98,6 +98,8 @@
   .status .badge.na{color:#b39dff; border:1px solid rgba(179,157,255,.45); background:rgba(179,157,255,.08)}
   /* emergency squawk (7500/7600/7700) or an ADS-B emergency flag -- rare, so
      make it impossible to miss: red, bordered, gently pulsing. */
+  .status .badge.hold{background:rgba(255,204,51,.16); color:#ffd76a;
+    border:1px solid rgba(255,204,51,.45)}
   .status .badge.emerg{background:rgba(255,60,45,.18); color:#ff6b5a;
     border:1px solid rgba(255,90,80,.55); animation:emergPulse 1.1s ease-in-out infinite}
   @keyframes emergPulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -1257,6 +1259,7 @@ async function producePlane(){
   }
   if(!pick) pick={...air[0], route:null};
   const {a, nm, route}=pick, spd=a.gs?Math.round(a.gs):null;
+  air.forEach(x=>noteTrack(x.a));            // sample every aircraft in range, not just this one
   const oLL=route&&route.origin&&typeof route.origin.latitude==="number"?{lat:route.origin.latitude,lon:route.origin.longitude}:null;
   const dLL=route&&route.destination&&typeof route.destination.latitude==="number"?{lat:route.destination.latitude,lon:route.destination.longitude}:null;
   let eta=`<span class="badge na">en route</span>`;
@@ -1289,7 +1292,9 @@ async function producePlane(){
     subline: route?`${route.origin.iata_code||""} ${route.origin.name||""}  →  ${route.destination.iata_code||""} ${route.destination.name||""}`.trim():(a.ownOp||"General aviation — no scheduled route"),
     oLL, dLL, posLL:{lat:a.lat,lon:a.lon}, oCode:route?route.origin.iata_code:"", dCode:route?route.destination.iata_code:"",
     progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
-    statusHtml: emergencyBadge(a)+`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")
+    statusHtml: emergencyBadge(a)
+      +(isHolding(a)?`<span class="badge hold">⟳ holding</span>`:"")
+      +`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")
       +vRateChip(a.baro_rate)+headingChip(a.track)
       +((a.squawk||"").trim()&&!SQUAWK_EMERG[(a.squawk||"").trim()]?`<span class="alt">SQK ${(a.squawk||"").trim()}</span>`:"")
       +appr+eta, photoHex:a.hex };
@@ -1897,7 +1902,40 @@ function renderLogPanel(){
 
 const PRODUCERS = { planes:producePlane, trains:produceTrain, buses:produceBus, iss:produceISS };
 
+/* ---- holding pattern: the one delay signal ADS-B can actually prove --------
+   There is no schedule in this data, so "12 minutes late" is not something that
+   can be derived honestly (see the note in the README). What CAN be observed is
+   an aircraft flying circles: air traffic control has parked it, which always
+   means delay. Track each aircraft's heading over a few minutes and add up the
+   turn — a racetrack hold accumulates well past a full circle, while a normal
+   route change is one turn and done. */
+const trackHist = new Map();          // hex -> [{t, trk}]
+const HOLD_WINDOW_MS = 240000;
+function noteTrack(a){
+  if(!a || !a.hex || typeof a.track!=="number") return;
+  const now=Date.now();
+  const h=trackHist.get(a.hex) || [];
+  h.push({ t:now, trk:a.track });
+  while(h.length && now-h[0].t > HOLD_WINDOW_MS) h.shift();
+  trackHist.set(a.hex, h);
+  if(trackHist.size>400) trackHist.delete(trackHist.keys().next().value);   // bounded
+}
+function isHolding(a){
+  if(!a || !a.hex) return false;
+  const alt = typeof a.alt_baro==="number" ? a.alt_baro : null;
+  if(alt!=null && alt>26000) return false;         // holds happen low, not at cruise
+  const h=trackHist.get(a.hex);
+  if(!h || h.length<4 || (h[h.length-1].t - h[0].t) < 90000) return false;
+  let turn=0;
+  for(let i=1;i<h.length;i++){
+    let d=h[i].trk - h[i-1].trk;                   // shortest signed way round
+    d=((d+540)%360)-180;
+    turn+=d;
+  }
+  return Math.abs(turn) >= 300;                    // most of a full circle or more
+}
 function phaseOf(a){
+  if(isHolding(a)) return "holding";
   const alt=typeof a.alt_baro==="number"?a.alt_baro:null, rate=a.baro_rate||0;
   if(alt==null) return "en route";
   if(alt<4000 && rate<-150) return "on final approach";
