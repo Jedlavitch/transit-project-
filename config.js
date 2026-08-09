@@ -22,20 +22,27 @@ window.TB_CONFIG = {
   feedProxy: "",          // https://tb-feeds.yourname.workers.dev
   licence:   "",          // TB-XXXXX-XXXXX-XXXXX-XXXXX
 
-  /* ---- API keys -------------------------------------------------------- */
-  wmataKey:  "",          // developer.wmata.com — powers DC Metrorail + Metrobus
+  /* ---- API keys --------------------------------------------------------
+     PUBLIC. This file is served to every visitor and is in git history for
+     good, so treat anything put here as published. That is an acceptable trade
+     for WMATA's key — free, rotatable at developer.wmata.com, and rate-limited
+     per key, so the worst case is throttling rather than a breach. It is NOT
+     acceptable for a Stripe, Resend or admin secret; those belong in a Worker's
+     secrets. To take this one off the page entirely, move it behind
+     feed-proxy-worker.js, which is what that file exists for. */
+  wmataKey:  "960c93531d084988b57fca2e0adb4cc8",   // developer.wmata.com — DC Metrorail + Metrobus
 
   /* ---- optional live-position Workers ---------------------------------- */
   // Every one of these is optional. Left empty, that system falls back to its
   // bundled timetable, which needs nothing at all.
-  marcUrl:      "",       // marc-worker.js
-  septaUrl:     "",       // septa-worker.js
+  marcUrl:      "https://broken-meadow-f8da.jacklemonade2.workers.dev",  // marc-worker.js
+  septaUrl:     "https://septa.jacklemonade2.workers.dev",               // septa-worker.js
   nycBusUrl:    "",       // mta-bus-worker.js
   pathUrl:      "",       // path-worker.js
   njtUrl:       "",       // njt-worker.js
   njtUser:      "",       // raildata.njtransit.com login
   njtPass:      "",
-  sfLiveUrl:    "",       // sf511-worker.js
+  sfLiveUrl:    "https://restless-frog-f414.jacklemonade2.workers.dev",  // sf511-worker.js
   amsLiveUrl:   "",       // ovapi-worker.js
 
   /* ---- shared spotter feed --------------------------------------------- */
