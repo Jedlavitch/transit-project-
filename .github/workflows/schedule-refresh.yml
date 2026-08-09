@@ -1,0 +1,102 @@
+# Keeps the bundled GTFS schedules from expiring.
+#
+# THE PROBLEM THIS SOLVES
+#   Systems without a live feed are drawn from a schedule bundled in this repo,
+#   and those bundles carry the agency's own service calendar. Agencies publish
+#   only a short horizon -- LACMTA about three weeks, SEPTA and SF about a
+#   month -- so a bundle that is fine today is empty a few weeks from now. When
+#   it lapses, no error appears anywhere: the card just stops showing trains.
+#   (That is exactly how the LA Metro Rail board went blank.)
+#
+# WHAT THIS DOES
+#   Twice a week it re-runs the generator for any bundle that has expired or is
+#   within ~2 weeks of it, then commits whatever changed. Most runs regenerate
+#   nothing and commit nothing.
+#
+# SETUP: none. It uses the repo's built-in GITHUB_TOKEN. If pushing fails, the
+#   one thing to check is Settings > Actions > General > Workflow permissions,
+#   which must be "Read and write permissions".
+#
+# RUN IT BY HAND: Actions tab -> "Refresh schedules" -> Run workflow. Tick
+#   "audit only" to see the state of every bundle without changing anything.
+
+name: Refresh schedules
+
+on:
+  schedule:
+    # Mondays and Thursdays, 11:10 UTC. Off the hour because GitHub queues
+    # every on-the-hour job in the world at once and drops the overflow.
+    - cron: "10 11 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      audit_only:
+        description: "Audit only (report, change nothing)"
+        type: boolean
+        default: false
+      days:
+        description: "Refresh anything with fewer than this many days left"
+        default: "14"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: schedule-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit
+        id: audit
+        run: |
+          python3 refresh-schedules.py --days "${{ github.event.inputs.days || 14 }}" | tee audit.txt || true
+          {
+            echo "### Schedule bundles"
+            echo '```'
+            cat audit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refresh what is expiring
+        if: ${{ github.event.inputs.audit_only != 'true' }}
+        run: |
+          python3 refresh-schedules.py --fix --days "${{ github.event.inputs.days || 14 }}"
+
+      # Only the bundles are committed. A generator that also rewrites a shapes
+      # file is fine -- those are listed too -- but nothing else in the tree is
+      # picked up, so a stray edit can never ride along with an automated run.
+      - name: Commit refreshed bundles
+        if: ${{ github.event.inputs.audit_only != 'true' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*-schedule.json' '*-shapes.json'
+          if git diff --cached --quiet; then
+            echo "No bundle changed - nothing to commit."
+            exit 0
+          fi
+          git commit -m "Refresh expiring schedule bundles
+
+          Automated: agencies publish only a few weeks of calendar, so bundles
+          are rebuilt before they lapse and boards go quietly empty.
+          $(git diff --cached --name-only | sed 's/^/  - /')"
+          # Another run (or a person) may have pushed while the generators ran.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Fail if anything is still expired
+        if: ${{ github.event.inputs.audit_only != 'true' }}
+        run: |
+          # Report-mode exit code is the gate: a bundle that is still expired
+          # after a refresh attempt means the agency changed its feed URL or
+          # format, and that needs a person.
+          python3 refresh-schedules.py --days 0
