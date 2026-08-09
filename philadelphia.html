@@ -1270,9 +1270,22 @@ function fitAll(){
   balanceCards();                       // resize the rows BEFORE fitting content to them
   ["#amtrakList","#septaRailList","#septaSubwayList","#septaBusList","#patcoList","#planeList"].forEach(s=>fitList($(s)));
 }
+/* What an unconfigured system says depends on WHO is looking. A customer cannot
+   act on "add a WMATA key" — they have no key, no admin page and no business in
+   one — so telling them to is just a broken-looking board. The operator, with
+   admin unlocked, still gets the actionable version. */
+function needsSetupMsg(operatorText, customerText){
+  /* Deliberately NOT TBAdmin.isAdmin(): that answers true when no admin login
+     has been created at all, which is the un-set-up state a customer is most
+     likely to be in. The operator text needs someone who explicitly unlocked
+     this screen. */
+  let unlocked = false;
+  try { unlocked = localStorage.getItem("tb.admin") === "1"; } catch (_) {}
+  return unlocked ? operatorText : customerText;
+}
 function renderRailNoKey(){
   $("#railList").innerHTML="";
-  $("#railList").appendChild(el("div","empty","Add a free WMATA key (⚙︎) to see live train times."));
+  $("#railList").appendChild(el("div","empty",needsSetupMsg("Add a free WMATA key (⚙︎) to see live train times.","Live train times aren\u2019t available on this board.")));
 }
 
 /* ---------- BUS ---------- */
@@ -1288,7 +1301,7 @@ async function ensureBusStops(){
   return state.busStops;
 }
 async function fetchBus(){
-  if(!state.wmataKey){ $("#busList").innerHTML=""; $("#busList").appendChild(el("div","empty","Add a WMATA key (⚙︎) to see live bus times.")); return; }
+  if(!state.wmataKey){ $("#busList").innerHTML=""; $("#busList").appendChild(el("div","empty",needsSetupMsg("Add a WMATA key (⚙︎) to see live bus times.","Live bus times aren\u2019t available on this board."))); return; }
   await ensureBusStops();
   const box=$("#busList"); box.innerHTML="";
   let any=false;
