@@ -7,7 +7,7 @@
 <title>Washington DC Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=12" />
+<link rel="stylesheet" href="theme.css?v=13" />
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
@@ -255,6 +255,9 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
      and flip appropriately in the Black/Day themes. */
   body{background:
       radial-gradient(900px 600px at 108% 18%, rgba(78,161,255,.13) 0%, transparent 55%),
+      /* the dominant wash follows the accent; the teal and violet layers below
+         stay fixed on purpose, so the depth palette survives any colour choice */
+      radial-gradient(900px 600px at 108% 18%, color-mix(in srgb, var(--accent) 15%, transparent) 0%, transparent 55%),
       radial-gradient(1000px 700px at -10% 110%, rgba(58,208,200,.10) 0%, transparent 55%),
       radial-gradient(800px 500px at 8% -6%, rgba(181,140,255,.09) 0%, transparent 60%),
       radial-gradient(1400px 900px at 50% 125%, var(--blue-deep,#0a1a3d) 0%, transparent 62%),
