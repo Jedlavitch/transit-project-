@@ -737,6 +737,14 @@ function initMap(){
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
   state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
   state.map.on("zoomend", updateLabelVisibility);
+  // labels are positioned in screen space, so any pan or zoom invalidates the
+  // collision result — and every fleet repaint adds new ones to test
+  state.map.on("zoomend moveend", scheduleDeclutter);
+  /* Vehicles glide continuously between position updates, so labels drift apart
+     and back together between passes. A slow periodic re-check catches that; the
+     pass is a few thousand rect comparisons, far too cheap to be worth tying to
+     the animation frame. */
+  setInterval(scheduleDeclutter, 1200);
 
   // Leaflet computes its internal size the instant it's created; if the #map
   // container hasn't finished CSS layout yet the map can end up mis-sized or
@@ -770,7 +778,7 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;",
 // A dot at the exact location + an info chip floating to its right (hidden when
 // zoomed out). Use this for any ground-vehicle marker.
 function labelIcon(color, label){
-  const chip = (state.labelsOn && label) ? `<span style="position:absolute;left:8px;top:-8px;
+  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:8px;top:-8px;
       background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
       font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
       box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
@@ -782,7 +790,7 @@ function labelIcon(color, label){
 }
 // Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
 function planeIcon(track, label){
-  const lbl = (state.labelsOn && label) ? `<span style="position:absolute;left:19px;top:3px;background:rgba(9,13,24,.85);
+  const lbl = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:19px;top:3px;background:rgba(9,13,24,.85);
       color:#ffd166;padding:1px 5px;border-radius:5px;font:700 10px/13px system-ui;white-space:nowrap;
       box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
   return L.divIcon({ className:"plane-icon", iconSize:[22,22], iconAnchor:[11,11],
@@ -830,12 +838,65 @@ function updateFleet(fleet, items, dur){
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
     }
   }
+  scheduleDeclutter();          // new arrivals bring new labels to test
   for(const id in F){ if(!keep.has(id)){ layer.removeLayer(F[id].marker); delete F[id]; } }
 }
 function refreshFleetIcons(){
   for(const f in state.fleets){ const F=state.fleets[f];
     for(const id in F){ if(F[id].iconFn) F[id].marker.setIcon(F[id].iconFn()); }
   }
+  scheduleDeclutter();
+}
+
+/* ---- keep map labels readable where vehicles bunch up -------------------
+   Labels are baked into each marker's icon, and the only control was a zoom
+   threshold: all on, or all off. In a dense centre — Philadelphia's Center City
+   had forty buses inside a few blocks — every chip drew on top of every other
+   and none of them could be read.
+
+   So after each paint, walk the labels and hide any whose box overlaps one
+   already kept. Nearest the middle of the map wins, on the reasoning that
+   whatever you have centred is what you are looking at. The markers themselves
+   are untouched: every vehicle is still shown and still clickable, it is only
+   the text that thins out. Zoom in and the survivors spread apart, so more
+   labels come back on their own. */
+function declutterLabels(){
+  if(!state.map) return;
+  const labels=[...document.querySelectorAll("#map .veh-lbl")];
+  if(!labels.length) return;
+  const box=state.map.getContainer().getBoundingClientRect();
+  const cx=box.left+box.width/2, cy=box.top+box.height/2;
+  const items=[];
+  labels.forEach(el=>{
+    el.style.visibility="";                 // measure unhidden, or rects go stale
+    const r=el.getBoundingClientRect();
+    if(!r.width) return;
+    /* Vehicles outside the visible map are still in the DOM with real positions.
+       Leaving them in the contest let a label nobody can see win a slot, which
+       is why zooming in did not free any up — the ones that scrolled off screen
+       kept their place in the tally. */
+    if(r.right < box.left || r.left > box.right ||
+       r.bottom < box.top || r.top > box.bottom){ el.style.visibility="hidden"; return; }
+    items.push({el, r, d:Math.hypot(r.left+r.width/2-cx, r.top+r.height/2-cy)});
+  });
+  items.sort((a,b)=>a.d-b.d);
+  const kept=[];
+  const hits=(a,b)=> a.left < b.right+2 && a.right+2 > b.left &&
+                     a.top  < b.bottom+1 && a.bottom+1 > b.top;
+  items.forEach(it=>{
+    if(kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
+    else kept.push(it.r);
+  });
+}
+let declutterPending=0;
+function scheduleDeclutter(){
+  if(declutterPending) return;
+  /* setTimeout, not requestAnimationFrame: rAF is suspended in a hidden or
+     throttled tab, so a board that painted its fleet while backgrounded would
+     come back with every label still overlapping and nothing scheduled to fix
+     it. Same trap the Grand Tour's flyTo hit. The small delay also lets Leaflet
+     finish writing the icons before anything is measured. */
+  declutterPending=setTimeout(()=>{ declutterPending=0; declutterLabels(); }, 60);
 }
 function updateLabelVisibility(){
   const on = state.map.getZoom() >= CFG.labelZoom;
