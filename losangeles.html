@@ -367,6 +367,94 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
     #setup .set-body{grid-template-columns:1fr}
     #setup .box{max-height:94vh}
   }
+
+  /* ===================== 2026 restyle =====================================
+     Appended so it wins over the rules above without editing them. Three
+     complaints, three changes: the six KPI slabs ate a fifth of the screen for
+     six numbers; every card carried a full gradient bar and boxed header; and a
+     minimised card looked like an empty panel rather than something put away. */
+
+  /* --- KPI strip: six tiles -> one slim line ---------------------------- */
+  #statStrip{grid-template-columns:repeat(6,auto); justify-content:start;
+    gap:0 26px; padding:7px 16px 3px; align-items:baseline}
+  .stat{background:none !important; border:0; border-radius:0; padding:0;
+    display:flex; align-items:baseline; gap:8px; overflow:visible}
+  .stat .s-label{font-size:9.5px; letter-spacing:.16em; opacity:.62; order:1}
+  .stat .s-glyph{font-size:10px}
+  .stat .s-value{font-size:17px; line-height:1.1; margin:0; order:0;
+    font-family:var(--mono); font-variant-numeric:tabular-nums}
+  .stat .s-value small{font-size:10px}
+  .stat .s-sub{display:none}          /* the sub-line is in the card that owns it */
+  @media (max-width:1100px){ .stat .s-label{display:none} }
+
+  /* --- cards: less chrome per card -------------------------------------- */
+  .card{border-radius:8px; padding:9px 12px 10px;
+    background:linear-gradient(180deg,var(--panel),var(--panel2))}
+  .card h2{font-size:10px; letter-spacing:.12em; opacity:.8; margin:0 0 5px;
+    display:flex; align-items:center; gap:7px}
+  /* the system's colour becomes a small mark instead of a bar across the top */
+  .card h2::before{content:""; flex:none; width:3px; height:11px; border-radius:2px;
+    background:linear-gradient(180deg,var(--sys,var(--line)),var(--sys2,var(--sys,var(--line))))}
+  .card h2 .icon{display:none}        /* the colour mark already says which system */
+  .card h2 .count{font-size:9.5px; opacity:.75}
+  .statline{font-size:10px; margin:-1px 0 5px; opacity:.75}
+
+  /* --- minimised cards read as tabs, not empty slabs -------------------- */
+  .card.mini{padding:0; border-color:transparent; background:var(--row-bg)}
+  .card.mini h2{margin:0; padding:7px 11px; opacity:.62}
+  .card.mini h2::before{height:9px}
+  .card.mini:hover{border-color:var(--line); opacity:1}
+  .card.mini h2 .count{margin-left:auto}
+
+  /* --- density: fit more without shrinking the numbers that matter ------ */
+  .row{padding:5px 8px; gap:8px}
+  .row .dest{font-size:calc(var(--dest-fs) - .5px); line-height:1.1}
+  .list{gap:calc(var(--row-gap) - 1px)}
+
+  /* --- scrollable boxes ---------------------------------------------------
+     Rows used to be deleted when they didn't fit; the box scrolls instead, so
+     the other alerts, trains and planes are still reachable. Thin bar that only
+     colours on hover, so a wall display doesn't read as a page full of
+     scrollbars. max-height:100% (never 100vh) keeps a list inside its own card
+     -- otherwise the cards push past the viewport and the whole page scrolls,
+     which is the one thing a kiosk board must never do. */
+  .list{overflow-y:auto; overflow-x:hidden; scrollbar-width:thin;
+    scrollbar-color:var(--row-line) transparent; overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch}
+  .list::-webkit-scrollbar{width:6px}
+  .list::-webkit-scrollbar-track{background:transparent}
+  .list::-webkit-scrollbar-thumb{background:var(--row-line); border-radius:3px}
+  .list:hover::-webkit-scrollbar-thumb{background:var(--muted)}
+  .card{position:relative}
+  .card::after{content:""; position:absolute; left:1px; right:8px; bottom:1px; height:16px;
+    border-radius:0 0 7px 7px; pointer-events:none; opacity:0; transition:opacity .2s ease;
+    background:linear-gradient(180deg,transparent,var(--panel2))}
+  .card.has-more::after{opacity:.95}
+  .card.mini::after{opacity:0}
+
+  /* --- smooth minimise ----------------------------------------------------
+     display:none can't be animated, so the collapsing parts move on max-height
+     and opacity, and the grid reflow is delayed to match (see applyMini). */
+  /* No max-height here and none in the .mini rule either: a percentage resolves
+     against a height that is itself collapsing, so it jumps straight to zero,
+     and an !important would beat the inline value the animation sets. The
+     collapse is driven from JS in pixels (animateMini) and CSS only carries the
+     easing and the fade. */
+  .card .list, .card .statline{
+    transition:max-height .26s cubic-bezier(.4,0,.2,1), opacity .17s ease, margin .26s ease}
+  /* flex:0 0 auto is the whole trick. A collapsed card is align-self:start, so
+     it is sized by its content -- and a flex:1 1 0 child inside a content-sized
+     column gets zero height immediately, whatever its max-height says. That was
+     collapsing the list instantly while the expand (which starts from a card
+     that is still stretched) animated perfectly. Taking the list out of the flex
+     grow/shrink makes its height come from the max-height being animated. */
+  .card.mini .list, .card.mini .statline{
+    flex:0 0 auto; opacity:0; margin-top:0; margin-bottom:0; overflow:hidden; display:block}
+  .card .mini-btn{transition:transform .26s cubic-bezier(.4,0,.2,1), color .2s ease}
+  .card.mini .mini-btn{transform:rotate(180deg)}
+  @media (prefers-reduced-motion:reduce){
+    .card .list, .card .statline, .card .mini-btn{transition:none}
+  }
 </style>
 <script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
    the whole site and cached every board, so a device that installed it keeps serving
@@ -961,39 +1049,83 @@ function balanceCards(){
   const cards=[...box.children].filter(c=>c.classList.contains("card")
     && !c.classList.contains("user-hidden") && c.style.display!=="none");
   if(!cards.length){ box.style.gridTemplateRows=""; return; }
-  const light=c=>{
-    if(c.classList.contains("mini")) return true;          // collapsed: needs nothing
+
+  /* How much room does this card actually want?
+       0     collapsed, or nothing to show -> it should take only its header
+       n     the pixel height its content asked for before being trimmed
+     Rows are then sized in proportion, so a busy departures card gets more of
+     the screen than a quiet one instead of all of them getting an equal slice
+     -- which was simultaneously clipping the full ones and leaving dead space
+     under the empty ones. */
+  const want=c=>{
+    if(c.classList.contains("mini")) return 0;
     const l=c.querySelector(".list");
-    if(!l) return true;
-    if(l.querySelector(".empty")) return true;             // "no data right now"
-    return l.querySelectorAll(".row").length===0;          // nothing rendered/survived
+    if(!l) return 0;
+    /* An "empty" card still has a sentence to show. Asking for nothing starved
+       it to a height its own message didn't fit in -- clipped text, which looks
+       worse than the dead space this was fixing. Ask for what the message needs
+       and no more. */
+    if(l.querySelector(".empty")) return Math.min(l.scrollHeight||0, 110);
+    if(!l.querySelectorAll(".row").length) return 0;
+    return Number(l.dataset.want||0) || l.scrollHeight || 0;
   };
-  const tracks=[];
-  for(let i=0;i<cards.length;i+=cols){
-    const row=cards.slice(i,i+cols);
-    tracks.push(row.every(light) ? "min-content" : "1fr");
-  }
+
+  const rows=[];
+  for(let i=0;i<cards.length;i+=cols) rows.push(cards.slice(i,i+cols));
+  const demand=rows.map(r=>Math.max(...r.map(want)));
+  const live=demand.filter(d=>d>0);
+  if(!live.length){ box.style.gridTemplateRows=""; return; }
+  const avg=live.reduce((a,b)=>a+b,0)/live.length;
+
+  /* Clamped to 0.7x-1.8x of average: without a ceiling one very busy card
+     squeezes every other row down to a single line, which reads worse than a
+     little clipping did. */
+  const tracks=demand.map(d=>{
+    if(d<=0) return "min-content";
+    const w=Math.max(0.7, Math.min(1.8, d/avg));
+    return w.toFixed(3)+"fr";
+  });
   const next=tracks.join(" ");
   if(box.style.gridTemplateRows!==next) box.style.gridTemplateRows=next;
 }
 
 function fitList(box){
-  if(!box || box.clientHeight < 8) return;    // not laid out yet -> trimming would delete everything
-  // Snapshot the height ONCE. Re-reading box.clientHeight inside the loop was a
-  // feedback loop: these cards live in a `grid-auto-rows:1fr` grid, so removing a
-  // row can shrink the card, which shrinks this box, which makes the next pass
-  // remove another -- cascading until the card was empty. That is why boxes with
-  // ~95px of room were rendering ZERO departures.
-  const avail = box.clientHeight;
-  let guard=0;
-  while(box.scrollHeight > avail + 1 && box.lastElementChild && guard++ < 80){
-    box.removeChild(box.lastElementChild);
-  }
+  /* This used to DELETE every row that didn't fit, so a card holding twelve
+     departures silently showed three and the rest were gone. The lists scroll
+     now, so nothing is thrown away -- all this does is record how much room the
+     content wanted, which is what balanceCards() shares the screen out by.
+     Still a function because every renderer calls it. */
+  if(!box) return;
+  box.dataset.want = String(Math.max(box.scrollHeight, box.clientHeight));
+  /* Keep a concrete pixel max-height on the box at all times. It matches the
+     height flex already gave it, so it changes nothing visually -- but it means
+     collapsing has a real number to animate FROM. max-height cannot transition
+     out of "none", which is why the collapse used to snap while the expand
+     (which starts from 0px) animated fine. */
+  const card=box.closest(".card");
+  if(card && !card.classList.contains("mini")) box.style.maxHeight=box.clientHeight+"px";
 }
+const LIST_IDS=["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList"];
 function fitAll(){
-  balanceCards();                       // resize the rows BEFORE fitting content to them
-  ["#railList","#mlinkList","#amtrakList","#planeList"].forEach(s=>fitList($(s)));
+  balanceCards();
+  LIST_IDS.forEach(sel=>fitList($(sel)));
+  markScrollable();
 }
+/* The fade only shows where there is genuinely more below, and clears at the
+   bottom -- a permanent one reads as a shadow and stops meaning anything. */
+function markScrollable(){
+  document.querySelectorAll(".cards .card").forEach(c=>{
+    const l=c.querySelector(".list");
+    c.classList.toggle("has-more", !!l && !c.classList.contains("mini") &&
+      l.scrollHeight > l.clientHeight + 4 &&
+      l.scrollTop + l.clientHeight < l.scrollHeight - 4);
+  });
+}
+/* Delegated, because cards are injected after boot (the Spotted card) and
+   per-element listeners bound at startup would miss them. */
+document.addEventListener("scroll", e=>{
+  if(e.target && e.target.classList && e.target.classList.contains("list")) markScrollable();
+}, true);
 
 /* ---------- shared building blocks for bundled-schedule systems ----------
    These are the exact helpers MARC/Ride On/SEPTA/PATCO/PATH use in the real
@@ -1132,9 +1264,36 @@ function applyMini(){
   if(ab){ const all=vis.length>0 && vis.every(c=>c.classList.contains("mini"));
     ab.classList.toggle("on", all); ab.textContent=all?"▤":"▣";
     ab.title=all?"Expand all boxes":"Minimize all boxes"; }
-  if(typeof fitAll==="function") setTimeout(fitAll,60);
+  if(typeof fitAll==="function") setTimeout(fitAll,280);
 }
-function toggleMini(id){ const s=miniSet(); s.has(id)?s.delete(id):s.add(id); miniSave(s); applyMini(); }
+/* Collapse and expand in real pixels. max-height cannot animate to or from
+   "auto", so both ends are measured first: closing goes current-height -> 0,
+   opening goes 0 -> content-height and then hands the property back to CSS so a
+   later data update isn't stuck at a stale height. */
+function animateMini(card, willMini){
+  if(!card) return;
+  const parts=[card.querySelector(".list"), card.querySelector(".statline")].filter(Boolean);
+  parts.forEach(el=>{
+    if(willMini){
+      // fitList already left a real px height here, so this is a genuine
+      // transition rather than a jump out of "none".
+      if(!el.style.maxHeight) el.style.maxHeight=el.getBoundingClientRect().height+"px";
+      void el.offsetHeight;                                  // commit it
+      requestAnimationFrame(()=>{ el.style.maxHeight="0px"; });
+    } else {
+      const to=el.scrollHeight;
+      el.style.maxHeight="0px";
+      void el.offsetHeight;
+      requestAnimationFrame(()=>{ el.style.maxHeight=to+"px"; });
+    }
+  });
+}
+function toggleMini(id){
+  const s=miniSet(), willMini=!s.has(id);
+  animateMini(document.getElementById(id), willMini);   // measure BEFORE the class lands
+  willMini ? s.add(id) : s.delete(id);
+  miniSave(s); applyMini();
+}
 function toggleMiniAll(){
   const vis=allCards().filter(c=>!c.classList.contains("user-hidden") && c.style.display!=="none");
   const everyMini=vis.length>0 && vis.every(c=>c.classList.contains("mini"));
