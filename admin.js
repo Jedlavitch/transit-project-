@@ -78,27 +78,19 @@
     document.documentElement.classList.toggle(CLASS, !isAdmin);
   }
 
-  /* A way in to the setup page, on the first screen you land on after signing in.
-     Injected here rather than added to nine boards' markup, and deliberately NOT
-     hidden from customers: admin.html asks for the passphrase itself, and hiding
-     the link would lock the operator out of the page that unlocks everything —
-     they would have to know the URL by heart on a TV remote. It sits last in the
-     nav, reads as one more small link, and goes nowhere without the passphrase. */
-  function addAdminLink() {
-    if (/admin\.html$/i.test(location.pathname)) return;      // already there
-    if (document.getElementById("tbAdminLink")) return;
-    const nav = document.querySelector("nav.view-links");
-    if (!nav) return;
-    const a = document.createElement("a");
-    a.id = "tbAdminLink";
-    a.href = "admin.html";
-    a.textContent = "Admin";
-    a.title = "Board setup — Worker URLs and API keys (passphrase required)";
-    a.style.opacity = ".72";
-    // the sibling links all carry this, for embedded contexts where a bare
-    // anchor click was observed not to navigate
-    a.setAttribute("onclick", "window.location.href='admin.html'; return false;");
-    nav.appendChild(a);
+  /* The Admin link used to be injected into every board's nav. It is gone: with
+     config.js shipping the keys and Worker URLs, a customer has no reason to
+     open that page, and a setup link sitting in the navigation of a product you
+     sold is an invitation to break it.
+
+     The page itself is untouched and still reachable by typing /admin.html —
+     which is the right shape for this. The operator knows the address; the
+     customer never sees that it exists. If a link is ever wanted back, show it
+     only when stored() is already true, so it appears for an unlocked screen and
+     for nobody else. */
+  function removeAdminLink() {
+    const a = document.getElementById("tbAdminLink");
+    if (a) a.remove();          // clears the link from any cached older page
   }
 
   function styles() {
@@ -112,7 +104,7 @@
 
   async function boot() {
     styles();
-    addAdminLink();
+    removeAdminLink();
     // No passphrase configured -> dormant: show everything, exactly as before.
     if (!adminHash()) { apply(true); return; }
 
