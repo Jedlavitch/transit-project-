@@ -105,9 +105,19 @@
   async function boot() {
     styles();
     removeAdminLink();
-    // No passphrase configured -> dormant: show everything, exactly as before.
-    if (!adminHash()) { apply(true); return; }
 
+    /* Hidden by DEFAULT. This used to show everything whenever no admin login
+       existed on the device, which sounds like a sensible dormant state and is
+       exactly backwards: the login lives in localStorage, so a CUSTOMER's device
+       has never created one. Every customer therefore fell into the "no login,
+       show everything" branch and saw every Worker URL, API key box and feed
+       control on the board — the precise opposite of the intent. Verified before
+       changing it: on a cleared board TBAdmin.isAdmin() answered true and no
+       hiding class was applied.
+
+       Now nothing operator-only shows until someone explicitly unlocks the
+       screen at admin.html, which is a step only the operator can perform. Your
+       own kiosks need unlocking once each; that was already the workflow. */
     let admin = stored();
     const q = new URLSearchParams(location.search).get("admin");
     if (q !== null) {
@@ -134,14 +144,17 @@
 
   window.TBAdmin = {
     hash: sha256,
-    isAdmin: () => !adminHash() || stored(),
-    set(v) { store(!!v); apply(!adminHash() || !!v); },
+    isAdmin: () => stored(),          // explicitly unlocked, nothing else counts
+    set(v) { store(!!v); apply(!!v); },
     /* Verify a typed passphrase and unlock this device on success. Lets
        admin.html be set up by typing rather than by visiting a URL with the
        passphrase in it — easier on a TV remote, and it leaves nothing on screen
        or in history. Returns false on a bad one rather than throwing. */
     async check(v) {
-      if (!adminHash()) return true;                 // gate not configured
+      // No login created means there is nothing to check against, so nothing can
+      // pass. Previously returned true here, which combined with the old default
+      // meant an unconfigured board treated every visitor as the operator.
+      if (!adminHash()) return false;
       let ok = false;
       try { ok = (await sha256(v)) === adminHash(); } catch (_) { ok = false; }
       if (ok) { store(true); apply(true); }
