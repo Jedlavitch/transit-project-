@@ -1935,6 +1935,18 @@ function marcActiveServices(s, date){
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  /* Bundled calendars EXPIRE. Agencies publish only a few weeks ahead, and
+     when the last date passes this set comes back empty and the card goes
+     silently blank -- no error, just no trains (how LA Metro Rail vanished).
+     refresh-schedules.py + the schedule-refresh workflow keep the bundles
+     current; this is the last resort if that ever stops running: fall back
+     to the same weekday from the calendar we do have. Times drift from
+     reality as the bundle ages, so the boards label it "stale schedule"
+     rather than passing it off as current. */
+  if(!act.size){
+    for(const id in s.svc){ const v=s.svc[id]; if(v.dow[dow]) act.add(id); }
+    if(act.size) s._stale=true;
+  }
   return act;
 }
 async function refreshMarc(){
@@ -1979,7 +1991,7 @@ async function refreshMarc(){
   }
   if(!shown) box.appendChild(el("div","empty","No more MARC trains today at nearby stations."));
   state._marcNext=soonest;   // stats strip reads this
-  $("#marcCount").textContent="scheduled";
+  $("#marcCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 /* Place MARC trains on the map by interpolating each running trip's position
@@ -2064,7 +2076,7 @@ async function refreshRideOn(){
   }
   if(!shown) box.appendChild(el("div","empty","No more Ride On trips today at nearby stops."));
   state._rideonNext=soonest;   // stats strip reads this
-  $("#rideonCount").textContent="scheduled";
+  $("#rideonCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 /* Place Ride On buses (routes 23 & 29) on the map by interpolating each

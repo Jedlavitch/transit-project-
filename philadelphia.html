@@ -1926,6 +1926,18 @@ function marcActiveServices(s, date){
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  /* Bundled calendars EXPIRE. Agencies publish only a few weeks ahead, and
+     when the last date passes this set comes back empty and the card goes
+     silently blank -- no error, just no trains (how LA Metro Rail vanished).
+     refresh-schedules.py + the schedule-refresh workflow keep the bundles
+     current; this is the last resort if that ever stops running: fall back
+     to the same weekday from the calendar we do have. Times drift from
+     reality as the bundle ages, so the boards label it "stale schedule"
+     rather than passing it off as current. */
+  if(!act.size){
+    for(const id in s.svc){ const v=s.svc[id]; if(v.dow[dow]) act.add(id); }
+    if(act.size) s._stale=true;
+  }
   return act;
 }
 async function refreshMarc(){
@@ -1957,7 +1969,7 @@ async function refreshMarc(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more MARC trains today at nearby stations."));
-  $("#marcCount").textContent="scheduled";
+  $("#marcCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 /* Place MARC trains on the map by interpolating each running trip's position
@@ -2034,7 +2046,7 @@ async function refreshRideOn(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more Ride On trips today at nearby stops."));
-  $("#rideonCount").textContent="scheduled";
+  $("#rideonCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 /* Place Ride On buses (routes 23 & 29) on the map by interpolating each
@@ -2146,7 +2158,7 @@ async function refreshSeptaRail(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No SEPTA Regional Rail nearby (or none scheduled soon)."));
-  $("#septaRailCount").textContent="scheduled";
+  $("#septaRailCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 async function drawSeptaRailScheduledMap(){
@@ -2233,7 +2245,7 @@ async function refreshSeptaBusScheduled(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No Route 3/4/16 buses nearby (or none scheduled soon)."));
-  $("#septaBusCount").textContent="scheduled";
+  $("#septaBusCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 async function drawSeptaBusScheduledMap(){
@@ -2406,7 +2418,7 @@ async function refreshSeptaSubway(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No SEPTA subway nearby (or none scheduled soon)."));
-  $("#septaSubwayCount").textContent="scheduled";
+  $("#septaSubwayCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 async function drawSeptaSubwayScheduledMap(){
@@ -2484,7 +2496,7 @@ async function refreshPatco(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No PATCO nearby (or none scheduled soon)."));
-  $("#patcoCount").textContent="scheduled";
+  $("#patcoCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 async function drawPatcoScheduledMap(){
@@ -2580,7 +2592,7 @@ async function refreshNjt(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No NJ Transit nearby (or none scheduled soon)."));
-  $("#njtCount").textContent="scheduled";
+  $("#njtCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
 async function drawNjtScheduledMap(){

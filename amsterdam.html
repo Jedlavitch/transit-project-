@@ -985,6 +985,18 @@ function activeServices(s, parts){
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
   const ex=s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  /* Bundled calendars EXPIRE. Agencies publish only a few weeks ahead, and
+     when the last date passes this set comes back empty and the card goes
+     silently blank -- no error, just no trains (how LA Metro Rail vanished).
+     refresh-schedules.py + the schedule-refresh workflow keep the bundles
+     current; this is the last resort if that ever stops running: fall back
+     to the same weekday from the calendar we do have. Times drift from
+     reality as the bundle ages, so the boards label it "stale schedule"
+     rather than passing it off as current. */
+  if(!act.size){
+    for(const id in s.svc){ const v=s.svc[id]; if(v.dow[dow]) act.add(id); }
+    if(act.size) s._stale=true;
+  }
   return act;
 }
 // Group a stop's upcoming departures by headsign so a card shows both directions.
@@ -1676,7 +1688,7 @@ async function refreshAmsCard({key, list, count, stations=2, badgeCls, noneMsg})
     });
   }
   if(!shown) box.appendChild(el("div","empty",noneMsg||"No more departures today nearby."));
-  const c=$(count); if(c) c.textContent="gepland";
+  const c=$(count); if(c) c.textContent = s._stale ? "verouderd" : "gepland";
   fitList(box);
 }
 const refreshMetro=()=>refreshAmsCard({ key:"metro", list:"#metroList", count:"#metroCount", stations:2,
