@@ -1784,6 +1784,25 @@ function routeFor(a){
    rejected as stale. Worth keeping separate from the route: a US airliner's
    REGISTERED owner is usually a leasing trust, so falling back to the ADS-B
    `ownOp` alone labelled American Airlines jets "Wilmington Trust Trustee". */
+/* IATA code of whoever is flying it, for the carrier logo. Comes from the same
+   cached adsbdb lookup as the airline name, so it costs no extra request. */
+function airlineIataFor(a){
+  const cs=(a.flight||"").trim();
+  const hit=cs ? rtLoad()[cs] : null;
+  return (hit && hit.iata) || "";
+}
+/* A logo chip for the row. The CDN answers with a neutral placeholder for codes
+   it doesn't know instead of a 404, so an unknown operator degrades to a plain
+   mark rather than a broken image; no code at all means no chip. */
+function airlineLogoEl(a){
+  const code=airlineIataFor(a).toUpperCase();
+  if(!code) return null;
+  const img=document.createElement("img");
+  img.className="airline-logo"; img.alt=""; img.loading="lazy";
+  img.onerror=()=>img.remove();
+  img.src=`https://pics.avs.io/100/40/${encodeURIComponent(code)}.png`;
+  return img;
+}
 function operatorFor(a){
   const cs=(a.flight||"").trim();
   const hit=cs ? rtLoad()[cs] : null;
@@ -1798,6 +1817,7 @@ async function lookupRoute(cs){
   if(fr){
     // kept even when the city pair below gets rejected -- see operatorFor()
     entry.airline=(fr.airline&&fr.airline.name)||"";
+    entry.iata=(fr.airline&&fr.airline.iata)||"";   // for the carrier logo
     if(o&&d) Object.assign(entry, {
       from:o.iata_code||o.icao_code||"", to:d.iata_code||d.icao_code||"",
       fromName:o.municipality||o.name||"", toName:d.municipality||d.name||"",
@@ -1942,7 +1962,10 @@ function renderPlanes(ac){
     const row=el("div","row plane");
     const rt=routeFor(a);
     const mid=el("div");
-    mid.appendChild(el("div","dest", (a.desc||a.t||"Aircraft")));
+    const destLine=el("div","dest");
+    const lg=airlineLogoEl(a); if(lg) destLine.appendChild(lg);
+    destLine.appendChild(document.createTextNode(a.desc||a.t||"Aircraft"));
+    mid.appendChild(destLine);
     mid.appendChild(el("div","sub", [
       operatorFor(a),
       a.year,
