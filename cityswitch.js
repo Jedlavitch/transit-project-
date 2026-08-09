@@ -45,3 +45,25 @@ function switchCity(url, forceShell) {
     window.location.href = url;
   }
 }
+
+/* Suggested locations for the Settings > Location picker.
+   Each board passes its own list of {lat, lon, label} plus a callback that
+   actually moves the board. Coordinates are baked in rather than geocoded:
+   one tap, no network round-trip, and it cannot fail on a flaky connection.
+   The chip matching the board's current location is highlighted, so the panel
+   also answers "where am I pointed right now?". */
+function renderLocSuggestions(box, list, current, onPick) {
+  if (!box) return;
+  box.innerHTML = "";
+  (list || []).forEach(function (s) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "sg";
+    b.textContent = s.label;
+    if (current && Math.abs(current.lat - s.lat) < 0.004 && Math.abs(current.lon - s.lon) < 0.004) {
+      b.className += " on";
+    }
+    b.onclick = function () { onPick({ lat: s.lat, lon: s.lon, label: s.full || s.label }); };
+    box.appendChild(b);
+  });
+}

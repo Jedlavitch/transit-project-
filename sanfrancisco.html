@@ -7,9 +7,9 @@
 <title>San Francisco Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=11" />
+<link rel="stylesheet" href="theme.css?v=12" />
 <script src="license.js" defer></script>
-<script src="cityswitch.js"></script>
+<script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=3" defer></script>
@@ -504,6 +504,8 @@ var r=g("tb.rows")||g("transitboardsf.rows");if(r&&r!=="normal")d.setAttribute("
       <button id="addrSetBtn" type="button">Set</button>
     </div>
     <div id="addrStatus"></div>
+    <div class="suggest-lbl">Or jump to</div>
+    <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
     <div class="accent-lbl">Theme</div>
@@ -1954,6 +1956,7 @@ async function refreshPlanes(){
 /* ---------- setup overlay ---------- */
 function openSetup(){
   const inp=$("#liveUrlInput"); if(inp) inp.value=localStorage.getItem(LS.liveUrl)||"";
+  drawLocSuggestions();
   groupSettings(); $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){
@@ -1965,6 +1968,33 @@ $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
+
+/* Suggested spots for this city -- see renderLocSuggestions in cityswitch.js.
+   Picked for transit interest (hubs, districts, the airport) rather than
+   landmarks, since that is what actually changes what the board shows. */
+const LOC_SUGGESTIONS=[
+  {lat:37.7844, lon:-122.4078, label:"Powell St", full:"Powell St, San Francisco"},
+  {lat:37.7955, lon:-122.3937, label:"Ferry Building", full:"Ferry Building, San Francisco"},
+  {lat:37.808, lon:-122.4177, label:"Fisherman's Wharf", full:"Fisherman's Wharf, San Francisco"},
+  {lat:37.8199, lon:-122.4783, label:"Golden Gate Bridge", full:"Golden Gate Bridge, San Francisco"},
+  {lat:37.7599, lon:-122.4148, label:"Mission District", full:"Mission District, San Francisco"},
+  {lat:37.6213, lon:-122.379, label:"SFO Airport", full:"San Francisco International Airport"},
+  {lat:37.8044, lon:-122.2712, label:"Oakland", full:"Downtown Oakland, CA"}
+];
+function pickSuggestedLoc(loc){
+  applyLoc(loc); saveLoc(loc); setManualLoc(true);
+  if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat,loc.lon], 12); }
+  setAddrStatus("Now tracking near "+loc.label, "good");
+  const inp=$("#addrInput"); if(inp) inp.value="";
+  drawLocSuggestions();
+  refreshEverythingForNewLocation();
+}
+function drawLocSuggestions(){
+  if(typeof renderLocSuggestions!=="function") return;   // cityswitch.js not loaded
+  renderLocSuggestions($("#suggestRow"), LOC_SUGGESTIONS, state.loc, pickSuggestedLoc);
+}
+drawLocSuggestions();
+
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
 
 /* ---------- full-screen kiosk mode + keep-awake ---------- */

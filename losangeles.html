@@ -7,9 +7,9 @@
 <title>Los Angeles Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=11" />
+<link rel="stylesheet" href="theme.css?v=12" />
 <script src="license.js" defer></script>
-<script src="cityswitch.js"></script>
+<script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=3" defer></script>
@@ -491,6 +491,8 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
       <button id="addrSetBtn" type="button">Set</button>
     </div>
     <div id="addrStatus"></div>
+    <div class="suggest-lbl">Or jump to</div>
+    <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
     <div class="accent-lbl">Theme</div>
@@ -1848,6 +1850,7 @@ async function refreshPlanes(){
 function openSetup(){
   // [ADD-A-SYSTEM] if a system has an optional live-Worker input, preload it here:
   //   $("#busInput").value = state.busUrl;
+  drawLocSuggestions();
   groupSettings(); $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
@@ -1857,6 +1860,33 @@ $("#skipKey").onclick=closeSetup;
 // wire #saveKey here to persist state.busUrl to LS.busUrl then re-refresh.
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
+
+/* Suggested spots for this city -- see renderLocSuggestions in cityswitch.js.
+   Picked for transit interest (hubs, districts, the airport) rather than
+   landmarks, since that is what actually changes what the board shows. */
+const LOC_SUGGESTIONS=[
+  {lat:34.0562, lon:-118.2365, label:"Union Station", full:"Union Station, Los Angeles"},
+  {lat:34.043, lon:-118.267, label:"Downtown LA", full:"Downtown Los Angeles"},
+  {lat:34.1016, lon:-118.3269, label:"Hollywood", full:"Hollywood, Los Angeles"},
+  {lat:34.0094, lon:-118.4973, label:"Santa Monica", full:"Santa Monica Pier, CA"},
+  {lat:33.9416, lon:-118.4085, label:"LAX Airport", full:"Los Angeles International Airport"},
+  {lat:34.1478, lon:-118.1445, label:"Pasadena", full:"Pasadena, CA"},
+  {lat:33.7701, lon:-118.1937, label:"Long Beach", full:"Long Beach, CA"}
+];
+function pickSuggestedLoc(loc){
+  applyLoc(loc); saveLoc(loc); setManualLoc(true);
+  if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat,loc.lon], 12); }
+  setAddrStatus("Now tracking near "+loc.label, "good");
+  const inp=$("#addrInput"); if(inp) inp.value="";
+  drawLocSuggestions();
+  refreshEverythingForNewLocation();
+}
+function drawLocSuggestions(){
+  if(typeof renderLocSuggestions!=="function") return;   // cityswitch.js not loaded
+  renderLocSuggestions($("#suggestRow"), LOC_SUGGESTIONS, state.loc, pickSuggestedLoc);
+}
+drawLocSuggestions();
+
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
 
 /* ---------- full-screen kiosk mode + keep-awake ---------- */

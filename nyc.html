@@ -7,9 +7,9 @@
 <title>New York Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=11" />
+<link rel="stylesheet" href="theme.css?v=12" />
 <script src="license.js" defer></script>
-<script src="cityswitch.js"></script>
+<script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=3" defer></script>
@@ -515,6 +515,8 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
       <button id="addrSetBtn" type="button">Set</button>
     </div>
     <div id="addrStatus"></div>
+    <div class="suggest-lbl">Or jump to</div>
+    <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
     <div class="accent-lbl">Theme</div>
@@ -2297,6 +2299,7 @@ async function refreshMnr(){
 function openSetup(){
   $("#busInput").value=state.busUrl;
   $("#pathInput").value=state.pathUrl;
+  drawLocSuggestions();
   groupSettings(); $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
@@ -2312,6 +2315,33 @@ $("#saveKey").onclick=()=>{
 $("#skipKey").onclick=closeSetup;
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
+
+/* Suggested spots for this city -- see renderLocSuggestions in cityswitch.js.
+   Picked for transit interest (hubs, districts, the airport) rather than
+   landmarks, since that is what actually changes what the board shows. */
+const LOC_SUGGESTIONS=[
+  {lat:40.7506, lon:-73.9935, label:"Penn Station", full:"Penn Station, New York, NY"},
+  {lat:40.758, lon:-73.9855, label:"Times Square", full:"Times Square, New York, NY"},
+  {lat:40.7527, lon:-73.9772, label:"Grand Central", full:"Grand Central Terminal, New York, NY"},
+  {lat:40.6928, lon:-73.9903, label:"Downtown Brooklyn", full:"Downtown Brooklyn, NY"},
+  {lat:40.6413, lon:-73.7781, label:"JFK Airport", full:"JFK International Airport"},
+  {lat:40.5755, lon:-73.9707, label:"Coney Island", full:"Coney Island, Brooklyn, NY"},
+  {lat:40.7002, lon:-73.8085, label:"Jamaica, Queens", full:"Jamaica, Queens, NY"}
+];
+function pickSuggestedLoc(loc){
+  applyLoc(loc); saveLoc(loc); setManualLoc(true);
+  if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat,loc.lon], 12); }
+  setAddrStatus("Now tracking near "+loc.label, "good");
+  const inp=$("#addrInput"); if(inp) inp.value="";
+  drawLocSuggestions();
+  refreshEverythingForNewLocation();
+}
+function drawLocSuggestions(){
+  if(typeof renderLocSuggestions!=="function") return;   // cityswitch.js not loaded
+  renderLocSuggestions($("#suggestRow"), LOC_SUGGESTIONS, state.loc, pickSuggestedLoc);
+}
+drawLocSuggestions();
+
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
 
 /* ---------- full-screen kiosk mode + keep-awake ---------- */

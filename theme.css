@@ -267,3 +267,23 @@ body #app{
   /* bigger tap targets for follow-from-box rows on touch screens */
   body .list .row{ padding:6px 9px; }
 }
+
+/* ---- suggested locations (Settings -> Location) ------------------------------
+   Typing an address is fine when you know one, but "where should I even put
+   this?" is the more common question on a board for a city you're visiting.
+   These are a handful of hand-picked, transit-interesting spots per city: one
+   tap, no geocoder round-trip, coordinates baked in so they can't fail. */
+.suggest-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+/* #setup-scoped: each board's own `#setup button{background:var(--accent);
+   flex:1}` is an id rule and would otherwise paint every chip as if it were
+   the selected one, stretched full width. */
+#setup .suggest-row .sg, .suggest-row .sg{
+  flex:none; background:var(--panel2); color:var(--text); border:1px solid var(--line);
+  border-radius:999px; padding:6px 11px; font-family:inherit; font-size:12px; font-weight:600;
+  cursor:pointer; white-space:nowrap; line-height:1.2; }
+#setup .suggest-row .sg:hover, .suggest-row .sg:hover{ border-color:var(--accent); color:var(--accent); }
+#setup .suggest-row .sg.on, .suggest-row .sg.on{
+  background:var(--accent); border-color:var(--accent); color:#04101f; font-weight:800; }
+.suggest-lbl{ font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase;
+  letter-spacing:.1em; margin-top:12px; }
+@media (pointer:coarse){ #setup .suggest-row .sg, .suggest-row .sg{ padding:9px 13px; font-size:13px; } }
