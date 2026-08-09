@@ -2636,15 +2636,27 @@ async function refreshTransit(){
     await Promise.allSettled([fetchRail(), fetchBus()]);
     drawStops();
     state.lastTransitOk=Date.now();
-    setStatus("live — WMATA + airplanes.live");
+    /* Match the label the markup already ships (#statusText). The WMATA branch
+       used to overwrite it with "live — WMATA + airplanes.live", which named a
+       system this board doesn't carry. */
+    setStatus("live — SEPTA/PATCO/Amtrak + airplanes.live");
   }catch(e){
     setStatus("transit error: "+e.message, true);
   }
 }
 async function refreshPlanes(){
   try{ await fetchPlanes(); }catch(e){}
+  /* This board has no Metrorail or Metrobus card — the WMATA path is dead code
+     inherited from the fork off index.html. It used to warn "transit stale —
+     check WMATA key" here, which fired constantly once a key was configured
+     site-wide: Philadelphia never calls WMATA, so lastTransitOk never advances
+     and the check was permanently true. A customer was being told to fix a key
+     for a system this board does not show.
+
+     `stale` was computed on the line below and then never used. The aircraft
+     feed IS something this board runs, so report that instead. */
   const stale = Date.now()-state.lastPlaneOk > 60000;
-  if(state.wmataKey && Date.now()-state.lastTransitOk>90000) setStatus("transit stale — check WMATA key", true);
+  if(stale) setStatus("aircraft feed stale — retrying", true);
 }
 
 /* ---------- setup overlay ---------- */
