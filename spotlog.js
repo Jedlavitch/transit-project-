@@ -192,6 +192,14 @@
     return Math.round(s / 86400) + "d ago";
   }
 
+  /* Has someone deliberately unlocked this screen for setup? Deliberately not
+     TBAdmin.isAdmin(), which answers true when no admin login exists at all —
+     that is exactly a fresh customer's state, so it would show everyone the
+     operator text. */
+  const isUnlocked = () => {
+    try { return localStorage.getItem("tb.admin") === "1"; } catch (_) { return false; }
+  };
+
   function ensureCard() {
     let card = document.getElementById("spotCard");
     if (card) return card;
@@ -350,12 +358,23 @@
       /* Two very different situations used to read the same way. If no shared
          feed is set, a log made on a phone CANNOT reach this screen, and telling
          someone to go log more on their phone is the wrong advice entirely. */
+      /* And a third situation, which is most people: a customer who has never
+         opened the Spotter app. Walking them through share codes and a ⇄ button
+         is setup instruction for a feature they have not asked for — the same
+         mistake as telling them to go and add a WMATA key. They get a plain
+         description of what the card is for; the operator, on a screen they have
+         actually unlocked, still gets the steps. */
+      const operator = isUnlocked();
       list.innerHTML = anyFeed()
         ? `<div class="empty">No sightings yet.${remoteErr
-             ? ` Shared feed unreachable (${esc(remoteErr)}) — check the URL with ⇄ above.` : ""}</div>`
-        : `<div class="empty">Nothing logged on <i>this</i> device. Sightings stay on the
-             device that logged them — on your phone tap <b>⚙ → Share to my boards</b>,
-             then enter that share code here with <b>⇄</b> above.</div>`;
+             ? (operator ? ` Shared feed unreachable (${esc(remoteErr)}) — check the URL with ⇄ above.`
+                         : ` Shared feed unreachable.`) : ""}</div>`
+        : operator
+          ? `<div class="empty">Nothing logged on <i>this</i> device. Sightings stay on the
+               device that logged them — on your phone tap <b>⚙ → Share to my boards</b>,
+               then enter that share code here with <b>⇄</b> above.</div>`
+          : `<div class="empty">Trains, buses and planes you log in the Spotter app
+               show up here.</div>`;
       stat.innerHTML = ""; count.textContent = "";
       return;
     }
