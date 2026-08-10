@@ -588,11 +588,27 @@ function nearestCity(){
 }
 /* Bundles are big and immutable, so unlike the live feeds they SHOULD hit the
    browser cache rather than being re-downloaded on every refresh. */
+/* Bus bundles ship pattern-deduplicated ("v":2): stop sequences and running-time
+   profiles are each stored once and referenced by index, which is what lets 30
+   routes cost about what 7 used to. Expand back to the plain
+   {line,hs,s,st:[[stop,min],...]} shape on load so every consumer downstream --
+   interpolation, departures, route lines -- stays exactly as it was. */
+function expandBundle(s){
+  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
+  const pats=s.pats, offs=s.offs||[];
+  s.trips=(s.trips||[]).map(t=>{
+    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
+    return { line:t.l, hs:t.h, s:t.s,
+             st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
+  });
+  delete s.pats; delete s.offs;
+  return s;
+}
 async function loadBundle(file){
   if(bundleCache[file]) return bundleCache[file];
   const r=await fetch(file);
   if(!r.ok) throw new Error("bundle "+file);
-  const s=await r.json(); s._coord={};
+  const s=expandBundle(await r.json()); s._coord={};
   (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
   bundleCache[file]=s; return s;
 }

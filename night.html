@@ -317,6 +317,29 @@
   header a:hover, header button:hover{border-color:var(--blue-bright,#7cc0ff); color:var(--blue-bright,#7cc0ff)}
   /* Brand mode is the carrier's colour and nothing else over it. */
   body.brandmode #sky, body.brandmode #sunSky, body.brandmode #stars{display:none !important}
+  /* Short-viewport slack. Everything fits at every size tested except one narrow
+     band — around 600px tall, where the type is still large enough for a long
+     carrier name to wrap to two lines but the screen is not tall enough to hold
+     the extra line. Measured overflow was 4px, and main is overflow:hidden, so
+     it clips silently rather than scrolling. Tightening the leading on the two
+     biggest blocks buys ~20px there and is invisible elsewhere. Laptops with
+     browser chrome land in exactly this band, so it is not a hypothetical. */
+  @media (max-height: 720px){
+    /* Measured at 1024x600, plane view: the text column wanted 509px of a 479px
+       space. Two city names at 7.8vh wrap to two lines (127px) and the status
+       chips wrap to three (120px), which is most of the overrun. Trimming the
+       vh coefficients on just those two blocks, plus the leading, recovers it
+       without touching how the layout looks on a normal screen. Trains and
+       buses already fit here; this band only ever hurt planes, which carry the
+       most content. */
+    .airline{line-height:1.0}
+    .route{line-height:1.05; gap:1.8vw; margin-top:0}
+    .route .city{font-size:clamp(1.2rem,min(5.4vw,6.1vh),3.6rem); line-height:1.02}
+    .route .arrow{font-size:clamp(1.1rem,min(4vw,4.6vh),2.6rem)}
+    .status{font-size:clamp(.9rem,min(2.5vw,2.6vh),1.6rem); gap:.7em; margin-top:.4vmin}
+    .subcity{margin-top:.15em}
+    .side{gap:8px}
+  }
 </style>
 <script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
    the whole site and cached every board, so a device that installed it keeps serving

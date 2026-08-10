@@ -1504,12 +1504,28 @@ function njtStation(n){
     .replace(/\bNj\b/g,"NJ").replace(/\bAv\b/g,"Ave");
 }
 /* one loader for both bundles -- identical shape, different file */
+/* Bus bundles ship pattern-deduplicated ("v":2): stop sequences and running-time
+   profiles are each stored once and referenced by index, which is what lets 30
+   routes cost about what 7 used to. Expand back to the plain
+   {line,hs,s,st:[[stop,min],...]} shape on load so every consumer downstream --
+   interpolation, departures, route lines -- stays exactly as it was. */
+function expandBundle(s){
+  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
+  const pats=s.pats, offs=s.offs||[];
+  s.trips=(s.trips||[]).map(t=>{
+    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
+    return { line:t.l, hs:t.h, s:t.s,
+             st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
+  });
+  delete s.pats; delete s.offs;
+  return s;
+}
 async function ensureNjtSched(kind){
   const key = kind==="rail" ? "njtRailSched" : "njtBusSched";
   if(state[key]) return state[key];
   const file = kind==="rail" ? "njt-state-rail-schedule.json" : "njt-state-bus-schedule.json";
   try{
-    const s=await getJSON(file, 25000);
+    const s=expandBundle(await getJSON(file, 25000));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
