@@ -2685,14 +2685,27 @@ async function gvCapture(){
     if(j && j.ok) gvSetSnap({ power:j.power, brightness:j.brightness, rgb:j.rgb });
   }catch(e){ console.warn("lights:", e.message); }
 }
-function gvRestore(){
-  const s=gvSnap(); if(!s) return;
-  gvSetSnap(null); lightHex="";
+/* What to send to put the room back the way we found it.
+
+   A light found switched OFF is the common case — the board runs at night — and
+   it only needs switching off again. Restoring a colour and a brightness onto a
+   dark light is two more upstream calls to set properties nobody can see, and
+   an off light reports brightness 0, which is not a value Govee accepts back
+   (its range starts at 1). So off is a single call and an early out. */
+function gvRestoreBody(s){
+  if(!s) return null;
+  if(s.power===0) return { power:0 };
   const p={};
   if(s.power!=null) p.power=s.power;
   if(Number.isFinite(s.rgb)) p.rgb=s.rgb;
-  if(Number.isFinite(s.brightness)) p.brightness=s.brightness;
-  if(Object.keys(p).length) gvSet(p);
+  if(Number.isFinite(s.brightness) && s.brightness>0) p.brightness=s.brightness;
+  return Object.keys(p).length ? p : null;
+}
+function gvRestore(){
+  const s=gvSnap(); if(!s) return;
+  gvSetSnap(null); lightHex="";
+  const p=gvRestoreBody(s);
+  if(p) gvSet(p);
 }
 const gvRgbInt = (hex)=>{ const [r,g,b]=hexToRgb(hex); return (r<<16)|(g<<8)|b; };
 
@@ -2728,10 +2741,7 @@ function driveLights(s){
    body keeps it free of the CORS preflight it could not answer anyway. */
 window.addEventListener("pagehide", ()=>{
   const s=gvSnap(), u=gvUrl(); if(!s || !u || !navigator.sendBeacon) return;
-  const body=gvBody(); if(!body) return;
-  if(s.power!=null) body.power=s.power;
-  if(Number.isFinite(s.rgb)) body.rgb=s.rgb;
-  if(Number.isFinite(s.brightness)) body.brightness=s.brightness;
+  const p=gvRestoreBody(s), body=gvBody(p); if(!p || !body) return;
   navigator.sendBeacon(u+"/set", new Blob([JSON.stringify(body)], {type:"text/plain"}));
   gvSetSnap(null);
 });
