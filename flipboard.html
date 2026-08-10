@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css" />
+<script src="delays.js?v=1"></script>
 <style>
   /* Split-flap look keeps its own black palette, blue-tinted to match the
      shared theme (typeface + accents come from theme.css conventions). */
@@ -97,6 +98,14 @@
   .status-tag.warn{background:rgba(255,204,51,.15); color:var(--warn)}
   .status-tag.late{background:rgba(255,90,90,.15); color:var(--late)}
   .status-tag.na{color:var(--muted); border:1px solid var(--line)}
+  .status-tag.bad{background:rgba(255,90,90,.2); color:var(--late)}
+  /* The four shared delay bands (delays.js + theme.css), tinted to sit on the
+     split-flap's dark plates. The severe band keeps the solid plate it has on
+     the boards -- on a wall display that is the whole point of it. */
+  .status-tag.dly-ok{background:rgba(51,209,122,.15); color:var(--delay-ok)}
+  .status-tag.dly-min{background:rgba(255,204,51,.15); color:var(--delay-min)}
+  .status-tag.dly-mid{background:rgba(255,138,117,.15); color:var(--delay-mid)}
+  .status-tag.dly-max{background:var(--delay-max-bg); color:var(--delay-max-ink)}
 
   footer{padding:1.2vmin 3vw; border-top:1px solid var(--line); font-size:11px; color:var(--muted); flex-shrink:0; display:flex; gap:1.5em}
   #fsHint{position:fixed; top:0; left:50%; transform:translate(-50%,-120%); z-index:80;
@@ -426,9 +435,18 @@ async function collectAmtrakRows(count){
     }
     list.sort((a,b)=>a.mi-b.mi);
     return list.slice(0,count).map(({t})=>{
+      /* Lateness used to be read out of trainTimely and bucketed by regex.
+         That field is empty on every active train now, so every Amtrak row was
+         landing on "na" and the board showed no delays at all. Derive it from
+         the next stop's scheduled vs actual time instead -- the same source
+         the city boards use -- and keep the feed's own wording as a fallback
+         for if it ever starts reporting again. */
       const late=(t.trainTimely||"").trim();
-      const lateNorm=late.toLowerCase();
-      const statusKind = !late ? "na" : lateNorm.includes("on time") ? "ok" : /\b([5-9]|[1-9]\d+)\s*min/i.test(late) ? "late" : "warn";
+      const amLi=amtrakLateInfo((t.stations||[]).find(s=>s.status!=="Departed"));
+      const statusKind = amLi ? amLi.cls : "na";
+      const statusText = amLi
+        ? (amLi.mins>0 ? `+${amLi.mins} MIN` : "ON TIME")
+        : (late||"EN ROUTE").toUpperCase();
       const dLL=st[t.destCode];
       let sortMin=1440, time="EN ROUTE";
       if(dLL && t.velocity>15){
@@ -439,7 +457,7 @@ async function collectAmtrakRows(count){
         }
       }
       return { sortMin, time, dest:(t.destName||t.destCode||"?").toUpperCase(),
-        via:(t.routeName||"AMTRAK").toUpperCase(), status:(late||"EN ROUTE").toUpperCase(), statusKind,
+        via:(t.routeName||"AMTRAK").toUpperCase(), status:statusText, statusKind,
         color:"#3ad0c8" };
     });
   }catch(e){ return []; }
@@ -608,8 +626,12 @@ async function collectTransitousRows(family, count){
         dest:(d.headsign||"?").toUpperCase(), via:(d.route||d.label||"").toUpperCase(),
         /* Only claim live where the feed says so — the Swiss trams are live, the
            Rhine boats are not, and both end up on this board. */
+        /* Any real-time delay goes through the shared bands rather than the
+           old on-time/late split, so a Zurich tram three minutes down and one
+           twenty minutes down stop looking identical. */
         status: d.cancelled? "CANCELLED" : (d.realTime? (d.delayMin>0? `+${d.delayMin} MIN`:"ON TIME") : "SCHEDULED"),
-        statusKind: d.cancelled? "bad" : (d.realTime? (d.delayMin>0? "warn":"ok") : "na"),
+        statusKind: d.cancelled? "bad"
+          : (d.realTime? ((liveLateInfo(d.delayMin)||{}).cls || "ok") : "na"),
         color: TOUS_COL[family]||"#6aa9ff" };
     });
 }

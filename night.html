@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css" />
+<script src="delays.js?v=1"></script>
+<script src="transitous.js?v=1"></script>
 <style>
   :root{
     --bg:#010409; --amber:#7db8ff; --amber-dim:#4a7fc4; --muted:#35567e; --faint:#16263c;
@@ -95,6 +97,13 @@
   .status .badge{padding:.12em .5em; border-radius:.3em; font-weight:800}
   .status .badge.ok{background:rgba(90,209,122,.14); color:var(--good)}
   .status .badge.late{background:rgba(255,107,90,.15); color:var(--late)}
+  /* The four shared delay bands (delays.js + theme.css). Deliberately NOT
+     derived from --amber/--city, so brand mode repainting the screen in a
+     carrier's colour cannot also repaint how late the train is. */
+  .status .badge.dly-ok{background:rgba(51,209,122,.14); color:var(--delay-ok)}
+  .status .badge.dly-min{background:rgba(255,204,51,.15); color:var(--delay-min)}
+  .status .badge.dly-mid{background:rgba(255,138,117,.15); color:var(--delay-mid)}
+  .status .badge.dly-max{background:var(--delay-max-bg); color:var(--delay-max-ink)}
   .status .badge.na{color:#b39dff; border:1px solid rgba(179,157,255,.45); background:rgba(179,157,255,.08)}
   /* emergency squawk (7500/7600/7700) or an ADS-B emergency flag -- rare, so
      make it impossible to miss: red, bordered, gently pulsing. */
@@ -1307,7 +1316,6 @@ const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.loca
 /* SEPTA's live feeds occasionally send phantom vehicles with nonsense
    sentinel lateness (e.g. late:998) instead of omitting the field --
    matching the same guard used on the boards. */
-function isRealLateNight(late){ return typeof late==="number" && isFinite(late) && late>0 && Math.abs(late)<=90; }
 
 /* ---- PLANES ---- */
 
@@ -1638,19 +1646,19 @@ async function produceLiveLocalTrain(){
     const trains=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon);
     if(!trains.length) return null;
     const list=trains.map(t=>({t, mi:haversineNm(loc,{lat:+t.lat,lon:+t.lon})*1.15078})).sort((a,b)=>a.mi-b.mi);
-    const {t,mi}=list[0], late=isRealLateNight(t.late);
+    const {t,mi}=list[0], late=isRealLate(t.late);
     const cars=String(t.consist||"").split(",").filter(Boolean).length;   // SEPTA lists each car number
     return { id:"ls"+t.trainno, nm:mi, unit:"mi", dir:bearingFrom(loc,{lat:+t.lat,lon:+t.lon}), count:list.length,
       fleet: list.map(({t:t2,mi:m2})=>({ t:t2.line||"SEPTA", s:`Train ${t2.trainno} → ${t2.dest||""}`,
         nm:m2, unit:"mi", dir:bearingFrom(loc,{lat:+t2.lat,lon:+t2.lon}),
-        x:isRealLateNight(t2.late)?`+${t2.late} min`:"on time", ll:{lat:+t2.lat,lon:+t2.lon} })),
+        x:isRealLate(t2.late)?`+${t2.late} min`:"on time", ll:{lat:+t2.lat,lon:+t2.lon} })),
       altText:"", title:t.line||"SEPTA Regional Rail",
       sub:`Train ${t.trainno} · SEPTA`, sysName:"SEPTA", lateMin:late?t.late:null,
       oCity:t.currentstop||null, dCity:t.dest||null,
       subline: t.currentstop&&t.nextstop ? `${t.currentstop} → ${t.nextstop}` : (t.dest?`→ ${t.dest}`:""),
       oLL:null, dLL:null, posLL:{lat:+t.lat,lon:+t.lon}, oCode:"", dCode:"",
       statusHtml:`<span class="phase">en route</span>`+headingChip(t.heading)+(cars?`<span class="alt">${cars} cars</span>`:"")
-        +(late?`<span class="badge late">+${t.late} min late</span>`:`<span class="badge ok">on time</span>`),
+        +lateBadge(late?t.late:0),
       photoQuery:"SEPTA Regional Rail train", photoFallback:"SEPTA train Philadelphia" };
   }
   return null;
@@ -1754,6 +1762,71 @@ async function produceMetroTrain(){
   };
 }
 
+
+/* ---- Europe: nearest train / bus from a schedule-derived position ----------
+   These cities' feeds report departures, not vehicle positions. A trip does
+   carry its whole stop sequence with coordinates and times, so the vehicle is
+   placed between the two stops the clock puts it between — the same technique
+   this project already uses for MARC and Ride On, which also have no live
+   position feed. It is a schedule-derived position and the status line says so
+   rather than implying GPS. */
+async function produceEuroVehicle(families, kind){
+  if(!window.TBTransitous) return null;
+  const v = await TBTransitous.nearestVehicle(loc.lat, loc.lon, families,
+    { source:CITY_CFG.transitSource, mainStation:CITY_CFG.mainStation });
+  if(!v) return null;
+  const d=v.dep, t=v.trip, pos=v.pos;
+  const mi = v.km*0.621371;
+  const oLL={lat:t.from.lat, lon:t.from.lon}, dLL={lat:t.to.lat, lon:t.to.lon};
+  const line = d.route || d.label || "";
+  const nextName = pos.next && pos.next.name;
+  const nextT = pos.next && pos.next.t;
+  const arr = t.end ? new Date(t.end).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "";
+  const lateChip = (d.realTime && d.delayMin>0) ? `  ·  +${d.delayMin} min` : "";
+  /* Distance covered and remaining, walked along the stop list so a curving
+     line is not understated the way a straight origin-to-destination hop is. */
+  const travelled = (function(){
+    const st=t.stops, mi=(a,b)=>{
+      const R=3958.8, rad=Math.PI/180;
+      const dLat=(b.lat-a.lat)*rad, dLon=(b.lon-a.lon)*rad;
+      const h=Math.sin(dLat/2)**2+Math.cos(a.lat*rad)*Math.cos(b.lat*rad)*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.sqrt(h));
+    };
+    let done=0, left=0, passed=true;
+    for(let i=0;i<st.length-1;i++){
+      const seg=mi(st[i],st[i+1]);
+      if(st[i+1].t<=Date.now()) done+=seg;
+      else if(st[i].t<=Date.now()){ // the segment being travelled right now
+        done+=mi(st[i],{lat:pos.lat,lon:pos.lon});
+        left+=mi({lat:pos.lat,lon:pos.lon},st[i+1]);
+      } else left+=seg;
+    }
+    return {done, left};
+  })();
+  return {
+    id:"e"+(d.tripId||line), nm:mi, unit:"mi",
+    dir:bearingFrom(loc,{lat:pos.lat,lon:pos.lon}), count:1,
+    sysName:CITY_CFG.cityLabel, lateMin:(d.realTime && d.delayMin>0)? d.delayMin : null,
+    altText:`${pos.pct}% of the way`,
+    title:[line, d.label].filter(Boolean)[0] || (kind==="bus"?"Bus":"Train"),
+    sub:[line && (kind==="bus"?`Route ${line}`:`Line ${line}`), d.label, d.stop&&d.stop.name]
+        .filter(Boolean).join("  ·  ")+lateChip,
+    oCity:t.from.name, dCity:t.to.name,
+    subline:`${t.from.name}  →  ${t.to.name}`,
+    oLL, dLL, posLL:{lat:pos.lat, lon:pos.lon}, oCode:"", dCode:"",
+    /* progPct is a FRACTION here — the renderer multiplies by 100, so passing a
+       percentage showed "3000%". Distances are measured along the stop
+       sequence rather than straight-line, so a route that curves reports the
+       length actually travelled. */
+    progPct:pos.pct/100, progFlown:travelled.done, progToGo:travelled.left,
+    statusHtml:`<span class="phase">${pos.pct>=100?"arrived":pos.pct<=0?"about to depart":"en route"}</span>`
+      + (nextName? nextStopChip(nextName,
+            nextT? new Date(nextT).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "",
+            "position from timetable") : "")
+      + (arr? `<span class="badge na">arr ${arr}</span>` : ""),
+    photoQuery:`${CITY_CFG.cityLabel} ${kind==="bus"?"tram bus":"train"}`,
+    photoFallback:`${CITY_CFG.cityLabel} public transport` };
+}
 async function produceTrain(){
   /* Cities with no local vehicle feed and no Amtrak: say so instead of spinning.
      These boards have live DEPARTURES (transitous / the Swiss API) but nothing
@@ -1761,8 +1834,10 @@ async function produceTrain(){
      one moving thing with a position, a photo and an ETA. Without this the
      screen sat on "Finding trains…" forever, which reads as broken rather than
      as unavailable. */
-  if(CITY_CFG.noLocalVehicles) return { none:true,
-    note:"No live train positions for " + (CITY_CFG.cityLabel||"this city") + " — planes work here." };
+  if(CITY_CFG.noLocalVehicles){
+    const v = await produceEuroVehicle(["longdistance","regional","metro"], "train");
+    return v || { none:true, note:"No train running near here right now" };
+  }
 
   const [amtrak, local] = await Promise.all([
     produceAmtrakTrain().catch(()=>null),
@@ -1860,18 +1935,18 @@ async function produceLiveBus(){
   const buses=(data.bus||[]).filter(b=>b.lat&&b.lng);
   if(!buses.length) return null;
   const list=buses.map(b=>({b, nm:haversineNm(loc,{lat:+b.lat,lon:+b.lng})})).sort((a,c)=>a.nm-c.nm);
-  const {b,nm}=list[0], late=isRealLateNight(b.late);
+  const {b,nm}=list[0], late=isRealLate(b.late);
   return { id:"lb"+(b.VehicleID||b.route_id), nm, unit:"nm", dir:bearingFrom(loc,{lat:+b.lat,lon:+b.lng}), count:list.length,
     fleet: list.map(({b:b2,nm:n2})=>({ t:`Route ${b2.route_id}`, s:b2.destination||"", nm:n2, unit:"nm",
       dir:bearingFrom(loc,{lat:+b2.lat,lon:+b2.lng}),
-      x:isRealLateNight(b2.late)?`+${b2.late} min`:"on time", ll:{lat:+b2.lat,lon:+b2.lng} })),
+      x:isRealLate(b2.late)?`+${b2.late} min`:"on time", ll:{lat:+b2.lat,lon:+b2.lng} })),
     altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · ${CITY_CFG.localBusSystem}`,
     sysName:CITY_CFG.localBusSystem,
     oCity:null, dCity:b.destination||null, subline: b.Direction||"",
     oLL:null, dLL:null, posLL:{lat:+b.lat,lon:+b.lng}, oCode:"", dCode:"",
     statusHtml:`<span class="phase">in service</span>`+headingChip(b.heading)
       +(b.next_stop_name?nextStopChip(b.next_stop_name,"",""):"")
-      +(late?`<span class="badge late">+${b.late} min late</span>`:`<span class="badge ok">on time</span>`),
+      +lateBadge(late?b.late:0),
     photoQuery:CITY_CFG.busPhotoQuery, photoFallback:"transit bus exterior" };
 }
 
@@ -1943,8 +2018,10 @@ async function produceBus(){
      one moving thing with a position, a photo and an ETA. Without this the
      screen sat on "Finding buss…" forever, which reads as broken rather than
      as unavailable. */
-  if(CITY_CFG.noLocalVehicles) return { none:true,
-    note:"No live bus positions for " + (CITY_CFG.cityLabel||"this city") + " — planes work here." };
+  if(CITY_CFG.noLocalVehicles){
+    const v = await produceEuroVehicle(["bus","tram"], "bus");
+    return v || { none:true, note:"No bus running near here right now" };
+  }
 
   const live=await produceLiveBus().catch(()=>null);
   if(live) return live;
@@ -2317,12 +2394,29 @@ function headingChip(track){
    schedule field at all, and the bundled-timetable buses are POSITIONED from the
    timetable, so calling them "on time" would be circular. Neither gets a badge
    rather than getting an invented one. */
+/* The on-time/late badge these live rows used to build inline by hand, now
+   banded. Both call sites pass 0 when the feed reports no usable delay, which
+   is the same "on time" they showed before. */
+function lateBadge(min){
+  const li=liveLateInfo(min);
+  if(!li) return `<span class="badge ok">on time</span>`;
+  return `<span class="badge ${li.cls}">${li.mins>0 ? `+${li.mins} min late` : "on time"}</span>`;
+}
 function adherenceChip(min){
   if(typeof min!=="number" || !isFinite(min)) return "";
   const m=Math.round(min);
-  if(Math.abs(m)<2) return `<span class="badge">on time</span>`;
-  if(m>0) return `<span class="badge late">${m} min late</span>`;
-  return `<span class="badge">${Math.abs(m)} min early</span>`;
+  // Running early keeps its own plain wording -- the bands describe lateness,
+  // and painting "4 min early" green would say the same thing as on time
+  // while being a different fact.
+  if(m<0) return `<span class="badge">${Math.abs(m)} min early</span>`;
+  /* The old chip allowed two minutes of slack before calling a train late, and
+     called everything past that simply "late". The bands replace both halves of
+     that, and the slack has to go with them: keeping it would print "on time"
+     in the 1-5 band's yellow, so the words and the colour would contradict each
+     other on the one minute they straddle. One minute down is now one down. */
+  const li=liveLateInfo(m);
+  if(!li) return "";
+  return `<span class="badge ${li.cls}">${li.mins>0 ? `${li.mins} min late` : "on time"}</span>`;
 }
 function nextStopChip(name, timeStr, note){
   if(!name) return "";
