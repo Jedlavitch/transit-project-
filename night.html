@@ -2727,8 +2727,24 @@ function driveLights(s){
        signal. Too soon simply means no change — the next render tries again, so
        whatever is overhead when the timer clears is what wins. */
     if(now-lightAt < GOVEE_DWELL_MS) return;
-    lightAt=now; lightHex=hex;
-    (async()=>{ await gvCapture(); gvSet({ power:1, rgb:gvRgbInt(hex) }); })();
+    /* The dwell clock starts even if the change fails. An unreachable light
+       must not be retried on every 12s render — that is a dead light generating
+       traffic forever. */
+    lightAt=now;
+    (async()=>{
+      const hadSnap = !!gvSnap();
+      await gvCapture();
+      const r = await gvSet({ power:1, rgb:gvRgbInt(hex) });
+      if(r && r.ok){ lightHex=hex; return; }
+      /* Nothing actually changed — an offline light is the common way this
+         happens. Don't record a colour the room isn't wearing: lightHex would
+         suppress the retry once the light came back, and a snapshot captured
+         this pass would have us "restoring" a room we never touched. Only drop
+         the snapshot if it was ours; an earlier successful colour still needs
+         something to go back to. */
+      lightHex="";
+      if(!hadSnap) gvSetSnap(null);
+    })();
     return;
   }
   /* Nothing in range. Aircraft drop out of a feed for a refresh or two without
