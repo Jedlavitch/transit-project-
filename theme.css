@@ -49,11 +49,19 @@
   --delay-mid:#ff8a75;       /* 7.7:1 */
   --delay-max-bg:#8f1d1d; --delay-max-ink:#ffe3e3;   /* 7.3:1 plate vs ink */
 }
+/* Day inks are measured against the PALE BLUE PAGE BACKDROP (rgb 210,226,252),
+   not against white. A delay can sit on any of three surfaces here -- that
+   backdrop, a card at rgb(246,250,255), or a white row -- and the backdrop is
+   the darkest of them, so it is the one that decides. Measuring against white
+   is how the first pass shipped a --delay-mid of #d13b2e: 4.8:1 on the row it
+   was checked on, 3.7:1 on the backdrop it actually appears on. */
 :root[data-theme="day"]{
-  --delay-ok:#0f7a3d;        /* 5.4:1 on white */
-  --delay-min:#8a5a00;       /* 5.9:1 */
-  --delay-mid:#d13b2e;       /* 4.8:1 */
-  --delay-max-bg:#8f1d1d; --delay-max-ink:#ffffff;   /* 8.9:1 */
+  /* ratios below are backdrop / white row -- the backdrop figure is the one
+     that has to clear 4.5, and each of these was measured, not estimated */
+  --delay-ok:#0d6b35;        /* 5.05 / 6.62 */
+  --delay-min:#8a5a00;       /* 4.52 / 5.93 */
+  --delay-mid:#b3261e;       /* 4.99 / 6.54 */
+  --delay-max-bg:#8f1d1d; --delay-max-ink:#ffffff;   /* 8.9 plate vs ink */
 }
 .dly-ok{ color:var(--delay-ok) }
 .dly-min{ color:var(--delay-min) }
