@@ -121,6 +121,33 @@
   .buy-side{text-align:center; min-width:190px}
   @media (max-width:720px){ .price-card{grid-template-columns:1fr} .buy-side{text-align:left} }
 
+  /* ---- getting started ---- */
+  .steps{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px}
+  .step{padding:19px; border-radius:14px; border:1px solid var(--line); background:var(--panel)}
+  .step .n{width:26px; height:26px; border-radius:50%; background:var(--accent); color:#04101f;
+    font-weight:800; font-size:13.5px; display:flex; align-items:center; justify-content:center}
+  .step .nm{font-weight:800; margin-top:11px; color:var(--text); font-size:15px}
+  .step .ds{font-size:13px; color:var(--muted); margin-top:5px; line-height:1.55}
+  .step kbd{background:var(--panel2); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:5px; padding:1px 6px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11.5px; color:var(--text)}
+
+  /* ---- faq ----
+     <details> rather than JavaScript: it is keyboard accessible, works with the
+     page's find-in-page, and survives this page's whole script failing. */
+  .faq{display:grid; gap:9px; max-width:780px}
+  .faq details{border:1px solid var(--line); border-radius:12px; background:var(--panel);
+    overflow:hidden}
+  .faq summary{padding:14px 17px; cursor:pointer; font-weight:700; font-size:14.5px;
+    color:var(--text); list-style:none; display:flex; align-items:center; gap:11px}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::before{content:"+"; color:var(--accent-ink); font-weight:800; font-size:17px;
+    line-height:1; width:13px; flex:none}
+  .faq details[open] summary::before{content:"−"}
+  .faq summary:hover{background:var(--panel2)}
+  .faq .a{padding:0 17px 15px 41px; color:var(--muted); font-size:13.5px; line-height:1.6}
+  .faq .a b{color:var(--text)}
+
   footer{border-top:1px solid var(--line); padding:24px 0 40px; color:var(--muted); font-size:12.5px;
     display:flex; gap:16px; flex-wrap:wrap; align-items:center}
   footer a{color:var(--muted)} footer a:hover{color:var(--text)}
@@ -133,6 +160,8 @@
   <header>
     <div class="brand">🚇 Transit Project</div>
     <nav>
+      <a href="#start">How it works</a>
+      <a href="#faq">FAQ</a>
       <a href="tour.html">Grand Tour</a>
       <a href="spot.html">Spotter</a>
       <a href="tv.html">All views</a>
@@ -180,8 +209,35 @@
   <section id="cities">
     <h2 id="cityCount">Cities</h2>
     <p class="sub">Each board is pinned to its own city and keeps its own settings, so they never
-      argue about where "here" is. Open one and it starts working immediately — no key, no account.</p>
+      argue about where "here" is. Open one and it starts working immediately — no key, no sign-up.</p>
     <div class="cities" id="cityGrid"></div>
+  </section>
+
+  <section id="start">
+    <h2>Getting started</h2>
+    <p class="sub">Three steps, and none of them involve signing up.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <div class="nm">Pick your city</div>
+        <div class="ds">Tap a card above. It opens straight into a live board — no key, no
+          sign-up, no configuration. What you see is what it does.</div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div class="nm">Tell it where you are</div>
+        <div class="ds">Press <kbd>⚙</kbd> in the header, type any address, city or zip, and
+          hit Set. Every card re-centres on you — nearest stations, nearest stops, planes
+          overhead. Each city remembers its own location separately.</div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div class="nm">Put it on the wall</div>
+        <div class="ds">Press <kbd>F</kbd> or the ⛶ button for full screen, then bookmark that
+          city's page so the screen opens straight to the board. On a tablet or TV, add it to
+          the home screen and leave it running.</div>
+      </div>
+    </div>
   </section>
 
   <section>
@@ -213,6 +269,66 @@
     </div>
   </section>
 
+  <section id="faq">
+    <h2>Questions</h2>
+    <p class="sub">The ones worth answering before you spend anything.</p>
+    <div class="faq">
+      <details>
+        <summary>Do I need an account, or an API key?</summary>
+        <div class="a">No. Open a board and it works — every city ships with its timetables
+          bundled in, and the live feeds it uses need no key. There <b>is</b> an optional sign-in,
+          and it does exactly one thing: carries your Spotter log between your own devices. No
+          board, view or feature depends on it.</div>
+      </details>
+      <details>
+        <summary>Is there a server? Will it stop working one day?</summary>
+        <div class="a">There is no backend. The whole thing runs in your browser and talks
+          directly to the transit agencies' own public feeds, so there is no subscription to
+          lapse and no server of mine to go down. If your browser and the agency's feed are
+          both up, your board is up.</div>
+      </details>
+      <details>
+        <summary>My city isn't on the list. Is it useless to me?</summary>
+        <div class="a">Not entirely, but be realistic about it. <b>Planes overhead and Amtrak
+          work anywhere in the US</b> — type your address and they follow you. Local trains and
+          buses do not: each city board is built against that agency's own feeds and timetables,
+          so a city with no board has no local transit. If you want yours added, ask.</div>
+      </details>
+      <details>
+        <summary>What happens when the internet drops?</summary>
+        <div class="a">Scheduled times keep working — the timetables are bundled into the page,
+          not fetched. Live vehicle positions and arrival predictions stop, because those come
+          from the agencies in real time. The board says which it is showing rather than quietly
+          presenting stale data as current.</div>
+      </details>
+      <details>
+        <summary>What can I run it on?</summary>
+        <div class="a">Anything with a reasonably modern browser: a tablet, a smart TV, a
+          Raspberry Pi, a spare laptop, an old Facebook Portal. It is a web page — there is no
+          app to install and nothing to keep updated.</div>
+      </details>
+      <details>
+        <summary>Where does my location go?</summary>
+        <div class="a">Into your browser's local storage, and to the transit and aircraft APIs
+          when asking what is near you — which is unavoidable, since that is the question.
+          <b>There is no tracking and no analytics on this site</b>, and the address your board
+          is pointed at never leaves your device. One deliberate exception: if you sign in to
+          sync the Spotter, the sightings you chose to log are stored so they reach your other
+          devices — and a sighting records where you saw it. Nothing syncs unless you sign in.</div>
+      </details>
+      <details>
+        <summary>What does the licence actually cover?</summary>
+        <div class="a">One payment of $19, up to five devices, no renewal. It covers every city
+          board including ones added later, the sky view, the split-flap departure board, the
+          Grand Tour and the Spotter app.</div>
+      </details>
+      <details>
+        <summary>Can I try it before paying?</summary>
+        <div class="a" id="faqTrial">Yes — open any city above and see for yourself.</div>
+      </details>
+    </div>
+  </section>
+
   <footer>
     <span>Live data from WMATA, SEPTA, MTA, NJ Transit, MBTA, BART, GVB, SBB, Amtrak and airplanes.live.</span>
     <span class="sp"><a href="PRIVACY.md">Privacy</a></span>
@@ -240,7 +356,7 @@ var VIEWS = [
   {icon:"🌙", name:"Sky view",       desc:"The nearest aircraft overhead, full screen, with the room lights to match", file:"night.html?city=dc", sys:"#b58cff"},
   {icon:"🚉", name:"Departure board",desc:"A split-flap board, the way a station concourse does it",                    file:"flipboard.html?city=dc", sys:"#ffd166"},
   {icon:"🌍", name:"Grand Tour",     desc:"Every city's vehicles moving on one map at once",                            file:"tour.html", sys:"#3ad0c8"},
-  {icon:"📍", name:"Spotter",        desc:"Log what you see from the platform — a phone app, no account",               file:"spot.html", sys:"#33d17a"}
+  {icon:"📍", name:"Spotter",        desc:"Log what you see from the platform — a phone app, no sign-up needed",               file:"spot.html", sys:"#33d17a"}
 ];
 
 /* The headings count the array rather than restating it. I wrote "twelve"
@@ -295,6 +411,38 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
   document.getElementById("resumeNote").textContent =
     "Pinning this to a wall display? Bookmark " + c.file + " directly so it opens straight to the board.";
 })();
+
+/* ---- the one FAQ answer that can go stale --------------------------------
+   Everything else on this page is true regardless. Whether boards are gated is
+   not: licensing is dormant until a licence server is configured, and promising
+   a "15 minute demo" while every board is wide open would be a lie told to the
+   people most likely to check. So the answer is written from the live state.
+
+   The 15 is duplicated from gate.js's TRIAL_MIN. gate.js is deliberately NOT
+   loaded here -- it would start a demo clock on the landing page and eventually
+   wall the page people arrive at to pay, which is the one page that must never
+   be gated. If TRIAL_MIN ever changes, change it here too. */
+function paintTrialAnswer(){
+  var el=document.getElementById("faqTrial");
+  if(!el) return;
+  var on = window.TBLicense && TBLicense.configured;
+  el.innerHTML = on
+    ? "Yes. Every city board runs for <b>15 minutes a visit</b> without a licence \u2014 long " +
+      "enough to judge it properly on your own screen, with live data and every card working. " +
+      "Full screen and the sky view need a licence, because leaving it up on a wall is the " +
+      "thing being sold."
+    : "Yes \u2014 open any city above and see for yourself. <b>Nothing is locked at the " +
+      "moment</b>: every board, view and feature on this site is currently open.";
+}
+/* license.js is DEFERRED, so it has not run yet while this inline script is
+   being parsed -- reading TBLicense here answered "not configured" even after
+   licensing was switched on, which is the one wrong answer on the page that
+   would cost a sale. Deferred scripts are guaranteed done by DOMContentLoaded,
+   so wait for it, then check once more after verification has had a moment. */
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", paintTrialAnswer);
+else paintTrialAnswer();
+setTimeout(paintTrialAnswer, 1500);
 
 /* ---- licence key entry ---------------------------------------------------
    The gate on the boards can take a key too, but somebody who has just bought
