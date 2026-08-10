@@ -19,7 +19,9 @@
 (function () {
   "use strict";
   const FILE_CFG = {
-    workerUrl: "",        // e.g. "https://tb-license.YOURNAME.workers.dev"  (see SELLING.md)
+    // The licence server. A public endpoint, not a secret: it verifies keys and
+    // issues them against a paid Stripe session, and holds nothing worth taking.
+    workerUrl: "https://tblicense.jacklemonade2.workers.dev",
     buyUrl: "buy.html",
   };
   const LS = { key: "tb.license", okUntil: "tb.license.okUntil", lastOk: "tb.license.lastOk",

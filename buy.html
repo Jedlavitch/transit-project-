@@ -77,7 +77,7 @@
   // Stripe Payment Link — public by design, safe in a public repo. Verified to
   // charge $19.00 for "Transit Project".
   const PAYMENT_LINK = "https://buy.stripe.com/6oUcN69QXdA4ehnbDp57W00";
-  const WORKER_URL   = "";   // ← license-worker URL, e.g. https://tb-license.YOU.workers.dev
+  const WORKER_URL   = "https://tblicense.jacklemonade2.workers.dev";
 
   const workerUrl = (localStorage.getItem("tb.workerUrl") || WORKER_URL || "").replace(/\/+$/,"");
   const buyBtn = document.getElementById("buyBtn");

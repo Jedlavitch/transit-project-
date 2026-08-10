@@ -56,7 +56,7 @@
   </div>
 </div>
 <script>
-  const WORKER_URL = "";   // ← license-worker URL, e.g. https://tb-license.YOU.workers.dev
+  const WORKER_URL = "https://tblicense.jacklemonade2.workers.dev";
   const workerUrl = (localStorage.getItem("tb.workerUrl") || WORKER_URL || "").replace(/\/+$/,"");
   const qs = new URLSearchParams(location.search);
   const msg = t => { document.getElementById("msg").textContent = t; };
