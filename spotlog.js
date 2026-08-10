@@ -208,7 +208,7 @@
     card = document.createElement("div");
     card.className = "card";
     card.id = "spotCard";
-    card.style.setProperty("--sys", "#b39dff");   // tactical header tick (index.html); harmless elsewhere
+    card.style.setProperty("--sys", "#b39dff");   // tactical header tick (dc.html); harmless elsewhere
     card.innerHTML =
       `<h2><span class="icon">📓</span> Spotted <span class="count" id="spotCount"></span>
          <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button>

@@ -10,7 +10,7 @@ Pin it full-screen on a tablet, wall display, TV browser, or the old Facebook Po
 There are **three separate pages**, each pinned to its own city so they never fight over "current
 location" — open whichever one matches where you are:
 
-- **`index.html`** — Bethesda / DC area: Metrorail, Metrobus, MARC, Ride On (routes 23 & 29), Amtrak, planes.
+- **`dc.html`** — Bethesda / DC area: Metrorail, Metrobus, MARC, Ride On (routes 23 & 29), Amtrak, planes.
 - **`philadelphia.html`** — Philadelphia: SEPTA Regional Rail, SEPTA Subway (Market-Frankford + Broad
   Street Line), SEPTA Bus (routes 3, 4 & 16 — Cecil B. Moore Ave and North Broad St near Temple
   University), PATCO, Amtrak, planes. (No Metro/MARC/Ride On — those are DC-specific.)
@@ -101,7 +101,7 @@ python3 -m http.server 4173
 
 ## Deploy so it never expires (free, permanent) — GitHub Pages
 1. Create a new GitHub repo (e.g. `bethesda-transit`).
-2. Upload `index.html`, `philadelphia.html`, `nyc.html`, and `night.html`/`flipboard.html`, plus every
+2. Upload `dc.html`, `philadelphia.html`, `nyc.html`, and `night.html`/`flipboard.html`, plus every
    bundled `*.json` schedule file (`marc-schedule.json`, `rideon-schedule.json`,
    `septa-rail-schedule.json`, `septa-subway-schedule.json`, `septa-bus-schedule.json`,
    `patco-schedule.json`, `mta-subway-schedule.json`, `mta-subway-shapes.json`, `lirr-schedule.json`,

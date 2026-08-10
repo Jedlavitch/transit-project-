@@ -10,7 +10,7 @@ Two ways to start:
 - **From the stencil** — cleanest. Copy `stencil.html`, then add only the systems your
   city has. Nothing to strip out.
 - **From an existing board** — if your city closely matches one that exists
-  (`index.html` Bethesda, `philadelphia.html` Philly, `nyc.html` New York), copy the
+  (`dc.html` Bethesda, `philadelphia.html` Philly, `nyc.html` New York), copy the
   closest one and swap its systems. Faster if there's a lot of overlap, but you'll have
   to delete the systems you don't want.
 

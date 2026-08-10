@@ -172,8 +172,8 @@
     <button id="fsBtn" title="Full screen (F)">⤢</button>
     <!-- href is a fallback only (rewritten from CITY_CFG.board later); resolve it from ?city=
          up front so a script error can never bounce you to the DC board. -->
-    <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
-    <script>(function(){try{var m={dc:"index.html",philly:"philadelphia.html",nj:"newjersey.html",
+    <a id="boardBtn" href="dc.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
+    <script>(function(){try{var m={dc:"dc.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
       sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
@@ -243,7 +243,7 @@ const CITY_CONFIG = {
   },
   dc: {
     defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
-    lsLoc:"transitboard.loc", board:"index.html", cityLabel:"Washington DC",
+    lsLoc:"transitboard.loc", board:"dc.html", cityLabel:"Washington DC",
     lsWmataKey:"transitboard.wmataKey", lsHidden:"transitboard.hiddenCards",
   },
   nj: {

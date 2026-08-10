@@ -383,11 +383,11 @@
     <button id="fsBtn" title="Full screen (F)"></button>
     <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city on one live map" onclick="window.location.href=this.href; return false;">tour ›</a>
     <!-- href is a fallback only: it is rewritten from CITY_CFG.board in boot(). It used to be
-         hardcoded "index.html", so ANY script error before boot() finished sent you to the DC
+         hardcoded "dc.html", so ANY script error before boot() finished sent you to the DC
          board instead of the city you came from. Resolve it up front from ?city= instead. -->
-    <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
+    <a id="boardBtn" href="dc.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
     <script>/* set the back-link from ?city= immediately, before any other JS can fail */
-    (function(){try{var m={dc:"index.html",philly:"philadelphia.html",nj:"newjersey.html",
+    (function(){try{var m={dc:"dc.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
       sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
@@ -586,7 +586,7 @@ const CITY_CONFIG = {
   // (rail needs no Worker at all; bus needs its own, different Worker), so
   // they can't share one field the way Philly's incidentally can.
   dc: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
-    lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
+    lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"dc.html",
     busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
     lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
     lsWmataKey:"transitboard.wmataKey",          // unlocks Metrorail and Metrobus as fallbacks
@@ -972,7 +972,7 @@ function initMiniMap(){
   initRadar(miniMap, .5);                          // live precipitation overlay
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
   miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng
-  // Same root cause as the board's own #map (see index.html's initMap()): Leaflet
+  // Same root cause as the board's own #map (see dc.html's initMap()): Leaflet
   // sizes itself once at construction and won't notice a later resize on its own.
   // Here the trigger is the async representative-photo fetch -- .side is
   // flex-direction:row with height:auto in the portrait/mobile layout, so when
@@ -2704,7 +2704,7 @@ const AIRLINE_BRAND={
    Keyed by the `sysName` each producer already sets (the agency named in the
    card's subtitle), so what you read and what you see agree. Where a city board
    already flies an agency's colour — nyc.html's LIRR green, sanfrancisco's BART
-   blue, index.html's MARC orange — that exact hex is reused, so the same
+   blue, dc.html's MARC orange — that exact hex is reused, so the same
    operator doesn't change colour when you switch between board and sky view. */
 const TRANSIT_BRAND={
   "Amtrak":"#004B8D",

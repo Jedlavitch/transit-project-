@@ -22,7 +22,7 @@
      1. Open admin.html. The first visit asks you to pick a username and
         password; after that it asks you to sign in with them.
      2. Signing in unlocks the operator controls on this device.
-        Lock it again from admin.html, or with …/index.html?admin=off
+        Lock it again from admin.html, or with …/dc.html?admin=off
 
      The login lives on the device that created it, and only the password's
      SHA-256 is stored. Set it up once per screen.

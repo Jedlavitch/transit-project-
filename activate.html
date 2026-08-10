@@ -37,7 +37,7 @@
 </head>
 <body>
 <div class="wrap">
-  <a class="back" href="index.html">← back to the board</a>
+  <a class="back" href="dc.html">← back to the board</a>
   <h1>Activate your license</h1>
   <div class="panel">
     <div id="fetching" style="display:none"><p>Confirming your purchase…</p></div>
@@ -99,7 +99,7 @@
           localStorage.setItem("tb.license.okUntil", String(Date.now()+86400000));
           localStorage.setItem("tb.license.lastOk", String(Date.now()));
           msg("✓ Licensed! Opening your board…");
-          setTimeout(()=>{ window.location.href = "index.html"; }, 900);
+          setTimeout(()=>{ window.location.href = "dc.html"; }, 900);
         } else msg(data.error === "device_limit" ? "This key is already on its maximum number of devices." : "That key wasn't recognized.");
       } catch (_) { msg("Saved. The board will verify the key when it can reach the license server."); }
     } else msg("Saved. Open any board to finish activation.");
