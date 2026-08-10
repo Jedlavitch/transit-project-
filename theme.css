@@ -14,6 +14,25 @@
   --text:#eef3ff; --muted:#93a5cf; --accent:#4ea1ff; --good:#33d17a; --late:#ff5a5a;
   --warn:#ffcc33; --live:#33d17a; --sched:#7f93c4; --plane:#ffd166; --amtrak:#3ad0c8; --busveh:#6aa9ff;
   --row-bg:#0d1830; --row-line:#1c2c4e; --sched-b:#b3c3e8; --scrim:rgba(5,10,22,.86);
+  /* ---- INK variants: the same semantics, safe to read as text --------------
+     The palette above is tuned for a near-black board, and several of those
+     colours are also used as SOLID FILLS -- var(--accent) backs the active city
+     tab, var(--good) and var(--warn) back badges, all with dark ink on top. So
+     the day theme cannot simply darken them: that would fix the text and break
+     every filled plate at the same time.
+
+     Hence a second set, used only where the colour is text. Every `color:`
+     declaration points at the -ink variant; every `background:` keeps the vivid
+     original. In the dark themes the two are literally the same value, so
+     nothing changes there at all -- this exists entirely so the day theme has
+     somewhere to put a readable version.
+
+     Day values are measured against the pale blue page backdrop rgb(210,226,252),
+     the darkest of that theme's three light surfaces and therefore the one that
+     decides. On white they all sit comfortably higher. */
+  --accent-ink:var(--accent); --good-ink:var(--good); --live-ink:var(--live);
+  --warn-ink:var(--warn);     --late-ink:var(--late); --sched-ink:var(--sched);
+  --plane-ink:var(--plane);
   /* blue depth range: bright for highlights (clock ink, row sheen, labels),
      deep for floors (header/footer washes) — flipped per theme below */
   --blue-bright:#7cc0ff; --blue-deep:#0a1a3d;
@@ -78,10 +97,27 @@
 }
 :root[data-theme="day"]{
   --bg:#e9eefb; --panel:#ffffff; --panel2:#f1f5fd; --line:#d0dcf2; --bg-glow:#d7e3fa;
-  --text:#13203e; --muted:#54648c; --row-bg:#ffffff; --row-line:#dde6f7; --sched-b:#334a78;
+  --text:#13203e; --muted:#525f88; --row-bg:#ffffff; --row-line:#dde6f7; --sched-b:#334a78;
   --scrim:rgba(165,185,225,.55);
   /* light theme: "bright" = a saturated darker blue (reads on white), "deep" = pale wash */
-  --blue-bright:#1e63c4; --blue-deep:#dbe6fa;
+  --blue-bright:#1b5cb8; --blue-deep:#dbe6fa;
+  /* Readable versions of the semantic palette. Auditing the rendered board in
+     this theme turned up 186 failing text elements from 13 colours, all with
+     one cause: the structural tokens above were overridden for day and the
+     semantic ones never were, leaving colours built for a near-black board
+     sitting on pale blue. --live at 1.52:1 was every countdown on the screen
+     and --sched at 2.34:1 every scheduled time, so the theme was close to
+     unusable in the one condition it exists for.
+
+     Fills are untouched -- only `color:` reads these. Ratios are against the
+     rgb(210,226,252) backdrop; all measured, none estimated. */
+  --accent-ink:#1a58ae;      /* was #4ea1ff at 2.04 -> 5.25 */
+  --good-ink:#0d6b35;        /* was #33d17a at 1.52 -> 5.05 */
+  --live-ink:#0d6b35;        /* was #33d17a at 1.52 -> 5.05 */
+  --warn-ink:#7a5200;        /* was #ffcc33 at 1.15 -> 5.28 */
+  --late-ink:#b3261e;        /* was #ff5a5a at 2.93 -> 4.99 */
+  --sched-ink:#455474;       /* was #7f93c4 at 2.34 -> 5.78 */
+  --plane-ink:#7a5200;       /* was #ffd166 at 1.10 -> 5.28 */
 }
 
 /* One typeface everywhere: the native system UI font (San Francisco on
@@ -325,7 +361,7 @@ body #app{
   flex:none; background:var(--panel2); color:var(--text); border:1px solid var(--line);
   border-radius:999px; padding:6px 11px; font-family:inherit; font-size:12px; font-weight:600;
   cursor:pointer; white-space:nowrap; line-height:1.2; }
-#setup .suggest-row .sg:hover, .suggest-row .sg:hover{ border-color:var(--accent); color:var(--accent); }
+#setup .suggest-row .sg:hover, .suggest-row .sg:hover{ border-color:var(--accent); color:var(--accent-ink); }
 #setup .suggest-row .sg.on, .suggest-row .sg.on{
   background:var(--accent); border-color:var(--accent); color:#04101f; font-weight:800; }
 .suggest-lbl{ font-size:11px; color:var(--muted); font-weight:700; text-transform:uppercase;

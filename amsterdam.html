@@ -12,6 +12,7 @@
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
 <script src="delays.js?v=1"></script>
+<script src="transitous.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=10" defer></script>
@@ -73,8 +74,8 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
   .row .dest{font-weight:700; font-size:15px; line-height:1.15}
   .row .sub{color:var(--muted); font-size:12px}
   .row .times{display:flex; flex-direction:column; align-items:flex-end; gap:2px}
-  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live)}
-  .row .sched{font-size:11px; color:var(--sched)}
+  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live-ink)}
+  .row .sched{font-size:11px; color:var(--sched-ink)}
   .row .sched b{color:var(--sched-b)}
   /* Live delay chip (banded green / yellow / light red / dark red -- see delays.js) --
      used by systems with a real-time feed; see appendLiveTimes()/liveLateInfo(). */
@@ -82,21 +83,21 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
   .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
   /* Direction divider inside a bundled-schedule card (groupDepsByDirection). */
   .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
-  .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
+  .dir-label{font-size:11px; color:var(--accent-ink); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
   /* third line of a plane row: where it's going, where it is, how it's squawking */
-  .plane .route{font-size:11px; color:var(--sched); font-family:var(--mono); letter-spacing:.02em;
+  .plane .route{font-size:11px; color:var(--sched-ink); font-family:var(--mono); letter-spacing:.02em;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
   .plane .route b{color:var(--sched-b); font-weight:700}
-  .plane .route .ap b{color:var(--plane)}   /* airport codes carry the card's own colour */
-  .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
+  .plane .route .ap b{color:var(--plane-ink)}   /* airport codes carry the card's own colour */
+  .plane .alt{color:var(--accent-ink); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
 
   #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
   .leaflet-container{background:var(--row-bg)}
   .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
   .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
-  .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
+  .legend b{color:var(--live-ink)} .legend i{color:var(--sched-ink); font-style:normal}
 
   footer{display:flex; align-items:center; gap:14px; padding:6px 22px; border-top:1px solid var(--line);
     font-size:12px; color:var(--muted)}
@@ -112,7 +113,7 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
     padding:26px; max-width:460px; width:100%}
   #setup h3{margin:0 0 6px; font-size:19px}
   #setup p{color:var(--muted); font-size:13px; line-height:1.5; margin:8px 0}
-  #setup a{color:var(--accent)}
+  #setup a{color:var(--accent-ink)}
   #setup input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
     background:var(--row-bg); color:var(--text); font-size:14px; margin-top:6px}
   #setup .btns{display:flex; gap:10px; margin-top:16px}
@@ -263,7 +264,15 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   :root[data-theme="day"] .card h2 .t{filter:brightness(.6) saturate(1.3)}
   .statline b{color:var(--sys2,var(--sys,var(--text)))}  /* --sys2 is the brighter of the pair */
-  :root[data-theme="day"] .statline b{filter:brightness(.62) saturate(1.3)}
+  /* The number is tinted from a per-tile --sys hex written inline in the
+     markup, so there is no token to swap for day. brightness() could not
+     get there: at .62 the amber and green numbers still measured ~3:1, and
+     winding it down far enough turned every hue to mud. color-mix keeps the
+     hue and guarantees the darkness instead -- 38% is the ratio at which the
+     worst hue (amber) clears 4.5 against the pale backdrop. */
+  :root[data-theme="day"] .statline b{
+    color:color-mix(in srgb, var(--sys2,var(--sys,var(--text))) 38%, #0b1424);
+    filter:none}
 
   /* ============ blue depth pass ============
      A wider blue range on top of the gradient pass: deep-navy floors (header,
@@ -299,9 +308,9 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
   .row{border-left:3px solid var(--sys,var(--accent)); padding-left:9px; position:relative}
   .row .times{min-width:5.6em; text-align:right}
   .row .live.eta{font-variant-numeric:tabular-nums; letter-spacing:.01em}
-  .row .live.eta.due{color:var(--good)}
-  .row .live.eta.soon{color:var(--warn)}
-  .row .live.eta.later{color:var(--live)}
+  .row .live.eta.due{color:var(--good-ink)}
+  .row .live.eta.soon{color:var(--warn-ink)}
+  .row .live.eta.later{color:var(--live-ink)}
   .row .sched{opacity:.85; white-space:nowrap}
   :root[data-theme="day"] .row .live.eta{filter:brightness(.72) saturate(1.25)}
 
@@ -322,16 +331,16 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
   .card.mini .list, .card.mini .statline{display:none}
   .card.mini h2{margin-bottom:0}
   .cards.all-mini{grid-auto-rows:min-content; align-content:start}
-  #minAllBtn.on{border-color:var(--accent); color:var(--accent)}
+  #minAllBtn.on{border-color:var(--accent); color:var(--accent-ink)}
 
   /* big stops: rail interchanges + airports */
   .hub-dot{filter:drop-shadow(0 0 6px var(--accent))}
   .hub-label{white-space:nowrap; color:var(--text); font:700 10px/1 var(--mono);
     letter-spacing:.04em; text-shadow:0 1px 5px #000,0 0 2px #000; pointer-events:none}
-  .hub-label b{color:var(--accent); margin-left:3px}
+  .hub-label b{color:var(--accent-ink); margin-left:3px}
   .airport-mark{white-space:nowrap; pointer-events:auto}
-  .airport-mark .ap{color:var(--plane); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
-  .airport-mark .apc{color:var(--plane); font:800 10px/1 var(--mono); margin-left:3px;
+  .airport-mark .ap{color:var(--plane-ink); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
+  .airport-mark .apc{color:var(--plane-ink); font:800 10px/1 var(--mono); margin-left:3px;
     text-shadow:0 1px 5px #000,0 0 2px #000}
 
   /* ============ settings panel redesign ============
@@ -590,7 +599,7 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">GVB + NS scheduled · planes live — airplanes.live</span>
+    <span id="statusText">GVB + NS scheduled · international live — transitous · planes live — airplanes.live</span>
     <span class="grow"></span>
   </footer>
 
@@ -1965,9 +1974,121 @@ const refreshTram =()=>refreshAmsCard({ key:"tram", list:"#tramList", count:"#tr
 const refreshRail =()=>refreshAmsCard({ key:"rail", list:"#railList", count:"#railCount", stations:2,
   badgeCls:()=>"badge",                        // dark text on NS yellow
   noneMsg:"No more NS trains today at nearby stations." });
-const refreshIntl =()=>refreshAmsCard({ key:"intl", list:"#intlList", count:"#intlCount", stations:2,
+/* The bundled timetable, kept as the fallback for the international card.
+   Everything else on this board is scheduled by design — the Dutch GTFS-RT
+   needs a Worker most people will never deploy — but international trains are
+   covered live and keyless by transitous, so this card gets the real thing and
+   falls back here only if that source is unreachable. */
+const refreshIntlSched =()=>refreshAmsCard({ key:"intl", list:"#intlList", count:"#intlCount", stations:2,
   badgeCls:l=>l==="GV"?"badge":"badge rail",   // dark text on GoVolta's yellow
   noneMsg:"No more international trains today from nearby stations." });
+
+/* ---- LIVE international trains (transitous, no key, no Worker) ------------
+   Amsterdam Centraal is where the Eurostars to London and Paris and the ICEs
+   to Germany leave from, and until now the card read them off a timetable
+   bundled at build time: right about when a train was meant to go, silent
+   about whether it actually was. The same source the German and Swiss boards
+   use answers for Amsterdam too, so the times are now the operator's own.
+
+   Which trains count is decided in transitous.js from the timezone the journey
+   ENDS in — see the note there. Positions come from each train's real route
+   geometry and are recomputed locally every tick, so the markers glide without
+   touching the network, and setting liveOk.intl stands the scheduled ghosts
+   down (drawSchedFleet checks it) so a train is never drawn twice. */
+const INTL_STATION = "Amsterdam Centraal";
+async function refreshIntl(){
+  if(!window.TBTransitous){ return refreshIntlSched(); }
+  let b=null;
+  try{ b = await TBTransitous.intlBoard(INTL_STATION, {n:60, trains:8}); }
+  catch(e){ b=null; }
+  if(!b || !b.station || !b.departures.length) return refreshIntlSched();
+  state._intlLive=b;
+  renderIntlLive(b);
+  drawIntlLive();
+}
+
+function renderIntlLive(b){
+  const box=$("#intlList"); if(!box) return;
+  box.innerHTML="";
+  const sys=SYSTEMS.intl;
+  b.departures.slice(0,8).forEach(d=>{
+    const tr=d.trip;
+    /* The trip knows where the train really finishes; a departure row often
+       names only the border station it hands over at. */
+    const dest=(tr&&tr.to&&tr.to.name) || (d.tripTo&&d.tripTo.name) || d.headsign || "—";
+    const line=(d.route||d.label||"—");
+    const col=sys.color(line.split(/\s/)[0]);
+    const row=el("div","row");
+    const badge=el("div", line.startsWith("GV")?"badge":"badge rail", line.slice(0,14));
+    badge.style.background=col;
+    const mid=el("div");
+    mid.appendChild(el("div","dest", dest));
+    const sub=[d.label];
+    // where it is right now -- the payoff of tracking the train, on the card
+    if(tr){
+      const p=TBTransitous.positionOnTrip(tr);
+      if(p && p.pct>0 && p.pct<100 && p.next && p.next.name) sub.push("nu bij "+p.next.name);
+    }
+    if(d.platform) sub.push("spoor "+d.platform);
+    mid.appendChild(el("div","sub", sub.filter(Boolean).join(" · ")));
+    const times=el("div","times");
+    const rel=Math.round((d.when-Date.now())/60000);
+    const t=el("div","live"); t.style.color=col;
+    t.textContent=new Date(d.scheduled||d.when).toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+    times.append(t, dualTime(t, rel));
+    /* A departure with no realtime of its own may still be tracked live on its
+       trip, which is where several of these delays come from. */
+    const rt = d.realTime || !!(tr && tr.realTime);
+    const dm = d.realTime ? d.delayMin : (tr ? tr.delayMin : null);
+    if(d.cancelled){
+      const c=el("div","live-tag","rijdt niet"); c.style.color="var(--warn-ink)"; times.appendChild(c);
+    } else if(rt){
+      const li = (dm==null) ? null : liveLateInfo(dm);
+      if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.appendChild(eta); }
+      else times.appendChild(el("div","live-tag","live"));
+    }
+    row.append(badge, mid, el("div"), times);
+    if(tr && state.fleets.intl && state.fleets.intl["ti"+tr.id]){
+      row.classList.add("followable"); row.title="Follow on the map";
+      row.onclick=()=>startFollow("intl","ti"+tr.id);
+    }
+    box.appendChild(row);
+  });
+  if(!box.children.length) box.appendChild(el("div","empty","No more international trains today."));
+  const live=b.departures.slice(0,8).filter(d=>d.realTime||(d.trip&&d.trip.realTime)).length;
+  const c=$("#intlCount"); if(c) c.textContent = live? `${live} live` : "gepland";
+  fitList(box);
+}
+
+/* Recomputed from geometry already in memory: no network on this tick. */
+function drawIntlLive(){
+  const b=state._intlLive; if(!b || !state.intlLayer) return;
+  const items=[], seenRoute={};
+  if(state.intlRouteLayer) state.intlRouteLayer.clearLayers();
+  (b.trains||[]).forEach(t=>{
+    const p=TBTransitous.positionOnTrip(t);
+    if(!p || typeof p.lat!=="number") return;
+    const line=(t.route||t.label||"—");
+    const col=SYSTEMS.intl.color(line.split(/\s/)[0]);
+    const pts=(t.line&&t.line.length>1)? t.line : (t.stops||[]).map(s=>[s.lat,s.lon]);
+    // one line per service, not per vehicle
+    if(state.intlRouteLayer && pts.length>1 && !seenRoute[line]){
+      seenRoute[line]=1;
+      L.polyline(pts,{color:col,weight:3,opacity:.35,lineCap:"round",lineJoin:"round"}).addTo(state.intlRouteLayer);
+    }
+    const late=(t.realTime&&t.delayMin>0)? ` · +${t.delayMin} min` : "";
+    items.push({ id:"ti"+t.id, lat:p.lat, lon:p.lon,
+      icon:()=>labelIcon(col, line), ik:"ti-"+line,
+      label:`${line} → ${t.to.name}`, color:col, route:pts,
+      tip:`${line} · ${t.from.name} → ${t.to.name}<br>${p.pct}%`
+         +(t.realTime? " · live times, position from timetable" : " · scheduled")+late });
+  });
+  if(items.length){
+    updateFleet("intl", items, 1000);
+    // stand the bundled ghosts down so no train is drawn twice
+    state.liveOk.intl = Date.now();
+  }
+}
 const refreshFerry=()=>refreshAmsCard({ key:"ferry", list:"#ferryList", count:"#ferryCount", stations:2,
   noneMsg:"No more ferries today at nearby docks." });
 // Map vehicles: interpolate each running trip between the two stops its
@@ -2030,7 +2151,7 @@ async function fetchAmsLive(){
     });
     if(items.length){ updateFleet(key, items, CFG.liveEveryMs); state.liveOk[key]=Date.now(); anyLive=true; }
   }
-  if(anyLive) $("#statusText").textContent="LIVE trams via your Worker · rest scheduled · planes live — airplanes.live";
+  if(anyLive) $("#statusText").textContent="LIVE trams via your Worker · rest scheduled · international live — transitous · planes live — airplanes.live";
 }
 
 /* ---------- refresh orchestration ---------- */
@@ -2435,9 +2556,9 @@ function decodeGtfsAlerts(buf){
    several have none at all), ranked worst-first, and the card removes itself
    entirely when nothing is wrong so that seeing it means something IS wrong. */
 const SEV = {
-  major:  { rank:0, word:"Major",  color:"var(--late)" },
-  delay:  { rank:1, word:"Delay",  color:"var(--warn)" },
-  notice: { rank:2, word:"Notice", color:"var(--accent)" },
+  major:  { rank:0, word:"Major",  color:"var(--late-ink)" },
+  delay:  { rank:1, word:"Delay",  color:"var(--warn-ink)" },
+  notice: { rank:2, word:"Notice", color:"var(--accent-ink)" },
 };
 /* Feeds write alerts for a web page, not a kiosk: rambling sentences, repeated
    "we apologize for the inconvenience" boilerplate, and labels that name every
@@ -2628,6 +2749,11 @@ function boot(){
   setInterval(refreshTram, CFG.cardEveryMs);
   setInterval(refreshRail, CFG.cardEveryMs);
   setInterval(refreshIntl, CFG.cardEveryMs);
+  /* International positions are recomputed from geometry already held, so this
+     tick costs nothing on the network — it is what makes those markers glide
+     rather than hop once every card refresh. It also keeps liveOk.intl fresh,
+     which is what holds the bundled ghosts back. */
+  setInterval(drawIntlLive, 1000);
   setInterval(refreshFerry, CFG.cardEveryMs);
   refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 

@@ -75,8 +75,8 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   .row .dest{font-weight:700; font-size:15px; line-height:1.15}
   .row .sub{color:var(--muted); font-size:12px}
   .row .times{display:flex; flex-direction:column; align-items:flex-end; gap:2px}
-  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live)}
-  .row .sched{font-size:11px; color:var(--sched)}
+  .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live-ink)}
+  .row .sched{font-size:11px; color:var(--sched-ink)}
   .row .sched b{color:var(--sched-b)}
   /* Live delay chip (banded green / yellow / light red / dark red -- see delays.js) --
      used by systems with a real-time feed; see appendLiveTimes()/liveLateInfo(). */
@@ -84,21 +84,21 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
   /* Direction divider inside a bundled-schedule card (groupDepsByDirection). */
   .stop-label{font-size:12px; color:var(--muted); margin:8px 2px 2px; font-weight:700; letter-spacing:.3px}
-  .dir-label{font-size:11px; color:var(--accent); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
+  .dir-label{font-size:11px; color:var(--accent-ink); margin:5px 2px 2px 10px; font-weight:700; letter-spacing:.2px}
   .empty{color:var(--muted); font-size:13px; padding:14px; text-align:center}
   .plane .badge{background:var(--plane); font-size:11px; min-width:30px}
   /* third line of a plane row: where it's going, where it is, how it's squawking */
-  .plane .route{font-size:11px; color:var(--sched); font-family:var(--mono); letter-spacing:.02em;
+  .plane .route{font-size:11px; color:var(--sched-ink); font-family:var(--mono); letter-spacing:.02em;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
   .plane .route b{color:var(--sched-b); font-weight:700}
-  .plane .route .ap b{color:var(--plane)}   /* airport codes carry the card's own colour */
-  .plane .alt{color:var(--accent); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
+  .plane .route .ap b{color:var(--plane-ink)}   /* airport codes carry the card's own colour */
+  .plane .alt{color:var(--accent-ink); font-weight:800; font-size:15px; font-variant-numeric:tabular-nums}
 
   #map{flex:1; border-radius:16px; border:1px solid var(--line); min-height:220px; background:var(--row-bg)}
   .leaflet-container{background:var(--row-bg)}
   .plane-icon{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
   .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); padding:2px 4px}
-  .legend b{color:var(--live)} .legend i{color:var(--sched); font-style:normal}
+  .legend b{color:var(--live-ink)} .legend i{color:var(--sched-ink); font-style:normal}
 
   footer{display:flex; align-items:center; gap:14px; padding:6px 22px; border-top:1px solid var(--line);
     font-size:12px; color:var(--muted)}
@@ -114,7 +114,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     padding:26px; max-width:460px; width:100%}
   #setup h3{margin:0 0 6px; font-size:19px}
   #setup p{color:var(--muted); font-size:13px; line-height:1.5; margin:8px 0}
-  #setup a{color:var(--accent)}
+  #setup a{color:var(--accent-ink)}
   #setup input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
     background:var(--row-bg); color:var(--text); font-size:14px; margin-top:6px}
   #setup .btns{display:flex; gap:10px; margin-top:16px}
@@ -265,7 +265,15 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   :root[data-theme="day"] .card h2 .t{filter:brightness(.6) saturate(1.3)}
   .statline b{color:var(--sys2,var(--sys,var(--text)))}  /* --sys2 is the brighter of the pair */
-  :root[data-theme="day"] .statline b{filter:brightness(.62) saturate(1.3)}
+  /* The number is tinted from a per-tile --sys hex written inline in the
+     markup, so there is no token to swap for day. brightness() could not
+     get there: at .62 the amber and green numbers still measured ~3:1, and
+     winding it down far enough turned every hue to mud. color-mix keeps the
+     hue and guarantees the darkness instead -- 38% is the ratio at which the
+     worst hue (amber) clears 4.5 against the pale backdrop. */
+  :root[data-theme="day"] .statline b{
+    color:color-mix(in srgb, var(--sys2,var(--sys,var(--text))) 38%, #0b1424);
+    filter:none}
 
   /* ============ blue depth pass ============
      A wider blue range on top of the gradient pass: deep-navy floors (header,
@@ -301,9 +309,9 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   .row{border-left:3px solid var(--sys,var(--accent)); padding-left:9px; position:relative}
   .row .times{min-width:5.6em; text-align:right}
   .row .live.eta{font-variant-numeric:tabular-nums; letter-spacing:.01em}
-  .row .live.eta.due{color:var(--good)}
-  .row .live.eta.soon{color:var(--warn)}
-  .row .live.eta.later{color:var(--live)}
+  .row .live.eta.due{color:var(--good-ink)}
+  .row .live.eta.soon{color:var(--warn-ink)}
+  .row .live.eta.later{color:var(--live-ink)}
   .row .sched{opacity:.85; white-space:nowrap}
   :root[data-theme="day"] .row .live.eta{filter:brightness(.72) saturate(1.25)}
 
@@ -324,16 +332,16 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   .card.mini .list, .card.mini .statline{display:none}
   .card.mini h2{margin-bottom:0}
   .cards.all-mini{grid-auto-rows:min-content; align-content:start}
-  #minAllBtn.on{border-color:var(--accent); color:var(--accent)}
+  #minAllBtn.on{border-color:var(--accent); color:var(--accent-ink)}
 
   /* big stops: rail interchanges + airports */
   .hub-dot{filter:drop-shadow(0 0 6px var(--accent))}
   .hub-label{white-space:nowrap; color:var(--text); font:700 10px/1 var(--mono);
     letter-spacing:.04em; text-shadow:0 1px 5px #000,0 0 2px #000; pointer-events:none}
-  .hub-label b{color:var(--accent); margin-left:3px}
+  .hub-label b{color:var(--accent-ink); margin-left:3px}
   .airport-mark{white-space:nowrap; pointer-events:auto}
-  .airport-mark .ap{color:var(--plane); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
-  .airport-mark .apc{color:var(--plane); font:800 10px/1 var(--mono); margin-left:3px;
+  .airport-mark .ap{color:var(--plane-ink); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
+  .airport-mark .apc{color:var(--plane-ink); font:800 10px/1 var(--mono); margin-left:3px;
     text-shadow:0 1px 5px #000,0 0 2px #000}
 
   /* ============ settings panel redesign ============
@@ -546,10 +554,15 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
       <div id="map"><button id="mapFsBtn" type="button" title="Map only — full screen (M)"></button></div>
       <div class="legend">
         <span>✈️ aircraft</span>
-        <span style="color:#3ad0c8">▦ Amtrak</span>
-        <span style="color:#3ad0c8">┈ Amtrak route</span>
+        <span style="color:#1D4E9E">▦ international</span>
+        <span style="color:#e2504f">▦ long-distance</span>
+        <span style="color:#3ad0c8">▦ regional</span>
+        <span style="color:#4ea1ff">▦ metro</span>
+        <span style="color:#f0ab00">▦ tram</span>
+        <span style="color:#6aa9ff">▦ bus</span>
+        <span style="color:#5ad17a">▦ boat</span>
         <!-- [ADD-A-SYSTEM] legend swatch: one <span style="color:#XXX">▦ YourSystem</span> per system -->
-        <span style="opacity:.7">vehicles move live · zoom in for labels</span>
+        <span style="opacity:.7">positions from the timetable · zoom in for labels</span>
       </div>
     </div>
 
@@ -559,8 +572,13 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
              must match a CARD_DEFS/CARD_LAYERS entry and the #xList / #xCount ids
              its render function writes to. Put your local systems BEFORE these two
              (Amtrak + planes work anywhere in the US, so they read best last). -->
+        <div class="card" id="intlCard" style="--sys:#1D4E9E; --sys2:#6f9bff">
+          <h2><span class="icon">🌍</span> <span class="t">International</span> <span class="count" id="intlCount"></span></h2>
+          <div class="statline" id="intlStat"></div>
+          <div class="list" id="intlList"><div class="empty">Looking for trains leaving the country…</div></div>
+        </div>
         <div class="card" id="ldCard" style="--sys:#e2504f; --sys2:#ffa07a">
-          <h2><span class="icon">🚄</span> <span class="t">Long-distance &amp; international</span> <span class="count" id="ldCount"></span></h2>
+          <h2><span class="icon">🚄</span> <span class="t">Long-distance</span> <span class="count" id="ldCount"></span></h2>
           <div class="statline" id="ldStat"></div>
           <div class="list" id="ldList"><div class="empty">Loading…</div></div>
         </div>
@@ -600,7 +618,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">live — Amtrak + airplanes.live</span>
+    <span id="statusText">live — transitous + airplanes.live</span>
     <span class="grow"></span>
   </footer>
 </div>
@@ -612,7 +630,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     <div class="section-lbl">Location</div>
     <p style="font-size:12px">This board tracks trains and planes <b>near one location</b> —
       <b id="curLocLbl">the default</b> by default. Type any address, city, or zip to move it there instead.
-      Amtrak and planes work anywhere in the US.</p>
+      Planes work anywhere; the departure boards cover Switzerland.</p>
     <div class="addr-row">
       <input id="addrInput" type="text" placeholder="Address, city, or zip…" autocomplete="off" spellcheck="false" />
       <button id="addrSetBtn" type="button">Set</button>
@@ -717,15 +735,13 @@ const CITY_ID = "stuttgart";
 
 const CFG = {
   // [CITY-SETUP] default map center + label (shown until GPS/typed address wins).
-  // Amtrak + planes work anywhere in the US; pick your city's downtown/station.
+  // Planes work anywhere; pick your city's downtown/station.
   transitSource: "",
   mainStation: "Stuttgart Hauptbahnhof",
   defaultLoc: { lat: 48.7838, lon: 9.1817, label: "Stuttgart Hauptbahnhof" },
   planeRadiusNm: 12,    // nautical miles for "overhead"
-  amtrakRadiusMi: 60,   // miles: Amtrak trains to show as "regional"
   planeEveryMs: 15000,
   labelZoom: 12,        // at this zoom and closer, show vehicle labels; below, just dots
-  amtrakEveryMs: 20000,
   // [ADD-A-SYSTEM] refresh interval: add one `xEveryMs` per system (how often to
   // re-fetch its positions). Ground transit ~10-15s reads well.
   clockEveryMs: 1000,
@@ -747,7 +763,12 @@ const ACCENTS=["#ff5a5a","#ff7a1a","#fb923c","#ffb454","#ffd166","#fde047","#d9e
 let state = {
   loc: CFG.defaultLoc,
   map: null, tileLayer: null,
-  amtrakRouteLayer: null, trainLayer: null, planeLayer: null,
+  planeLayer: null, stopLayer: null,
+  /* One pair of layers per departure family -- the route line underneath, the
+     vehicles on top -- created in initMap() from FAMILY_CARDS. Kept apart
+     rather than pooled into one transit layer so a card's "show on board"
+     checkbox can hide exactly its own system and nothing else (CARD_LAYERS). */
+  _trips: {},   // family -> [{dep, trip}] currently on the map, see refreshTransitVehicles
   // [ADD-A-SYSTEM] map layers: add `xLayer` (live-vehicle markers) and, if it has
   // route lines, `xRouteLayer` here. Also create them in initMap() below.
 };
@@ -854,10 +875,10 @@ function initMap(){
   state.ringLayer   = L.layerGroup().addTo(state.map);   // tactical range rings, beneath everything
   // [ADD-A-SYSTEM] initMap layers: create each layer group here. ORDER = z-order
   // (earlier = underneath), so add route-line layers first, then vehicle layers.
-  state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes (under vehicles)
-  state.trainLayer  = L.layerGroup().addTo(state.map);      // Amtrak vehicles
-  state.transitLayer = L.layerGroup().addTo(state.map);
-  state.planeLayer  = L.layerGroup().addTo(state.map);      // planes
+  FAMILY_CARDS.forEach(([key])=>{ state[key+"RouteLayer"] = L.layerGroup().addTo(state.map); });
+  state.stopLayer = L.layerGroup().addTo(state.map);        // nearby stops, under the vehicles
+  FAMILY_CARDS.forEach(([key])=>{ state[key+"Layer"] = L.layerGroup().addTo(state.map); });
+  state.planeLayer  = L.layerGroup().addTo(state.map);      // planes, over everything they cross
   const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
   state.labelsOn = state.map.getZoom() >= CFG.labelZoom;   // labels on only when zoomed in
@@ -931,14 +952,15 @@ function planeIcon(track, label){
    items array [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}] and
    call updateFleet("yourFleetName", items, durMs). */
 state.fleets = {
-  amtrak:{}, plane:{},
+  plane:{},
+  // one fleet per departure family, named to match FAMILY_CARDS
+  intl:{}, ld:{}, regio:{}, metro:{}, tram:{}, busx:{}, ferry:{},
   // [ADD-A-SYSTEM] fleet: add `x:{}` here, one per live system.
 };
 function fleetLayer(f){
-  return {
-    amtrak:state.trainLayer, plane:state.planeLayer,
-    // [ADD-A-SYSTEM] fleet layer: map your fleet name -> its layer, e.g.  bus:state.busLayer,
-  }[f];
+  // families follow the naming convention; anything else is looked up by hand
+  return f==="plane" ? state.planeLayer : state[f+"Layer"];
+  // [ADD-A-SYSTEM] fleet layer: map your fleet name -> its layer, e.g.  bus:state.busLayer,
 }
 // items: [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}]
 function updateFleet(fleet, items, dur){
@@ -1233,11 +1255,13 @@ function groupDepsByDirection(deps, perDir=2, maxDirs=2, sys, nowMin){
    extra network calls. Runs on a 1s tick; feeds that haven't reported yet
    show an em-dash instead of a fake zero. Same engine on every board; the
    three consts below are this board's configuration. */
-const STATS_GROUPS=[{"v":"stG1","short":"transit","fleets":[]},{"v":"stG2","short":"road","fleets":[]}];
+const STATS_GROUPS=[
+  {"v":"stG1","short":"rail","fleets":[["ld","long-dist"],["regio","regional"],["metro","metro"]]},
+  {"v":"stG2","short":"street","fleets":[["tram","tram"],["busx","bus"],["ferry","boat"]]}];
 const STATS_LINES={};
 const STATS_FEEDS=[{name:"ADS-B", ts:()=>state.lastPlaneOk, staleMs:60000},
-  {name:"AMTRK", ts:()=>state.lastAmtrakOk, staleMs:120000},
-  {name:"GTFS", bundled:true}];
+  {name:"TRANSIT", ts:()=>state.lastTransitOk, staleMs:120000},
+  {name:"INTL", ts:()=>state.lastIntlOk, staleMs:180000}];
 function fleetCount(f){ return Object.keys((state.fleets&&state.fleets[f])||{}).length; }
 function medianOf(arr){ if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; }
 function setTxt(id, txt){ const e=document.getElementById(id); if(e && e.textContent!==txt) e.textContent=txt; }
@@ -1364,9 +1388,9 @@ function updateStats(){
     setTxt(g.v+"Sub", parts.join(" · ")||"—");
   });
   setTxt("stTotal", total? String(total):"—");
-  { const n=(state._transit||[]).reduce((a,s)=>a+s.deps.length,0);
-    setTxt("stG1", n? String(n) : "—");
-    setTxt("stG1Sub", n? `${(state._transit||[]).length} stops nearby` : "no departures"); }
+  /* stG1/stG2 used to be overwritten here with a count of DEPARTURES, because
+     this board had no fleets to count. It has them now, so the tiles mean the
+     same thing they do on every other board: vehicles moving on the map. */
   setTxt("stTotalSub", total? `${air} air · ${groupCounts.map((n,i)=>`${n} ${STATS_GROUPS[i].short}`).join(" · ")}` : "vehicles live on map");
   const P=state._planes;
   setTxt("stAir", P? String(P.length) : "—");
@@ -1421,11 +1445,6 @@ function updateStats(){
       busiest && busiest[1]>1 ? `most <b>${esc(busiest[0])}</b>` : "",
     ].filter(Boolean).join(" · "));
   } else setHTML("planeStat","");
-  const A=state._amtrak;
-  if(A && A.length){
-    const avg=Math.round(A.reduce((s2,x)=>s2+(x.t.velocity||0),0)/A.length);
-    setHTML("amtrakStat", `⌀ <b>${avg}</b> mph · nearest <b>${A[0].distMi.toFixed(0)}</b> mi`);
-  } else setHTML("amtrakStat","");
   for(const elId in STATS_LINES){
     const [fl,sysTag]=STATS_LINES[elId], n=fleetCount(fl);
     const nx=sysTag? SN[sysTag] : null, fresh=nx && Date.now()-nx.at<120000;
@@ -1680,9 +1699,15 @@ function vertText(a){
    buried the two trains an hour under forty bus departures. Families are
    classified in transitous.js from the line name first, since Zurich's S-Bahn
    arrives tagged METRO and Stuttgart's U-Bahn as SUBWAY. */
-const FAMILY_CARDS = [["ld","longdistance"],["regio","regional"],["metro","metro"],
+/* "intl" is a family like any other, which is what earns it a map layer, a
+   fleet, route lines and moving vehicles without a line of new drawing code.
+   It differs from the rest in only one way: a departure's family normally comes
+   from its line name, and no line name can tell you whether a train crosses a
+   border. That one is decided in transitous.js from the timezone the journey
+   ENDS in, and stamped on in refreshTransit() below. */
+const FAMILY_CARDS = [["intl","international"],["ld","longdistance"],["regio","regional"],["metro","metro"],
                       ["tram","tram"],["busx","bus"],["ferry","ferry"]];
-const FAMILY_COL = {ld:"#e2504f", regio:"#3ad0c8", metro:"#4ea1ff",
+const FAMILY_COL = {intl:"#1D4E9E", ld:"#e2504f", regio:"#3ad0c8", metro:"#4ea1ff",
                     tram:"#f0ab00", busx:"#6aa9ff", ferry:"#5ad17a"};
 function transitMinutes(ms){ return Math.round((ms - Date.now())/60000); }
 async function refreshTransit(){
@@ -1704,12 +1729,59 @@ async function refreshTransit(){
      sat empty and hid itself between trains. It should always show the next few,
      however far out they are. De-duped by line+time, since a train already in
      the general list would otherwise appear twice. */
+  const home = stops[0] || {name:CFG.mainStation};
+  const extra=[];
   try{
     const ld = await TBTransitous.longDistanceAt(CFG.mainStation, 8, CFG.transitSource);
     const seen = new Set(all.map(d=>d.route+"@"+d.when));
-    const home = stops[0] || {name:CFG.mainStation};
-    ld.forEach(d=>{ if(!seen.has(d.route+"@"+d.when)) all.push(Object.assign({}, d, {stop:home})); });
+    ld.forEach(d=>{ if(!seen.has(d.route+"@"+d.when)){ const r=Object.assign({}, d, {stop:home}); all.push(r); extra.push(r); } });
   }catch(e){}
+
+  /* International trains, on their own card.
+     Merged into long-distance they drown: the next ten trains out of Köln Hbf
+     are nine domestic ICEs and one Eurostar, so the single train someone is
+     watching for is the one that never fits. transitous.js decides which count
+     by the timezone the journey ends in — see the long note there for why the
+     letters on the front ("ICE" is usually domestic and occasionally the one to
+     Brussels) cannot be the test.
+
+     Anything it claims is taken OUT of the other families rather than listed
+     twice, and the same rows are handed to the map, which otherwise only ever
+     sees departures from the handful of stops nearest the board. */
+  try{
+    const ib = await TBTransitous.intlBoard(CFG.mainStation, {n:50, trains:8});
+    state.lastIntlOk = Date.now();
+    /* Matched on line-and-minute as well as trip id, because the id is not
+       stable across feeds: ICE 122 to Amsterdam comes back from the Dutch feed
+       for the international card and from the German one for long-distance,
+       with a different id each time, and on trip id alone it was still being
+       listed in both boxes. */
+    const ids = new Set(ib.departures.map(d=>d.tripId).filter(Boolean));
+    const slots = new Set(ib.departures.map(d=>(d.route||"")+"@"+Math.round((d.scheduled||d.when)/60000)));
+    for(let i=all.length-1;i>=0;i--){
+      const d=all[i];
+      if((d.tripId && ids.has(d.tripId)) ||
+         slots.has((d.route||"")+"@"+Math.round((d.scheduled||d.when)/60000))) all.splice(i,1);
+    }
+    ib.departures.slice(0,10).forEach(d=>{
+      const r=Object.assign({}, d, {family:"international", stop:home});
+      all.push(r); extra.push(r);
+    });
+    /* Inbound services go to the MAP only, never onto the card: a departures
+       box that quietly mixes in arrivals reads as a train you can catch. They
+       matter because at a terminus like Zurich almost every international
+       service STARTS here, so without them the card lists eight trains and the
+       map draws none — everything actually moving is on its way in. */
+    (ib.arrivals||[]).slice(0,6).forEach(d=>{
+      if(!d.tripId || all.some(x=>x.tripId===d.tripId)) return;
+      extra.push(Object.assign({}, d, {family:"international", stop:home}));
+    });
+  }catch(e){}
+  /* Departures found at the main station rather than at a nearby stop. The map
+     builds its vehicles from state._transit, which only covers the stops around
+     the board, so without this the international trains — the whole point of
+     the card — would be listed and never drawn. */
+  state._extraDeps = extra;
 
   FAMILY_CARDS.forEach(([key,fam])=>{
     const box=$("#"+key+"List"); if(!box) return;
@@ -1723,7 +1795,11 @@ async function refreshTransit(){
     let live=0;
     mine.forEach(d=>{
       const row=el("div","row");
-      const b=el("div","badge", (d.route||d.label||"—").slice(0,7));
+      /* International line numbers run longer than local ones, and clipping
+         them does not merely truncate — it lies. "EST 9474" cut to seven reads
+         as "EST 947", which is a different train that also exists. The badge is
+         min-width rather than fixed, so the extra characters cost no layout. */
+      const b=el("div","badge", (d.route||d.label||"—").slice(0, key==="intl"?14:7));
       b.style.background=FAMILY_COL[key]; b.style.color="#0b0b0b";
       const mid=el("div");
       mid.appendChild(el("div","dest", d.headsign||"—"));
@@ -1732,7 +1808,7 @@ async function refreshTransit(){
       const times=el("div","times");
       const mins=transitMinutes(d.when);
       const t=el("div","live", d.cancelled? "cancelled" : (mins<=0? "now" : "in "+mins+" min"));
-      if(d.cancelled) t.style.color="var(--warn)";
+      if(d.cancelled) t.style.color="var(--warn-ink)";
       times.appendChild(t);
       if(d.cancelled){
         // a cancelled train is not "on time"; the delay figure is meaningless now
@@ -1750,14 +1826,186 @@ async function refreshTransit(){
     fitList(box);
   });
   drawTransitStops(stops);
+  refreshTransitVehicles();
+  state.lastTransitOk = Date.now();
   if(typeof balanceCards==="function") balanceCards();
 }
 function drawTransitStops(stops){
-  if(!state.transitLayer) return;
-  state.transitLayer.clearLayers();
+  if(!state.stopLayer) return;
+  state.stopLayer.clearLayers();
   (stops||[]).forEach(s=>{
     L.circleMarker([s.lat,s.lon],{radius:5,weight:1.5,color:"#fff",fillColor:"#e2504f",fillOpacity:1})
-      .bindTooltip(s.name,{direction:"top"}).addTo(state.transitLayer);
+      .bindTooltip(s.name,{direction:"top"}).addTo(state.stopLayer);
+  });
+}
+
+/* ---------- vehicles on the map --------------------------------------------
+   This feed reports DEPARTURES, not vehicle positions: nothing in it says where
+   a tram is. A trip does carry its whole stop sequence with times and the
+   route's real geometry, so a vehicle is placed between the two stops the clock
+   puts it between and travels along the actual alignment. That is the same
+   technique the DC board already uses for MARC and Ride On, which have no
+   position feed either. It is a schedule-derived position, and the tooltip says
+   so rather than implying GPS.
+
+   The cost stays small because trip geometry is immutable and TBTransitous
+   caches it: the lookups happen once per trip, and positions are then
+   recomputed locally on a fast tick with no network at all. That local tick is
+   what makes the movement continuous between the 45-second departure refreshes.
+*/
+const VEHICLE_TICK_MS = 5000;      // how often positions are recomputed (no network)
+const VEHICLE_PER_FAMILY = 6;      // trips looked up per family per refresh
+const VEHICLE_LOOKUP_CAP = 30;     // ...and no more than this many in total
+const VEHICLE_CONCURRENCY = 4;     // the public endpoint rate-limits; stay under it
+
+/* Run `job` over `items` a few at a time. The transitous endpoint answers 429
+   when a cold board asks for two dozen trips at once, which cost every vehicle
+   on the map for that refresh. */
+async function mapLimited(items, limit, job){
+  const out=new Array(items.length); let i=0;
+  await Promise.all(Array.from({length:Math.min(limit,items.length)}, async ()=>{
+    while(i<items.length){ const k=i++; out[k]=await job(items[k]); }
+  }));
+  return out;
+}
+
+/* Real alignment where the feed sent geometry, the stop sequence otherwise. A
+   straight chord between stops cuts corners badly on fast lines -- on the
+   Köln-Rhein/Main high-speed route it misses the track by around 20 km. */
+function tripPoints(trip){
+  if(trip.line && trip.line.length>1) return trip.line;
+  return (trip.stops||[]).map(s=>[s.lat,s.lon]);
+}
+
+/* Departures that can actually be LOCATED, i.e. that carry a trip id.
+
+   The cards and the map do not always come from the same feed. Zurich's cards
+   are the Swiss source, which reports live delays but no trip id at all -- and
+   without one there is no stop sequence to place a vehicle on, so every tram
+   and S-Bahn silently stayed off the map while the long-distance trains (which
+   arrive via the Europe-wide source) appeared. When the board's own departures
+   cannot locate any local service, the same nearby stops are asked of the
+   Europe-wide source purely for the map. Germany's boards get ids on the card
+   feed itself and skip the extra call entirely. */
+const LOCAL_FAMILIES = new Set(["regional","metro","tram","bus","ferry"]);
+async function locatableDepartures(){
+  const out=[];
+  (state._transit||[]).forEach(s=>(s.deps||[]).forEach(d=>{ if(d.tripId) out.push(d); }));
+  (state._extraDeps||[]).forEach(d=>{ if(d.tripId) out.push(d); });
+  if(out.some(d=>LOCAL_FAMILIES.has(d.family))) return out;
+  try{
+    const stops=await TBTransitous.board(state.loc.lat, state.loc.lon,
+      {stops:3, perStop:12, mainStation:CFG.mainStation});
+    (stops||[]).forEach(s=>(s.deps||[]).forEach(d=>{
+      if(d.tripId) out.push(Object.assign({}, d, {stop:s}));
+    }));
+  }catch(e){}
+  return out;
+}
+
+async function refreshTransitVehicles(){
+  if(!window.TBTransitous || !TBTransitous.tripDetail) return;
+  // one entry per trip, however many nearby stops it was seen departing from
+  const byFam={};
+  (await locatableDepartures()).forEach(d=>{
+    const list = byFam[d.family] || (byFam[d.family]=[]);
+    if(!list.some(x=>x.tripId===d.tripId)) list.push(d);
+  });
+  /* Soonest first within each family, then a global cap and a concurrency
+     limit over the whole set: a cold board otherwise fires every lookup at
+     once and the endpoint answers 429, which costs every vehicle on the map.
+
+     The families are interleaved before the cap bites. Taking the first N in
+     card order spent the whole budget on the trains at the front of the list
+     and left the buses and boats at the end permanently empty. */
+  const queues=FAMILY_CARDS.map(([key,fam])=>
+    (byFam[fam]||[]).sort((a,b)=>a.when-b.when).slice(0, VEHICLE_PER_FAMILY)
+      .map(dep=>({key, dep})));
+  const picks=[];
+  for(let i=0; picks.length<VEHICLE_LOOKUP_CAP; i++){
+    const before=picks.length;
+    queues.forEach(q=>{ if(i<q.length && picks.length<VEHICLE_LOOKUP_CAP) picks.push(q[i]); });
+    if(picks.length===before) break;      // every queue exhausted
+  }
+  const detailed=await mapLimited(picks, VEHICLE_CONCURRENCY,
+    async p=>{
+      const trip=await TBTransitous.tripDetail(p.dep.tripId).catch(()=>null);
+      return trip ? {key:p.key, dep:p.dep, trip} : null;
+    });
+
+  /* Two different questions, so two different sets. A route LINE is a fact
+     about the network and stays drawn whether or not something is on it right
+     now -- a half-hourly boat would otherwise lose its line between sailings,
+     when every other board draws lines from the timetable. A VEHICLE marker is
+     a claim that something is out there, so it is held to the stricter test. */
+  const now=Date.now(), moving={}, lines={};
+  FAMILY_CARDS.forEach(([key])=>{ moving[key]=[]; lines[key]=[]; });
+  detailed.filter(Boolean).forEach(({key,dep,trip})=>{
+    if(!lines[key]) return;
+    lines[key].push({dep, trip});
+    if(now>trip.end) return;                       // the run has finished
+    /* International services are kept from the moment they set off, wherever
+       that was: half the interest in the 15:43 to Brussels is watching it
+       come in from Frankfurt first. The rest are only drawn while underway,
+       since parking a tram on its origin terminus would be inventing a
+       position. */
+    if(key!=="intl" && now<trip.start) return;
+    moving[key].push({dep, trip});
+  });
+  FAMILY_CARDS.forEach(([key])=>{
+    state._trips[key]=moving[key];
+    drawFamilyRoutes(key, lines[key]);
+  });
+  tickTransitVehicles();
+}
+
+/* One line per route, not per vehicle: six trams on the 11 would otherwise
+   stack six identical polylines. Longest run wins, since a short-turn working
+   would only draw part of the line. */
+function drawFamilyRoutes(key, rows){
+  const layer=state[key+"RouteLayer"]; if(!layer) return;
+  layer.clearLayers();
+  const best={};
+  rows.forEach(({dep,trip})=>{
+    const pts=tripPoints(trip); if(pts.length<2) return;
+    const name=dep.route||dep.label||trip.route||"";
+    if(!best[name] || pts.length>best[name].length) best[name]=pts;
+  });
+  Object.values(best).forEach(pts=>{
+    L.polyline(pts, {color:FAMILY_COL[key], weight:4, opacity:.45,
+      lineCap:"round", lineJoin:"round"}).addTo(layer);
+  });
+}
+
+/* Recompute every vehicle's position from the cached trips and hand them to
+   updateFleet, which glides each marker from where it currently is to the new
+   spot over the length of one tick. No network here at all. */
+function tickTransitVehicles(){
+  if(!window.TBTransitous || !TBTransitous.positionOnTrip) return;
+  FAMILY_CARDS.forEach(([key])=>{
+    const items=[];
+    (state._trips[key]||[]).forEach(({dep,trip})=>{
+      let pos=null;
+      try{ pos=TBTransitous.positionOnTrip(trip); }catch(e){ pos=null; }
+      if(!pos || typeof pos.lat!=="number" || typeof pos.lon!=="number") return;
+      const line=dep.route||dep.label||trip.route||"";
+      const dest=dep.headsign||(trip.to&&trip.to.name)||"";
+      const label=[line,dest].filter(Boolean).join(" → ");
+      const next=pos.next&&pos.next.name;
+      /* Live times move the whole timetable, but the position between stops is
+         still interpolated -- say which is which instead of implying GPS. */
+      const src=dep.realTime
+        ? "live times · position from timetable"
+        : "scheduled position";
+      const late=(dep.realTime&&dep.delayMin>0)? ` · +${dep.delayMin} min` : "";
+      items.push({
+        id: dep.tripId, lat: pos.lat, lon: pos.lon,
+        icon: ()=>labelIcon(FAMILY_COL[key], label), ik: label,
+        tip: [label, next?("next: "+next):"", src+late].filter(Boolean).join(" · "),
+        route: tripPoints(trip), label, color: FAMILY_COL[key],
+      });
+    });
+    updateFleet(key, items, VEHICLE_TICK_MS);
   });
 }
 
@@ -1905,102 +2153,6 @@ function etaClock(min){
 function minsUntil(x){ const d=(x instanceof Date)?x:new Date(x);
   return isNaN(d) ? null : Math.round((d-Date.now())/60000); }
 function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
-function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
-async function ensureAmtrakStations(){
-  if(state.amStations) return state.amStations;
-  try{ const c=JSON.parse(localStorage.getItem(`transitboard${CITY_ID}.amstations`)||"null");
-    if(c && Date.now()-c.t < 864e5 && c.map){ state.amStations=c.map; return c.map; } }catch(e){}
-  const data=await getJSON("https://api-v3.amtraker.com/v3/stations", 12000);
-  const map={};
-  for(const code in data){ const s=data[code];
-    if(typeof s.lat==="number" && typeof s.lon==="number") map[code]=[s.lat,s.lon]; }
-  state.amStations=map;
-  try{ localStorage.setItem(`transitboard${CITY_ID}.amstations`, JSON.stringify({t:Date.now(), map})); }catch(e){}
-  return map;
-}
-async function fetchAmtrak(){
-  let data, amSt={};
-  try{ data=await getJSON("https://api-v3.amtraker.com/v3/trains", 12000); }catch(e){ return; }
-  try{ amSt=await ensureAmtrakStations(); }catch(e){}
-  const here=state.loc, byNum={};
-  for(const arr of Object.values(data)) for(const t of (arr||[])){
-    if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
-    if(t.trainState && t.trainState!=="Active") continue;       // only trains actually en route
-    const distMi=kmToMi(haversine(here,{lat:t.lat,lon:t.lon}));
-    if(distMi>CFG.amtrakRadiusMi) continue;
-    const ex=byNum[t.trainNum];                                 // dedupe: keep the nearest instance
-    if(!ex || distMi<ex.distMi) byNum[t.trainNum]={t, distMi};
-  }
-  const out=Object.values(byNum).sort((a,b)=>a.distMi-b.distMi);
-  renderAmtrak(out); drawAmtrak(out); drawAmtrakRoutes(out, amSt);
-}
-// Real curved track geometry (Amtrak's own GTFS shapes.txt, bundled by
-// gen-amtrak-routes.py -> amtrak-routes.json) so routes follow the real corridor.
-function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"").trim(); }
-async function ensureAmtrakRouteShapes(){
-  if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
-  try{
-    const data=await getJSON("amtrak-routes.json", 15000);
-    const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
-    state.amtrakRouteShapes=map;
-  }catch(e){ state.amtrakRouteShapes={}; }
-  return state.amtrakRouteShapes;
-}
-async function drawAmtrakRoutes(list, amSt){
-  if(!state.amtrakRouteLayer) return;
-  const shapes=await ensureAmtrakRouteShapes();
-  state.amtrakRouteLayer.clearLayers();
-  list.forEach(({t})=>{
-    const shape=shapes[normAmtrakName(t.routeName)];
-    const pts=shape || (t.stations||[]).map(s=>amSt[s.code]).filter(Boolean);
-    if(pts.length>1) L.polyline(pts, {color:"#3ad0c8", weight:2.5, opacity:.35,
-      lineCap:"round", lineJoin:"round", dashArray: shape?null:"1 6"}).addTo(state.amtrakRouteLayer);
-  });
-}
-function renderAmtrak(list){
-  const box=$("#amtrakList"); box.innerHTML="";
-  state._amtrak=list; state.lastAmtrakOk=Date.now();   // stats strip reads these
-  if(!list.length){ box.appendChild(el("div","empty",`No Amtrak trains within ${CFG.amtrakRadiusMi} mi right now.`)); $("#amtrakCount").textContent=""; return; }
-  list.slice(0,10).forEach(({t,distMi})=>{
-    const row=el("div","row");
-    const b=el("div","badge", (t.trainNum||"?").toString()); b.style.background="#3ad0c8"; b.style.color="#04201e";
-    const mid=el("div");
-    mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
-    const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
-    // Amtrak's trainTimely string is empty on every train these days, so the
-    // delay is derived from the next stop's scheduled vs actual time and shown
-    // in its band colour; `late` stays as the fallback for when it does return.
-    const sub=el("div","sub",
-      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}`);
-    const amLi=amtrakLateInfo(ns);
-    if(amLi && amLi.mins>0) sub.appendChild(delayFragment(amLi));
-    else if(late) sub.appendChild(document.createTextNode(` · ${late}`));
-    mid.appendChild(sub);
-    const times=el("div","times");
-    if(ns){
-      const am=minsUntil(ns.arr||ns.dep);
-      // a next-stop time well in the past means it just called there — show the
-      // clock rather than a misleading "now"
-      const lv=el("div","live", (am==null||am<-2)?(fmtTime(ns.arr||ns.dep)||"—"):countdownText(am));
-      if(am!=null && am>=-2) lv.classList.add("eta", etaClass(am));
-      times.appendChild(lv);
-      const sch=el("div","sched"); sch.innerHTML=`sched <b>${fmtTime(ns.schArr||ns.schDep)||"—"}</b>`; times.appendChild(sch);
-    } else { times.appendChild(el("div","sched", t.trainState||"")); }
-    row.append(b, mid, el("div"), times);
-    box.appendChild(row);
-  });
-  $("#amtrakCount").textContent = `${list.length} within ${CFG.amtrakRadiusMi} mi`;
-  fitList(box);
-}
-function drawAmtrak(list){
-  const items=list.map(({t})=>({
-    id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
-    ik:"a-"+(t.trainNum||"")+(t.destCode||""),
-    tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
-  }));
-  updateFleet("amtrak", items, CFG.amtrakEveryMs);
-}
 
 /* ---------- refresh orchestration ---------- */
 async function refreshPlanes(){
@@ -2285,12 +2437,18 @@ function buildDisplayButtons(){
 const CARD_DEFS=[
   // [ADD-A-SYSTEM] card def: add {id:"xCard", label:"Your System"} -- put local
   // systems first so they read above Amtrak/planes.
-  {id:"ldCard", label:"Long-distance & international"}, {id:"regioCard", label:"Regional & S-Bahn"}, {id:"metroCard", label:"U-Bahn & metro"}, {id:"tramCard", label:"Trams"}, {id:"busxCard", label:"Buses"}, {id:"ferryCard", label:"Boats"}, {id:"planeCard", label:"Planes"},
+  {id:"intlCard", label:"International"}, {id:"ldCard", label:"Long-distance"}, {id:"regioCard", label:"Regional & S-Bahn"}, {id:"metroCard", label:"U-Bahn & metro"}, {id:"tramCard", label:"Trams"}, {id:"busxCard", label:"Buses"}, {id:"ferryCard", label:"Boats"}, {id:"planeCard", label:"Planes"},
 ];
 const CARD_LAYERS={
   // [ADD-A-SYSTEM] card layers: map each card id -> the state.*Layer keys it owns.
-  ldCard: ["transitLayer"], regioCard: ["transitLayer"], metroCard: ["transitLayer"], tramCard: ["transitLayer"], busxCard: ["transitLayer"], ferryCard: ["transitLayer"], 
-  planeCard:  ["planeLayer"],
+  /* Each family owns its vehicles AND its route lines, so unchecking "Trams"
+     takes the trams off the map too. The stop dots are deliberately not owned
+     by any card -- they are the stations the whole board is centred on. */
+  intlCard:  ["intlLayer","intlRouteLayer"],
+  ldCard:    ["ldLayer","ldRouteLayer"],       regioCard: ["regioLayer","regioRouteLayer"],
+  metroCard: ["metroLayer","metroRouteLayer"], tramCard:  ["tramLayer","tramRouteLayer"],
+  busxCard:  ["busxLayer","busxRouteLayer"],   ferryCard: ["ferryLayer","ferryRouteLayer"],
+  planeCard: ["planeLayer"],
 };
 function loadHiddenCards(){
   try{ return new Set(JSON.parse(localStorage.getItem(LS.hidden)||"[]")); }catch(e){ return new Set(); }
@@ -2340,6 +2498,8 @@ function boot(){
   refreshEverythingForNewLocation();
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(refreshTransit, 45000);   // the feed updates about every 30s
+  // positions come from cached trips, so this tick costs nothing on the network
+  setInterval(tickTransitVehicles, VEHICLE_TICK_MS);
   // [ADD-A-SYSTEM] boot interval: setInterval(refreshYourSystem, CFG.xEveryMs);
 
   let rzT; window.addEventListener("resize", ()=>{

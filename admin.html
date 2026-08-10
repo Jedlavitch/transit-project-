@@ -160,7 +160,7 @@
         else localStorage.removeItem(i.dataset.ls);
       } catch(_){}
     });
-    $("#msg").style.color = "var(--good,#4ade80)";
+    $("#msg").style.color = "var(--good-ink,#4ade80)";
     $("#msg").textContent = `Saved — ${n} value${n===1?"":"s"} set on this screen.`;
   }
 
@@ -252,7 +252,7 @@
       const m = $("#msg");
       try {
         await navigator.clipboard.writeText(body);
-        m.style.color = "var(--good,#4ade80)";
+        m.style.color = "var(--good-ink,#4ade80)";
         m.textContent = "Copied — paste over the TB_CONFIG block in config.js, then redeploy.";
       } catch (_) {
         m.style.color = "var(--muted,#8fa3bf)";

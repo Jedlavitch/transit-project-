@@ -95,8 +95,8 @@
   :root[data-theme="day"] .status .alt{filter:brightness(.55) saturate(1.3)}
   :root[data-theme="day"] .status .badge.na{filter:brightness(.6) saturate(1.3)}
   .status .badge{padding:.12em .5em; border-radius:.3em; font-weight:800}
-  .status .badge.ok{background:rgba(90,209,122,.14); color:var(--good)}
-  .status .badge.late{background:rgba(255,107,90,.15); color:var(--late)}
+  .status .badge.ok{background:rgba(90,209,122,.14); color:var(--good-ink)}
+  .status .badge.late{background:rgba(255,107,90,.15); color:var(--late-ink)}
   /* The four shared delay bands (delays.js + theme.css). Deliberately NOT
      derived from --amber/--city, so brand mode repainting the screen in a
      carrier's colour cannot also repaint how late the train is. */
@@ -200,7 +200,7 @@
   #logPanel .actions button, #fleetPanel .actions button{flex:1; padding:12px; border-radius:12px; font-weight:800; font-size:14px;
     cursor:pointer; font-family:inherit}
   #logPanel .done2, #fleetPanel .done2{border:none; background:var(--amber); color:var(--btn-text)}
-  #logPanel .reset{border:1px solid rgba(255,107,90,.5); background:none; color:var(--late)}
+  #logPanel .reset{border:1px solid rgba(255,107,90,.5); background:none; color:var(--late-ink)}
   /* ---- "nearest of N" -> whole-fleet list ---- */
   .fleet-btn{cursor:pointer; border-bottom:1px dotted var(--amber-dim)}
   .fleet-btn:hover{color:var(--amber); border-bottom-color:var(--amber)}

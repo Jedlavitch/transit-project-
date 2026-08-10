@@ -68,7 +68,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .sug .t{flex:1; min-width:0}
   .sug .t b{display:block; font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .sug .t span{font-size:11.5px; color:var(--muted); font-family:var(--mono)}
-  .sug .plus{color:var(--accent); font-size:20px; font-weight:700; flex:none}
+  .sug .plus{color:var(--accent-ink); font-size:20px; font-weight:700; flex:none}
   .hint{font-size:12px; color:var(--muted); line-height:1.6}
 
   label.fld{display:block; margin-top:11px}
@@ -107,7 +107,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .entry .b{flex:1; min-width:0}
   .entry .b b{font-size:14px; display:block}
   .entry .b span{font-size:11.5px; color:var(--muted); display:block; margin-top:1px}
-  .entry .b .note{color:var(--sched); font-style:italic; margin-top:3px; font-size:12px}
+  .entry .b .note{color:var(--sched-ink); font-style:italic; margin-top:3px; font-size:12px}
   .entry .r{flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:4px}
   .entry time{font-size:11px; color:var(--muted); font-family:var(--mono)}
   .rode{font-size:9.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
@@ -133,7 +133,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .sheet button{flex:1; min-width:130px; padding:13px; border-radius:11px; border:none;
     background:var(--accent); color:#04101f; font-weight:800; font-size:14px; cursor:pointer}
   .sheet button.ghost{background:transparent; color:var(--text); border:1px solid var(--line)}
-  a{color:var(--accent)}
+  a{color:var(--accent-ink)}
 
 
   /* ---- front door ---- */
@@ -187,11 +187,11 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     padding:10px 2px; border-bottom:1px solid var(--line)}
   .collrow .n{font-weight:700}
   .collrow .s{font-size:12px; color:var(--muted)}
-  .collrow .c{font-size:12px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums}
+  .collrow .c{font-size:12px; font-weight:800; color:var(--accent-ink); font-variant-numeric:tabular-nums}
   .missing{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
   .missing span{font-size:12px; font-weight:700; padding:6px 10px; border-radius:999px;
     border:1px solid var(--line); color:var(--muted)}
-  .missing span.got{border-color:var(--accent); color:var(--accent)}
+  .missing span.got{border-color:var(--accent); color:var(--accent-ink)}
   .bar{height:8px; border-radius:99px; background:var(--line); overflow:hidden; margin:10px 0 4px}
   .bar i{display:block; height:100%; background:var(--accent)}
   .newbadge{font-size:9px; font-weight:900; letter-spacing:.08em; padding:2px 6px; border-radius:999px;
@@ -366,7 +366,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <button type="button" id="topicCopy" class="ghost" style="flex:0 0 auto;padding:11px 14px;display:none">Copy</button>
   </div>
   <div id="topicCode" style="font:700 13px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;
-       color:var(--accent);margin:-2px 0 10px"></div>
+       color:var(--accent-ink);margin:-2px 0 10px"></div>
 
   <p><b>Tell me when one comes past.</b> A notification when something you've logged
      is near you again — your exact aircraft by callsign or tail number, or a bus/train
@@ -385,7 +385,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <button type="button" id="shareCopy" class="ghost" style="flex:0 0 auto;padding:11px 14px;display:none">Copy code</button>
   </div>
   <div id="shareCode" style="font:700 13px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;
-       color:var(--accent);margin:-2px 0 10px"></div>
+       color:var(--accent-ink);margin:-2px 0 10px"></div>
 
   <div data-admin>
   <p><b>Shared feed (optional).</b> Paste a <code>spotter-worker.js</code> URL to pool
@@ -1126,7 +1126,7 @@ function renderLiveMap(){
   const hint=$("#mapHint");
   const rows=near.filter(n=>typeof n.lat==="number" && typeof n.lon==="number");
   if(loc){
-    L.circleMarker([loc.lat,loc.lon],{radius:6,color:"var(--accent)",weight:2,
+    L.circleMarker([loc.lat,loc.lon],{radius:6,color:"var(--accent-ink)",weight:2,
       fillColor:"#fff",fillOpacity:1}).bindPopup("You are here").addTo(sMarkers);
   }
   if(!rows.length){
