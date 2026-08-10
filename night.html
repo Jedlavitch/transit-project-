@@ -98,6 +98,10 @@
   .status .badge.na{color:#b39dff; border:1px solid rgba(179,157,255,.45); background:rgba(179,157,255,.08)}
   /* emergency squawk (7500/7600/7700) or an ADS-B emergency flag -- rare, so
      make it impossible to miss: red, bordered, gently pulsing. */
+  .status .badge.faa{background:rgba(255,204,51,.14); color:#ffd76a;
+    border:1px solid rgba(255,204,51,.4)}
+  .status .badge.faa.major{background:rgba(255,120,60,.16); color:#ffa06a;
+    border-color:rgba(255,140,80,.55)}
   .status .badge.hold{background:rgba(255,204,51,.16); color:#ffd76a;
     border:1px solid rgba(255,204,51,.45)}
   .status .badge.emerg{background:rgba(255,60,45,.18); color:#ff6b5a;
@@ -367,6 +371,11 @@
       </div>
       <button class="ghostbtn" id="skyAddrGps">Use my current location</button>
       <div id="skyAddrMsg"></div>
+      <div class="lbl">Flight delay status <span style="text-transform:none;opacity:.7">(optional)</span></div>
+      <div class="locrow">
+        <input id="faaUrl" type="text" placeholder="https://faa.yourname.workers.dev" autocomplete="off" spellcheck="false" />
+        <button id="faaSave">Save</button>
+      </div>
       <div class="lbl">Show the nearest…</div>
       <div class="seg" id="modeSeg">
         <button data-mode="planes"><span class="ic">✈</span>Plane</button>
@@ -1294,6 +1303,7 @@ async function producePlane(){
     progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
     statusHtml: emergencyBadge(a)
       +(isHolding(a)?`<span class="badge hold">⟳ holding</span>`:"")
+      +faaChips({oCode:(route&&route.from)||"", dCode:(route&&route.to)||""})
       +`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")
       +vRateChip(a.baro_rate)+headingChip(a.track)
       +((a.squawk||"").trim()&&!SQUAWK_EMERG[(a.squawk||"").trim()]?`<span class="alt">SQK ${(a.squawk||"").trim()}</span>`:"")
@@ -1934,6 +1944,41 @@ function isHolding(a){
   }
   return Math.abs(turn) >= 300;                    // most of a full circle or more
 }
+/* ---- FAA delay status for the airports a flight touches --------------------
+   Free, no key, but CORS-blocked at source, so it comes via faa-worker.js. This
+   is AIRPORT-level: "PHL has a 47-minute ground delay", not "your flight is 47
+   minutes late". Labelled that way on purpose -- claiming a per-flight delay
+   from airport-wide data would be a guess dressed up as a fact. */
+let faaData=null, faaAt=0, faaBusy=false;
+function faaUrl(){ try{ return (localStorage.getItem("tb.faaUrl")||"").trim().replace(/\/+$/,""); }catch(e){ return ""; } }
+async function refreshFaa(){
+  const u=faaUrl();
+  if(!u || faaBusy || Date.now()-faaAt < 120000) return faaData;   // FAA updates on the order of minutes
+  faaBusy=true;
+  try{
+    const d=await getJSON(u+"/delays", 12000);
+    if(d && d.ok && d.airports){ faaData=d.airports; faaAt=Date.now(); }
+  }catch(e){}
+  faaBusy=false;
+  return faaData;
+}
+function faaFor(code){
+  const c=String(code||"").toUpperCase().trim();
+  if(!c || !faaData) return [];
+  return faaData[c] || [];
+}
+function faaChips(s){
+  if(!faaData) return "";
+  const seen=new Set(), out=[];
+  [[s.oCode,"from"],[s.dCode,"to"]].forEach(([code,which])=>{
+    faaFor(code).forEach(e=>{
+      const k=code+e.kind; if(seen.has(k)) return; seen.add(k);
+      const cls = e.severity==="major" ? "faa major" : "faa";
+      out.push(`<span class="badge ${cls}" title="${escapeHtml(e.reason||"")}">${escapeHtml(code)} ${escapeHtml(e.text||e.label||"")}</span>`);
+    });
+  });
+  return out.slice(0,2).join("");
+}
 function phaseOf(a){
   if(isHolding(a)) return "holding";
   const alt=typeof a.alt_baro==="number"?a.alt_baro:null, rate=a.baro_rate||0;
@@ -2298,6 +2343,11 @@ function boot(){
   clock(); setInterval(clock, 1000);
   updateSunSky(); setInterval(updateSunSky, 60000);
   updateMoon(); setInterval(updateMoon, 60000);
+  refreshFaa(); setInterval(refreshFaa, 120000);
+  { const i=$("#faaUrl"), b=$("#faaSave");
+    if(i) i.value=faaUrl();
+    if(b) b.onclick=()=>{ try{ localStorage.setItem("tb.faaUrl",(i.value||"").trim().replace(/\/+$/,"")); }catch(e){}
+      faaData=null; faaAt=0; refreshFaa().then(()=>tick()); }; }
   setInterval(backgroundWatch, 60000);             // off-mode rare-bird + ISS-pass watcher
   setMode(mode); setInterval(tick, CFG.refreshMs);
   // Only fall back to GPS if the board itself would (i.e. you haven't set a
