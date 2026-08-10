@@ -161,5 +161,10 @@
     get licensed() { return state.licensed; },
     enterKey: k => verify(true, k),
     open: openDialog,
+    // Already resolved above (localStorage override, else the shipped default).
+    // profile.html reads these rather than keeping a second copy of the URL and
+    // its own device-id logic, which would drift out of step with this file.
+    url: workerUrl,
+    device: deviceId,
   };
 })();

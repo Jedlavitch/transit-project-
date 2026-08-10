@@ -46,6 +46,34 @@ function switchCity(url, forceShell) {
   }
 }
 
+/* "You" — the account/licence page, in every board's header.
+
+   Injected here rather than pasted into sixteen headers by hand: this file is
+   already on every page that has a `nav.view-links`, so one edit reaches all of
+   them and a board added later inherits the link for free. The pages with their
+   own navigation (the Spotter, the TV menu) carry it in their own markup.
+
+   `from` is passed so the page's back link returns to the board you came from
+   rather than guessing. Navigation goes through switchCity() so a kiosk in full
+   screen stays in full screen, exactly like the other header links. */
+(function () {
+  function addProfileLink() {
+    var nav = document.querySelector("nav.view-links");
+    if (!nav || nav.querySelector("#profileBtn")) return;
+    var here = (location.pathname.split("/").pop() || "").replace(/[^a-z.]/gi, "");
+    var url = "profile.html" + (here ? "?from=" + encodeURIComponent(here) : "");
+    var a = document.createElement("a");
+    a.id = "profileBtn";
+    a.href = url;
+    a.title = "Your account — sign-in, licence key and saved settings";
+    a.textContent = "You";
+    a.onclick = function (e) { e.preventDefault(); switchCity(url); return false; };
+    nav.appendChild(a);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addProfileLink);
+  else addProfileLink();
+})();
+
 /* Suggested locations for the Settings > Location picker.
    Each board passes its own list of {lat, lon, label} plus a callback that
    actually moves the board. Coordinates are baked in rather than geocoded:

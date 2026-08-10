@@ -48,6 +48,16 @@ window.TB_CONFIG = {
   /* ---- shared spotter feed --------------------------------------------- */
   spotBlob:     "",       // share code from the phone app
   spotFeedUrl:  "",       // spotter-worker.js
+
+  /* ---- accounts / sign-in ----------------------------------------------
+     account-worker.js. Left empty there is simply no sign-in: the Spotter log
+     stays on one device, and the Account panel on profile.html says so plainly
+     rather than showing a form that cannot work. Filling it in turns sign-in on
+     everywhere at once, with no other change. Steps are in ACCOUNTS.md — it
+     needs a KV namespace bound as ACCOUNTS and an email API key, or the codes
+     never arrive. Deliberately NOT the licence server: that decides who paid,
+     this decides who they are. */
+  acctUrl:      "",       // https://tbaccounts.yourname.workers.dev
 };
 
 /* ---------------------------------------------------------------------------
@@ -78,6 +88,7 @@ window.TB_CONFIG = {
     amsLiveUrl:  ["transitboardams.liveUrl"],
     spotBlob:    ["tb.spotBlob"],
     spotFeedUrl: ["tb.spotFeedUrl"],
+    acctUrl:     ["tb.acctUrl"],
   };
   try {
     Object.keys(MAP).forEach(field => {

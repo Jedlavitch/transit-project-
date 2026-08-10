@@ -258,6 +258,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <button class="iconbtn" id="boardBtn" title="Open the board">🚇</button>
     <button class="iconbtn" id="nightBtn" title="Sky view — nearest flight overhead">🌙</button>
     <button class="iconbtn" id="flipBtn" title="Departure board — split-flap display">🚉</button>
+    <button class="iconbtn" id="profileBtn" title="Your account — sign-in, licence key and saved settings">👤</button>
     <button class="iconbtn" id="setBtn" title="Settings">⚙︎</button>
   </div>
 </header>
@@ -1518,6 +1519,7 @@ function hereCity(){ return nearestCity() || SPOT_CITIES[0]; }
 $("#boardBtn").onclick=()=>{ window.location.href=hereCity().board; };
 $("#nightBtn").onclick=()=>{ window.location.href="night.html?city="+hereCity().code; };
 $("#flipBtn").onclick=()=>{ window.location.href="flipboard.html?city="+hereCity().code; };
+$("#profileBtn").onclick=()=>{ window.location.href="profile.html?from=spot.html"; };
 
 /* pull-to-refresh the nearby list (only at the very top of the page) */
 let touchY=0;
