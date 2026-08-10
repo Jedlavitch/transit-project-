@@ -244,6 +244,30 @@ for at least 45s so a busy corridor can't strobe the room, and the lights are re
 goes quiet, when you switch it off, or when the tab closes. Only while the sky view is actually
 open: nothing is running when the page is closed.
 
+### Bluetooth-only Govee strips — `govee-ble-lights.py`
+Some Govee strips (the **H617A** among them) have no Wi-Fi radio at all. They never appear on the
+account over the cloud API, so `govee-worker.js` cannot see them — the only way in is Bluetooth from
+a machine in the same room.
+
+```bash
+pip3 install --user bleak
+python3 govee-ble-lights.py --scan             # find the strip
+python3 govee-ble-lights.py --address <addr>   # remember it
+python3 govee-ble-lights.py --selftest         # packet checks, no Bluetooth needed
+python3 govee-ble-lights.py --test             # 15s of United blue
+python3 govee-ble-lights.py                    # watch, polling every 60s
+```
+
+Two honest limitations. **It cannot put the strip back how it was** — BLE on this model is
+write-only, with no way to read the current colour, so instead it returns to an idle you pick
+(`--idle off`, or `--idle "#221100"`). And the protocol is **reverse-engineered**, not published;
+`--selftest` checks the packets against the documented bytes so a transcription slip surfaces there
+rather than as a strip that silently does nothing.
+
+It connects only to make a change, then disconnects, so the Govee phone app keeps working normally
+the rest of the time — BLE allows one connection at a time, and holding it open would lock the app
+out completely.
+
 ### Philips Hue instead — `hue-lights.py`
 **Needs a Hue bridge.** Bluetooth-only Hue bulbs — the ones you pair straight to the phone app with
 no bridge in the box — cannot be driven by this at all. There is no IP to talk to: the bulb speaks
