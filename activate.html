@@ -64,11 +64,12 @@
 <script>
   const WORKER_URL = "https://tblicense.jacklemonade2.workers.dev";
   const workerUrl = (localStorage.getItem("tb.workerUrl") || WORKER_URL || "").replace(/\/+$/,"");
-  /* Where a stranded buyer is sent. Left empty deliberately: with no address
-     set the page tells them to reply to the receipt Stripe already emailed
-     them, which needs no inbox published on a page anyone can read. Fill this
-     in and it becomes a one-click mailto with the details already written. */
-  const SUPPORT_EMAIL = "";
+  /* Where a stranded buyer is sent. A role address on the product's own domain
+     rather than a personal inbox: it can be handed to somebody else, and it
+     does not put anyone's private mail on a page the whole internet can read.
+     Empty is still a valid setting — the panel then says to reply to the
+     receipt Stripe already sent, which needs no published address at all. */
+  const SUPPORT_EMAIL = "info@transitproject.online";
 
   const qs = new URLSearchParams(location.search);
   const msg = t => { document.getElementById("msg").textContent = t; };
