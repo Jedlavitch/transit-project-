@@ -74,12 +74,23 @@
   </div>
 </div>
 <script>
-  const PAYMENT_LINK = "";   // ← Stripe Payment Link URL goes here (SELLING.md step 4)
+  // Stripe Payment Link — public by design, safe in a public repo. Verified to
+  // charge $19.00 for "Transit Project".
+  const PAYMENT_LINK = "https://buy.stripe.com/6oUcN69QXdA4ehnbDp57W00";
   const WORKER_URL   = "";   // ← license-worker URL, e.g. https://tb-license.YOU.workers.dev
 
   const workerUrl = (localStorage.getItem("tb.workerUrl") || WORKER_URL || "").replace(/\/+$/,"");
   const buyBtn = document.getElementById("buyBtn");
-  if (PAYMENT_LINK) {
+  /* BOTH, not just the payment link. The link alone is a button that takes $19
+     and delivers nothing: the key is minted by the Worker, from the Stripe
+     session id, on activate.html. With no Worker configured that page cannot
+     call /claim, so the buyer lands on an empty "paste your key" box holding a
+     receipt and no key.
+
+     Interlocking the two makes that state unreachable rather than merely
+     documented -- there is no order of setup steps that opens the till before
+     the thing that fills the order. */
+  if (PAYMENT_LINK && workerUrl) {
     buyBtn.href = PAYMENT_LINK;
   } else {
     buyBtn.style.display = "none";

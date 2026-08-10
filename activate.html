@@ -72,6 +72,24 @@
   (async function boot(){
     const session = qs.get("session_id");
     if (key) { showKey(key); return; }
+    /* Came back from a real Stripe checkout, but there is no licence server to
+       turn the session into a key. Without this branch the page falls through
+       to its default state -- "Paste your license key:" and an empty box -- so
+       somebody who has just paid $19 is asked for a key nobody ever sent them,
+       with no error and no explanation. That reads as a scam, and it is the
+       worst thirty seconds a new customer could have.
+
+       buy.html will not show a Buy button unless a Worker is configured, so
+       this should be unreachable. It exists because "should be unreachable" is
+       not the standard to hold a payment page to. */
+    if (session && !workerUrl) {
+      show("manualWrap", false);
+      document.getElementById("activateBtn").style.display = "none";
+      msg("Your payment went through — but this site can't issue keys yet, so there's "
+        + "nothing to activate on this device. Reply to the receipt Stripe emailed you "
+        + "and your key will be sent by hand. Nothing further is owed.");
+      return;
+    }
     if (session && workerUrl) {
       show("fetching", true); show("manualWrap", false);
       try {
