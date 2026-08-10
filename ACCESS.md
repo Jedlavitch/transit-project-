@@ -61,9 +61,33 @@ matches "they cannot view it without purchasing".
 
 **dash.cloudflare.com → Add a site → `transitproject.online`** → Free plan.
 
-Cloudflare scans your existing DNS and shows you two nameservers. Change the
-nameservers at whoever you bought the domain from to those two. Usually live
-within the hour.
+Cloudflare scans your existing DNS and shows you two nameservers. Those replace
+the ones you have now.
+
+> **Your registrar is IONOS** — checked live: the domain answers from
+> `ns1072.ui-dns.com`, `ns1058.ui-dns.de`, `ns1049.ui-dns.org`,
+> `ns1063.ui-dns.biz`, which is IONOS's set. In their panel:
+> **Domains & SSL → transitproject.online → DNS → Nameserver → Use custom
+> nameservers**, then paste Cloudflare's two and remove IONOS's four. IONOS
+> shows a warning about losing their DNS features; that is expected, Cloudflare
+> is taking the zone over.
+
+Propagation is usually under an hour, sometimes up to 24.
+
+**Before you switch, note what has to survive the move.** Cloudflare's scan
+usually copies these, but check them afterwards — if they are missing, the site
+goes down until you add them back:
+
+| Type | Name | Value |
+|---|---|---|
+| A | @ | 185.199.108.153 |
+| A | @ | 185.199.109.153 |
+| A | @ | 185.199.110.153 |
+| A | @ | 185.199.111.153 |
+
+Those are GitHub Pages' four addresses, and they are what the domain resolves to
+right now. Leave the `CNAME` file in the repo alone — GitHub reads it to know the
+domain is legitimately yours, and deleting it un-configures Pages.
 
 When it's done, check the existing records survived the import: you want the four
 `A` records to `185.199.108.153`, `.109.153`, `.110.153`, `.111.153`, and they
