@@ -492,11 +492,6 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   <header>
     <!-- [CITY-SETUP] header title + short subtitle -->
     <div class="title">🇩🇪 <span class="t-grad">Stuttgart Live Transit</span> <small id="loclabel">locating…</small></div>
-    <!-- [CITY-SETUP] city picker + view links: once you've named your city AND
-         registered it in night.html / flipboard.html (see ADDING-A-CITY.md),
-         uncomment these, add your city's <option selected> line, and ALSO add
-         the same option to every other board's picker. `?city=` must match
-         your CITY_ID below.
     <nav class="city-picker">
       <select aria-label="Switch city" title="Switch city" autocomplete="off"
         onchange="switchCity(this.value)">
@@ -514,10 +509,12 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
       </select>
     </nav>
     <nav class="view-links">
-      <a href="night.html?city=stuttgart" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=stuttgart'; return false;">Sky</a>
-      <a href="flipboard.html?city=stuttgart" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=stuttgart'; return false;">Board</a>
+      <a id="nightBtn" href="night.html?city=stuttgart" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=stuttgart'; return false;">Sky</a>
+      <a id="tvBtn" href="tv.html" title="TV menu — big remote-friendly launcher" onclick="window.location.href='tv.html'; return false;">TV</a>
+      <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city's planes, trains &amp; buses on one live map" onclick="window.location.href='tour.html'; return false;">Tour</a>
+      <a id="spotBtn" href="spot.html" title="Spotter — log the trains, buses &amp; planes you see" onclick="window.location.href='spot.html'; return false;">Spot</a>
+      <a id="flipBtn" href="flipboard.html?city=stuttgart" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=stuttgart'; return false;">Board</a>
     </nav>
-    -->
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="minAllBtn" type="button" title="Minimize all boxes">▣</button>
     <button id="settingsBtn" title="Settings">⚙︎</button>

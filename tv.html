@@ -50,7 +50,13 @@
   }
 
   .grid{display:grid; gap:clamp(8px,calc(1.2*var(--u)),20px)}
-  #cities{grid-template-columns:repeat(4,1fr)}
+  /* Cities outgrew four columns: at 11 they need a third row, and this page
+     deliberately does not scroll, so the extra row was being cut off. Six
+     columns keeps it to two rows and keeps every tile the same height as
+     before, rather than shrinking them all to buy room for one row nobody
+     could see anyway. */
+  #cities{grid-template-columns:repeat(6,1fr)}
+  @media (max-width:1500px){ #cities{grid-template-columns:repeat(4,1fr)} }
   #views{grid-template-columns:repeat(4,1fr)}
 
   .tile{
@@ -69,7 +75,12 @@
   }
   .tile .icon{font-size:clamp(22px,calc(2.9*var(--u)),72px); line-height:1}
   .tile .name{font-size:clamp(17px,calc(2.15*var(--u)),56px); font-weight:700; line-height:1.1}
-  .tile .desc{font-size:clamp(11px,calc(1.15*var(--u)),30px); color:#93a6c4; line-height:1.25}
+  /* Six narrower columns make the longest system lists wrap to a third line,
+     which overflowed the tile. Cap it at two lines and fade the overflow rather
+     than letting the box grow — the name is what you navigate by, the list
+     underneath is only a hint at what the board carries. */
+  .tile .desc{font-size:clamp(11px,calc(1.15*var(--u)),30px); color:#93a6c4; line-height:1.25;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
   .tile .bar{height:4px; border-radius:3px; background:var(--sys,#4ea1ff); opacity:.85}
 
   /* The focus ring is the whole point of this page — it has to be obvious from
@@ -225,7 +236,13 @@ var CITIES = [
   {id:"boston",    file:"boston.html",        icon:"🦞", name:"Boston",        desc:"MBTA subway · commuter rail · bus", sys:"#33d17a"},
   {id:"la",        file:"losangeles.html",    icon:"🌴", name:"Los Angeles",   desc:"Metro rail · Metrolink", sys:"#b58cff"},
   {id:"sf",        file:"sanfrancisco.html",  icon:"🌉", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
-  {id:"amsterdam", file:"amsterdam.html",     icon:"🌷", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"}
+  {id:"amsterdam", file:"amsterdam.html",     icon:"🌷", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"},
+  /* Europe. Icons keep the same rule as the rest of this list — a symbol OF the
+     place, not a transit glyph: Cologne's cathedral, Stuttgart as the city both
+     Mercedes and Porsche come from, the Alps above Zurich. */
+  {id:"cologne",   file:"cologne.html",       icon:"⛪", name:"Cologne",       desc:"KVB Stadtbahn · S-Bahn · DB rail", sys:"#e8a33d"},
+  {id:"stuttgart", file:"stuttgart.html",     icon:"🚗", name:"Stuttgart",     desc:"SSB Stadtbahn · S-Bahn · DB rail", sys:"#e05a5a"},
+  {id:"zurich",    file:"zurich.html",        icon:"🏔", name:"Zurich",        desc:"Tram · S-Bahn · SBB rail", sys:"#5ad1a0"}
 ];
 
 /* Views that follow whichever city you used last. `perCity:false` = shared page. */
@@ -249,8 +266,10 @@ function tile(o){
   a.className = "tile";
   a.href = o.href;
   a.style.setProperty("--sys", o.sys);
+  /* Only the first nine tiles get a number: the shortcut is a single keypress,
+     so a "10" badge would advertise a key that does not exist. */
   a.innerHTML =
-    '<span class="num">' + o.num + '</span>' +
+    (o.num <= 9 ? '<span class="num">' + o.num + '</span>' : '') +
     '<span class="icon">' + o.icon + '</span>' +
     '<span class="name">' + o.name + '</span>' +
     '<span class="desc">' + o.desc + '</span>' +
@@ -275,7 +294,12 @@ CITIES.forEach(function(c, i){
 
 var viewWrap = document.getElementById("views");
 VIEWS.forEach(function(v, i){
-  var el = tile({href:buildViewHref(v), icon:v.icon, name:v.name, desc:v.desc, sys:v.sys, num:i+9, city:""});
+  /* Views used to be numbered 9-12, which was right when there were 8 cities.
+     With 11 they collided with city badges 9, 10 and 11 — two tiles showing the
+     same number, and the key only ever reaching one of them. Numbering now
+     continues from the city count. */
+  var el = tile({href:buildViewHref(v), icon:v.icon, name:v.name, desc:v.desc, sys:v.sys,
+                 num:CITIES.length + i + 1, city:""});
   el.dataset.view = i;
   viewWrap.appendChild(el); tiles.push(el);
 });
