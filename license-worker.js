@@ -66,7 +66,39 @@ export default {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
-    if (url.pathname === "/health") return json({ ok: true });
+    /* Health has to answer "is this deployment actually wired up", not merely
+       "is a Worker running here". Both setup guides say to check /health after
+       deploying, and an unconditional {ok:true} passes that check on a Worker
+       with no KV binding and no Stripe key — so the first thing you learn is
+       wrong, and the next thing you learn is a customer's failed purchase.
+
+       Booleans only. Whether a secret is set is a deployment fact; what it is
+       stays in Cloudflare, and this endpoint is open to the world. */
+    if (url.pathname === "/health") {
+      const kv = !!env.LICENSES, stripe = !!env.STRIPE_SECRET, test = env.TEST_MODE === "1";
+      return json({
+        ok: true,
+        kv, stripe,
+        admin: !!env.ADMIN_SECRET,
+        testMode: test,
+        deviceLimit: parseInt(env.DEVICE_LIMIT || "5", 10),
+        // can this Worker actually issue a key to somebody right now?
+        ready: kv && (stripe || test),
+        // loud on purpose: TEST_MODE hands free keys to anyone who asks
+        warning: test ? "TEST_MODE is on — /claim issues free keys with no payment. Remove it before selling." : null,
+      });
+    }
+
+    /* Every route below reads or writes KV. Without the binding, env.LICENSES
+       is undefined and the first property access throws — which Cloudflare
+       turns into a bare 500 carrying none of the CORS headers above, so the
+       browser reports a cross-origin failure and the actual cause (one
+       unchecked box in Settings → Bindings) is invisible. The binding is the
+       step that most often gets missed, so it gets named rather than guessed. */
+    if (!env.LICENSES) {
+      return json({ ok: false, error: "kv_not_bound",
+        detail: "This Worker has no KV binding named LICENSES. Cloudflare → Storage & Databases → KV → create a namespace, then Worker → Settings → Bindings → add KV namespace, variable name LICENSES." }, 500);
+    }
 
     /* ---- verify a key + register the device using it ---- */
     if (url.pathname === "/verify") {
