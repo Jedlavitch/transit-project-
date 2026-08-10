@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#081020" />
 <!-- [CITY-SETUP] page title -->
-<title>New Jersey Live Transit Board</title>
+<title>Stuttgart Live Transit Board</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=14" />
@@ -14,6 +14,7 @@
 <script src="config.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
+<script src="transitous.js?v=1"></script>
 <script src="spotlog.js?v=10" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -489,13 +490,18 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
 <div id="app">
   <header>
     <!-- [CITY-SETUP] header title + short subtitle -->
-    <div class="title">🚆 <span class="t-grad">New Jersey Live Transit</span> <small id="loclabel">locating…</small></div>
+    <div class="title">🇩🇪 <span class="t-grad">Stuttgart Live Transit</span> <small id="loclabel">locating…</small></div>
+    <!-- [CITY-SETUP] city picker + view links: once you've named your city AND
+         registered it in night.html / flipboard.html (see ADDING-A-CITY.md),
+         uncomment these, add your city's <option selected> line, and ALSO add
+         the same option to every other board's picker. `?city=` must match
+         your CITY_ID below.
     <nav class="city-picker">
       <select aria-label="Switch city" title="Switch city" autocomplete="off"
         onchange="switchCity(this.value)">
         <option value="index.html">Washington DC</option>
         <option value="philadelphia.html">Philadelphia</option>
-        <option value="newjersey.html" selected>New Jersey</option>
+        <option value="newjersey.html">New Jersey</option>
         <option value="nyc.html">New York</option>
         <option value="boston.html">Boston</option>
         <option value="amsterdam.html">Amsterdam</option>
@@ -503,16 +509,14 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
         <option value="sanfrancisco.html">San Francisco</option>
         <option value="zurich.html">Zurich</option>
         <option value="cologne.html">Cologne</option>
-        <option value="stuttgart.html">Stuttgart</option>
+        <option value="stuttgart.html" selected>Stuttgart</option>
       </select>
     </nav>
     <nav class="view-links">
-      <a id="nightBtn" href="night.html?city=nj" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=nj'; return false;">Sky</a>
-      <a id="tourBtn" href="tour.html" title="Grand Tour" onclick="window.location.href='tour.html'; return false;">Tour</a>
-      <a id="spotBtn" href="spot.html" title="Spotter — log the trains, buses &amp; planes you see" onclick="window.location.href='spot.html'; return false;">Spot</a>
-      <a id="tvBtn" href="tv.html" title="TV menu — big remote-friendly launcher" onclick="window.location.href='tv.html'; return false;">TV</a>
-      <a id="flipBtn" href="flipboard.html?city=nj" title="Departure board" onclick="window.location.href='flipboard.html?city=nj'; return false;">Board</a>
+      <a href="night.html?city=mycity" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=mycity'; return false;">Sky</a>
+      <a href="flipboard.html?city=mycity" title="Departure board — split-flap display" onclick="window.location.href='flipboard.html?city=mycity'; return false;">Board</a>
     </nav>
+    -->
     <button id="fsBtn" title="Full screen (F)"></button>
     <button id="minAllBtn" type="button" title="Minimize all boxes">▣</button>
     <button id="settingsBtn" title="Settings">⚙︎</button>
@@ -546,9 +550,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
         <span>✈️ aircraft</span>
         <span style="color:#3ad0c8">▦ Amtrak</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
-        <span style="color:#f0ab00">▦ NJT rail</span>
-        <span style="color:#00a1de">▦ NJT bus</span>
-        <!-- [ADD-A-SYSTEM] legend swatch -->
+        <!-- [ADD-A-SYSTEM] legend swatch: one <span style="color:#XXX">▦ YourSystem</span> per system -->
         <span style="opacity:.7">vehicles move live · zoom in for labels</span>
       </div>
     </div>
@@ -559,20 +561,35 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
              must match a CARD_DEFS/CARD_LAYERS entry and the #xList / #xCount ids
              its render function writes to. Put your local systems BEFORE these two
              (Amtrak + planes work anywhere in the US, so they read best last). -->
-        <div class="card" id="njtRailCard" style="--sys:#f0ab00; --sys2:#ffd166">
-          <h2><span class="icon">🚆</span> <span class="t">NJ Transit — rail &amp; light rail</span> <span class="count" id="njtRailCount"></span></h2>
-          <div class="statline" id="njtRailStat"></div>
-          <div class="list" id="njtRailList"><div class="empty">Loading NJ Transit rail schedule…</div></div>
+        <div class="card" id="ldCard" style="--sys:#e2504f; --sys2:#ffa07a">
+          <h2><span class="icon">🚄</span> <span class="t">Long-distance &amp; international</span> <span class="count" id="ldCount"></span></h2>
+          <div class="statline" id="ldStat"></div>
+          <div class="list" id="ldList"><div class="empty">Loading…</div></div>
         </div>
-        <div class="card" id="njtBusCard" style="--sys:#00a1de; --sys2:#62d4ff">
-          <h2><span class="icon">🚌</span> <span class="t">NJ Transit — bus</span> <span class="count" id="njtBusCount"></span></h2>
-          <div class="statline" id="njtBusStat"></div>
-          <div class="list" id="njtBusList"><div class="empty">Loading NJ Transit bus schedule…</div></div>
+        <div class="card" id="regioCard" style="--sys:#3ad0c8; --sys2:#4ea1ff">
+          <h2><span class="icon">🚆</span> <span class="t">Regional &amp; S-Bahn</span> <span class="count" id="regioCount"></span></h2>
+          <div class="statline" id="regioStat"></div>
+          <div class="list" id="regioList"><div class="empty">Loading…</div></div>
         </div>
-        <div class="card" id="amtrakCard" style="--sys:#3ad0c8; --sys2:#4ea1ff">
-          <h2><span class="icon">🚄</span> <span class="t">Amtrak — regional rail</span> <span class="count" id="amtrakCount"></span></h2>
-          <div class="statline" id="amtrakStat"></div>
-          <div class="list" id="amtrakList"><div class="empty">Finding nearby trains…</div></div>
+        <div class="card" id="metroCard" style="--sys:#4ea1ff; --sys2:#b58cff">
+          <h2><span class="icon">🚇</span> <span class="t">U-Bahn &amp; metro</span> <span class="count" id="metroCount"></span></h2>
+          <div class="statline" id="metroStat"></div>
+          <div class="list" id="metroList"><div class="empty">Loading…</div></div>
+        </div>
+        <div class="card" id="tramCard" style="--sys:#f0ab00; --sys2:#ffd166">
+          <h2><span class="icon">🚊</span> <span class="t">Trams</span> <span class="count" id="tramCount"></span></h2>
+          <div class="statline" id="tramStat"></div>
+          <div class="list" id="tramList"><div class="empty">Loading…</div></div>
+        </div>
+        <div class="card" id="busxCard" style="--sys:#6aa9ff; --sys2:#8fc4ff">
+          <h2><span class="icon">🚌</span> <span class="t">Buses</span> <span class="count" id="busxCount"></span></h2>
+          <div class="statline" id="busxStat"></div>
+          <div class="list" id="busxList"><div class="empty">Loading…</div></div>
+        </div>
+        <div class="card" id="ferryCard" style="--sys:#5ad17a; --sys2:#9fe8b6">
+          <h2><span class="icon">⛴️</span> <span class="t">Boats</span> <span class="count" id="ferryCount"></span></h2>
+          <div class="statline" id="ferryStat"></div>
+          <div class="list" id="ferryList"><div class="empty">Loading…</div></div>
         </div>
         <div class="card" id="planeCard" style="--sys:var(--plane); --sys2:#ff9d5c">
           <h2><span class="icon">✈️</span> <span class="t">Planes overhead</span> <span class="count" id="planeCount"></span></h2>
@@ -603,8 +620,6 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
       <button id="addrSetBtn" type="button">Set</button>
     </div>
     <div id="addrStatus"></div>
-    <div class="suggest-lbl">Or jump to</div>
-    <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
     <div class="accent-lbl">Theme</div>
@@ -657,22 +672,11 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
-    <details style="margin-top:6px">
-      <summary style="cursor:pointer;color:var(--accent);font-size:13px">Advanced: live NJ Transit buses</summary>
-      <p style="margin-top:10px">NJ Transit is <b>scheduled</b> by default (no setup). Rail covers every
-        line in the state; buses cover the bundled trunk routes only. Paste an
-        <code>njt-worker.js</code> URL to switch buses to <b>live</b> — that unlocks all 263 routes.
-        Your API key lives in the Worker, never in this browser.</p>
-      <input id="njtInput" type="text" placeholder="https://njt.yourname.workers.dev (optional)"
-             autocomplete="off" spellcheck="false" />
-      <p style="margin-top:12px"><b>Live trains need no Worker.</b> NJT's rail API allows direct
-        browser calls, so the login below is enough for live positions on all 17 lines. It is
-        stored only in this browser, on this device - a Worker secret is more private, so prefer
-        the Worker above if you have it running.</p>
-      <input id="njtUserInput" type="text" placeholder="NJT rail API username" autocomplete="off" spellcheck="false" />
-      <input id="njtPassInput" type="password" placeholder="NJT rail API password" autocomplete="off" style="margin-top:6px" />
-      <div class="btns" style="margin-top:10px"><button id="saveNjt">Save</button></div>
-    </details>
+    <!-- [ADD-A-SYSTEM] optional live-Worker input: if a system's live feed has no
+         CORS (needs a Cloudflare Worker, like MTA Bus / SEPTA), add a <details>
+         block here with an <input id="xInput"> and wire it in openSetup()/#saveKey.
+         Systems whose live feed is directly fetchable (or that are schedule-only)
+         need nothing here. See ADDING-A-CITY.md. -->
 
     <div class="btns">
       <button id="skipKey">Close</button>
@@ -711,20 +715,19 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
 // EVERY localStorage key is namespaced with it (transitboard<CITY_ID>.*), so two
 // boards never clobber each other's saved location/theme/toggles. Change this ONE
 // line and all keys move with it.
-const CITY_ID = "nj";
+const CITY_ID = "stuttgart";
 
 const CFG = {
   // [CITY-SETUP] default map center + label (shown until GPS/typed address wins).
   // Amtrak + planes work anywhere in the US; pick your city's downtown/station.
-  defaultLoc: { lat:40.7346, lon:-74.1643, label:"Newark Penn Station, NJ" },
+  transitSource: "",
+  mainStation: "Stuttgart Hauptbahnhof",
+  defaultLoc: { lat: 48.7838, lon: 9.1817, label: "Stuttgart Hauptbahnhof" },
   planeRadiusNm: 12,    // nautical miles for "overhead"
   amtrakRadiusMi: 60,   // miles: Amtrak trains to show as "regional"
   planeEveryMs: 15000,
   labelZoom: 12,        // at this zoom and closer, show vehicle labels; below, just dots
   amtrakEveryMs: 20000,
-  njtRailEveryMs: 15000,   // statewide rail positions (scheduled interpolation, no network)
-  njtBusEveryMs: 15000,    // bus positions (bundled trunk routes, or live via the Worker)
-  njtCardEveryMs: 30000,   // departure cards re-render (bundle math only)
   // [ADD-A-SYSTEM] refresh interval: add one `xEveryMs` per system (how often to
   // re-fetch its positions). Ground transit ~10-15s reads well.
   clockEveryMs: 1000,
@@ -738,9 +741,6 @@ const LS = {
   hidden:    `transitboard${CITY_ID}.hiddenCards`,
   rows:      `transitboard${CITY_ID}.rows`,      // "Trains per box" density
   mapFull:   `transitboard${CITY_ID}.mapFull`,   // map-only full screen sticks
-  njtUrl:    `transitboard${CITY_ID}.njtUrl`,   // optional njt-worker.js URL (live buses)
-  njtUser:   `transitboard${CITY_ID}.njtUser`,  // NJT rail API login - rail is CORS-open, no Worker needed
-  njtPass:   `transitboard${CITY_ID}.njtPass`,
   // [ADD-A-SYSTEM] if a system needs an optional live-Worker URL saved, add its
   // key here, e.g.  busUrl: `transitboard${CITY_ID}.busUrl`,
 };
@@ -750,8 +750,6 @@ let state = {
   loc: CFG.defaultLoc,
   map: null, tileLayer: null,
   amtrakRouteLayer: null, trainLayer: null, planeLayer: null,
-  njtRailLayer: null, njtRailRouteLayer: null,
-  njtBusLayer: null, njtBusRouteLayer: null,
   // [ADD-A-SYSTEM] map layers: add `xLayer` (live-vehicle markers) and, if it has
   // route lines, `xRouteLayer` here. Also create them in initMap() below.
 };
@@ -798,8 +796,7 @@ function applyLoc(loc){
 // locates you, after you set a custom address, and on window resize.
 function refreshEverythingForNewLocation(){
   drawRangeRings();
-  fetchAmtrak(); refreshPlanes();
-  refreshNjtRail(); drawNjtRailMap(); refreshNjtBus(); drawNjtBusMap();
+  refreshTransit(); refreshPlanes();
   // [ADD-A-SYSTEM] refresh call: add your system's initial fetch here so it
   // reloads when the location changes, e.g.  refreshBus(); busMapTick();
 }
@@ -857,14 +854,11 @@ function initMap(){
     .setView([state.loc.lat, state.loc.lon], 12);
   state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
   state.ringLayer   = L.layerGroup().addTo(state.map);   // tactical range rings, beneath everything
-  state.njtRailRouteLayer = L.layerGroup().addTo(state.map);  // rail line routes, beneath vehicles
-  state.njtBusRouteLayer  = L.layerGroup().addTo(state.map);  // bus route lines
-  state.njtBusLayer       = L.layerGroup().addTo(state.map);
-  state.njtRailLayer      = L.layerGroup().addTo(state.map);
   // [ADD-A-SYSTEM] initMap layers: create each layer group here. ORDER = z-order
   // (earlier = underneath), so add route-line layers first, then vehicle layers.
   state.amtrakRouteLayer = L.layerGroup().addTo(state.map); // Amtrak train routes (under vehicles)
   state.trainLayer  = L.layerGroup().addTo(state.map);      // Amtrak vehicles
+  state.transitLayer = L.layerGroup().addTo(state.map);
   state.planeLayer  = L.layerGroup().addTo(state.map);      // planes
   const accentNow=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff";
   L.circleMarker([state.loc.lat,state.loc.lon], {radius:6,color:accentNow,fillColor:accentNow,fillOpacity:1,weight:2}).addTo(state.map);
@@ -939,13 +933,12 @@ function planeIcon(track, label){
    items array [{id, lat, lon, icon:()=>L.divIcon, ik:iconKey, tip:string}] and
    call updateFleet("yourFleetName", items, durMs). */
 state.fleets = {
-  amtrak:{}, plane:{}, njtRail:{}, njtBus:{},
+  amtrak:{}, plane:{},
   // [ADD-A-SYSTEM] fleet: add `x:{}` here, one per live system.
 };
 function fleetLayer(f){
   return {
     amtrak:state.trainLayer, plane:state.planeLayer,
-    njtRail:state.njtRailLayer, njtBus:state.njtBusLayer,
     // [ADD-A-SYSTEM] fleet layer: map your fleet name -> its layer, e.g.  bus:state.busLayer,
   }[f];
 }
@@ -1166,7 +1159,7 @@ function fitList(box){
   box.dataset.want=String(content);
 }
 // [ADD-A-SYSTEM] fitAll: add your card's list selector here (e.g. "#busList").
-const LIST_IDS=["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList"];
+const LIST_IDS=["#railList","#busList","#ldList", "#regioList", "#metroList", "#tramList", "#busxList", "#ferryList","#marcList","#rideonList","#planeList"];
 function fitAll(){
   balanceCards();
   LIST_IDS.forEach(sel=>fitList($(sel)));
@@ -1242,7 +1235,7 @@ function groupDepsByDirection(deps, perDir=2, maxDirs=2, sys, nowMin){
    extra network calls. Runs on a 1s tick; feeds that haven't reported yet
    show an em-dash instead of a fake zero. Same engine on every board; the
    three consts below are this board's configuration. */
-const STATS_GROUPS=[{"v":"stG1","short":"rail","fleets":[["njtRail","njt rail"],["amtrak","amtrak"]]},{"v":"stG2","short":"road","fleets":[["njtBus","njt bus"]]}];
+const STATS_GROUPS=[{"v":"stG1","short":"transit","fleets":[]},{"v":"stG2","short":"road","fleets":[]}];
 const STATS_LINES={};
 const STATS_FEEDS=[{name:"ADS-B", ts:()=>state.lastPlaneOk, staleMs:60000},
   {name:"AMTRK", ts:()=>state.lastAmtrakOk, staleMs:120000},
@@ -1373,6 +1366,9 @@ function updateStats(){
     setTxt(g.v+"Sub", parts.join(" · ")||"—");
   });
   setTxt("stTotal", total? String(total):"—");
+  { const n=(state._transit||[]).reduce((a,s)=>a+s.deps.length,0);
+    setTxt("stG1", n? String(n) : "—");
+    setTxt("stG1Sub", n? `${(state._transit||[]).length} stops nearby` : "no departures"); }
   setTxt("stTotalSub", total? `${air} air · ${groupCounts.map((n,i)=>`${n} ${STATS_GROUPS[i].short}`).join(" · ")}` : "vehicles live on map");
   const P=state._planes;
   setTxt("stAir", P? String(P.length) : "—");
@@ -1382,7 +1378,20 @@ function updateStats(){
     setTxt("stAirSub", `nr ${isFinite(nr)?nr.toFixed(1):"—"} nm${med!=null?` · med ${med.toLocaleString()}′`:""}`);
   } else setTxt("stAirSub", P? `none in ${CFG.planeRadiusNm} nm` : "—");
 
-  /* NEXT DEPART: soonest departure any schedule card reported (fresh ≤2min) */
+  /* NEXT DEPART: soonest departure any schedule card reported (fresh ≤2min).
+     These boards have one live source rather than several bundled schedules, so
+     it is stashed straight from the departures render — without this the tile
+     sat on an em-dash forever, which reads as broken rather than as empty. */
+  if(state._transit && state._transit.length){
+    const all=[]; state._transit.forEach(st=>st.deps.forEach(d=>all.push(d)));
+    if(all.length){
+      const soonest=all.reduce((a,b)=>a.when<=b.when?a:b);
+      state._schedNexts=state._schedNexts||{};
+      state._schedNexts.transit={at:Date.now(),
+        min:Math.max(0,Math.round((soonest.when-Date.now())/60000)),
+        label:[soonest.route,soonest.headsign].filter(Boolean).join(" → ").slice(0,34)};
+    }
+  }
   const SN=state._schedNexts||{}, cand=[];
   for(const k in SN){ if(Date.now()-SN[k].at<120000 && SN[k].min<=720) cand.push(SN[k]); }
   if(cand.length){
@@ -1463,280 +1472,6 @@ function appendLiveTimes(row, late){
   if(li){ const eta=el("div","live-eta"); eta.style.color=li.color; eta.textContent=li.text; times.appendChild(eta); }
   times.appendChild(el("div","live-tag","live"));
   row.appendChild(times);
-}
-
-
-/* ===========================================================================
-   NJ TRANSIT — statewide rail + bus
-   Rail is bundled WHOLE (all 17 routes / 4,754 trips, ~1MB) so every train in
-   the state shows with zero setup. Buses can't work that way: 263 routes /
-   33,536 trips is ~17MB of JSON, so njt-state-bus-schedule.json carries only
-   the highest-frequency trunk routes that fit a size budget (see
-   gen-njt-state.py) and the LIVE feed is what covers all 263 -- paste an
-   njt-worker.js URL in Settings to switch the bus card + map over to it.
-   Positions come from interpolating each active trip between the two stops its
-   schedule puts it between right now, the same technique as MARC/SEPTA/PATCO.
-   =========================================================================== */
-const NJT_NAME = { ATLC:"Atlantic City Line", RVLN:"River LINE", NEC:"Northeast Corridor",
-  NJCL:"North Jersey Coast", NJCLL:"North Jersey Coast", MNE:"Morris & Essex",
-  MNEG:"Gladstone Branch", MNBN:"Main/Bergen", MNBNP:"Port Jervis Line",
-  BNTN:"Montclair-Boonton", BNTNM:"Montclair-Boonton", PASC:"Pascack Valley",
-  RARV:"Raritan Valley", HBLR:"Hudson-Bergen Light Rail", NLR:"Newark Light Rail",
-  MRL:"Meadowlands Rail", PRIN:"Princeton Shuttle" };
-const NJT_COL = { ATLC:"#00a6e2", RVLN:"#005daa", NEC:"#ef3e42", NJCL:"#009aa6", NJCLL:"#009aa6",
-  MNE:"#16b14b", MNEG:"#a2c037", MNBN:"#ffc72c", MNBNP:"#a05eb5", BNTN:"#e87200",
-  BNTNM:"#e87200", PASC:"#7c2e86", RARV:"#f0ab00", HBLR:"#0086c7", NLR:"#e31837",
-  MRL:"#8a8d8f", PRIN:"#9b9b9b" };
-const njtName = l => NJT_NAME[l] || (l ? "Route "+l : "NJ Transit");
-/* NJT bus headsigns are written for a bus roller sign: they repeat the route
-   number and append fare/branch notes ("25 SPRINGFIELD AVE MAPLEWOOD-EXACT
-   FARE"). Strip both so a row reads as a destination. */
-function njtHeadsign(hs, line){
-  let s=(hs||"").replace(/\s+/g," ").trim();
-  if(line) s=s.replace(new RegExp("^"+line.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s+"), "");
-  s=s.replace(/\s*-\s*(exact fare|no exact fare|exact change)\s*$/i,"")
-     .replace(/\s*\bvia\b\s+/i," via ");
-  return s.trim();
-}
-const njtCol  = l => NJT_COL[l] || "#00a1de";     // unmapped => a bus route
-// NJT writes names in ALL CAPS ("NEWARK PENN STATION"); title-case so they sit
-// alongside every other agency's names instead of shouting.
-function njtStation(n){
-  return (n||"").toLowerCase().replace(/\b[a-z]/g, c=>c.toUpperCase())
-    .replace(/\bHblr\b/g,"HBLR").replace(/\bNlr\b/g,"NLR").replace(/\bNy\b/g,"NY")
-    .replace(/\bNj\b/g,"NJ").replace(/\bAv\b/g,"Ave");
-}
-/* one loader for both bundles -- identical shape, different file */
-/* Bus bundles ship pattern-deduplicated ("v":2): stop sequences and running-time
-   profiles are each stored once and referenced by index, which is what lets 30
-   routes cost about what 7 used to. Expand back to the plain
-   {line,hs,s,st:[[stop,min],...]} shape on load so every consumer downstream --
-   interpolation, departures, route lines -- stays exactly as it was. */
-function expandBundle(s){
-  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
-  const pats=s.pats, offs=s.offs||[];
-  s.trips=(s.trips||[]).map(t=>{
-    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
-    return { line:t.l, hs:t.h, s:t.s,
-             st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
-  });
-  delete s.pats; delete s.offs;
-  return s;
-}
-async function ensureNjtSched(kind){
-  const key = kind==="rail" ? "njtRailSched" : "njtBusSched";
-  if(state[key]) return state[key];
-  const file = kind==="rail" ? "njt-state-rail-schedule.json" : "njt-state-bus-schedule.json";
-  try{
-    const s=expandBundle(await getJSON(file, 25000));
-    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
-    s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
-    s._lines=[...new Set((s.trips||[]).map(tr=>tr.line))];
-    state[key]=s;
-    drawScheduleRouteLines(s, kind==="rail"?state.njtRailRouteLayer:state.njtBusRouteLayer, l=>njtCol(l));
-  }catch(e){}
-  return state[key];
-}
-/* shared departures renderer for both cards */
-async function renderNjtCard(kind){
-  const rail = kind==="rail";
-  const s=await ensureNjtSched(kind);
-  const box=$(rail?"#njtRailList":"#njtBusList"); if(!box) return;
-  const statEl=$(rail?"#njtRailStat":"#njtBusStat"), cntEl=$(rail?"#njtRailCount":"#njtBusCount");
-  if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","NJ Transit schedule unavailable.")); return; }
-  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
-  const active=activeServices(s, now);
-  const maxMi = rail ? 30 : 8;                     // buses only matter close by
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0, soonest=null;
-  for(const {st,mi} of near){
-    if(mi>maxMi) break;
-    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
-    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
-    if(!deps.length) continue;
-    used++;
-    const sd=deps.reduce((a,b)=>a.min<=b.min?a:b);
-    if(soonest==null || sd.min-nowMin<soonest) soonest=sd.min-nowMin;
-    box.appendChild(el("div","stop-label","◼ "+njtStation(st.name)+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 3, 1, kind, nowMin).forEach(group=>{
-      box.appendChild(el("div","dir-label","→ "+(njtStation(njtHeadsign(group[0].hs,group[0].line))||njtName(group[0].line))));
-      group.forEach(d=>{
-        const row=el("div","row");
-        const b=el("div","badge rail", (d.line||"?").slice(0,4)); b.style.background=njtCol(d.line);
-        const mid=el("div");
-        mid.appendChild(el("div","dest", njtStation(njtHeadsign(d.hs,d.line))||njtName(d.line)));
-        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-        mid.appendChild(el("div","sub", njtName(d.line)+" · "+relTxt));
-        const times=el("div","times");
-        const tv=el("div","live"); tv.style.color=njtCol(d.line); tv.textContent=schedClock(d.t);
-        times.append(tv, el("div","sched","scheduled"));
-        row.append(b, mid, el("div"), times);
-        // follow-from-box: scheduled fleets are keyed prefix+tripIndex
-        row.classList.add("followable"); row.title="Follow on the map";
-        const fleet=rail?"njtRail":"njtBus", fid=(rail?"nr":"nb")+d.ti;
-        row.onclick=()=>{ if(state.fleets[fleet] && state.fleets[fleet][fid]) startFollow(fleet, fid);
-          else row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450}); };
-        box.appendChild(row); shown++;
-      });
-    });
-  }
-  if(!shown) box.appendChild(el("div","empty", rail
-    ? "No NJ Transit rail nearby (or none scheduled soon)."
-    : "No bundled bus route nearby — the live feed covers all 263 routes (⚙︎)."));
-  const moving=Object.keys(state.fleets[rail?"njtRail":"njtBus"]||{}).length;
-  if(statEl) statEl.innerHTML = `<b>${moving}</b> moving now`
-    + (soonest!=null?` · next in <b>${Math.max(0,soonest)}</b> min`:"")
-    + (rail?` · <b>${(s._lines||[]).length}</b> lines`:` · <b>${(s._lines||[]).length}</b> bundled routes`);
-  if(cntEl){
-    const live = rail ? state.njtRailLive : state.njtBusLive;
-    cntEl.textContent = (state.njtUrl && live) ? `live · ${live.length} vehicles` : "scheduled";
-  }
-  fitList(box);
-}
-const refreshNjtRail = () => renderNjtCard("rail");
-const refreshNjtBus  = () => renderNjtCard("bus");
-
-/* shared scheduled-position mapper for both fleets */
-async function drawNjtMap(kind){
-  const rail = kind==="rail";
-  const s=await ensureNjtSched(kind); if(!s || !s.trips) return;
-  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=activeServices(s, now);
-  const items=[], pfx=rail?"nr":"nb";
-  s.trips.forEach((tr,i)=>{
-    if(!active.has(tr.s)) return;
-    const seq=tr.st; if(seq.length<2) return;
-    for(const nm of [nowMin, nowMin+1440]){          // also catch after-midnight trips
-      if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
-      let k=0; while(k<seq.length-1 && seq[k+1][1] <= nm) k++;
-      const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
-      const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
-      const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
-      const lbl=`${tr.line} → ${njtStation(njtHeadsign(tr.hs,tr.line))}`;
-      items.push({ id:pfx+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(njtCol(tr.line), lbl), ik:pfx+"-"+i,
-        tip:`NJ Transit ${njtName(tr.line)} → ${njtStation(njtHeadsign(tr.hs,tr.line))} (scheduled)`,
-        color:njtCol(tr.line), label:"NJT "+lbl,
-        route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
-      break;
-    }
-  });
-  updateFleet(rail?"njtRail":"njtBus", items, rail?CFG.njtRailEveryMs:CFG.njtBusEveryMs);
-}
-/* ---------- live buses (njt-worker.js -> NJT BusTime) -------------------------
-   Only runs when a Worker URL is configured. It covers ALL 263 routes, which the
-   bundled schedule can't (see gen-njt-state.py), so when live data is present it
-   REPLACES the bundled bus positions rather than drawing both. Falls back to the
-   bundle on any error, so a Worker hiccup degrades instead of emptying the map. */
-async function fetchNjtBusLive(){
-  if(!state.njtUrl) return null;
-  // ask for the routes we know about first; the Worker batches them 10 at a time
-  const sched=await ensureNjtSched("bus");
-  const rts=(sched&&sched._lines&&sched._lines.length) ? sched._lines : ["126","1","25"];
-  try{
-    const d=await getJSON(`${state.njtUrl}/vehicles?rt=${encodeURIComponent(rts.join(","))}`, 12000);
-    if(!d || !d.ok || !Array.isArray(d.vehicles)) return null;
-    state.njtBusLive=d.vehicles; state.lastNjtBusOk=Date.now();
-    return d.vehicles;
-  }catch(e){ return null; }
-}
-function drawNjtBusLive(veh){
-  const items=veh.filter(v=>typeof v.lat==="number" && typeof v.lon==="number").map(v=>{
-    const lbl=`${v.rt} → ${njtStation(njtHeadsign(v.dest, v.rt))}`;
-    return { id:"nbl"+v.id, lat:v.lat, lon:v.lon,
-      icon:()=>labelIcon(njtCol(v.rt), lbl), ik:"nbl-"+v.rt+"-"+(v.delayed?"d":""),
-      tip:`NJ Transit ${v.rt} → ${v.dest||"?"}${v.delayed?" · delayed":""} (live)`,
-      color:njtCol(v.rt), label:"NJT "+lbl };
-  });
-  updateFleet("njtBus", items, CFG.njtBusEveryMs);
-}
-/* ---------- live trains (njt-worker.js -> raildata getVehicleData) ----------
-   Same contract as the buses: live replaces the bundled interpolation when the
-   Worker answers, and any failure falls straight back to the schedule so the map
-   never empties. NJT reports lateness in seconds; the Worker converts to minutes. */
-/* NJT's rail API sends access-control-allow-origin:*, so the browser can call it
-   directly - no Worker needed for trains (buses still need one: BusTime sends no
-   CORS header). A urlencoded POST with no custom headers is a "simple" CORS
-   request, so it is not preflighted either. */
-const NJT_RAIL_API = "https://raildata.njtransit.com/api/TrainData";
-async function njtRailToken(force){
-  if(!state.njtUser || !state.njtPass) return null;
-  if(!force && state._njtTok && Date.now()-(state._njtTokAt||0) < 50*60000) return state._njtTok;
-  try{
-    const r=await fetch(NJT_RAIL_API+"/getToken", {method:"POST",
-      body:new URLSearchParams({username:state.njtUser, password:state.njtPass})});
-    const d=await r.json().catch(()=>null);
-    const tok=d && (d.UserToken||d.userToken||d.token||d.Token);
-    if(!tok) return null;
-    state._njtTok=tok; state._njtTokAt=Date.now(); return tok;
-  }catch(e){ return null; }
-}
-const njtPick=(o,...ks)=>{ for(const k of ks) if(o && o[k]!=null && o[k]!=="") return o[k]; return null; };
-function njtParseTrains(data){
-  const list = Array.isArray(data) ? data
-    : (data && (data.Trains||data.trains)) ? (data.Trains||data.trains)
-    : (data && typeof data==="object") ? Object.values(data) : [];
-  return (Array.isArray(list)?list:[]).map(v=>{
-    const lat=parseFloat(njtPick(v,"LATITUDE","Latitude","latitude","lat"));
-    const lon=parseFloat(njtPick(v,"LONGITUDE","Longitude","longitude","lon"));
-    if(!isFinite(lat)||!isFinite(lon)) return null;
-    return { id:String(njtPick(v,"ID","TRAIN_ID","TrainID")??(lat+","+lon)),
-      train:String(njtPick(v,"TRAIN_ID","TrainID","train")??""),
-      line:String(njtPick(v,"LINE","Line","line","LINECODE")??""), lat, lon,
-      dest:String(njtPick(v,"DESTINATION","Destination","dest")??"").trim(),
-      late:(Number(njtPick(v,"SEC_LATE","SecondsLate")??0)/60)||0,
-      next:String(njtPick(v,"NEXT_STOP","NextStop")??"").trim() };
-  }).filter(Boolean);
-}
-async function fetchNjtRailLive(){
-  if(state.njtUrl){                                  // Worker first: keeps the login off this device
-    try{
-      const d=await getJSON(`${state.njtUrl}/rail/vehicles`, 12000);
-      if(d && d.ok && Array.isArray(d.trains) && d.trains.length){
-        state.njtRailLive=d.trains; state.lastNjtRailOk=Date.now(); return d.trains;
-      }
-    }catch(e){}
-  }
-  let tok=await njtRailToken(false); if(!tok) return null;
-  for(let attempt=0; attempt<2; attempt++){
-    try{
-      const r=await fetch(NJT_RAIL_API+"/getVehicleData", {method:"POST",
-        body:new URLSearchParams({token:tok})});
-      const d=await r.json().catch(()=>null);
-      const trains=njtParseTrains(d);
-      if(trains.length){ state.njtRailLive=trains; state.lastNjtRailOk=Date.now(); return trains; }
-    }catch(e){}
-    tok=await njtRailToken(true);                    // token likely expired -> one retry
-    if(!tok) return null;
-  }
-  return null;
-}
-function drawNjtRailLive(trains){
-  const items=trains.map(v=>{
-    const line=v.line||"", lbl=`${v.train||line} → ${njtStation(v.dest||"")}`;
-    const late=Math.round(v.late||0);
-    return { id:"nrl"+v.id, lat:v.lat, lon:v.lon,
-      icon:()=>labelIcon(njtCol(line), lbl), ik:"nrl-"+line+"-"+(late>5?"L":""),
-      tip:`NJ Transit ${njtName(line)} → ${njtStation(v.dest||"?")}`
-        +(v.next?` · next ${njtStation(v.next)}`:"")
-        +(late>0?` · ${late} min late`:" · on time")+" (live)",
-      color:njtCol(line), label:"NJT "+lbl };
-  });
-  updateFleet("njtRail", items, CFG.njtRailEveryMs);
-}
-async function drawNjtRailMap(){
-  if(state.njtUrl){
-    const tr=await fetchNjtRailLive();
-    if(tr){ drawNjtRailLive(tr); return; }
-  }
-  return drawNjtMap("rail");
-}
-async function drawNjtBusMap(){
-  if(state.njtUrl){
-    const veh=await fetchNjtBusLive();
-    if(veh){ drawNjtBusLive(veh); return; }     // live owns the fleet when it answers
-  }
-  return drawNjtMap("bus");                      // no Worker, or it failed -> bundled schedule
 }
 
 /* =========================================================================
@@ -1947,6 +1682,78 @@ function vertText(a){
   if(r<-200) return `↓ ${Math.abs(r).toLocaleString()} fpm`;
   return "level";
 }
+
+/* ---------- departures, split by family ------------------------------------
+   One fetch, six cards. Splitting by what the vehicle IS — an ICE to Brussels
+   is not the same thing as the number 5 tram — because a single merged list
+   buried the two trains an hour under forty bus departures. Families are
+   classified in transitous.js from the line name first, since Zurich's S-Bahn
+   arrives tagged METRO and Stuttgart's U-Bahn as SUBWAY. */
+const FAMILY_CARDS = [["ld","longdistance"],["regio","regional"],["metro","metro"],
+                      ["tram","tram"],["busx","bus"],["ferry","ferry"]];
+const FAMILY_COL = {ld:"#e2504f", regio:"#3ad0c8", metro:"#4ea1ff",
+                    tram:"#f0ab00", busx:"#6aa9ff", ferry:"#5ad17a"};
+function transitMinutes(ms){ return Math.round((ms - Date.now())/60000); }
+async function refreshTransit(){
+  if(!window.TBTransitous) return;
+  let stops=[];
+  try{
+    stops = await TBTransitous.cityBoard(state.loc.lat, state.loc.lon,
+      {stops:4, perStop:14, source:CFG.transitSource, mainStation:CFG.mainStation});
+  }catch(e){ stops=[]; }
+  state._transit=stops;
+
+  // one flat list of departures, each remembering which stop it leaves from
+  const all=[];
+  stops.forEach(s=>s.deps.forEach(d=>all.push(Object.assign({}, d, {stop:s}))));
+
+  FAMILY_CARDS.forEach(([key,fam])=>{
+    const box=$("#"+key+"List"); if(!box) return;
+    const mine=all.filter(d=>d.family===fam).sort((a,b)=>a.when-b.when).slice(0,10);
+    box.innerHTML="";
+    const card=document.getElementById(key+"Card");
+    /* A city with no trams should not show an empty Trams box forever. Hidden
+       the same way the other boards hide a system with nothing to say. */
+    if(card) card.style.display = mine.length ? "" : "none";
+    if(!mine.length){ setTxt(key+"Count",""); setHTML(key+"Stat",""); return; }
+    let live=0;
+    mine.forEach(d=>{
+      const row=el("div","row");
+      const b=el("div","badge", (d.route||d.label||"—").slice(0,7));
+      b.style.background=FAMILY_COL[key]; b.style.color="#0b0b0b";
+      const mid=el("div");
+      mid.appendChild(el("div","dest", d.headsign||"—"));
+      mid.appendChild(el("div","sub",
+        [d.label, d.stop&&d.stop.name, d.platform?("Pl. "+d.platform):""].filter(Boolean).join(" · ")));
+      const times=el("div","times");
+      const mins=transitMinutes(d.when);
+      const t=el("div","live", d.cancelled? "cancelled" : (mins<=0? "now" : "in "+mins+" min"));
+      if(d.cancelled) t.style.color="var(--warn)";
+      times.appendChild(t);
+      if(d.realTime){
+        live++;
+        const dm=d.delayMin;
+        times.appendChild(el("div","live-tag", dm==null? "live" : (dm>0? `live · +${dm} min` : "live · on time")));
+      } else times.appendChild(el("div","sched","scheduled"));
+      row.append(b, mid, el("div"), times);
+      box.appendChild(row);
+    });
+    setTxt(key+"Count", `${mine.length} next`);
+    setHTML(key+"Stat", live? `<b>${live}</b> live` : "scheduled times");
+    fitList(box);
+  });
+  drawTransitStops(stops);
+  if(typeof balanceCards==="function") balanceCards();
+}
+function drawTransitStops(stops){
+  if(!state.transitLayer) return;
+  state.transitLayer.clearLayers();
+  (stops||[]).forEach(s=>{
+    L.circleMarker([s.lat,s.lon],{radius:5,weight:1.5,color:"#fff",fillColor:"#e2504f",fillOpacity:1})
+      .bindTooltip(s.name,{direction:"top"}).addTo(state.transitLayer);
+  });
+}
+
 /* ---------- PLANES (works anywhere in the US, no key) ---------- */
 
 /* ---------- keep an aircraft on screen through a tracking gap ----------------
@@ -2190,60 +1997,15 @@ async function refreshPlanes(){
 function openSetup(){
   // [ADD-A-SYSTEM] if a system has an optional live-Worker input, preload it here:
   //   $("#busInput").value = state.busUrl;
-  drawLocSuggestions();
   groupSettings(); $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
 $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
-state.njtUrl = localStorage.getItem(LS.njtUrl) || "";
-state.njtUser = localStorage.getItem(LS.njtUser) || "";
-state.njtPass = localStorage.getItem(LS.njtPass) || "";
-(function wireNjtUrl(){
-  const inp=$("#njtInput"), btn=$("#saveNjt");
-  const uIn=$("#njtUserInput"), pIn=$("#njtPassInput");
-  if(inp) inp.value=state.njtUrl;
-  if(uIn) uIn.value=state.njtUser||""; if(pIn) pIn.value=state.njtPass||"";
-  if(btn) btn.onclick=()=>{
-    state.njtUrl=(inp.value||"").trim().replace(/\/+$/,"");
-    state.njtUser=(uIn&&uIn.value||"").trim(); state.njtPass=(pIn&&pIn.value||"");
-    localStorage.setItem(LS.njtUrl, state.njtUrl);
-    localStorage.setItem(LS.njtUser, state.njtUser); localStorage.setItem(LS.njtPass, state.njtPass);
-    state._njtTok=null;
-    state.njtBusLive=null; state.njtRailLive=null;   // drop any stale live snapshot
-    refreshNjtBus(); drawNjtBusMap(); refreshNjtRail(); drawNjtRailMap();
-    closeSetup();
-  };
-})();
+// [ADD-A-SYSTEM] if you added an optional live-Worker input + a Save button,
+// wire #saveKey here to persist state.busUrl to LS.busUrl then re-refresh.
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
-
-/* Suggested spots for this city -- see renderLocSuggestions in cityswitch.js.
-   Picked for transit interest (hubs, districts, the airport) rather than
-   landmarks, since that is what actually changes what the board shows. */
-const LOC_SUGGESTIONS=[
-  {lat:40.7346, lon:-74.1643, label:"Newark Penn", full:"Newark Penn Station, NJ"},
-  {lat:40.7353, lon:-74.0277, label:"Hoboken", full:"Hoboken Terminal, NJ"},
-  {lat:40.7324, lon:-74.0637, label:"Jersey City", full:"Journal Square, Jersey City, NJ"},
-  {lat:40.7614, lon:-74.0757, label:"Secaucus", full:"Secaucus Junction, NJ"},
-  {lat:40.6895, lon:-74.1745, label:"Newark Airport", full:"Newark Liberty International Airport"},
-  {lat:40.3573, lon:-74.6672, label:"Princeton", full:"Princeton, NJ"},
-  {lat:40.2171, lon:-74.7546, label:"Trenton", full:"Trenton, NJ"}
-];
-function pickSuggestedLoc(loc){
-  applyLoc(loc); saveLoc(loc); setManualLoc(true);
-  if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat,loc.lon], 12); }
-  setAddrStatus("Now tracking near "+loc.label, "good");
-  const inp=$("#addrInput"); if(inp) inp.value="";
-  drawLocSuggestions();
-  refreshEverythingForNewLocation();
-}
-function drawLocSuggestions(){
-  if(typeof renderLocSuggestions!=="function") return;   // cityswitch.js not loaded
-  renderLocSuggestions($("#suggestRow"), LOC_SUGGESTIONS, state.loc, pickSuggestedLoc);
-}
-drawLocSuggestions();
-
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
 
 /* ---------- full-screen kiosk mode + keep-awake ---------- */
@@ -2397,7 +2159,7 @@ function setBoardRows(mode){
 /* Big-stops control: off / rail interchanges only / include bus & street modes.
    "trains" is the default because a busy bus corridor turns half the map into
    hubs, which is why it was rail-only to begin with. */
-const BIGSTOP_KEY="transitboardnj.bigStops";
+const BIGSTOP_KEY="transitboardmycity.bigStops";
 function bigStopsMode(){
   const v=localStorage.getItem(BIGSTOP_KEY);
   return (v==="off"||v==="all"||v==="trains") ? v : "trains";
@@ -2509,14 +2271,11 @@ function buildDisplayButtons(){
 const CARD_DEFS=[
   // [ADD-A-SYSTEM] card def: add {id:"xCard", label:"Your System"} -- put local
   // systems first so they read above Amtrak/planes.
-  {id:"njtRailCard", label:"NJT Rail"}, {id:"njtBusCard", label:"NJT Bus"},
-  {id:"amtrakCard", label:"Amtrak"}, {id:"planeCard", label:"Planes"},
+  {id:"ldCard", label:"Long-distance & international"}, {id:"regioCard", label:"Regional & S-Bahn"}, {id:"metroCard", label:"U-Bahn & metro"}, {id:"tramCard", label:"Trams"}, {id:"busxCard", label:"Buses"}, {id:"ferryCard", label:"Boats"}, {id:"planeCard", label:"Planes"},
 ];
 const CARD_LAYERS={
   // [ADD-A-SYSTEM] card layers: map each card id -> the state.*Layer keys it owns.
-  njtRailCard: ["njtRailLayer","njtRailRouteLayer"],
-  njtBusCard:  ["njtBusLayer","njtBusRouteLayer"],
-  amtrakCard: ["trainLayer","amtrakRouteLayer"],
+  ldCard: ["transitLayer"], regioCard: ["transitLayer"], metroCard: ["transitLayer"], tramCard: ["transitLayer"], busxCard: ["transitLayer"], ferryCard: ["transitLayer"], 
   planeCard:  ["planeLayer"],
 };
 function loadHiddenCards(){
@@ -2566,11 +2325,7 @@ function boot(){
   requestAnimationFrame(animateFleets);   // start the smooth-movement loop
   refreshEverythingForNewLocation();
   setInterval(refreshPlanes, CFG.planeEveryMs);
-  setInterval(fetchAmtrak, CFG.amtrakEveryMs);
-  setInterval(refreshNjtRail, CFG.njtCardEveryMs);
-  setInterval(refreshNjtBus,  CFG.njtCardEveryMs);
-  setInterval(drawNjtRailMap, CFG.njtRailEveryMs);
-  setInterval(drawNjtBusMap,  CFG.njtBusEveryMs);
+  setInterval(refreshTransit, 45000);   // the feed updates about every 30s
   // [ADD-A-SYSTEM] boot interval: setInterval(refreshYourSystem, CFG.xEveryMs);
 
   let rzT; window.addEventListener("resize", ()=>{
