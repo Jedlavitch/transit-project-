@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Web Bluetooth check</title>
+<!--
+  bt-check.html — can THIS browser drive a Bluetooth light?
+
+  Written for the Facebook Portal, which has no developer console, so every
+  answer has to be readable on the screen itself from across a room.
+
+  Deliberately old-fashioned JavaScript: var, no arrow functions in the checks,
+  no optional chaining, no template literals. The whole point is to run on a
+  browser that might be years behind, and a syntax error would render a blank
+  page that looks exactly like "unsupported" while telling you nothing.
+
+  THE TRAP THIS PAGE EXISTS TO AVOID: Web Bluetooth is only exposed in a secure
+  context. Loaded over plain http (say, from the Mac's local server on the LAN)
+  navigator.bluetooth is undefined even on a browser that fully supports it —
+  a false negative that would have us abandon a route that actually works. So
+  the page checks that FIRST and refuses to give a verdict over http.
+-->
+<style>
+  body{margin:0;padding:5vmin;background:#070d17;color:#cfe3ff;
+       font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  h1{font-size:5vmin;margin:0 0 3vmin;font-weight:800}
+  .verdict{font-size:8vmin;font-weight:800;line-height:1.15;margin:3vmin 0;
+           padding:3vmin;border-radius:2vmin;text-align:center}
+  .yes{background:#12351f;color:#5ad17a}
+  .no{background:#3a1414;color:#ff6b5a}
+  .maybe{background:#3a2f10;color:#ffd76a}
+  table{width:100%;border-collapse:collapse;font-size:3.4vmin}
+  td{padding:1.6vmin 1vmin;border-bottom:1px solid #1e2b45;vertical-align:top}
+  td:first-child{color:#7f97bd;white-space:nowrap;padding-right:3vmin}
+  .ok{color:#5ad17a;font-weight:700}
+  .bad{color:#ff6b5a;font-weight:700}
+  button{margin-top:4vmin;width:100%;padding:4vmin;font-size:4.5vmin;font-weight:800;
+         border:0;border-radius:2vmin;background:#3f8cff;color:#fff;font-family:inherit}
+  #out{margin-top:3vmin;font-size:3.4vmin;white-space:pre-wrap;word-break:break-word}
+  code{font-size:3vmin;color:#9fb8dd;word-break:break-all}
+</style>
+</head>
+<body>
+<h1>Web Bluetooth check</h1>
+<div id="verdict" class="verdict maybe">checking…</div>
+<table id="rows"></table>
+<button id="try" style="display:none">Tap to try the device picker</button>
+<div id="out"></div>
+
+<script>
+(function () {
+  var rows = document.getElementById("rows");
+  function row(label, value, cls) {
+    var tr = document.createElement("tr");
+    var a = document.createElement("td");
+    a.textContent = label;
+    var b = document.createElement("td");
+    b.textContent = value;
+    if (cls) { b.className = cls; }
+    tr.appendChild(a); tr.appendChild(b); rows.appendChild(tr);
+  }
+  function verdict(text, cls) {
+    var v = document.getElementById("verdict");
+    v.textContent = text;
+    v.className = "verdict " + cls;
+  }
+
+  var secure = (window.isSecureContext === true);
+  var hasBT = (typeof navigator !== "undefined" && !!navigator.bluetooth);
+
+  row("Page address", String(location.origin));
+  row("Secure context", secure ? "yes" : "NO — this is the problem",
+      secure ? "ok" : "bad");
+  row("navigator.bluetooth", hasBT ? "present" : "missing", hasBT ? "ok" : "bad");
+  row("requestDevice", (hasBT && typeof navigator.bluetooth.requestDevice === "function")
+      ? "present" : "missing",
+      (hasBT && typeof navigator.bluetooth.requestDevice === "function") ? "ok" : "bad");
+  row("Browser", navigator.userAgent);
+
+  // An insecure origin hides the whole API, so no verdict is possible here.
+  if (!secure) {
+    verdict("Can't tell — load this over https://",
+            "maybe");
+    var note = document.getElementById("out");
+    note.textContent =
+      "Web Bluetooth is hidden on plain http, even on browsers that fully support it. "
+      + "Open https://transitproject.online/bt-check.html instead and this will give a real answer.";
+    return;
+  }
+
+  if (!hasBT) {
+    verdict("NO — this browser can't do Bluetooth", "no");
+    document.getElementById("out").textContent =
+      "Nothing to be done about this from the code side. The Python script on a "
+      + "computer in the same room is the way to drive the strip.";
+    return;
+  }
+
+  // The API exists. getAvailability tells us whether there is actually a radio.
+  var btn = document.getElementById("try");
+  var out = document.getElementById("out");
+
+  function showPickerButton() {
+    btn.style.display = "block";
+    btn.onclick = function () {
+      out.textContent = "Opening the picker…";
+      // The Govee service must be named up front or the browser will refuse to
+      // expose it after connecting.
+      navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["00010203-0405-0607-0809-0a0b0c0d1910"]
+      }).then(function (d) {
+        out.textContent = "PICKED: " + (d.name || "(unnamed)") + "\nid: " + d.id
+          + "\n\nThat's the whole chain working. Tell Claude what this says.";
+      }).catch(function (e) {
+        out.textContent = "Picker said: " + e.name + " — " + e.message
+          + "\n\n(If you simply closed it without choosing, that's a NotFoundError "
+          + "and is fine — the picker opening at all is the result that matters.)";
+      });
+    };
+  }
+
+  if (navigator.bluetooth.getAvailability) {
+    navigator.bluetooth.getAvailability().then(function (avail) {
+      row("Bluetooth radio", avail ? "available" : "not available",
+          avail ? "ok" : "bad");
+      if (avail) {
+        verdict("YES — this browser can drive the strip", "yes");
+      } else {
+        verdict("API is there, but no Bluetooth radio", "maybe");
+      }
+      showPickerButton();
+    })["catch"](function () {
+      verdict("API is there — tap below to be sure", "maybe");
+      showPickerButton();
+    });
+  } else {
+    verdict("API is there — tap below to be sure", "maybe");
+    showPickerButton();
+  }
+})();
+</script>
+</body>
+</html>
