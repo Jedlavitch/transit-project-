@@ -1691,9 +1691,24 @@ function airlineIataFor(a){
 /* A logo chip for the row. The CDN answers with a neutral placeholder for codes
    it doesn't know instead of a 404, so an unknown operator degrades to a plain
    mark rather than a broken image; no code at all means no chip. */
+/* Carriers whose IATA code we trust the logo CDN to resolve correctly.
+   This is an ALLOWLIST on purpose. IATA codes get reassigned when airlines fold,
+   and the CDN keeps whatever it was told years ago -- PSA Airlines (OH) came
+   back as "silkavia", an unrelated carrier. A missing logo is a non-event; a
+   confidently wrong one misinforms, so anything unverified simply shows no mark.
+   US regional operators (PSA, Envoy, SkyWest, Republic, Endeavor, Mesa) are
+   deliberately absent: they fly in mainline colours, so their own codes are
+   exactly the ones that mismap. */
+const LOGO_OK = new Set(("AA DL UA WN B6 AS NK F9 HA G4 SY MX " +
+  "AC WS AM Y4 VB CM AV LA AR G3 AD CM " +
+  "BA VS EI FR U2 W6 LH LX OS SN KL AF IB VY TP AZ SK DY AY LO OK TK SU A3 EW HV " +
+  "EK QR EY SV MS ET RJ GF WY " +
+  "SQ CX NH JL KE OZ CI BR TG MH GA VN AI 6E UK CZ MU CA HU 3U " +
+  "QF NZ VA JQ FJ").split(/\s+/).filter(Boolean));
+const logoAllowed = c => LOGO_OK.has(String(c || "").trim().toUpperCase());
 function airlineLogoEl(a){
   const code=airlineIataFor(a).toUpperCase();
-  if(!code) return null;
+  if(!code || !logoAllowed(code)) return null;   // unverified -> no mark, never a wrong one
   const img=document.createElement("img");
   img.className="airline-logo"; img.alt=""; img.loading="lazy";
   img.onerror=()=>img.remove();

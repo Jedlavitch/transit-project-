@@ -315,6 +315,8 @@
     opacity:.55}
   :root[data-theme="day"] body::after{display:none}
   header a:hover, header button:hover{border-color:var(--blue-bright,#7cc0ff); color:var(--blue-bright,#7cc0ff)}
+  /* Brand mode is the carrier's colour and nothing else over it. */
+  body.brandmode #sky, body.brandmode #sunSky, body.brandmode #stars{display:none !important}
 </style>
 <script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
    the whole site and cached every board, so a device that installed it keeps serving
@@ -1154,7 +1156,8 @@ function sunSkyColors(el){
 function sunSkyEnabled(){ return localStorage.getItem("nightmode.sunsky")!=="0"; }
 function updateSunSky(){
   const el=$("#sunSky"); if(!el) return;
-  if(!sunSkyEnabled()){ el.style.opacity=0; return; }
+  // brand mode owns the background; a sunset over a United-blue screen is noise
+  if(!sunSkyEnabled() || document.body.classList.contains("brandmode")){ el.style.opacity=0; return; }
   const c=sunSkyColors(sunElevationDeg(new Date(), loc.lat, loc.lon));
   el.style.background=`linear-gradient(to top, ${c.bot}, ${c.mid} 45%, ${c.top} 100%)`;
   el.style.opacity=c.op;
@@ -2051,6 +2054,21 @@ function amtrakNextStop(t){
     note:(ns.arrCmnt||ns.depCmnt||"").trim() };
 }
 const SQUAWK_EMERG={ "7500":"HIJACK", "7600":"RADIO FAIL", "7700":"EMERGENCY" };
+/* Carriers whose IATA code we trust the logo CDN to resolve correctly.
+   This is an ALLOWLIST on purpose. IATA codes get reassigned when airlines fold,
+   and the CDN keeps whatever it was told years ago -- PSA Airlines (OH) came
+   back as "silkavia", an unrelated carrier. A missing logo is a non-event; a
+   confidently wrong one misinforms, so anything unverified simply shows no mark.
+   US regional operators (PSA, Envoy, SkyWest, Republic, Endeavor, Mesa) are
+   deliberately absent: they fly in mainline colours, so their own codes are
+   exactly the ones that mismap. */
+const LOGO_OK = new Set(("AA DL UA WN B6 AS NK F9 HA G4 SY MX " +
+  "AC WS AM Y4 VB CM AV LA AR G3 AD CM " +
+  "BA VS EI FR U2 W6 LH LX OS SN KL AF IB VY TP AZ SK DY AY LO OK TK SU A3 EW HV " +
+  "EK QR EY SV MS ET RJ GF WY " +
+  "SQ CX NH JL KE OZ CI BR TG MH GA VN AI 6E UK CZ MU CA HU 3U " +
+  "QF NZ VA JQ FJ").split(/\s+/).filter(Boolean));
+const logoAllowed = c => LOGO_OK.has(String(c || "").trim().toUpperCase());
 function emergencyBadge(a){
   const sq=(a.squawk||"").trim(), em=(a.emergency||"").trim().toLowerCase();
   const label=SQUAWK_EMERG[sq] || (em && em!=="none" ? em.toUpperCase() : null);
@@ -2140,7 +2158,8 @@ function render(s){
   (function(){
     const img=$("#airlineLogo"); if(!img) return;
     const code=(s.airlineIata||"").trim().toUpperCase();
-    if(!code){ img.style.display="none"; img.removeAttribute("src"); return; }
+    // unverified code -> no logo at all, rather than possibly the wrong airline
+    if(!code || !logoAllowed(code)){ img.style.display="none"; img.removeAttribute("src"); return; }
     const want=`https://pics.avs.io/200/50/${encodeURIComponent(code)}.png`;
     // A cached logo can already be decoded by the time these handlers attach, so
     // `onload` never fires and the image stays hidden forever. Check `complete`
@@ -2255,6 +2274,29 @@ const AIRLINE_BRAND={
   CM:"#0033A0", CMP:"#0033A0",   AD:"#0F2B5B", AZU:"#0F2B5B",
 };
 const brandOn = () => localStorage.getItem("nightmode.brand")==="1";
+/* Background and ink for a carrier, chosen together.
+
+   A mid-tone brand colour is the awkward case: American's blue is equally poor
+   against white and against black (about 4.3 either way), which is fine on a
+   phone at arm's length and not fine on a wall. So a colour that cannot reach a
+   comfortable ratio is deepened until it can, keeping its hue — a darker United
+   blue still reads as United blue, unreadable text does not read as anything.
+   Colours that are already light (Spirit yellow, Vueling yellow) are left alone
+   and take dark ink instead. */
+function brandPaint(hex){
+  const lum=rgb=>{const [r,g,b]=rgb.map(v=>{v/=255; return v<=.03928? v/12.92 : ((v+.055)/1.055)**2.4;});
+    return .2126*r+.7152*g+.0722*b;};
+  const ratio=(a,b)=>{const L1=lum(a),L2=lum(b); return (Math.max(L1,L2)+.05)/(Math.min(L1,L2)+.05);};
+  const WHITE=[255,255,255], BLACK=[10,10,12];
+  let bg=hexToRgb(hex);
+  const best=()=>ratio(WHITE,bg)>=ratio(BLACK,bg) ? WHITE : BLACK;
+  // deepen a stubborn mid-tone until white sits comfortably on it
+  for(let i=0;i<14 && ratio(best(),bg)<6; i++){
+    if(lum(bg)>0.5) break;              // already light: dark ink handles it
+    bg=bg.map(v=>v*0.88);
+  }
+  return {bg, ink:best()};
+}
 /* The carrier's colour for this subject, or "" if we cannot say. Guessing from
    the aircraft owner's name is deliberately not attempted: leasing trusts and
    fractional operators would paint the screen the wrong colour with confidence. */
@@ -2274,9 +2316,37 @@ function applyBrand(s){
   const hex = brandOn() ? brandHexFor(s) : "";
   if(hex===brandActive) return;
   brandActive=hex;
-  applyPalette(hex || localStorage.getItem("nightmode.accent") || "#7db8ff");
-  const chip=document.getElementById("brandChip");
-  if(chip) chip.style.display = hex ? "" : "none";
+  const R=document.documentElement, theme=R.dataset.theme||"dark";
+
+  if(!hex || theme==="day"){
+    // back to the user's own accent, and the sky comes back with it
+    applyPalette(localStorage.getItem("nightmode.accent") || "#7db8ff");
+    document.body.classList.remove("brandmode");
+    updateSunSky();
+    return;
+  }
+
+  /* The screen BECOMES the airline's colour — not a dark tint of it. Stars and
+     the sunrise gradient are switched off in this mode (body.brandmode) because
+     they are a night sky, and this is not one: a United-blue or FedEx-purple
+     screen with stars over it just looks like a bug.
+
+     Every other colour is derived from the ink, blended toward that background,
+     so secondary text sits between the two rather than being a grey that was
+     mixed for a near-black page and looks dirty on a coloured one. */
+  const paint=brandPaint(hex), bg=paint.bg, ink=paint.ink;
+  const mix=(t)=>ink.map((v,i)=>v+(bg[i]-v)*t);      // ink -> background
+  R.style.setProperty("--bg", rgbStr(bg));
+  R.style.setProperty("--amber", rgbStr(ink));
+  R.style.setProperty("--city", rgbStr(ink));
+  R.style.setProperty("--amber-dim", rgbStr(mix(.28)));
+  R.style.setProperty("--muted", rgbStr(mix(.52)));
+  R.style.setProperty("--faint", rgbStr(mix(.78)));
+  R.style.setProperty("--glow", rgbStr(mix(.45)));
+  document.body.classList.add("brandmode");
+  updateSunSky();
+  const mt=document.querySelector('meta[name="theme-color"]');
+  if(mt) mt.setAttribute("content", rgbStr(bg));
 }
 function setBrand(v){
   localStorage.setItem("nightmode.brand", v==="on"?"1":"0");
