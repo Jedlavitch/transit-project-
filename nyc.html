@@ -4,11 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#081020" />
-<title>New York Live Transit Board</title>
+<title>New York Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=14" />
 <script src="license.js" defer></script>
+<script src="gate.js?v=1" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
 <script src="delays.js?v=2"></script>
@@ -511,7 +512,7 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
       </select>
     </nav>
     <nav class="view-links">
-      <a id="nightBtn" href="night.html?city=nyc" title="Sky view — nearest flight" onclick="window.location.href='night.html?city=nyc'; return false;">Sky</a>
+      <a id="nightBtn" href="night.html?city=nyc" title="Sky view — nearest flight" onclick="if(window.TBGate &amp;&amp; !TBGate.require('sky')) return false; window.location.href='night.html?city=nyc'; return false;">Sky</a>
       <a id="tvBtn" href="tv.html" title="TV menu — big remote-friendly launcher" onclick="window.location.href='tv.html'; return false;">TV</a>
       <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city's planes, trains &amp; buses on one live map" onclick="window.location.href='tour.html'; return false;">Tour</a>
       <a id="spotBtn" href="spot.html" title="Spotter — log the trains, buses &amp; planes you see" onclick="window.location.href='spot.html'; return false;">Spot</a>
@@ -711,7 +712,7 @@ var r=g("tb.rows")||g("transitboardnyc.rows");if(r&&r!=="normal")d.setAttribute(
 <script>
 "use strict";
 /* =========================================================================
-   New York (Manhattan + nearby Brooklyn/Queens) Live Transit Board
+   New York (Manhattan + nearby Brooklyn/Queens) Live Transit Project
    Pure client-side. Data: Amtrak (api-v3.amtraker.com) + airplanes.live (ADS-B).
    Forked from philadelphia.html -- shared architecture (bundled-schedule
    pattern, optional live-Worker upgrade, CARD_DEFS/CARD_LAYERS card<->map
@@ -2731,7 +2732,7 @@ function onFsChange(){
   wakeWanted=true; requestWake();   // awake in or out of kiosk full screen
   if(state.map) setTimeout(()=>{ state.map.invalidateSize(); fitAll(); }, 120);
 }
-$("#fsBtn").onclick=toggleFullscreen;
+$("#fsBtn").onclick=function(){ if(window.TBGate && !TBGate.require("fullscreen")) return; toggleFullscreen(); };
 document.addEventListener("fullscreenchange", onFsChange);
 try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFsChange); }catch(e){}
 document.addEventListener("webkitfullscreenchange", onFsChange);

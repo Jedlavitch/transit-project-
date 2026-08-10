@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css" />
+<script src="license.js" defer></script>
+<script src="gate.js?v=1" defer></script>
 <script src="delays.js?v=2"></script>
 <script src="transitous.js?v=1"></script>
 <style>
@@ -3119,7 +3121,7 @@ function onFsChange(){
   wakeWanted=true; requestWake();   // awake in or out of kiosk full screen
 }
 function initFullscreen(){
-  $("#fsBtn").onclick=toggleFullscreen;
+  $("#fsBtn").onclick=function(){ if(window.TBGate && !TBGate.require("fullscreen")) return; toggleFullscreen(); };
   document.addEventListener("fullscreenchange", onFsChange);
 try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFsChange); }catch(e){}
   document.addEventListener("webkitfullscreenchange", onFsChange);

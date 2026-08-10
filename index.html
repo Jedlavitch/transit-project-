@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Transit Board — live trains, buses and planes on any screen</title>
+<title>Transit Project — live trains, buses and planes on any screen</title>
 <meta name="description" content="A live transit and flight board for your wall. Trains, buses and aircraft overhead, in real time, across the US and Europe. Runs in any browser." />
 <meta name="theme-color" content="#081020" />
 <link rel="stylesheet" href="theme.css" />
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
 <script src="delays.js?v=1"></script>
+<script src="license.js" defer></script>
 <!--
   index.html — the front door.
 
@@ -55,8 +56,14 @@
   .btn.ghost{background:var(--panel); color:var(--text); border-color:var(--line)}
   .btn.ghost:hover{border-color:var(--accent)}
   .note{font-size:12.5px; color:var(--muted); margin-top:14px}
+  #keyBox{margin-top:18px; max-width:460px}
+  .keyrow{display:flex; gap:9px; flex-wrap:wrap}
+  .keyrow input{flex:1; min-width:210px; padding:12px 13px; border-radius:11px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);
+    font-size:15px; font-family:inherit; letter-spacing:.04em}
+  .keyrow input:focus{outline:none; border-color:var(--accent)}
 
-  /* ---- live strip ---- */
+/* ---- live strip ---- */
   .live-strip{margin:8px 0 44px; border:1px solid var(--line); border-radius:16px;
     background:color-mix(in srgb, var(--panel) 82%, transparent); overflow:hidden}
   .live-head{display:flex; align-items:center; gap:10px; padding:11px 16px;
@@ -124,7 +131,7 @@
 
 <div class="wrap">
   <header>
-    <div class="brand">🚇 Transit Board</div>
+    <div class="brand">🚇 Transit Project</div>
     <nav>
       <a href="tour.html">Grand Tour</a>
       <a href="spot.html">Spotter</a>
@@ -141,8 +148,21 @@
     <div class="cta-row">
       <a class="btn primary" id="openBoard" href="dc.html">Open the Washington board</a>
       <a class="btn ghost" href="#cities">Pick your city</a>
+      <button class="btn ghost" id="haveKey">I have a licence key</button>
     </div>
     <div class="note" id="resumeNote"></div>
+
+    <!-- Key entry inline rather than on its own page: someone arriving with a
+         key in their clipboard should not have to find a second page first.
+         activate.html still exists for the link in the purchase email. -->
+    <div id="keyBox" hidden>
+      <div class="keyrow">
+        <input id="keyInput" placeholder="TP-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"
+               spellcheck="false" aria-label="Licence key" />
+        <button class="btn primary" id="keyGo">Unlock</button>
+      </div>
+      <div class="note" id="keyMsg"></div>
+    </div>
   </div>
 
   <!-- Live strip: real vehicles, right now. Two keyless CORS-open requests and
@@ -175,7 +195,7 @@
       notice, forever, on up to five devices.</p>
     <div class="price-card">
       <div>
-        <div style="font-weight:800; font-size:17px">Transit Board license</div>
+        <div style="font-weight:800; font-size:17px">Transit Project license</div>
         <ul>
           <li><b id="cityCountBuy">All city boards</b>, plus every future city</li>
           <li><b>Live map</b> with moving trains, buses and aircraft</li>
@@ -247,7 +267,7 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
   var word=countWord(CITIES.length);
   document.getElementById("cityCount").textContent = word.charAt(0).toUpperCase()+word.slice(1)+" cities";
   document.getElementById("cityCountBuy").textContent = "All "+word+" city boards";
-  document.title = "Transit Board \u2014 live trains, buses and planes on any screen";
+  document.title = "Transit Project \u2014 live trains, buses and planes on any screen";
 
   var v=document.getElementById("viewGrid");
   VIEWS.forEach(function(x){
@@ -273,6 +293,55 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
   b.href=c.file; b.textContent="Open the "+c.name+" board";
   document.getElementById("resumeNote").textContent =
     "Pinning this to a wall display? Bookmark " + c.file + " directly so it opens straight to the board.";
+})();
+
+/* ---- licence key entry ---------------------------------------------------
+   The gate on the boards can take a key too, but somebody who has just bought
+   one lands HERE, from the purchase email, with the key on the clipboard. Make
+   that the shortest possible path: paste, unlock, straight into their board.
+
+   license.js is dormant until a licence server is configured, so before that
+   this reports the honest thing rather than pretending to check. */
+(function(){
+  var btn=document.getElementById("haveKey"), box=document.getElementById("keyBox");
+  var input=document.getElementById("keyInput"), go=document.getElementById("keyGo");
+  var msg=document.getElementById("keyMsg");
+  function say(t,kind){ msg.textContent=t;
+    msg.style.color = kind==="bad" ? "var(--late-ink)" : kind==="ok" ? "var(--good-ink)" : "var(--muted)"; }
+
+  btn.addEventListener("click", function(){
+    box.hidden=!box.hidden;
+    if(!box.hidden){ input.focus(); if(!window.TBLicense || !TBLicense.configured)
+      say("Licensing isn't switched on for this site yet — every board is currently open."); }
+  });
+
+  function submit(){
+    var k=(input.value||"").trim();
+    if(!k){ say("Paste your key first.","bad"); return; }
+    if(!window.TBLicense || !TBLicense.configured){
+      say("Licensing isn't switched on for this site yet — every board is currently open.");
+      return;
+    }
+    say("Checking…"); go.disabled=true;
+    Promise.resolve(TBLicense.enterKey(k)).then(function(res){
+      go.disabled=false;
+      if(res && res.ok){
+        say("Unlocked on this device — thank you!","ok");
+        var last=null; try{ last=localStorage.getItem("tb.lastCity"); }catch(e){}
+        var c=CITIES.filter(function(x){ return x.id===last; })[0] || CITIES[0];
+        setTimeout(function(){ location.href=c.file; }, 900);
+      }
+      else if(res && res.offline) say("Can't reach the licence server — check your connection.","bad");
+      else if(res && res.error==="device_limit") say("That key is already on its maximum number of devices.","bad");
+      else say("That key wasn't recognised.","bad");
+    }).catch(function(){ go.disabled=false; say("Couldn't check that key just now.","bad"); });
+  }
+  go.addEventListener("click", submit);
+  input.addEventListener("keydown", function(e){ if(e.key==="Enter") submit(); });
+
+  // arriving from the purchase email as index.html?key=TP-...
+  var qk=new URLSearchParams(location.search).get("key");
+  if(qk){ box.hidden=false; input.value=qk; submit(); }
 })();
 
 /* ---- live strip ----------------------------------------------------------

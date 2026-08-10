@@ -1,5 +1,5 @@
 /* ============================================================================
-   license.js — Transit Boards licensing module (loaded by every city board)
+   license.js — Transit Project licensing module (loaded by every city board)
 
    DORMANT BY DEFAULT: until a license server URL is configured below (or in
    localStorage "tb.workerUrl"), this file does nothing at all and the boards

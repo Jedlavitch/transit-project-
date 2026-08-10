@@ -1,4 +1,4 @@
-# 🚇 Live Transit Board
+# 🚇 Live Transit Project
 
 A self-contained live board for **trains, buses, and planes**. No build step, no backend, no
 database — it runs entirely in the browser and talks directly to public APIs, so once it's on free

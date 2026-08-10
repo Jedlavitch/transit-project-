@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css" />
+<script src="license.js" defer></script>
+<script src="gate.js?v=1" defer></script>
 <script src="delays.js?v=2"></script>
 <style>
   /* Split-flap look keeps its own black palette, blue-tinted to match the
@@ -943,7 +945,7 @@ function hintFS(){
   hintTimer=setTimeout(()=>{ t.style.transform="translate(-50%,-120%)"; }, 4500);
 }
 function initFullscreen(){
-  $("#fsBtn").onclick=toggleFullscreen;
+  $("#fsBtn").onclick=function(){ if(window.TBGate && !TBGate.require("fullscreen")) return; toggleFullscreen(); };
   document.addEventListener("keydown", e=>{ if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen(); });
   // Keep kiosk fullscreen across the ‹ board nav link: remember it when a nav
   // link is clicked while fullscreen (capture phase, before it navigates), then

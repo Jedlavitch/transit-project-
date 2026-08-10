@@ -1,4 +1,4 @@
-# Selling the Transit Board — go-live guide
+# Selling the Transit Project — go-live guide
 
 The licensing stack is **built and dormant**. Boards behave exactly as before until you
 complete the steps below; then unlicensed visitors see a small "◇ evaluation" chip and
@@ -51,7 +51,7 @@ unlicensed browsers.
 ## Step 4 — Connect Stripe (~30 min)
 
 1. Create a Stripe account (stripe.com) and finish business verification.
-2. **Product catalog → Add product**: "Transit Board license", one-time, $19.
+2. **Product catalog → Add product**: "Transit Project license", one-time, $19.
 3. **Payment Links → New**: pick the product. Under **After payment**, choose
    "Don't show confirmation page" and redirect to:
    `https://YOUR-SITE/activate.html?session_id={CHECKOUT_SESSION_ID}`

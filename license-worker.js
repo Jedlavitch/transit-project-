@@ -1,5 +1,5 @@
 /* ============================================================================
-   license-worker.js — Transit Boards license server (Cloudflare Worker)
+   license-worker.js — Transit Project license server (Cloudflare Worker)
 
    Issues and verifies license keys for the transit-board kiosk product.
    Works hand-in-hand with license.js (loaded by every board), buy.html

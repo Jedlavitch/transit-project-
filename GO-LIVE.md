@@ -49,7 +49,7 @@ them visibly.
 ## 3. Taking money — **you**
 
 1. **stripe.com** → create an account, complete identity/bank details
-2. **Products** → new product, e.g. "Transit Board — licence", one-time, $19
+2. **Products** → new product, e.g. "Transit Project — licence", one-time, $19
 3. **Payment Links** → create a link for it
 4. Under **After payment**, set the redirect to
    `https://yourdomain.com/activate.html?session_id={CHECKOUT_SESSION_ID}`
