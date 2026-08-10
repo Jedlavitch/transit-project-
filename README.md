@@ -223,6 +223,27 @@ interpolation either way.
    On the NYC board: **⚙︎ → "Optional: exact live MTA Bus positions"** and/or **"Optional: exact live
    PATH arrivals"**, paste the matching URL, Save.
 
+## Optional: Govee room lights that follow what's overhead (free, ~5 min)
+The sky view already knows which carrier is passing and has a colour for it. **`govee-worker.js`**
+turns that into room lighting: a United-blue room while a United aircraft is overhead, back to
+however you left the lights when the sky empties. Trains and buses work too, in their agency's
+colour.
+
+A Worker is the only way in, not a shortcut — Govee's LAN control is UDP, which no browser can
+speak, and its cloud API sends no CORS header (and would expose your API key in a page served off
+GitHub Pages).
+
+1. **Govee Home app → Profile → About Us → Apply for API Key.** It arrives by email in a minute or two.
+2. Same Worker steps as above — name it `govee`, paste in `govee-worker.js`, **Deploy**.
+3. **Worker → Settings → Variables and Secrets** → add a **secret** named `GOVEE_API_KEY`.
+4. Sky view: **⚙︎ → "Room lights"**, paste the Worker URL, **Save**, then **Scan** and pick a light.
+   Switch it **On**.
+
+Colour-capable devices only — plugs and humidifiers are filtered out of the picker. A colour is held
+for at least 45s so a busy corridor can't strobe the room, and the lights are restored when the sky
+goes quiet, when you switch it off, or when the tab closes. Only while the sky view is actually
+open: nothing is running when the page is closed.
+
 ## Optional: NJ Transit (blocked on your own registration)
 NJ Transit rail (into Penn Station) isn't built in yet — it's the one system in this project that
 breaks the "zero setup" pattern entirely. Unlike every other agency here, NJ Transit requires

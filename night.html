@@ -263,7 +263,9 @@
   .ghostbtn{width:100%; padding:9px; border-radius:10px; background:transparent;
     color:var(--amber-dim); border:1px solid rgba(255,255,255,.16); cursor:pointer;
     font-size:13px; font-family:inherit}
-  #skyAddrMsg{font-size:12.5px; min-height:16px; margin:6px 0 2px; color:var(--amber-dim)}
+  #skyAddrMsg, #goveeMsg{font-size:12.5px; min-height:16px; margin:6px 0 2px; color:var(--amber-dim)}
+  .locrow select{flex:1; min-width:0; padding:10px 12px; border-radius:10px; font-family:inherit;
+    border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); color:var(--amber); font-size:15px}
   .swatches{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
   .sw{width:34px; height:34px; border-radius:50%; border:2px solid transparent; cursor:pointer;
     padding:0; outline:none}
@@ -398,6 +400,20 @@
         <input id="faaUrl" type="text" placeholder="https://faa.yourname.workers.dev" autocomplete="off" spellcheck="false" />
         <button id="faaSave">Save</button>
       </div>
+      <div class="lbl">Room lights <span style="text-transform:none;opacity:.7">(optional)</span></div>
+      <div class="locrow">
+        <input id="goveeUrl" type="text" placeholder="https://govee.yourname.workers.dev" autocomplete="off" spellcheck="false" />
+        <button id="goveeSave">Save</button>
+      </div>
+      <div class="locrow">
+        <select id="goveeDev"><option value="">— no light chosen —</option></select>
+        <button id="goveeScan">Scan</button>
+      </div>
+      <div class="seg" id="goveeSeg">
+        <button data-govee="on"><span class="ic">💡</span>On</button>
+        <button data-govee="off"><span class="ic">🚫</span>Off</button>
+      </div>
+      <div id="goveeMsg"></div>
       <div class="lbl">Show the nearest…</div>
       <div class="seg" id="modeSeg">
         <button data-mode="planes"><span class="ic">✈</span>Plane</button>
@@ -2402,6 +2418,7 @@ function render(s){
   })();
   $("#flightno").textContent = s.sub;
   window.__lastSubject=s; applyBrand(s);   // carrier colours, if switched on
+  driveLights(s);                          // and the room, if that's switched on too
   queueFit();                              // shrink the type if this one runs long
   const routeEl=$("#route");
   if(s.dCity){
@@ -2615,6 +2632,147 @@ function setBrand(v){
   brandActive="__";                 // force the next applyBrand to repaint
   applyBrand(window.__lastSubject||null);
 }
+
+/* ---- room lights: wear the colour of whatever is overhead ------------------
+   Drives Govee bulbs/strips through govee-worker.js, which holds the API key.
+   The browser cannot reach Govee directly on either path — the LAN API is UDP,
+   which no page can speak, and the cloud API sends no CORS header — so the
+   Worker is not an optimisation here, it is the only way in.
+
+   Colour comes from the SAME brandHexFor() the screen uses, but deliberately
+   not from brand mode: a dark screen with a lit room is a perfectly reasonable
+   thing to want, so the lights get their own switch.
+
+   Every call here is fire-and-forget. A light left unplugged, a Worker that is
+   down, a Govee outage — none of it may interrupt a board whose actual job is
+   showing you the sky. Failures go to the console and stop there. */
+const GOVEE_RADIUS_NM = 10;      // "nearby". The sky view itself scans out to 30
+const GOVEE_DWELL_MS  = 45000;   // hold a colour at least this long
+const GOVEE_CLEAR_MS  = 90000;   // sky empty this long -> put the room back
+const gvUrl = () => { try{ return (localStorage.getItem("tb.goveeUrl")||"").trim().replace(/\/+$/,""); }catch(e){ return ""; } };
+const gvOn  = () => { try{ return localStorage.getItem("tb.goveeOn")==="1"; }catch(e){ return false; } };
+const gvDev = () => { try{ return JSON.parse(localStorage.getItem("tb.goveeDev")||"null"); }catch(e){ return null; } };
+/* The snapshot lives in localStorage, not just memory, because the case it
+   exists for is the room being left the wrong colour — and a crash or a reload
+   mid-flight is exactly when that happens. On disk it survives both. */
+const gvSnap = () => { try{ return JSON.parse(localStorage.getItem("tb.goveeSnap")||"null"); }catch(e){ return null; } };
+function gvSetSnap(v){
+  try{ v ? localStorage.setItem("tb.goveeSnap", JSON.stringify(v)) : localStorage.removeItem("tb.goveeSnap"); }catch(e){}
+}
+function gvBody(extra){
+  const d=gvDev(); if(!d) return null;
+  return Object.assign({ sku:d.sku, device:d.device }, extra||{});
+}
+async function gvSet(extra){
+  const u=gvUrl(), body=gvBody(extra); if(!u || !body) return null;
+  try{
+    const r=await fetch(u+"/set", { method:"POST", headers:{"content-type":"application/json"},
+                                    body:JSON.stringify(body) });
+    const j=await r.json();
+    if(!j.ok) console.warn("lights:", j.error, j.detail||"");
+    return j;
+  }catch(e){ console.warn("lights:", e.message); return null; }
+}
+/* Read the room's own colour before touching it, once, so there is something to
+   go back to. Skipped if a snapshot already exists — overwriting it with an
+   airline colour would make "restore" restore the wrong thing. */
+async function gvCapture(){
+  if(gvSnap()) return;
+  const u=gvUrl(), d=gvDev(); if(!u || !d) return;
+  try{
+    const r=await fetch(`${u}/state?sku=${encodeURIComponent(d.sku)}&device=${encodeURIComponent(d.device)}`);
+    const j=await r.json();
+    if(j && j.ok) gvSetSnap({ power:j.power, brightness:j.brightness, rgb:j.rgb });
+  }catch(e){ console.warn("lights:", e.message); }
+}
+function gvRestore(){
+  const s=gvSnap(); if(!s) return;
+  gvSetSnap(null); lightHex="";
+  const p={};
+  if(s.power!=null) p.power=s.power;
+  if(Number.isFinite(s.rgb)) p.rgb=s.rgb;
+  if(Number.isFinite(s.brightness)) p.brightness=s.brightness;
+  if(Object.keys(p).length) gvSet(p);
+}
+const gvRgbInt = (hex)=>{ const [r,g,b]=hexToRgb(hex); return (r<<16)|(g<<8)|b; };
+
+let lightHex="", lightAt=0, lightSeen=0;
+/* Called on every render, alongside applyBrand(). Cheap and silent unless the
+   operator overhead actually changed. */
+function driveLights(s){
+  if(!gvOn() || !gvUrl() || !gvDev()) return;
+  // planes report nm, trains and buses report miles
+  const dist = (s && s.nm!=null) ? (s.unit==="mi" ? s.nm/1.15078 : s.nm) : Infinity;
+  const hex  = (s && dist<=GOVEE_RADIUS_NM) ? brandHexFor(s) : "";
+  const now  = Date.now();
+
+  if(hex){
+    lightSeen=now;
+    if(hex===lightHex) return;
+    /* Dwell. Near a busy corridor the nearest aircraft can change every refresh,
+       and a room that restyles itself every 12 seconds is a strobe, not a
+       signal. Too soon simply means no change — the next render tries again, so
+       whatever is overhead when the timer clears is what wins. */
+    if(now-lightAt < GOVEE_DWELL_MS) return;
+    lightAt=now; lightHex=hex;
+    (async()=>{ await gvCapture(); gvSet({ power:1, rgb:gvRgbInt(hex) }); })();
+    return;
+  }
+  /* Nothing in range. Aircraft drop out of a feed for a refresh or two without
+     going anywhere, so the room does not snap back on the first empty poll. */
+  if(lightHex && now-lightSeen > GOVEE_CLEAR_MS) gvRestore();
+}
+/* Last gasp. If the tab closes while the room is wearing an airline's colour,
+   nothing else will ever put it back: the Worker is stateless and the board is
+   gone. sendBeacon survives teardown where fetch() does not, and a text/plain
+   body keeps it free of the CORS preflight it could not answer anyway. */
+window.addEventListener("pagehide", ()=>{
+  const s=gvSnap(), u=gvUrl(); if(!s || !u || !navigator.sendBeacon) return;
+  const body=gvBody(); if(!body) return;
+  if(s.power!=null) body.power=s.power;
+  if(Number.isFinite(s.rgb)) body.rgb=s.rgb;
+  if(Number.isFinite(s.brightness)) body.brightness=s.brightness;
+  navigator.sendBeacon(u+"/set", new Blob([JSON.stringify(body)], {type:"text/plain"}));
+  gvSetSnap(null);
+});
+function gvMsg(m, kind){
+  const el=document.getElementById("goveeMsg"); if(!el) return;
+  el.textContent=m||"";
+  el.style.color = kind==="bad" ? "var(--late,#ff5a5a)" : kind==="good" ? "var(--good,#33d17a)" : "var(--amber-dim)";
+}
+/* Ask the Worker what is on the account. Colour-capable devices only: a Govee
+   plug or humidifier would otherwise sit in the picker and silently do nothing
+   when told to go United blue. */
+async function gvScan(){
+  const u=gvUrl(); if(!u){ gvMsg("Save the Worker URL first.", "bad"); return; }
+  gvMsg("Scanning…");
+  let j;
+  try{ j=await (await fetch(u+"/devices")).json(); }
+  catch(e){ gvMsg("Couldn't reach that Worker.", "bad"); return; }
+  if(!j || !j.ok){ gvMsg("Govee said: "+((j&&(j.detail||j.error))||"no answer"), "bad"); return; }
+  const lights=(j.devices||[]).filter(d=>d.rgb);
+  const sel=document.getElementById("goveeDev");
+  if(!lights.length){ gvMsg("No colour-capable lights on that account.", "bad"); return; }
+  sel.innerHTML="";
+  const cur=gvDev();
+  lights.forEach(d=>{
+    const o=document.createElement("option");
+    o.value=JSON.stringify({sku:d.sku, device:d.device, name:d.name});
+    o.textContent=d.name;
+    if(cur && cur.device===d.device) o.selected=true;
+    sel.appendChild(o);
+  });
+  if(!cur) try{ localStorage.setItem("tb.goveeDev", sel.value); }catch(e){}
+  gvMsg(`${lights.length} light${lights.length>1?"s":""} found.`, "good");
+}
+function setGovee(v){
+  const on = v==="on";
+  try{ localStorage.setItem("tb.goveeOn", on?"1":"0"); }catch(e){}
+  document.querySelectorAll("#goveeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.govee===v));
+  // switching off should hand the room back, not abandon it mid-colour
+  if(!on) gvRestore();
+  else if(!gvDev()) gvMsg("Pick a light first — press Scan.", "bad");
+}
 /* ---- make it fit, whatever the screen and whatever the name ----------------
    main is overflow:hidden by design (a wall display must not scroll), which
    means anything too tall is silently cut rather than reachable. How tall the
@@ -2814,6 +2972,24 @@ function boot(){
     if(i) i.value=faaUrl();
     if(b) b.onclick=()=>{ try{ localStorage.setItem("tb.faaUrl",(i.value||"").trim().replace(/\/+$/,"")); }catch(e){}
       faaData=null; faaAt=0; refreshFaa().then(()=>tick()); }; }
+  { const i=$("#goveeUrl"), b=$("#goveeSave"), sc=$("#goveeScan"), sel=$("#goveeDev");
+    if(i) i.value=gvUrl();
+    if(b) b.onclick=()=>{ try{ localStorage.setItem("tb.goveeUrl",(i.value||"").trim().replace(/\/+$/,"")); }catch(e){}
+      gvMsg("Saved. Press Scan to find your lights."); };
+    if(sc) sc.onclick=gvScan;
+    if(sel) sel.onchange=()=>{ if(!sel.value) return;
+      try{ localStorage.setItem("tb.goveeDev", sel.value); }catch(e){}
+      lightHex=""; lightAt=0;                       // new light: let it take a colour at once
+      gvMsg(JSON.parse(sel.value).name+" will follow what's overhead.", "good"); };
+    // a light already chosen on a previous visit should show as chosen
+    { const cur=gvDev(); if(sel && cur){ const o=document.createElement("option");
+        o.value=JSON.stringify(cur); o.textContent=cur.name; o.selected=true; sel.appendChild(o); } }
+    $("#goveeSeg").addEventListener("click", e=>{ const t=e.target.closest("button"); if(t) setGovee(t.dataset.govee); });
+    document.querySelectorAll("#goveeSeg button").forEach(x=>x.classList.toggle("active", x.dataset.govee===(gvOn()?"on":"off")));
+    /* A snapshot still on disk at startup means the last session ended with the
+       room wearing someone's livery -- the beacon missed, or the tab was killed.
+       Hand it back before doing anything else. */
+    if(gvSnap() && gvUrl() && gvDev()) gvRestore(); }
   setInterval(backgroundWatch, 60000);             // off-mode rare-bird + ISS-pass watcher
   setMode(mode); setInterval(tick, CFG.refreshMs);
   // Only fall back to GPS if the board itself would (i.e. you haven't set a
