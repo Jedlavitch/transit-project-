@@ -64,9 +64,14 @@ I can't create a Stripe account or handle payment setup on your behalf.
 
 1. Workers → new worker `tb-license`, paste `license-worker.js`
 2. **KV** → namespace bound as **`LICENSES`**
-3. Secrets: `STRIPE_KEY` (secret key from Stripe), `ADMIN_SECRET` (any long
-   random string, for issuing keys by hand)
-4. Send me the URL
+3. Secrets: **`STRIPE_SECRET`** (the `sk_live_…` from Stripe → Developers → API
+   keys), `ADMIN_SECRET` (any long random string, for issuing keys by hand)
+   — the name has to be exactly `STRIPE_SECRET`; that is what the Worker reads,
+   and a secret stored under any other name leaves it looking unconfigured, so
+   every real purchase would take the money and then fail to hand over a key
+4. Send me the URL — the worker URL is not a secret. **The `sk_live_…` key is:
+   it goes into the Cloudflare dashboard only, never into this repo and never
+   into a chat.**
 
 ---
 
