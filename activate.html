@@ -51,6 +51,12 @@
     </div>
     <button class="cta" id="activateBtn">Activate this device</button>
     <div id="msg"></div>
+    <!-- The way out for somebody who paid and has nothing to type. Written by
+         strandedHelp() so it can carry a mailto link and the session id, which
+         is the one string support needs to reissue the key. -->
+    <div id="help" style="display:none;margin-top:14px;padding:13px 15px;border-radius:11px;
+      background:var(--panel2,#0c1628);border:1px solid var(--line,#22345a);
+      color:var(--muted,#93a5cf);font-size:13.5px;line-height:1.6"></div>
     <p style="margin-top:16px">To license another device: open any city board on it, click the
       “◇ evaluation” chip in the corner, and enter the same key.</p>
   </div>
@@ -58,10 +64,47 @@
 <script>
   const WORKER_URL = "https://tblicense.jacklemonade2.workers.dev";
   const workerUrl = (localStorage.getItem("tb.workerUrl") || WORKER_URL || "").replace(/\/+$/,"");
+  /* Where a stranded buyer is sent. Left empty deliberately: with no address
+     set the page tells them to reply to the receipt Stripe already emailed
+     them, which needs no inbox published on a page anyone can read. Fill this
+     in and it becomes a one-click mailto with the details already written. */
+  const SUPPORT_EMAIL = "";
+
   const qs = new URLSearchParams(location.search);
   const msg = t => { document.getElementById("msg").textContent = t; };
   const show = (id, on) => { document.getElementById(id).style.display = on ? "block" : "none"; };
   let key = (qs.get("key") || "").trim().toUpperCase();
+  const esc = s => String(s == null ? "" : s)
+    .replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+
+  /* The dead end this exists to remove: somebody has paid, has no key, and the
+     page's only control is a box asking for the key they never got. Whatever
+     went wrong upstream — a missing redirect, a Stripe lookup that failed, a
+     Worker that was down — the buyer's next step should never be "guess".
+
+     The session id is included wherever we have one, because that single string
+     is all it takes to reissue the key against the real payment, so a support
+     message carrying it can be answered in seconds instead of a hunt through
+     the dashboard. */
+  function strandedHelp(session, reason) {
+    const box = document.getElementById("help");
+    const sess = session ? String(session).slice(0, 120) : "";
+    const subject = "Transit Project licence — paid, no key";
+    const body = "I bought a licence and didn't receive a key."
+      + (sess ? "\n\nStripe checkout session: " + sess : "")
+      + "\n\n(Please attach or quote your Stripe receipt.)";
+    const contact = SUPPORT_EMAIL
+      ? 'Email <a style="color:var(--accent,#4ea1ff)" href="mailto:' + esc(SUPPORT_EMAIL)
+        + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body)
+        + '">' + esc(SUPPORT_EMAIL) + "</a> and your key will be sent by hand."
+      : "Reply to the receipt Stripe emailed you and your key will be sent by hand.";
+    box.innerHTML =
+      "<b>Paid but no key?</b><br>" + (reason ? esc(reason) + " " : "")
+      + contact + " Your purchase is on record either way — nothing further is owed."
+      + (sess ? '<br><br><span style="opacity:.75">Quote this reference:</span><br>'
+                + '<code style="user-select:all;word-break:break-all;font-size:12.5px">' + esc(sess) + "</code>" : "");
+    box.style.display = "block";
+  }
 
   function showKey(k){
     key = k;
@@ -86,8 +129,8 @@
       show("manualWrap", false);
       document.getElementById("activateBtn").style.display = "none";
       msg("Your payment went through — but this site can't issue keys yet, so there's "
-        + "nothing to activate on this device. Reply to the receipt Stripe emailed you "
-        + "and your key will be sent by hand. Nothing further is owed.");
+        + "nothing to activate on this device.");
+      strandedHelp(session, "The licence server isn't connected.");
       return;
     }
     if (session && workerUrl) {
@@ -96,10 +139,26 @@
         const r = await fetch(`${workerUrl}/claim?session=${encodeURIComponent(session)}`);
         const data = await r.json();
         show("fetching", false);
-        if (data.ok) showKey(data.key);
-        else { show("manualWrap", true); msg("Couldn't confirm the purchase (" + (data.error||"error") + ") — contact the seller with your Stripe receipt."); }
-      } catch (_) { show("fetching", false); show("manualWrap", true); msg("Couldn't reach the license server."); }
+        if (data.ok) { showKey(data.key); return; }
+        /* Paid, and the claim was refused. The manual box stays — a key from a
+           previous device still works here — but it is no longer the only way
+           out, which it was when this said "contact the seller" and left them
+           to work out how. */
+        show("manualWrap", true);
+        msg("Couldn't confirm the purchase (" + (data.error || "error") + ").");
+        strandedHelp(session, "Stripe couldn't confirm that payment automatically.");
+      } catch (_) {
+        show("fetching", false); show("manualWrap", true);
+        msg("Couldn't reach the licence server.");
+        strandedHelp(session, "The licence server didn't answer.");
+      }
+      return;
     }
+    /* No session and no key. Usually someone opening the page to type a key
+       they already have — so the box stays and nothing is alarming — but it is
+       also where a buyer lands when the payment link's redirect drops the
+       session id, having paid and having nothing to type. */
+    strandedHelp("", "");
   })();
 
   document.getElementById("activateBtn").onclick = async () => {
