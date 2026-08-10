@@ -1436,7 +1436,6 @@ function drawScheduleRouteLines(schedule, layer, colorFn){
     if(pts.length>1) L.polyline(pts, {color:colorFn(tr.line), weight:4, opacity:.5, lineCap:"round", lineJoin:"round"}).addTo(layer);
   });
 }
-function schedClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
 // Lateness scale (bands, colours, sentinel guarding) lives in delays.js,
 // shared by every board so the cities cannot drift apart.
 function appendLiveTimes(row, late){
@@ -1792,13 +1791,19 @@ function countdownText(min){
     : `in ${Math.floor(min/60)}h ${String(min%60).padStart(2,"0")}m`;
 }
 function etaClass(min){ return min<=0?"due":min<=5?"soon":"later"; }
-function etaClock(min){
-  return new Date(Date.now()+Math.max(0,min)*60000)
-    .toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-}
 function minsUntil(x){ const d=(x instanceof Date)?x:new Date(x);
   return isNaN(d) ? null : Math.round((d-Date.now())/60000); }
-function fmtTime(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+/* A wall-clock time belongs to the CITY, not to whoever is looking -- see
+   tickClock. Anything you add that prints an absolute time should go through
+   here rather than calling toLocaleTimeString directly, or a board read from
+   another continent will quietly show the reader's own clock. */
+function fmtTime(iso){
+  if(!iso) return "";
+  const d=new Date(iso);
+  if(isNaN(d)) return "";
+  return d.toLocaleTimeString(CFG.clock24 ? "en-GB" : "en-US",
+    {hour:"2-digit", minute:"2-digit", hour12:!CFG.clock24, timeZone:CFG.tz});
+}
 function amtrakNextStop(t){ return (t.stations||[]).find(s=>s.status!=="Departed") || null; }
 async function ensureAmtrakStations(){
   if(state.amStations) return state.amStations;
