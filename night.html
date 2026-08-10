@@ -394,6 +394,11 @@
         <button data-sky="on"><span class="ic">🌇</span>On</button>
         <button data-sky="off"><span class="ic">🚫</span>Off</button>
       </div>
+      <div class="lbl">Airline colors</div>
+      <div class="seg" id="brandSeg">
+        <button data-brand="on"><span class="ic">🎨</span>On</button>
+        <button data-brand="off"><span class="ic">🚫</span>Off</button>
+      </div>
       <div class="lbl">Photos</div>
       <div class="seg" id="photoSeg">
         <button data-photo="slow"><span class="ic">🖼</span>Slow</button>
@@ -1295,6 +1300,8 @@ async function producePlane(){
     altText: [typeof a.alt_baro==="number"?`${a.alt_baro.toLocaleString()} ft`:"",
               spd?`${spd} kt`:""].filter(Boolean).join(" · "),
     airlineIata: (route && route.airline && route.airline.iata) || "",
+    callsign: (a.flight||"").trim(),      // ICAO prefix is the brand fallback
+
     title: airlineName(route,a), sub:[(a.flight||"").trim(), a.desc||a.t, a.r].filter(Boolean).join("  ·  "),
     oCity: route?(route.origin.municipality||route.origin.iata_code):null,
     dCity: route?(route.destination.municipality||route.destination.iata_code):null,
@@ -1303,7 +1310,7 @@ async function producePlane(){
     progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
     statusHtml: emergencyBadge(a)
       +(isHolding(a)?`<span class="badge hold">⟳ holding</span>`:"")
-      +faaChips({oCode:(route&&route.from)||"", dCode:(route&&route.to)||""})
+
       +`<span class="phase">${phaseOf(a)}</span>`+(spd?`<span class="alt">${spd} kt</span>`:"")
       +vRateChip(a.baro_rate)+headingChip(a.track)
       +((a.squawk||"").trim()&&!SQUAWK_EMERG[(a.squawk||"").trim()]?`<span class="alt">SQK ${(a.squawk||"").trim()}</span>`:"")
@@ -2147,6 +2154,7 @@ function render(s){
     if(img.complete) show();
   })();
   $("#flightno").textContent = s.sub;
+  window.__lastSubject=s; applyBrand(s);   // carrier colours, if switched on
   const routeEl=$("#route");
   if(s.dCity){
     routeEl.innerHTML = (s.oCity?`<span class="city">${escapeHtml(s.oCity)}</span><span class="arrow">→</span>`:`<span class="arrow">→</span>`)
@@ -2154,7 +2162,10 @@ function render(s){
     routeEl.style.display="";
   } else routeEl.style.display="none";
   const subEl=$("#subcity"); subEl.textContent=s.subline||""; subEl.style.display=s.subline?"":"none";
-  $("#status").innerHTML = s.statusHtml;
+  // Airport delay chips are added HERE, not in the producer: the subject's own
+  // oCode/dCode are the reliable source (Sky's route object nests
+  // origin/destination, so reading route.from/.to silently yielded nothing).
+  $("#status").innerHTML = (s.statusHtml) + faaChips(s);
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -2170,6 +2181,12 @@ function rgbStr(a){ return "rgb("+a.map(v=>Math.max(0,Math.min(255,Math.round(v)
 function setTheme(hex){
   localStorage.setItem("nightmode.accent", hex);
   document.querySelectorAll("#swatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
+  applyPalette(hex);
+}
+/* The palette, without saving it as the user's choice. Airline colours borrow
+   the screen for as long as that aircraft is the subject; the accent picked in
+   settings is what it returns to, so it must not be overwritten on the way. */
+function applyPalette(hex){
   const nightTheme=document.documentElement.dataset.theme||"dark";
   if(nightTheme==="day"){
     // Day uses its own fixed light palette (CSS above) so text/bg stay readable
@@ -2185,6 +2202,87 @@ function setTheme(hex){
   }
   const mt=document.querySelector('meta[name="theme-color"]');
   if(mt) mt.setAttribute("content", getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#010409");
+}
+/* ---- airline colours -------------------------------------------------------
+   Paints the whole screen in the carrier's own colours for as long as their
+   aircraft is the subject: United navy, Southwest blue, FedEx purple.
+
+   Keyed by BOTH the IATA code (which adsbdb gives us when it knows the flight)
+   and the ICAO callsign prefix (which every aircraft broadcasts), because the
+   IATA code is only there when the route lookup succeeded — and the callsign is
+   the one identifier always present. One table, both kinds of key, so whichever
+   we have wins.
+
+   One colour each, deliberately: the palette is derived from a single hex by
+   applyPalette(), and a carrier's real secondary is usually white or silver,
+   which would wash the screen out. */
+const AIRLINE_BRAND={
+  // US majors
+  AA:"#0078D2", AAL:"#0078D2",   UA:"#005DAA", UAL:"#005DAA",
+  DL:"#C8102E", DAL:"#C8102E",   WN:"#304CB2", SWA:"#304CB2",
+  B6:"#0033A0", JBU:"#0033A0",   AS:"#01426A", ASA:"#01426A",
+  NK:"#FFEC00", NKS:"#FFEC00",   F9:"#046A38", FFT:"#046A38",
+  HA:"#522398", HAL:"#522398",   G4:"#003D79", AAY:"#003D79",
+  SY:"#1D2D5C", SCX:"#1D2D5C",   MX:"#17B0E7", MXY:"#17B0E7",
+  // US regionals, which is most of what a small airport actually sees
+  OO:"#003A70", SKW:"#003A70",   YX:"#003DA5", RPA:"#003DA5",
+  MQ:"#0078D2", ENY:"#0078D2",   "9E":"#C8102E", EDV:"#C8102E",
+  OH:"#0078D2", JIA:"#0078D2",   PT:"#0078D2", PDT:"#0078D2",
+  // cargo
+  FX:"#4D148C", FDX:"#4D148C",   "5X":"#FFB500", UPS:"#FFB500",
+  "5Y":"#003DA5", GTI:"#003DA5",
+  // Canada + Mexico
+  AC:"#F01428", ACA:"#F01428",   WS:"#0F6FBF", WJA:"#0F6FBF",
+  PD:"#003DA5", POE:"#003DA5",   AM:"#0B2343", AMX:"#0B2343",
+  // Europe
+  BA:"#075AAA", BAW:"#075AAA",   LH:"#0C2340", DLH:"#0C2340",
+  AF:"#002157", AFR:"#002157",   KL:"#00A1DE", KLM:"#00A1DE",
+  EI:"#00A65A", EIN:"#00A65A",   IB:"#D7192D", IBE:"#D7192D",
+  VS:"#E10D0D", VIR:"#E10D0D",   FR:"#073590", RYR:"#073590",
+  U2:"#FF6600", EZY:"#FF6600",   W6:"#C6007E", WZZ:"#C6007E",
+  VY:"#FFCC00", VLG:"#FFCC00",   SK:"#003D7D", SAS:"#003D7D",
+  TP:"#00A04E", TAP:"#00A04E",   LX:"#E30614", SWR:"#E30614",
+  OS:"#D40E14", AUA:"#D40E14",   AZ:"#00844A", ITY:"#00844A",
+  // Middle East + Asia + Oceania
+  EK:"#D71921", UAE:"#D71921",   QR:"#5C0632", QTR:"#5C0632",
+  EY:"#BD8B13", ETD:"#BD8B13",   TK:"#C70A0C", THY:"#C70A0C",
+  NH:"#13497B", ANA:"#13497B",   JL:"#C8102E", JAL:"#C8102E",
+  KE:"#00256C", KAL:"#00256C",   SQ:"#26418F", SIA:"#26418F",
+  CX:"#006564", CPA:"#006564",   QF:"#E40000", QFA:"#E40000",
+  NZ:"#00247D", ANZ:"#00247D",
+  // Latin America
+  LA:"#1B0088", LAN:"#1B0088",   AV:"#DA291C", AVA:"#DA291C",
+  CM:"#0033A0", CMP:"#0033A0",   AD:"#0F2B5B", AZU:"#0F2B5B",
+};
+const brandOn = () => localStorage.getItem("nightmode.brand")==="1";
+/* The carrier's colour for this subject, or "" if we cannot say. Guessing from
+   the aircraft owner's name is deliberately not attempted: leasing trusts and
+   fractional operators would paint the screen the wrong colour with confidence. */
+function brandHexFor(s){
+  if(!s || mode!=="planes") return "";
+  const iata=String(s.airlineIata||"").trim().toUpperCase();
+  if(iata && AIRLINE_BRAND[iata]) return AIRLINE_BRAND[iata];
+  const call=String(s.callsign||s.flight||"").trim().toUpperCase();
+  const icao=call.slice(0,3).replace(/[^A-Z0-9]/g,"");
+  if(icao && AIRLINE_BRAND[icao]) return AIRLINE_BRAND[icao];
+  return "";
+}
+let brandActive="";
+/* Called on every render. Repaints only when the carrier actually changes, so a
+   12s refresh of the same aircraft doesn't restyle the page over and over. */
+function applyBrand(s){
+  const hex = brandOn() ? brandHexFor(s) : "";
+  if(hex===brandActive) return;
+  brandActive=hex;
+  applyPalette(hex || localStorage.getItem("nightmode.accent") || "#7db8ff");
+  const chip=document.getElementById("brandChip");
+  if(chip) chip.style.display = hex ? "" : "none";
+}
+function setBrand(v){
+  localStorage.setItem("nightmode.brand", v==="on"?"1":"0");
+  document.querySelectorAll("#brandSeg button").forEach(b=>b.classList.toggle("active", b.dataset.brand===v));
+  brandActive="__";                 // force the next applyBrand to repaint
+  applyBrand(window.__lastSubject||null);
 }
 function setNightTheme(t){
   document.documentElement.setAttribute("data-theme", t);
@@ -2229,6 +2327,7 @@ function initSettings(){
   $("#fleetPanel").addEventListener("click",e=>{ if(e.target.id==="fleetPanel") $("#fleetPanel").classList.remove("show"); });
   $("#themeSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setNightTheme(b.dataset.theme); });
   $("#skySeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setSunSky(b.dataset.sky); });
+  $("#brandSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setBrand(b.dataset.brand); });
   $("#photoSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPhotoPace(b.dataset.photo); });
 }
 function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
@@ -2341,6 +2440,7 @@ function boot(){
   initSettings();
   document.querySelectorAll("#themeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.theme===(localStorage.getItem("nightmode.theme")||"dark")));
   document.querySelectorAll("#skySeg button").forEach(b=>b.classList.toggle("active", b.dataset.sky===(sunSkyEnabled()?"on":"off")));
+  document.querySelectorAll("#brandSeg button").forEach(b=>b.classList.toggle("active", b.dataset.brand===(brandOn()?"on":"off")));
   document.querySelectorAll("#photoSeg button").forEach(b=>b.classList.toggle("active", b.dataset.photo===photoPace()));
   makeStars();
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
