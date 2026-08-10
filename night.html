@@ -550,6 +550,7 @@ const CITY_CONFIG = {
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
     localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
     transitSource:"ch", mainStation:"Zürich HB",
+    tz:"Europe/Zurich", clock24:true,
     cityLabel:"Zurich" },
   /* Europe. No bundled timetable and no live-vehicle feed exists for these, so
      there is nothing to point busSchedule or a live-Worker key at — planes are
@@ -561,6 +562,7 @@ const CITY_CONFIG = {
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
     localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
     transitSource:"", mainStation:"Köln Hbf",
+    tz:"Europe/Berlin", clock24:true,
     cityLabel:"Cologne" },
   /* Europe. No bundled timetable and no live-vehicle feed exists for these, so
      there is nothing to point busSchedule or a live-Worker key at — planes are
@@ -572,6 +574,7 @@ const CITY_CONFIG = {
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
     localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
     transitSource:"", mainStation:"Stuttgart Hauptbahnhof",
+    tz:"Europe/Berlin", clock24:true,
     cityLabel:"Stuttgart" },
   // lsMarcUrl/lsSeptaUrl mirror the board's own live-Worker settings so night
   // mode can pick up the SAME live positions once you've configured one there
@@ -1377,7 +1380,7 @@ async function producePlane(){
   const dLL=route&&route.destination&&typeof route.destination.latitude==="number"?{lat:route.destination.latitude,lon:route.destination.longitude}:null;
   let eta=`<span class="badge na">en route</span>`;
   if(dLL && a.gs>40){ const mins=Math.round(haversineNm({lat:a.lat,lon:a.lon},dLL)/a.gs*60);
-    if(mins>=0&&mins<600){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    if(mins>=0&&mins<600){ const arr=cityClock(Date.now()+mins*60000);
       eta=mins<=1?`<span class="badge ok">landing now</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
   const prog=journeyProgress(oLL, dLL, {lat:a.lat,lon:a.lon});
   // approach mode: on final near a known destination -> add landing runway +
@@ -1438,7 +1441,7 @@ async function produceAmtrakTrain(){
   const dLL=st[t.destCode]?{lat:st[t.destCode][0],lon:st[t.destCode][1]}:null;
   let eta="";
   if(dLL && t.velocity>20){ const mins=Math.round(haversineNm({lat:t.lat,lon:t.lon},dLL)*1.15078/t.velocity*60);
-    if(mins>=0&&mins<900){ const arr=new Date(Date.now()+mins*60000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+    if(mins>=0&&mins<900){ const arr=cityClock(Date.now()+mins*60000);
       eta=mins<=1?`<span class="badge ok">arriving</span>`:`<span class="badge ok">≈ ${mins} min · arr ${arr}</span>`; } }
   const late=(t.trainTimely||"").trim(), nx=amtrakNextStop(t);
   const prog=journeyProgress(oLL, dLL, {lat:t.lat,lon:t.lon});   // Amtrak distances are shown in miles
@@ -1784,7 +1787,7 @@ async function produceEuroVehicle(families, kind){
   const line = d.route || d.label || "";
   const nextName = pos.next && pos.next.name;
   const nextT = pos.next && pos.next.t;
-  const arr = t.end ? new Date(t.end).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "";
+  const arr = t.end ? cityClock(t.end) : "";
   const lateChip = (d.realTime && d.delayMin>0) ? `  ·  +${d.delayMin} min` : "";
   /* Distance covered and remaining, walked along the stop list so a curving
      line is not understated the way a straight origin-to-destination hop is. */
@@ -1824,7 +1827,7 @@ async function produceEuroVehicle(families, kind){
     progPct:pos.pct/100, progFlown:travelled.done, progToGo:travelled.left,
     statusHtml:`<span class="phase">${pos.pct>=100?"arrived":pos.pct<=0?"about to depart":"en route"}</span>`
       + (nextName? nextStopChip(nextName,
-            nextT? new Date(nextT).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : "",
+            nextT? cityClock(nextT) : "",
             "position from timetable") : "")
       + (arr? `<span class="badge na">arr ${arr}</span>` : ""),
     photoQuery:`${CITY_CFG.cityLabel} ${kind==="bus"?"tram bus":"train"}`,
@@ -2426,7 +2429,21 @@ function nextStopChip(name, timeStr, note){
   const extra=[timeStr, note].filter(Boolean).join(" · ");
   return `<span class="badge na">→ ${escapeHtml(name)}${extra?` · ${escapeHtml(extra)}`:""}</span>`;
 }
-function isoToClock(iso){ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+/* Wall-clock times on a city board belong to that CITY, not to whoever is
+   looking at it. Sky mode is opened from a board that may be six hours away,
+   so "arr 18:45" has to mean 18:45 there. Cities with no tz set keep the
+   viewer's own zone, which is exactly what every one of them did before.
+   NOT for minToClock(): that builds a Date from minutes-since-midnight in
+   local time, so re-reading it in another zone would shift it twice. */
+function cityClock(t){
+  const d = (t instanceof Date) ? t : new Date(t);
+  if(isNaN(d)) return "";
+  const tz = CITY_CFG && CITY_CFG.tz;
+  if(!tz) return d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  return d.toLocaleTimeString(CITY_CFG.clock24 ? "en-GB" : "en-US",
+    {hour:"2-digit", minute:"2-digit", hour12:!CITY_CFG.clock24, timeZone:tz});
+}
+function isoToClock(iso){ return iso ? cityClock(iso) : ""; }
 // minutes-since-midnight (schedule math, may wrap past 1440) -> "10:45 PM"
 function minToClock(min){ if(typeof min!=="number"||!isFinite(min)) return "";
   const m=((Math.round(min)%1440)+1440)%1440; return new Date(2000,0,1,Math.floor(m/60),m%60).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
@@ -2482,7 +2499,7 @@ function renderFleetPanel(){
 
 let lastId=null;
 function render(s){
-  $("#updated").textContent = "updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  $("#updated").textContent = "updated "+cityClock(Date.now());
   const L=$("#loading");
   if(s && s.needKey){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
@@ -3027,7 +3044,7 @@ function initSettings(){
   $("#brandSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setBrand(b.dataset.brand); });
   $("#photoSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPhotoPace(b.dataset.photo); });
 }
-function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+function clock(){ $("#clock").textContent=cityClock(Date.now()); }
 
 /* ---- full-screen kiosk mode + keep-awake ---- */
 const SVG_EXPAND=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;

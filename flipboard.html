@@ -225,18 +225,21 @@ const CITY_CONFIG = {
     lsLoc:"transitboardzurich.loc", board:"zurich.html", cityLabel:"Zurich",
     lsWmataKey:null, lsHidden:"transitboardzurich.hiddenCards",
     transitSource:"ch", mainStation:"Zürich HB",
+    tz:"Europe/Zurich", clock24:true,
   },
   cologne: {
     defaultLoc:{ lat:50.943, lon:6.9588, label:"Köln Hauptbahnhof" },
     lsLoc:"transitboardcologne.loc", board:"cologne.html", cityLabel:"Cologne",
     lsWmataKey:null, lsHidden:"transitboardcologne.hiddenCards",
     transitSource:"", mainStation:"Köln Hbf",
+    tz:"Europe/Berlin", clock24:true,
   },
   stuttgart: {
     defaultLoc:{ lat:48.7838, lon:9.1817, label:"Stuttgart Hauptbahnhof" },
     lsLoc:"transitboardstuttgart.loc", board:"stuttgart.html", cityLabel:"Stuttgart",
     lsWmataKey:null, lsHidden:"transitboardstuttgart.hiddenCards",
     transitSource:"", mainStation:"Stuttgart Hauptbahnhof",
+    tz:"Europe/Berlin", clock24:true,
   },
   dc: {
     defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
@@ -897,9 +900,22 @@ async function tick(){
   }catch(e){
     $("#statusText").textContent="update failed, retrying…";
   }
-  $("#updated").textContent="updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  $("#updated").textContent="updated "+cityClock(Date.now());
 }
-function clock(){ $("#clock").textContent=new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+/* The CITY's clock, not the viewer's -- this board is read from anywhere but
+   describes departures somewhere specific, and a Zurich board showing Eastern
+   time is worse than showing none. Cities with no tz keep the viewer's zone,
+   exactly as before. The TIME column itself is relative minutes, so it was
+   never affected. */
+function cityClock(t){
+  const d = (t instanceof Date) ? t : new Date(t);
+  if(isNaN(d)) return "";
+  const tz = CITY_CFG && CITY_CFG.tz;
+  if(!tz) return d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  return d.toLocaleTimeString(CITY_CFG.clock24 ? "en-GB" : "en-US",
+    {hour:"2-digit", minute:"2-digit", hour12:!CITY_CFG.clock24, timeZone:tz});
+}
+function clock(){ $("#clock").textContent=cityClock(Date.now()); }
 
 /* ---- full-screen kiosk mode ---- */
 /* Full screen must act on the TOP document. Boards run inside the same-origin

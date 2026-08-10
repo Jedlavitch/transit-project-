@@ -706,6 +706,11 @@ const CFG = {
   // [CITY-SETUP] default map center + label (shown until GPS/typed address wins).
   // Amtrak + planes work anywhere in the US; pick your city's downtown/station.
   defaultLoc: { lat: 41.8789, lon: -87.6397, label: "Chicago Union Station" },
+  // [CITY-SETUP] the city's IANA zone + whether it runs on a 24-hour clock.
+  // The header shows THIS city's time, so a board read from another continent
+  // still answers "when does it leave, there".
+  tz: "America/Chicago",
+  clock24: false,
   planeRadiusNm: 12,    // nautical miles for "overhead"
   amtrakRadiusMi: 60,   // miles: Amtrak trains to show as "regional"
   planeEveryMs: 15000,
@@ -755,8 +760,17 @@ async function getJSON(url, timeout=12000){
 /* ---------- clock ---------- */
 function tickClock(){
   const d=new Date(), p=n=>String(n).padStart(2,"0");
-  $("#clock").textContent = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
-  $("#date").textContent  = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"});
+  /* The CITY's time, not the viewer's. This clock sits above departures for a
+     city that may be six hours away -- someone watching Zurich from Maryland
+     needs to know what time it is in Zurich, and the old `[]` locale silently
+     showed them their own. Locale is pinned rather than left to the browser so
+     the format does not change with whoever is looking either: 24-hour where
+     the city runs on it, 12-hour where it does not. */
+  const loc = CFG.clock24 ? "en-GB" : "en-US";
+  $("#clock").textContent = d.toLocaleTimeString(loc,
+    {hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:!CFG.clock24, timeZone:CFG.tz});
+  $("#date").textContent  = d.toLocaleDateString("en-GB",
+    {weekday:"short", month:"short", day:"numeric", timeZone:CFG.tz});
   $("#utc").textContent   = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}Z`;
 }
 
