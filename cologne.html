@@ -1837,8 +1837,14 @@ async function refreshTransit(){
         times.appendChild(el("div","live-tag","not running"));
       } else if(d.realTime){
         live++;
-        const dm=d.delayMin;
-        times.appendChild(el("div","live-tag", dm==null? "live" : (dm>0? `live · +${dm} min` : "live · on time")));
+        /* Banded on the shared scale rather than written into the tag, so a
+           train ten minutes down reads the same here as on every other board.
+           A feed that reports "live" with no figure keeps the plain tag: there
+           is no delay to colour, and inventing an "on time" would be a claim
+           the feed never made. */
+        const li = (d.delayMin==null) ? null : liveLateInfo(d.delayMin);
+        if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.appendChild(eta); }
+        else times.appendChild(el("div","live-tag","live"));
       } else times.appendChild(el("div","sched","scheduled"));
       row.append(b, mid, el("div"), times);
       box.appendChild(row);

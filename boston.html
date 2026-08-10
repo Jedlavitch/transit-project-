@@ -1635,8 +1635,12 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
           big.classList.add("eta", etaClass(mins));
           const clk=ms=>new Date(ms).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
           times.append(big, el("div","sched", p.sms!=null ? "sched "+clk(p.sms) : "live · ≈ "+clk(p.tms)));
-          const tag=el("div","live-tag"); tag.textContent="live"; tag.style.color="var(--good-ink)";
-          times.appendChild(tag);
+          /* lateMin was already computed for the sub line and then thrown away
+             here, so a train twenty minutes down still showed a green "live".
+             The figure is the point; the word is not. */
+          const li=liveLateInfo(lateMin);
+          if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.appendChild(eta); }
+          else { const tag=el("div","live-tag"); tag.textContent="live"; tag.style.color="var(--good-ink)"; times.appendChild(tag); }
           row.append(b, mid, el("div"), times);
           box.appendChild(row); shown++;
         });
@@ -1663,8 +1667,13 @@ async function refreshMbtaCard({ensure, list, count, color, badgeCls, stations=2
           t.classList.add("eta", etaClass(liveMin));
           t.style.color="";
           times.append(t, el("div","sched","sched "+schedClock(d.t)));
-          const tag=el("div","live-tag"); tag.textContent="live"; tag.style.color="var(--good-ink)";
-          times.appendChild(tag); anyLive=true;
+          /* Nothing in this feed states a delay, but both halves of one are
+             here: the live prediction and the timetable minute it is replacing.
+             The difference IS the lateness, and it is what the rider feels. */
+          const li=liveLateInfo(liveMin-rel);
+          if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.appendChild(eta); }
+          else { const tag=el("div","live-tag"); tag.textContent="live"; tag.style.color="var(--good-ink)"; times.appendChild(tag); }
+          anyLive=true;
         } else {
           times.append(t, dualTime(t, rel));
         }

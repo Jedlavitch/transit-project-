@@ -1637,11 +1637,14 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
         const times=el("div","times");
         const t=el("div","live"); t.style.color=col; t.textContent=schedClock(shownMin); times.appendChild(t);
         if(isLive){
-          const r=Math.round(delay);
-          const tag=el("div","live-tag");
-          tag.textContent = r<=0 ? "on time" : `+${r} min`;
-          tag.style.color = r>4 ? "var(--late)" : r>=2 ? "var(--warn)" : "var(--good)";
-          times.appendChild(tag); anyLive=true;
+          /* This card used to run its own thresholds -- late above 4, warn at
+             2 -- which put a 5-minute Caltrain in a different colour here than
+             the identical delay on every other board. One scale now, from
+             delays.js. */
+          const li=liveLateInfo(Math.round(delay));
+          if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.appendChild(eta); }
+          else times.appendChild(el("div","live-tag","live"));
+          anyLive=true;
         } else {
           times.appendChild(dualTime(t, rel));
         }

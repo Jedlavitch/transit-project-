@@ -1575,6 +1575,10 @@ async function refreshMlink(){
         // CalcTrainMovementTime the live estimate, so keep the timetable one
         // and the row can show scheduled and live together
         schedClk:r.FormattedTrainMovementTime||"",
+        // the timetable time as a number too, so the delay can be MEASURED
+        // rather than read off CalculatedStatus, which only ever says whether
+        // a train is late and never by how much
+        st:mlDateMs(r.TrainMovementTime),
         status:(r.CalculatedStatus||"").trim(), ev:r.EventType||"" });
     });
     const here=state.loc;
@@ -1609,9 +1613,18 @@ async function refreshMlink(){
         } else {
           times.appendChild(el("div","live", e.clock||"—"));
         }
-        const stat=el("div","live-tag"); stat.textContent=e.status||"live";
-        stat.style.color = late?"var(--late)":"var(--good)";
-        times.append(stat);
+        /* Two colours -- late or not -- became four bands, because "late" was
+           doing the work of everything from one minute to forty. Where both
+           times are present the delay is measured; where they are not, the
+           feed's own wording stands, still coloured but unquantified. */
+        const lateMin=(e.t!=null && e.st!=null) ? Math.round((e.t-e.st)/60000) : null;
+        const li=liveLateInfo(lateMin);
+        if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.append(eta); }
+        else {
+          const stat=el("div","live-tag"); stat.textContent=e.status||"live";
+          stat.style.color = late?"var(--late)":"var(--good)";
+          times.append(stat);
+        }
         row.append(b, mid, el("div"), times);
         box.appendChild(row); shown++;
       });
