@@ -508,6 +508,8 @@ const CITY_CONFIG = {
     lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
     busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
     lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
+    lsWmataKey:"transitboard.wmataKey",          // unlocks Metrorail as a fallback
+    metroPhotoQuery:"WMATA Metrorail train Washington DC",
     localRailSystem:"MARC", localBusSystem:"Ride On", busPhotoQuery:"Ride On bus Montgomery County Maryland",
     cityLabel:"Washington DC" },
   // New Jersey: no live NJT Worker is wired yet (njt-worker.js is ready but needs
@@ -1572,6 +1574,101 @@ async function produceLiveLocalTrain(){
 }
 /* "Nearest train" should mean nearest across every rail system that's
    available, not just Amtrak -- pick whichever candidate is actually closer. */
+
+/* ---- METRORAIL, deliberately last in line -------------------------------
+   Metro runs every few minutes, so if it competed on distance like everything
+   else it would win essentially always and Sky view would become a Metro
+   display — Amtrak and MARC, the trains that are actually an event to see,
+   would never get a turn. So it is a FALLBACK: only consulted when no Amtrak
+   and no MARC train is anywhere in range.
+
+   Positions come from WMATA's TrainPositions product, which reports a train's
+   place as a track circuit rather than a lat/lon. Circuits are resolved to
+   coordinates through the same StandardRoutes interpolation the DC board
+   already uses, so a train sits between its two stations rather than snapping
+   to one. Out-of-service movements (ServiceType NoPassengers/Unknown) are
+   dropped — an empty train repositioning is not a sighting. */
+const LINE_COL={RD:"#e51937",BL:"#0076c0",OR:"#f7941e",SV:"#a1a3a1",GR:"#00b140",YL:"#ffd200"};
+let metroPosNight=null;          // circuitId -> {lat,lon,line}
+
+/* WMATA reports a train's position as a TRACK CIRCUIT, not a coordinate. Each
+   line's StandardRoutes lists its circuits in order, and only some of them
+   carry a StationCode. So walk each line once, and for every circuit find the
+   nearest stationed circuit behind and ahead of it and interpolate between
+   those two stations by sequence position. A train then sits sensibly between
+   stations instead of snapping onto one — the same treatment the DC board
+   already gives its Metro trains. Built once and cached; the layout of the
+   system does not change between refreshes. */
+async function ensureMetroPositions(key){
+  if(metroPosNight) return metroPosNight;
+  metroPosNight={};
+  try{
+    const [routes, stationsDoc] = await Promise.all([
+      getJSON(`https://api.wmata.com/TrainPositions/StandardRoutes?contentType=json&api_key=${encodeURIComponent(key)}`, 15000),
+      getJSON(`https://api.wmata.com/Rail.svc/json/jStations?api_key=${encodeURIComponent(key)}`, 15000),
+    ]);
+    const S={}; (stationsDoc.Stations||[]).forEach(st=>{ S[st.Code]={lat:st.Lat, lon:st.Lon}; });
+    (routes.StandardRoutes||[]).forEach(r=>{
+      const cs=(r.TrackCircuits||[]).slice().sort((a,b)=>a.SeqNum-b.SeqNum);
+      // index of every circuit that names a station we have coordinates for
+      const anchors=[];
+      cs.forEach((c,i)=>{ if(c.StationCode && S[c.StationCode]) anchors.push({i, ll:S[c.StationCode]}); });
+      if(!anchors.length) return;
+      let ai=0;
+      cs.forEach((c,i)=>{
+        while(ai<anchors.length-1 && anchors[ai+1].i < i) ai++;
+        const before=anchors[ai];
+        const after=anchors[Math.min(ai+1, anchors.length-1)];
+        let ll;
+        if(before.i===after.i) ll={lat:before.ll.lat, lon:before.ll.lon};
+        else{
+          const f=Math.max(0, Math.min(1, (i-before.i)/(after.i-before.i)));
+          ll={ lat:before.ll.lat+(after.ll.lat-before.ll.lat)*f,
+               lon:before.ll.lon+(after.ll.lon-before.ll.lon)*f };
+        }
+        if(c.CircuitId!=null) metroPosNight[c.CircuitId]={...ll, line:r.LineCode};
+      });
+    });
+  }catch(e){ /* leave the map empty; produceMetroTrain then simply finds nothing */ }
+  return metroPosNight;
+}
+
+async function produceMetroTrain(){
+  const keyLs=CITY_CFG.lsWmataKey; if(!keyLs || !loc) return null;
+  let key=""; try{ key=(localStorage.getItem(keyLs)||"").trim(); }catch(e){}
+  if(!key) return null;
+  let d=null;
+  try{ d=await getJSON(`https://api.wmata.com/TrainPositions/TrainPositions?contentType=json&api_key=${encodeURIComponent(key)}`, 12000); }
+  catch(e){ return null; }
+  const pos=await ensureMetroPositions(key);
+  const cand=[];
+  ((d && d.TrainPositions)||[]).forEach(t=>{
+    // an empty train being repositioned is not a sighting
+    if(t.ServiceType && t.ServiceType!=="Normal") return;
+    const p=pos[t.CircuitId]; if(!p) return;
+    const ll={lat:p.lat, lon:p.lon};
+    cand.push({ t, ll, nm:haversineNm(loc, ll), line:t.LineCode||p.line||"" });
+  });
+  if(!cand.length) return null;
+  cand.sort((a,b)=>a.nm-b.nm);
+  const w=cand[0], line=w.line;
+  return {
+    id:"metro:"+(w.t.TrainId||w.t.CircuitId),
+    kind:"train", nm:w.nm, unit:"nm",
+    dir:bearingFrom(loc, w.ll),
+    title:`${line} Line`,
+    sub:`Metrorail · ${w.t.CarCount||"?"}-car · train ${w.t.TrainId||"?"}`,
+    oCity:null, dCity:null, subline:"Metrorail",
+    posLL:w.ll, oLL:null, dLL:null,
+    chips:[{t:`${(w.nm*1.15078).toFixed(1)} mi away`},{t:"Metrorail", cls:"sched-chip"}],
+    color:LINE_COL[line]||"#8ab4ff",
+    photoQuery:CITY_CFG.metroPhotoQuery||"WMATA Metrorail train",
+    fleet:cand.slice(0,40).map(c=>({ t:`${c.line} Line`, s:`train ${c.t.TrainId||"?"}`,
+      nm:c.nm, unit:"nm", ll:c.ll })),
+    count:cand.length,
+  };
+}
+
 async function produceTrain(){
   const [amtrak, local] = await Promise.all([
     produceAmtrakTrain().catch(()=>null),
@@ -1584,7 +1681,10 @@ async function produceTrain(){
     win.count=win.fleet.length;
     return win;
   }
-  return amtrak || local;
+  if(amtrak || local) return amtrak || local;
+  /* Only now. Metro is frequent enough that letting it compete on distance
+     would mean it won every time and nothing else ever appeared. */
+  return await produceMetroTrain().catch(()=>null);
 }
 
 /* ---- BUSES (city-appropriate bundled schedule) ----
