@@ -157,7 +157,7 @@
          activate.html still exists for the link in the purchase email. -->
     <div id="keyBox" hidden>
       <div class="keyrow">
-        <input id="keyInput" placeholder="TP-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"
+        <input id="keyInput" placeholder="TB-XXXX-XXXX-XXXX" autocomplete="off"
                spellcheck="false" aria-label="Licence key" />
         <button class="btn primary" id="keyGo">Unlock</button>
       </div>
@@ -339,7 +339,11 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
   go.addEventListener("click", submit);
   input.addEventListener("keydown", function(e){ if(e.key==="Enter") submit(); });
 
-  // arriving from the purchase email as index.html?key=TP-...
+  /* Arriving from the purchase email as index.html?key=TB-...
+     The placeholder shows the shape license-worker.js issues (TB, three groups
+     of four), because that is what this box verifies against. gen-licence.py
+     mints a DIFFERENT shape -- TB then four groups of five -- for the signed
+     feed-proxy keys. Both are real; they belong to different subsystems. */
   var qk=new URLSearchParams(location.search).get("key");
   if(qk){ box.hidden=false; input.value=qk; submit(); }
 })();
