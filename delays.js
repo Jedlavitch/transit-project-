@@ -134,6 +134,23 @@
     return frag;
   }
 
+  /* The same thing as an HTML string, for map tooltips.
+
+     delayFragment() returns DOM, which is right for a card row assembled out of
+     elements and useless for a Leaflet tooltip, which is handed a string and
+     parses it as HTML. Without this the tooltips were the last place on the
+     boards still writing lateness as flat text, and colouring them would have
+     meant repeating the band names at each call site -- the duplication this
+     file exists to prevent.
+
+     Returns "" rather than null so it concatenates unconditionally, which is
+     how every tooltip on these boards is built. */
+  function delayHtml(info, sep) {
+    if (!info) return "";
+    return (sep === undefined ? " · " : sep) +
+      '<span class="' + info.cls + '">' + info.text + "</span>";
+  }
+
   /* Amtrak in one call: derive the delay from the stop, then band it against
      the wider Amtrak limit rather than the sentinel-guarding default. */
   function amtrakLateInfo(stop) {
@@ -148,4 +165,5 @@
   window.amtrakLateMin = amtrakLateMin;
   window.amtrakLateInfo = amtrakLateInfo;
   window.delayFragment = delayFragment;
+  window.delayHtml = delayHtml;
 })();

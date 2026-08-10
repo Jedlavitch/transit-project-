@@ -11,7 +11,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
-<script src="delays.js?v=1"></script>
+<script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=10" defer></script>
@@ -2584,7 +2584,7 @@ async function fetchSeptaLive(){
     const items=trains.map(({t})=>({
       id:"slt"+t.trainno, lat:+t.lat, lon:+t.lon,
       icon:()=>labelIcon(SEPTA_COL, `${t.line||"?"} → ${t.dest||"?"}`), ik:"slt-"+t.trainno,
-      tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${isRealLate(t.late)?` · ${t.late} min late`:""} (live)`
+      tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${delayHtml(liveLateInfo(t.late))} (live)`
     }));
     updateFleet("septaRail", items, CFG.septaEveryMs);
     $("#septaRailCount").textContent = trains.length ? `${trains.length} nearby` : "";
@@ -2597,7 +2597,10 @@ async function fetchSeptaLive(){
         const bd=el("div","badge rail", (t.line||"?").slice(0,4)); bd.style.background=SEPTA_COL;
         const mid=el("div");
         mid.appendChild(el("div","dest", t.dest||"—"));
-        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}${isRealLate(t.late)?` · ${t.late} min late`:""}`));
+        const tSub=el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}`);
+        const tLi=liveLateInfo(t.late);
+        if(tLi && tLi.mins>0) tSub.appendChild(delayFragment(tLi));
+        mid.appendChild(tSub);
         row.append(bd, mid, el("div"));
         appendLiveTimes(row, t.late);
         // live rows map 1:1 to their marker -- follow directly by train number
@@ -2616,7 +2619,7 @@ async function fetchSeptaLive(){
     const items=buses.map(({b})=>({
       id:"slb"+b.VehicleID, lat:+b.lat, lon:+b.lng,
       icon:()=>labelIcon("#e8a33c", `${b.route_id} → ${b.destination||"?"}`), ik:"slb-"+b.route_id,
-      tip:`SEPTA Route ${b.route_id} → ${b.destination}${isRealLate(b.late)?` · ${b.late} min late`:""} (live)`
+      tip:`SEPTA Route ${b.route_id} → ${b.destination}${delayHtml(liveLateInfo(b.late))} (live)`
     }));
     updateFleet("septaBus", items, CFG.septaEveryMs);
     $("#septaBusCard").style.display = "flex";
@@ -2630,7 +2633,10 @@ async function fetchSeptaLive(){
         const bd=el("div","badge", b.route_id); bd.style.background="#e8a33c"; bd.style.color="#2a1c00";
         const mid=el("div");
         mid.appendChild(el("div","dest", b.destination||"—"));
-        mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}${isRealLate(b.late)?` · ${b.late} min late`:""}`));
+        const bSub=el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}`);
+        const bLi=liveLateInfo(b.late);
+        if(bLi && bLi.mins>0) bSub.appendChild(delayFragment(bLi));
+        mid.appendChild(bSub);
         row.append(bd, mid, el("div"));
         appendLiveTimes(row, b.late);
         row.classList.add("followable"); row.title="Follow this bus on the map";

@@ -11,7 +11,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
-<script src="delays.js?v=1"></script>
+<script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=10" defer></script>
@@ -1930,7 +1930,10 @@ function renderSubway(list){
     if(["N","Q","R","W","GS"].includes(v.routeId)) b.style.color="#000";
     const mid=el("div");
     mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : (v.routeId+" train")));
-    mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
+    const sub=el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}`);
+    const subLi=liveLateInfo(lateMin);
+    if(subLi && subLi.mins>0) sub.appendChild(delayFragment(subLi));
+    mid.appendChild(sub);
     row.append(b, mid, el("div"));
     appendLiveTimes(row, lateMin, arrSec);
     // live rows map 1:1 to their marker -- follow directly by trip id
@@ -2314,7 +2317,10 @@ function renderRailCard(listId, countId, list, color, fleet){
     const b=el("div","badge rail", line||"?"); b.style.background=color;
     const mid=el("div");
     mid.appendChild(el("div","dest", stationName ? `${v.status===1?"At":"Approaching"} ${stationName}` : (line||"Train")));
-    mid.appendChild(el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}${isRealLate(lateMin)?` · ${lateMin} min late`:""}`));
+    const sub=el("div","sub", `${mi.toFixed(1)} mi${v.speed!=null?` · ${Math.round(v.speed*2.236936)} mph`:""}`);
+    const subLi=liveLateInfo(lateMin);
+    if(subLi && subLi.mins>0) sub.appendChild(delayFragment(subLi));
+    mid.appendChild(sub);
     row.append(b, mid, el("div"));
     appendLiveTimes(row, lateMin, arrSec);
     if(fleet){ // live rows map 1:1 to their marker (drawRailFleet keys fleet+tripId)

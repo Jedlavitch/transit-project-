@@ -12,7 +12,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
-<script src="delays.js?v=1"></script>
+<script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="transitous.js?v=1"></script>
@@ -2030,7 +2030,8 @@ function tickTransitVehicles(){
       const src=dep.realTime
         ? "live times · position from timetable"
         : "scheduled position";
-      const late=(dep.realTime&&dep.delayMin>0)? ` · +${dep.delayMin} min` : "";
+      // banded, so the tooltip agrees with the chip on the card behind it
+      const late=delayHtml(dep.realTime ? liveLateInfo(dep.delayMin) : null);
       items.push({
         id: dep.tripId, lat: pos.lat, lon: pos.lon,
         icon: ()=>labelIcon(FAMILY_COL[key], label), ik: label,

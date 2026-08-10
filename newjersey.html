@@ -12,7 +12,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
-<script src="delays.js?v=1"></script>
+<script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=10" defer></script>
@@ -1721,7 +1721,7 @@ function drawNjtRailLive(trains){
       icon:()=>labelIcon(njtCol(line), lbl), ik:"nrl-"+line+"-"+(late>5?"L":""),
       tip:`NJ Transit ${njtName(line)} → ${njtStation(v.dest||"?")}`
         +(v.next?` · next ${njtStation(v.next)}`:"")
-        +(late>0?` · ${late} min late`:" · on time")+" (live)",
+        +delayHtml(liveLateInfo(late))+" (live)",
       color:njtCol(line), label:"NJT "+lbl };
   });
   updateFleet("njtRail", items, CFG.njtRailEveryMs);

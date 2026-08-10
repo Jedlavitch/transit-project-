@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css" />
-<script src="delays.js?v=1"></script>
+<script src="delays.js?v=2"></script>
 <script src="transitous.js?v=1"></script>
 <style>
   :root{
@@ -1788,6 +1788,11 @@ async function produceEuroVehicle(families, kind){
   const nextName = pos.next && pos.next.name;
   const nextT = pos.next && pos.next.t;
   const arr = t.end ? cityClock(t.end) : "";
+  /* Plain text on purpose. This feeds `sub`, which the renderer assigns with
+     textContent, so a banded <span> would be printed as literal markup instead
+     of being coloured. The delay is already banded on this screen by
+     lateBadge()/adherenceChip(), which build the status badge as HTML, so this
+     line only has to state the number. */
   const lateChip = (d.realTime && d.delayMin>0) ? `  ·  +${d.delayMin} min` : "";
   /* Distance covered and remaining, walked along the stop list so a curving
      line is not understated the way a straight origin-to-destination hop is. */

@@ -11,7 +11,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
-<script src="delays.js?v=1"></script>
+<script src="delays.js?v=2"></script>
 <script src="transitous.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
@@ -2076,7 +2076,8 @@ function drawIntlLive(){
       seenRoute[line]=1;
       L.polyline(pts,{color:col,weight:3,opacity:.35,lineCap:"round",lineJoin:"round"}).addTo(state.intlRouteLayer);
     }
-    const late=(t.realTime&&t.delayMin>0)? ` · +${t.delayMin} min` : "";
+    // banded, so the tooltip agrees with the chip on the card behind it
+    const late=delayHtml(t.realTime ? liveLateInfo(t.delayMin) : null);
     items.push({ id:"ti"+t.id, lat:p.lat, lon:p.lon,
       icon:()=>labelIcon(col, line), ik:"ti-"+line,
       label:`${line} → ${t.to.name}`, color:col, route:pts,
