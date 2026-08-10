@@ -508,8 +508,9 @@ const CITY_CONFIG = {
     lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"index.html",
     busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
     lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
-    lsWmataKey:"transitboard.wmataKey",          // unlocks Metrorail as a fallback
+    lsWmataKey:"transitboard.wmataKey",          // unlocks Metrorail and Metrobus as fallbacks
     metroPhotoQuery:"WMATA Metrorail train Washington DC",
+    metroBusPhotoQuery:"WMATA Metrobus Washington DC",
     localRailSystem:"MARC", localBusSystem:"Ride On", busPhotoQuery:"Ride On bus Montgomery County Maryland",
     cityLabel:"Washington DC" },
   // New Jersey: no live NJT Worker is wired yet (njt-worker.js is ready but needs
@@ -1660,7 +1661,9 @@ async function produceMetroTrain(){
     sub:`Metrorail · ${w.t.CarCount||"?"}-car · train ${w.t.TrainId||"?"}`,
     oCity:null, dCity:null, subline:"Metrorail",
     posLL:w.ll, oLL:null, dLL:null,
-    chips:[{t:`${(w.nm*1.15078).toFixed(1)} mi away`},{t:"Metrorail", cls:"sched-chip"}],
+    altText:"", oCode:"", dCode:"",
+    sysTag:"🚇 Nearest Metro train", sysRange:"Metrorail — shown when no Amtrak or MARC is near",
+    statusHtml:`<span class="phase">in service</span><span class="badge na">Metrorail</span>`,
     color:LINE_COL[line]||"#8ab4ff",
     photoQuery:CITY_CFG.metroPhotoQuery||"WMATA Metrorail train",
     fleet:cand.slice(0,40).map(c=>({ t:`${c.line} Line`, s:`train ${c.t.TrainId||"?"}`,
@@ -1779,11 +1782,60 @@ async function produceLiveBus(){
       +(late?`<span class="badge late">+${b.late} min late</span>`:`<span class="badge ok">on time</span>`),
     photoQuery:CITY_CFG.busPhotoQuery, photoFallback:"transit bus exterior" };
 }
+
+/* ---- METROBUS, same last-in-line rule as Metrorail ----------------------
+   Metrobus runs hundreds of vehicles across the city, so on distance alone it
+   would beat Ride On's two routes essentially always and the bus mode would
+   become a Metrobus display. It is therefore only consulted when Ride On has
+   nothing in range — which, given Ride On here is just routes 23 and 29, is
+   most of the time, so this is what makes bus mode useful rather than what
+   takes it over.
+
+   Unlike Metrorail this needs no circuit arithmetic: jBusPositions reports real
+   coordinates, and takes a radius so the query is already scoped to nearby. */
+async function produceMetroBus(){
+  const keyLs=CITY_CFG.lsWmataKey; if(!keyLs || !loc) return null;
+  let key=""; try{ key=(localStorage.getItem(keyLs)||"").trim(); }catch(e){}
+  if(!key) return null;
+  let d=null;
+  try{
+    d=await getJSON(`https://api.wmata.com/Bus.svc/json/jBusPositions?Lat=${loc.lat}&Lon=${loc.lon}`+
+      `&Radius=8000&api_key=${encodeURIComponent(key)}`, 12000);
+  }catch(e){ return null; }
+  const cand=[];
+  ((d && d.BusPositions)||[]).forEach(v=>{
+    if(v.Lat==null || v.Lon==null) return;
+    const ll={lat:v.Lat, lon:v.Lon};
+    cand.push({ v, ll, nm:haversineNm(loc, ll) });
+  });
+  if(!cand.length) return null;
+  cand.sort((a,b)=>a.nm-b.nm);
+  const w=cand[0], v=w.v;
+  return {
+    id:"mbus:"+(v.VehicleID||`${v.RouteID}-${v.Lat}`),
+    kind:"bus", nm:w.nm, unit:"nm",
+    dir:bearingFrom(loc, w.ll),
+    title:`Route ${v.RouteID||"?"}`,
+    sub:`Metrobus${v.TripHeadsign?` → ${v.TripHeadsign}`:""}${v.VehicleID?` · bus ${v.VehicleID}`:""}`,
+    oCity:null, dCity:v.TripHeadsign||null, subline:"Metrobus",
+    posLL:w.ll, oLL:null, dLL:null,
+    altText:"", oCode:"", dCode:"",
+    sysTag:"🚌 Nearest Metrobus", sysRange:"Metrobus — shown when no Ride On bus is near",
+    statusHtml:`<span class="phase">in service</span><span class="badge na">Metrobus</span>`,
+    color:"#6aa9ff",
+    photoQuery:CITY_CFG.metroBusPhotoQuery||"WMATA Metrobus",
+    fleet:cand.slice(0,40).map(c=>({ t:`Route ${c.v.RouteID||"?"}`, s:c.v.TripHeadsign||"",
+      nm:c.nm, unit:"nm", ll:c.ll })),
+    count:cand.length,
+  };
+}
+
 async function produceBus(){
   const live=await produceLiveBus().catch(()=>null);
   if(live) return live;
   const s=await ensureRideOnScheduleNight();
-  if(!s) return null;
+  // no bundled timetable for this city: fall straight through to Metrobus
+  if(!s) return await produceMetroBus().catch(()=>null);
   const busSystem = CITY_CFG.localBusSystem;
   const nowP=roNowParts(s.tz), active=roActiveServices(s, nowP);
   let best=null, inService=0; const cand=[];
@@ -1807,7 +1859,10 @@ async function produceBus(){
       break;
     }
   });
-  if(!best) return null;
+  /* Nothing on the local routes right now. Only at this point does Metrobus get
+     a look in — the same last-in-line rule Metrorail follows, and for the same
+     reason: hundreds of vehicles would otherwise win on distance every time. */
+  if(!best) return await produceMetroBus().catch(()=>null);
   const { tr, lat, lon, nm, first, last, nextName, nextMin } = best;
   const prog=journeyProgress(first?{lat:first[0],lon:first[1]}:null, last?{lat:last[0],lon:last[1]}:null, {lat,lon});
   return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}), count:inService,
@@ -2210,6 +2265,11 @@ function render(s){
     return;
   }
   L.style.display="none";
+  /* The header named the mode's primary system regardless of what was on
+     screen, so a Metrobus appeared under "Nearest Ride On bus". A fallback
+     subject can name itself; anything else falls back to the mode's label. */
+  $("#tag").textContent = s.sysTag || TAGS[mode] || "";
+  $("#rangeLbl").textContent = s.sysRange || RANGE[mode] || "";
   const fl=$("#flight"); fl.style.display="";
   if(lastId!==null && lastId!==s.id){ fl.classList.remove("swap"); void fl.offsetWidth; fl.classList.add("swap"); }
   if(lastId!==s.id) logSubject(s);                 // a new subject — into the spotter's log
@@ -2284,7 +2344,8 @@ function render(s){
   // Airport delay chips are added HERE, not in the producer: the subject's own
   // oCode/dCode are the reliable source (Sky's route object nests
   // origin/destination, so reading route.from/.to silently yielded nothing).
-  $("#status").innerHTML = (s.statusHtml) + faaChips(s);
+  // a producer that omits statusHtml used to render the literal text "undefined"
+  $("#status").innerHTML = (s.statusHtml || "") + faaChips(s);
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
