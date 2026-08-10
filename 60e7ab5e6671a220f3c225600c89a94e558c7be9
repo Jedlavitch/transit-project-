@@ -1,0 +1,47 @@
+The subject describes only part of this commit. It also carries the European
+boards' map work — the 473/468/468-line diffs on zurich/cologne/stuttgart.html
+— which a concurrent session's `git add -A` swept in from another working
+session. Recorded here rather than by rewriting a pushed commit.
+
+WHAT THE MAP WORK CHANGED
+
+Before: Zurich, Cologne and Stuttgart were the only maps on the site that drew
+no vehicles — four static station dots and nothing else. All six departure
+cards shared a single `transitLayer`, so a card's "show on board" checkbox
+could not hide its own system's map layer, and `intlCard` pointed at layers
+that were never created. Each board also still carried Amtrak: `fetchAmtrak()`
+had no callers anywhere, the legend advertised an Amtrak route line and the
+footer read "live — Amtrak" in Switzerland.
+
+After: one vehicle layer and one route-line layer per departure family, created
+from FAMILY_CARDS. Vehicles are placed by interpolating each trip's stop
+sequence along the feed's real polyline geometry and glided between fixes by
+the existing `updateFleet`, so they carry label chips, declutter, and
+click-to-follow like every other board. Route lines are drawn one per route.
+CARD_LAYERS gives each family its own pair, the KPI strip is wired to real
+fleets (its `stG1` override, a stopgap from when there were no fleets to
+count, is gone), and ~96 lines of dead Amtrak code were removed.
+
+WHY locatableDepartures() EXISTS
+
+The cards and the map do not always come from the same feed. Zurich's cards use
+the Swiss source, which reports live delays but no trip id at all — 0 of 56
+local departures carried one — and without a trip id there is no stop sequence
+to place a vehicle on. Only long-distance trains appeared, because those arrive
+via the Europe-wide source. So when the board's own departures cannot locate any
+local service, the same nearby stops are asked of the Europe-wide source purely
+for the map; the German boards get ids on the card feed and skip the extra call.
+Zurich also searches six stops rather than the three the cards use, because the
+lake piers sit just outside the three nearest and the Boats card had departures
+the map could never place.
+
+TWO THINGS THAT LOOK LIKE BUGS AND ARE NOT
+
+Route lines are built from every looked-up trip, but vehicle markers only from
+trips actually underway — so a half-hourly boat keeps its line between sailings
+while showing no vessel. Trip lookups are interleaved across families before the
+global cap applies; taking the first N in card order spent the whole budget on
+the trains at the front of the list and left buses and boats permanently empty.
+
+VERIFIED LIVE against the real feeds: Zurich 18 vehicles, Cologne 22,
+Stuttgart 21, with route lines across every family on all three.
