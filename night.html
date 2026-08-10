@@ -2552,11 +2552,17 @@ function brandPaint(hex){
   }
   return {bg, ink:best()};
 }
-/* The carrier's colour for this subject, or "" if we cannot say. Guessing from
+/* The operator's colour for this subject, or "" if we cannot say. Guessing from
    the aircraft owner's name is deliberately not attempted: leasing trusts and
-   fractional operators would paint the screen the wrong colour with confidence. */
+   fractional operators would paint the screen the wrong colour with confidence.
+   Trains and buses have it easier — they carry their agency by name. */
 function brandHexFor(s){
-  if(!s || mode!=="planes") return "";
+  if(!s) return "";
+  if(mode==="trains" || mode==="buses"){
+    const sys=String(s.sysName||"").trim();
+    return TRANSIT_BRAND[sys] || "";
+  }
+  if(mode!=="planes") return "";
   const iata=String(s.airlineIata||"").trim().toUpperCase();
   if(iata && AIRLINE_BRAND[iata]) return AIRLINE_BRAND[iata];
   const call=String(s.callsign||s.flight||"").trim().toUpperCase();
