@@ -1952,13 +1952,19 @@ function isHolding(a){
 let faaData=null, faaAt=0, faaBusy=false;
 function faaUrl(){ try{ return (localStorage.getItem("tb.faaUrl")||"").trim().replace(/\/+$/,""); }catch(e){ return ""; } }
 async function refreshFaa(){
-  const u=faaUrl();
-  if(!u || faaBusy || Date.now()-faaAt < 120000) return faaData;   // FAA updates on the order of minutes
+  if(faaBusy || Date.now()-faaAt < 120000) return faaData;    // FAA moves on the order of minutes
   faaBusy=true;
-  try{
-    const d=await getJSON(u+"/delays", 12000);
-    if(d && d.ok && d.airports){ faaData=d.airports; faaAt=Date.now(); }
-  }catch(e){}
+  /* Same-origin file first: the deploy publishes faa-delays.json on a schedule,
+     so this needs no proxy, no Worker and no CORS at all. A Worker URL is still
+     honoured if one is configured -- it just isn't required any more. */
+  const tries=[ "faa-delays.json?t="+Math.floor(Date.now()/120000) ];
+  const u=faaUrl(); if(u) tries.push(u+"/delays");
+  for(const src of tries){
+    try{
+      const d=await getJSON(src, 12000);
+      if(d && d.ok && d.airports){ faaData=d.airports; faaAt=Date.now(); break; }
+    }catch(e){}
+  }
   faaBusy=false;
   return faaData;
 }

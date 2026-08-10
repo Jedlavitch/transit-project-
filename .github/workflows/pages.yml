@@ -18,6 +18,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:        # lets you re-run a deploy by hand from the Actions tab
+  # Refresh published FAA delay data on a timer. The feed itself has no CORS
+  # header, so a browser can't read it directly -- rather than standing up a
+  # proxy, the deploy fetches it and publishes it as a plain file on our own
+  # origin, where the boards can just read it. Every 15 minutes is well inside
+  # how fast ground delay programs actually change.
+  schedule:
+    - cron: "*/15 * * * *"
 
 permissions:
   contents: read
@@ -53,6 +60,65 @@ jobs:
                 --exclude='*.py' ./ _site/
           touch _site/.nojekyll
           du -sh _site
+
+      # Publish current FAA delays as a same-origin file. Never fails the build:
+      # if the FAA is unreachable the site deploys without it and the boards
+      # simply show no delay info, which is the same as not having it configured.
+      - name: Publish FAA delay status
+        continue-on-error: true
+        run: |
+          python3 - <<'EOF'
+          import json, re, urllib.request, datetime
+          URL = "https://nasstatus.faa.gov/api/airport-status-information"
+          def tag(s, t):
+              m = re.search(r"<%s>([\s\S]*?)</%s>" % (t, t), s)
+              return m.group(1).strip() if m else ""
+          def tags(s, t): return re.findall(r"<%s>([\s\S]*?)</%s>" % (t, t), s)
+          def unesc(s):
+              s = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), s or "")
+              s = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), s)
+              s = s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+              return re.sub(r"\s+", " ", s).strip()
+          # Most "Airport Closures" are routine NOTAMs restricting unscheduled
+          # general aviation -- reporting those as a closed airport would be
+          # badly wrong, so they are dropped.
+          GA = re.compile(r"CLSD\s+TO\s+(NON\s*SKED|UNSKED|TRANSIENT|GA\b)|NON\s*SKED\s+TRANSIENT|PPR\b", re.I)
+          out = {}
+          def add(code, e):
+              c = (code or "").upper().strip()
+              if re.fullmatch(r"[A-Z]{3,4}", c or ""): out.setdefault(c, []).append(e)
+          xml = urllib.request.urlopen(URL, timeout=30).read().decode("utf-8", "replace")
+          for g in tags(xml, "Ground_Delay"):
+              avg, rsn = unesc(tag(g, "Avg")), unesc(tag(g, "Reason"))
+              add(tag(g, "ARPT"), {"kind": "ground_delay", "severity": "major",
+                  "reason": rsn, "avg": avg or None, "max": unesc(tag(g, "Max")) or None,
+                  "text": "Ground delay" + (" averaging " + avg if avg else "") + (" \u2014 " + rsn if rsn else "")})
+          for g in tags(xml, "Ground_Stop"):
+              rsn = unesc(tag(g, "Reason"))
+              add(tag(g, "ARPT"), {"kind": "ground_stop", "severity": "major", "reason": rsn,
+                  "text": "Ground stop" + (" \u2014 " + rsn if rsn else "")})
+          for d in tags(xml, "Delay"):
+              code, rsn = tag(d, "ARPT"), unesc(tag(d, "Reason"))
+              if not code: continue
+              for m in re.finditer(r'<Arrival_Departure Type="(\w+)">([\s\S]*?)</Arrival_Departure>', d):
+                  seg = m.group(2)
+                  lo, hi, tr = unesc(tag(seg, "Min")), unesc(tag(seg, "Max")), unesc(tag(seg, "Trend"))
+                  span = "\u2013".join([x for x in (lo, hi) if x])
+                  add(code, {"kind": "delay", "severity": "delay", "reason": rsn, "trend": tr or None,
+                      "text": f"{m.group(1)} delays {span}" + (" \u2014 " + rsn if rsn else "") +
+                              (f" ({tr.lower()})" if tr else "")})
+          for lst in tags(xml, "Airport_Closure_List"):
+              for ap in tags(lst, "Airport"):
+                  rsn = unesc(tag(ap, "Reason"))
+                  if GA.search(rsn): continue
+                  ro = unesc(tag(ap, "Reopen"))
+                  add(tag(ap, "ARPT"), {"kind": "closure", "severity": "major", "reason": rsn[:160],
+                      "text": "Airport closed" + (" \u2014 reopens " + ro if ro else "")})
+          doc = {"ok": True, "updated": unesc(tag(xml, "Update_Time")),
+                 "fetched": datetime.datetime.utcnow().isoformat() + "Z", "airports": out}
+          open("_site/faa-delays.json", "w").write(json.dumps(doc, separators=(",", ":")))
+          print("FAA delays:", len(out), "airports ->", sorted(out))
+          EOF
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
