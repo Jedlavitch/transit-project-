@@ -636,6 +636,8 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
       <button id="addrSetBtn" type="button">Set</button>
     </div>
     <div id="addrStatus"></div>
+    <div class="suggest-lbl">Or jump to</div>
+    <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
     <div class="accent-lbl">Theme</div>
@@ -1764,7 +1766,14 @@ async function refreshTransit(){
          slots.has((d.route||"")+"@"+Math.round((d.scheduled||d.when)/60000))) all.splice(i,1);
     }
     ib.departures.slice(0,10).forEach(d=>{
-      const r=Object.assign({}, d, {family:"international", stop:home});
+      /* Best destination available, resolved here so the shared row renderer —
+         which reads headsign — shows it. The trip knows where the train really
+         finishes where the departure row often names only the border station it
+         hands over at: EC 197 reads "St. Gallen(CH)" as a departure and "München
+         Hbf" as a trip, and Munich is what someone on the concourse wants. Some
+         feeds send no headsign at all, which rendered as "TGV → —". */
+      const dest=(d.trip&&d.trip.to&&d.trip.to.name) || (d.tripTo&&d.tripTo.name) || d.headsign || "";
+      const r=Object.assign({}, d, {family:"international", stop:home, headsign:dest});
       all.push(r); extra.push(r);
     });
     /* Inbound services go to the MAP only, never onto the card: a departures
@@ -2168,6 +2177,7 @@ async function refreshPlanes(){
 function openSetup(){
   // [ADD-A-SYSTEM] if a system has an optional live-Worker input, preload it here:
   //   $("#busInput").value = state.busUrl;
+  drawLocSuggestions();   // the current spot may have moved since last open
   groupSettings(); $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
@@ -2175,6 +2185,34 @@ $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
 // [ADD-A-SYSTEM] if you added an optional live-Worker input + a Save button,
 // wire #saveKey here to persist state.busUrl to LS.busUrl then re-refresh.
+/* Suggested spots for this city -- see renderLocSuggestions in cityswitch.js.
+   Picked for transit interest (hubs, districts, the airport) rather than
+   landmarks, since that is what actually changes what the board shows.
+   Coordinates resolved through Nominatim, the same geocoder the Set button
+   uses, so a chip lands exactly where typing the name would. */
+const LOC_SUGGESTIONS=[
+  {lat:47.3781, lon:8.5394, label:"Zürich HB", full:"Zürich Hauptbahnhof"},
+  {lat:47.4501, lon:8.5619, label:"Airport", full:"Zürich Flughafen"},
+  {lat:47.4115, lon:8.5442, label:"Oerlikon", full:"Zürich Oerlikon"},
+  {lat:47.3666, lon:8.5484, label:"Stadelhofen", full:"Zürich Stadelhofen"},
+  {lat:47.3664, lon:8.5412, label:"Bürkliplatz", full:"Bürkliplatz (lake piers), Zürich"},
+  {lat:47.3913, lon:8.4893, label:"Altstetten", full:"Zürich Altstetten"},
+  {lat:47.5008, lon:8.7245, label:"Winterthur", full:"Winterthur Hauptbahnhof"}
+];
+function pickSuggestedLoc(loc){
+  applyLoc(loc); saveLoc(loc); setManualLoc(true);
+  if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat,loc.lon], 12); }
+  setAddrStatus("Now tracking near "+loc.label, "good");
+  const inp=$("#addrInput"); if(inp) inp.value="";
+  drawLocSuggestions();
+  refreshEverythingForNewLocation();
+}
+function drawLocSuggestions(){
+  if(typeof renderLocSuggestions!=="function") return;   // cityswitch.js not loaded
+  renderLocSuggestions($("#suggestRow"), LOC_SUGGESTIONS, state.loc, pickSuggestedLoc);
+}
+drawLocSuggestions();
+
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });

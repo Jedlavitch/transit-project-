@@ -59,7 +59,12 @@
        follows the letters with no word boundary between them — so the old \b
        never matched and every one of them was captioned "RB", including the RE
        services. Long-distance "IC"/"ICE" can stand alone, hence the second arm. */
-    const m = r.match(/^(ICE|IC|EC|RE|RB|EN|NJ|TGV|RJ|FLX)\s*\d/) || r.match(/^(ICE|IC|EC|RJ)\b/);
+    /* The second arm is for categories that stand alone with no number. It has
+       to carry the international ones too: "TGV" fell through both arms and was
+       captioned from its MODE instead, which is HIGHSPEED_RAIL — so every TGV
+       out of Zurich was labelled "ICE". */
+    const m = r.match(/^(ICE|IC|EC|RE|RB|EN|NJ|TGV|RJ|FLX)\s*\d/) ||
+              r.match(/^(ICE|IC|EC|RJX|RJ|TGV|EST|THA|NJ|EN)\b/);
     if (m) return m[1];
     return MODE_LABEL[mode] || mode;
   }
@@ -168,6 +173,11 @@
            because the name is worth showing and the coordinates worth drawing. */
         tripFrom: t.tripFrom || null,
         tripTo: t.tripTo || null,
+        /* Only set when the caller asked for `both`: a row the train ARRIVES on
+           rather than leaves on. Those are the services already underway, which
+           is what puts a moving train on the map — a departure an hour out has
+           not started yet and has no position worth drawing. */
+        arrival: !!(t.place && !t.place.departure && t.place.arrival),
       };
     }).filter(x => x.when).sort((a, b) => a.when - b.when);
   }
@@ -384,7 +394,8 @@
           t: Date.parse(leg.to.arrival || leg.to.scheduledArrival || leg.endTime) });
         const stops = pts.filter(x => x.t);
         if (stops.length >= 2) {
-          trip = { stops, from: stops[0], to: stops[stops.length - 1],
+          trip = { id: tripId,          // callers key map markers off this
+                   stops, from: stops[0], to: stops[stops.length - 1],
                    start: stops[0].t, end: stops[stops.length - 1].t,
                    route: cleanRoute(leg.routeShortName || leg.tripShortName),
                    label: labelFor(leg.mode || "OTHER", leg.routeShortName || leg.tripShortName),
@@ -555,6 +566,16 @@
      mostly domestic and are left to the zones to judge. */
   const ALWAYS_INTL = /^(EST|THA|TGV|EN|NJ|RJX|EC)\s*\d|^(EST|THA|TGV|NJ|RJX)\b/i;
 
+  /* Two different questions, and conflating them fills the card with the wrong
+     trains. An ICE that began in Brussels and runs on to Frankfurt IS an
+     international service, and worth drawing as one — but from a platform in
+     Cologne it takes you to Frankfurt, and listing it under "International"
+     alongside the Eurostar to Paris is the same dilution the card was created
+     to fix. Four of Cologne's ten were exactly this.
+
+     So: the CARD asks "does this take me out of the country", which is the
+     destination alone. The MAP asks "is this an international train", which
+     either end answers. */
   function isInternational(dep, homeTz) {
     const to = dep.tripTo || {}, from = dep.tripFrom || {};
     if (homeTz) {
@@ -563,28 +584,81 @@
     }
     return ALWAYS_INTL.test(String(dep.route || ""));
   }
+  function isOutbound(dep, homeTz) {
+    const to = dep.tripTo || {};
+    if (homeTz && to.tz) return to.tz !== homeTz;
+    return ALWAYS_INTL.test(String(dep.route || ""));
+  }
 
   /* The same train arrives twice over — once from its own country's feed and
      once from the neighbour's, which is how ICE 122 appears as both "to Arnhem"
      and "to Amsterdam". Collapse on line plus departure minute and keep the
      better copy: live times first, then the one running further, since the
      through destination is the one a passenger is looking for. */
-  function dedupeIntl(rows, homeTz) {
-    const best = {};
-    rows.forEach(r => {
-      const key = (r.route || r.label || "?") + "@" + Math.round((r.scheduled || r.when) / 60000);
-      const cur = best[key];
-      if (!cur) { best[key] = r; return; }
-      if (r.realTime !== cur.realTime) { if (r.realTime) best[key] = r; return; }
-      // equally live: keep the one still bound for another country, since the
-      // other copy usually terminates at the border and reads as domestic
-      const rAway = !!(r.tripTo && r.tripTo.tz && r.tripTo.tz !== homeTz);
-      const cAway = !!(cur.tripTo && cur.tripTo.tz && cur.tripTo.tz !== homeTz);
-      if (rAway !== cAway) { if (rAway) best[key] = r; return; }
-      const rEnd = (r.tripTo && r.tripTo.name) || "", cEnd = (cur.tripTo && cur.tripTo.name) || "";
-      if (rEnd.length > cEnd.length) best[key] = r;
-    });
-    return Object.keys(best).map(k => best[k]).sort((a, b) => a.when - b.when);
+  /* Keyed on the train NUMBER, not the line name, because the two countries
+     either end of a cross-border service disagree about the category: the 9570
+     to Paris is "ICE 9570" in the German feed and "IC 9570" in the French one,
+     so keying on the printed name left both on the card an hour apart from
+     nothing. Two digits minimum, so a tram called "7" cannot collide with a
+     Nightjet; where there is no number at all the name has to do. */
+  function intlNum(r) {
+    const num = String(r.route || "").match(/\d{2,}/);
+    return num ? "#" + num[0] : (r.route || r.label || "?");
+  }
+  /* Which of two copies of the same train to keep. */
+  function betterCopy(r, cur, homeTz) {
+    if (r.realTime !== cur.realTime) return !!r.realTime;
+    // equally live: the one still bound for another country, since the other
+    // copy usually terminates at the border and reads as a domestic train
+    const rAway = !!(r.tripTo && r.tripTo.tz && r.tripTo.tz !== homeTz);
+    const cAway = !!(cur.tripTo && cur.tripTo.tz && cur.tripTo.tz !== homeTz);
+    if (rAway !== cAway) return rAway;
+    // last resort: the copy that says where it is going at all. One feed's TGV
+    // row arrives with no destination, which reads on the card as "TGV → —"
+    const rEnd = (r.tripTo && r.tripTo.name) || r.headsign || "";
+    const cEnd = (cur.tripTo && cur.tripTo.name) || cur.headsign || "";
+    if (!cEnd !== !rEnd) return !!rEnd;
+    return rEnd.length > cEnd.length;
+  }
+  /* Matched on a TIME WINDOW rather than an exact minute, because the two
+     railways either side of a border publish the same train a minute or two
+     apart. Exact-minute keys let both through, and the board showed the 9575
+     twice on the card and as two markers a few kilometres apart on the map. Six
+     minutes is comfortably wider than that disagreement and far narrower than
+     the gap between two genuine runs of one train number. */
+  const SAME_TRAIN_MS = 6 * 60000;
+  function dedupeIntl(rows, homeTz, windowMs) {
+    const out = [], win = windowMs || SAME_TRAIN_MS;
+    rows.slice()
+      .sort((a, b) => (a.scheduled || a.when) - (b.scheduled || b.when))
+      .forEach(r => {
+        const key = intlNum(r), t = r.scheduled || r.when;
+        let hit = -1;
+        for (let i = 0; i < out.length; i++) {
+          if (out[i]._key === key && Math.abs((out[i].scheduled || out[i].when) - t) <= win) { hit = i; break; }
+        }
+        if (hit < 0) { r._key = key; out.push(r); return; }
+        if (betterCopy(r, out[hit], homeTz)) { r._key = key; out[hit] = r; }
+      });
+    /* One more pass, for the copies that carry no shared number to match on:
+       one railway files the Zurich-Paris Lyria as the bare category "TGV" and
+       the other as "TGV Lyria 9234", so nothing above can tell they are one
+       train. Same minute and one name a prefix of the other is enough. The
+       longer name wins — it is the one that knows the train runs through to
+       Paris rather than stopping at Mulhouse. */
+    for (let i = out.length - 1; i >= 0; i--) {
+      const a = out[i], ra = String(a.route || "").toUpperCase();
+      if (!ra) continue;
+      for (let j = 0; j < out.length; j++) {
+        if (i === j) continue;
+        const b = out[j], rb = String(b.route || "").toUpperCase();
+        if (rb.length <= ra.length || rb.indexOf(ra) !== 0) continue;
+        if (Math.abs((a.scheduled || a.when) - (b.scheduled || b.when)) > 120000) continue;
+        out.splice(i, 1);
+        break;
+      }
+    }
+    return out.sort((a, b) => a.when - b.when);
   }
 
   /* Everything the international card and the map need, in one call.
@@ -604,14 +678,45 @@
     if (!st) return { station: null, homeTz: "", departures: [], trains: [] };
     const seen = intlSeen[st.id] || (intlSeen[st.id] = {});
 
-    let rows = [], homeTz = "";
+    /* Arrivals as well as departures (`both`), because they are two different
+       jobs. The CARD wants departures — what is leaving, and when. The MAP
+       wants whatever is moving, and a train that leaves in ninety minutes is
+       standing in a siding somewhere with no position worth drawing, while the
+       EC in from Milan and the TGV in from Paris are both underway right now.
+       Asking for arrivals is what fills the map at a terminus like Zurich,
+       where almost every international service STARTS here. */
+    let rows = [], arrivals = [], homeTz = "";
     try {
-      const d = await get("/stoptimes", { stopId: st.id, n: o.n || 50, mode: INTL_MODES }, 16000);
+      const d = await get("/stoptimes",
+        { stopId: st.id, n: o.n || 60, mode: INTL_MODES, both: true }, 16000);
       homeTz = (d && d.place && d.place.tz) || "";
-      rows = dedupeIntl(mapStopTimes(d).filter(r => isInternational(r, homeTz)), homeTz);
+      const intl = mapStopTimes(d).filter(r => isInternational(r, homeTz));
+      /* A departure that cannot say where it is going is dropped rather than
+         shown as "TGV → —". It is always a second copy of a train already on
+         the card from a better-informed feed — the Lyria to Paris arrives once
+         as "TGV" with a destination and again as "TGV Lyria 9234" with none,
+         and the two carry different numbers so they survive de-duplication.
+         The one that names Paris is the one worth keeping. */
+      rows = dedupeIntl(intl.filter(r =>
+        !r.arrival && isOutbound(r, homeTz) &&
+        ((r.tripTo && r.tripTo.name) || r.headsign)), homeTz);
+      /* Everything else international and underway — the ones that arrive here,
+         and the ones passing through on their way home — goes to the map only.
+
+         Collapsed on the train number over a much wider window than the card
+         uses. The railways either side of a border can be a quarter of an hour
+         apart on when the same train is due: the 9575 from Paris is timetabled
+         into Stuttgart at 15:26 by DB and 15:14 by SNCF, and at six minutes
+         both copies survived and drew two markers for one train. Widening it
+         here is safe in a way it would not be on the card, because this list
+         only has to identify a train, not tell anyone when to be on a platform,
+         and one number does not run twice in an hour. */
+      arrivals = dedupeIntl(intl.filter(r => r.arrival || !isOutbound(r, homeTz)), homeTz, 3600000);
     } catch (_) { /* leave whatever is already on screen rather than blanking it */ }
 
-    const want = rows.slice(0, o.trains || 8).filter(r => r.tripId);
+    const want = rows.slice(0, o.trains || 8)
+      .concat(arrivals.slice(0, o.arrivals || 6))
+      .filter(r => r.tripId);
     await Promise.all(want.map(async r => {
       const trip = await tripDetail(r.tripId, o.tripMaxAgeMs);
       if (trip) { trip.intl = true; seen[r.tripId] = trip; }
@@ -622,12 +727,32 @@
       const t = seen[id];
       if (!t || now > t.end + 1800000) delete seen[id];   // half an hour past arrival: done
     });
-    const trains = Object.keys(seen).map(id => seen[id])
+    /* One marker per train, not one per feed. The same service is published by
+       the railway either side of the border, and the two copies disagree by a
+       minute or so — enough to survive the departure-list de-duplication, which
+       keys on the exact minute, and show up as two ICE 9575s a few kilometres
+       apart on the map. Grouped here by train number and start time instead:
+       copies of one train begin within a few minutes of each other, while two
+       genuine runs of the same number are hours apart. The better-informed copy
+       wins — live timings first, then the one with real route geometry. */
+    const byTrain = {};
+    Object.keys(seen).map(id => seen[id])
       .filter(t => t && now >= t.start - 7200000)
-      .sort((a, b) => a.start - b.start);
+      .forEach(t => {
+        const num = String(t.route || "").match(/\d{2,}/);
+        const key = num ? "#" + num[0] : ("id:" + t.id);
+        const slot = key + "@" + Math.round(t.start / 600000);   // ten-minute grain
+        const cur = byTrain[slot];
+        if (!cur) { byTrain[slot] = t; return; }
+        const better = (t.realTime && !cur.realTime) ||
+          (t.realTime === cur.realTime && (t.line ? t.line.length : 0) > (cur.line ? cur.line.length : 0));
+        if (better) byTrain[slot] = t;
+      });
+    const trains = Object.keys(byTrain).map(k => byTrain[k]).sort((a, b) => a.start - b.start);
 
     return { station: st, homeTz,
              departures: rows.map(r => Object.assign({}, r, { trip: seen[r.tripId] || null })),
+             arrivals: arrivals.map(r => Object.assign({}, r, { trip: seen[r.tripId] || null })),
              trains };
   }
 
@@ -646,6 +771,6 @@
   window.TBTransitous = {
     cityBoard, chBoard, chDepartures, chStops, longDistanceAt,
     nearestVehicle, tripDetail, positionOnTrip, nearbyStops, departures, board, findStation, familyOf,
-    intlBoard, isInternational, decodePolyline, kmBetween,
+    intlBoard, isInternational, isOutbound, decodePolyline, kmBetween,
                           FAMILIES, MODE_GROUP, MODE_LABEL, INTL_MODES, BASE };
 })();

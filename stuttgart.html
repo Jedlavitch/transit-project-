@@ -636,6 +636,8 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
       <button id="addrSetBtn" type="button">Set</button>
     </div>
     <div id="addrStatus"></div>
+    <div class="suggest-lbl">Or jump to</div>
+    <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
     <div class="accent-lbl">Theme</div>
@@ -1764,7 +1766,14 @@ async function refreshTransit(){
          slots.has((d.route||"")+"@"+Math.round((d.scheduled||d.when)/60000))) all.splice(i,1);
     }
     ib.departures.slice(0,10).forEach(d=>{
-      const r=Object.assign({}, d, {family:"international", stop:home});
+      /* Best destination available, resolved here so the shared row renderer —
+         which reads headsign — shows it. The trip knows where the train really
+         finishes where the departure row often names only the border station it
+         hands over at: EC 197 reads "St. Gallen(CH)" as a departure and "München
+         Hbf" as a trip, and Munich is what someone on the concourse wants. Some
+         feeds send no headsign at all, which rendered as "TGV → —". */
+      const dest=(d.trip&&d.trip.to&&d.trip.to.name) || (d.tripTo&&d.tripTo.name) || d.headsign || "";
+      const r=Object.assign({}, d, {family:"international", stop:home, headsign:dest});
       all.push(r); extra.push(r);
     });
     /* Inbound services go to the MAP only, never onto the card: a departures
@@ -1894,8 +1903,12 @@ async function locatableDepartures(){
   (state._extraDeps||[]).forEach(d=>{ if(d.tripId) out.push(d); });
   if(out.some(d=>LOCAL_FAMILIES.has(d.family))) return out;
   try{
+    /* Six, not the three the cards use: Zurich's lake piers sit just outside
+       the three nearest stops, so the Boats card had departures the map could
+       never place. MOTIS collapses duplicate stop ids, so this really is about
+       five distinct places. */
     const stops=await TBTransitous.board(state.loc.lat, state.loc.lon,
-      {stops:3, perStop:12, mainStation:CFG.mainStation});
+      {stops:6, perStop:12, mainStation:CFG.mainStation});
     (stops||[]).forEach(s=>(s.deps||[]).forEach(d=>{
       if(d.tripId) out.push(Object.assign({}, d, {stop:s}));
     }));
@@ -1935,9 +1948,10 @@ async function refreshTransitVehicles(){
 
   /* Two different questions, so two different sets. A route LINE is a fact
      about the network and stays drawn whether or not something is on it right
-     now -- a half-hourly boat would otherwise lose its line between sailings,
-     when every other board draws lines from the timetable. A VEHICLE marker is
-     a claim that something is out there, so it is held to the stricter test. */
+     now -- the lake boat runs every half hour, and blanking its line between
+     sailings would be odd when every other board draws lines from the
+     timetable. A VEHICLE marker is a claim that something is out there, so it
+     is held to the stricter test below. */
   const now=Date.now(), moving={}, lines={};
   FAMILY_CARDS.forEach(([key])=>{ moving[key]=[]; lines[key]=[]; });
   detailed.filter(Boolean).forEach(({key,dep,trip})=>{
@@ -2163,6 +2177,7 @@ async function refreshPlanes(){
 function openSetup(){
   // [ADD-A-SYSTEM] if a system has an optional live-Worker input, preload it here:
   //   $("#busInput").value = state.busUrl;
+  drawLocSuggestions();   // the current spot may have moved since last open
   groupSettings(); $("#setup").classList.add("show"); $("#addrInput").focus();
 }
 function closeSetup(){ $("#setup").classList.remove("show"); }
@@ -2170,6 +2185,34 @@ $("#settingsBtn").onclick=openSetup;
 $("#skipKey").onclick=closeSetup;
 // [ADD-A-SYSTEM] if you added an optional live-Worker input + a Save button,
 // wire #saveKey here to persist state.busUrl to LS.busUrl then re-refresh.
+/* Suggested spots for this city -- see renderLocSuggestions in cityswitch.js.
+   Picked for transit interest (hubs, districts, the airport) rather than
+   landmarks, since that is what actually changes what the board shows.
+   Coordinates resolved through Nominatim, the same geocoder the Set button
+   uses, so a chip lands exactly where typing the name would. */
+const LOC_SUGGESTIONS=[
+  {lat:48.7843, lon:9.1821, label:"Stuttgart Hbf", full:"Stuttgart Hauptbahnhof"},
+  {lat:48.6904, lon:9.1927, label:"Airport", full:"Stuttgart Flughafen/Messe"},
+  {lat:48.8014, lon:9.2169, label:"Bad Cannstatt", full:"Stuttgart Bad Cannstatt"},
+  {lat:48.7265, lon:9.1132, label:"Vaihingen", full:"Stuttgart-Vaihingen"},
+  {lat:48.7776, lon:9.1801, label:"Schlossplatz", full:"Schlossplatz, Stuttgart"},
+  {lat:48.8114, lon:9.1680, label:"Feuerbach", full:"Stuttgart Feuerbach"},
+  {lat:48.8923, lon:9.1852, label:"Ludwigsburg", full:"Ludwigsburg"}
+];
+function pickSuggestedLoc(loc){
+  applyLoc(loc); saveLoc(loc); setManualLoc(true);
+  if(state.map){ state.map.invalidateSize(); state.map.setView([loc.lat,loc.lon], 12); }
+  setAddrStatus("Now tracking near "+loc.label, "good");
+  const inp=$("#addrInput"); if(inp) inp.value="";
+  drawLocSuggestions();
+  refreshEverythingForNewLocation();
+}
+function drawLocSuggestions(){
+  if(typeof renderLocSuggestions!=="function") return;   // cityswitch.js not loaded
+  renderLocSuggestions($("#suggestRow"), LOC_SUGGESTIONS, state.loc, pickSuggestedLoc);
+}
+drawLocSuggestions();
+
 $("#addrSetBtn").onclick=handleSetAddress;
 $("#addrGpsBtn").onclick=handleUseMyLocation;
 $("#addrInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handleSetAddress(); });
