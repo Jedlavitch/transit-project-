@@ -245,6 +245,11 @@ goes quiet, when you switch it off, or when the tab closes. Only while the sky v
 open: nothing is running when the page is closed.
 
 ### Philips Hue instead — `hue-lights.py`
+**Needs a Hue bridge.** Bluetooth-only Hue bulbs — the ones you pair straight to the phone app with
+no bridge in the box — cannot be driven by this at all. There is no IP to talk to: the bulb speaks
+BLE to whatever is holding it, and nothing on your network can see it. A bridge is what puts a Hue
+light on the LAN in the first place.
+
 Hue can't go through a Worker, and that's a routing fact rather than a missing feature: the bridge
 sits on your LAN behind a private address and a Cloudflare Worker runs in Cloudflare's network, so
 there is no path between them. Talking to the bridge directly is both the only way and the nicer
