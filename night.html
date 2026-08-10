@@ -380,7 +380,7 @@
     <script>/* set the back-link from ?city= immediately, before any other JS can fail */
     (function(){try{var m={dc:"index.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
-      sf:"sanfrancisco.html"};
+      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
       if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
@@ -531,6 +531,36 @@
    reads/writes) instead of a hardcoded DC default — this is what used to
    make Philadelphia's sky view show DC stuff. */
 const CITY_CONFIG = {
+  /* Europe. No bundled timetable and no live-vehicle feed exists for these, so
+     there is nothing to point busSchedule or a live-Worker key at — planes are
+     the subject that works, and they work anywhere. Train and bus modes fall
+     back rather than pretending; see the note in produceTrain/produceBus. */
+  zurich: { defaultLoc:{ lat:47.3779, lon:8.5403, label:"Zürich Hauptbahnhof" },
+    lsLoc:"transitboardzurich.loc", lsManual:"transitboardzurich.locManual", board:"zurich.html",
+    busSchedule:null, busTag:"🚌 Nearest bus", busRange:"",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
+    localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
+    cityLabel:"Zurich" },
+  /* Europe. No bundled timetable and no live-vehicle feed exists for these, so
+     there is nothing to point busSchedule or a live-Worker key at — planes are
+     the subject that works, and they work anywhere. Train and bus modes fall
+     back rather than pretending; see the note in produceTrain/produceBus. */
+  cologne: { defaultLoc:{ lat:50.943, lon:6.9588, label:"Köln Hauptbahnhof" },
+    lsLoc:"transitboardcologne.loc", lsManual:"transitboardcologne.locManual", board:"cologne.html",
+    busSchedule:null, busTag:"🚌 Nearest bus", busRange:"",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
+    localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
+    cityLabel:"Cologne" },
+  /* Europe. No bundled timetable and no live-vehicle feed exists for these, so
+     there is nothing to point busSchedule or a live-Worker key at — planes are
+     the subject that works, and they work anywhere. Train and bus modes fall
+     back rather than pretending; see the note in produceTrain/produceBus. */
+  stuttgart: { defaultLoc:{ lat:48.7838, lon:9.1817, label:"Stuttgart Hauptbahnhof" },
+    lsLoc:"transitboardstuttgart.loc", lsManual:"transitboardstuttgart.locManual", board:"stuttgart.html",
+    busSchedule:null, busTag:"🚌 Nearest bus", busRange:"",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
+    localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
+    cityLabel:"Stuttgart" },
   // lsMarcUrl/lsSeptaUrl mirror the board's own live-Worker settings so night
   // mode can pick up the SAME live positions once you've configured one there
   // -- nothing to set up twice. Ride On has no live source at all (see memory:
@@ -1725,6 +1755,15 @@ async function produceMetroTrain(){
 }
 
 async function produceTrain(){
+  /* Cities with no local vehicle feed and no Amtrak: say so instead of spinning.
+     These boards have live DEPARTURES (transitous / the Swiss API) but nothing
+     that reports where a vehicle physically IS, and Sky mode's whole subject is
+     one moving thing with a position, a photo and an ETA. Without this the
+     screen sat on "Finding trains…" forever, which reads as broken rather than
+     as unavailable. */
+  if(CITY_CFG.noLocalVehicles) return { none:true,
+    note:"No live train positions for " + (CITY_CFG.cityLabel||"this city") + " — planes work here." };
+
   const [amtrak, local] = await Promise.all([
     produceAmtrakTrain().catch(()=>null),
     produceLiveLocalTrain().catch(()=>null),
@@ -1898,6 +1937,15 @@ async function produceMetroBus(){
 }
 
 async function produceBus(){
+  /* Cities with no local vehicle feed and no Amtrak: say so instead of spinning.
+     These boards have live DEPARTURES (transitous / the Swiss API) but nothing
+     that reports where a vehicle physically IS, and Sky mode's whole subject is
+     one moving thing with a position, a photo and an ETA. Without this the
+     screen sat on "Finding buss…" forever, which reads as broken rather than
+     as unavailable. */
+  if(CITY_CFG.noLocalVehicles) return { none:true,
+    note:"No live bus positions for " + (CITY_CFG.cityLabel||"this city") + " — planes work here." };
+
   const live=await produceLiveBus().catch(()=>null);
   if(live) return live;
   const s=await ensureRideOnScheduleNight();
@@ -2342,6 +2390,14 @@ function render(s){
   if(s && s.needKey){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
     L.textContent="Add a WMATA key on the board to track buses"; renderMiniMap(null,null,null,null); return;
+  }
+  /* A city that has no live vehicle positions for this mode. Distinct from
+     "nothing nearby right now": this will not resolve by waiting, so it says
+     what is actually true instead of pulsing forever. */
+  if(s && s.none){
+    $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
+    L.textContent = s.note || "Not available for this city";
+    renderMiniMap(null,null,null,null); return;
   }
   if(!s){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");

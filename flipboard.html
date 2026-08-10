@@ -166,7 +166,7 @@
     <a id="boardBtn" href="index.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
     <script>(function(){try{var m={dc:"index.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
-      sf:"sanfrancisco.html"};
+      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
       if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
@@ -203,6 +203,7 @@
     <span id="updated">—</span>
   </footer>
 
+<script src="transitous.js?v=1"></script>
 <script>
 "use strict";
 /* Departure board is shared by the city boards, same as night.html. Which
@@ -210,6 +211,24 @@
    board's own saved location / WMATA key / live-Worker URLs / "show on
    board" toggles -- nothing to set up twice. */
 const CITY_CONFIG = {
+  zurich: {
+    defaultLoc:{ lat:47.3779, lon:8.5403, label:"Zürich Hauptbahnhof" },
+    lsLoc:"transitboardzurich.loc", board:"zurich.html", cityLabel:"Zurich",
+    lsWmataKey:null, lsHidden:"transitboardzurich.hiddenCards",
+    transitSource:"ch", mainStation:"Zürich HB",
+  },
+  cologne: {
+    defaultLoc:{ lat:50.943, lon:6.9588, label:"Köln Hauptbahnhof" },
+    lsLoc:"transitboardcologne.loc", board:"cologne.html", cityLabel:"Cologne",
+    lsWmataKey:null, lsHidden:"transitboardcologne.hiddenCards",
+    transitSource:"", mainStation:"Köln Hbf",
+  },
+  stuttgart: {
+    defaultLoc:{ lat:48.7838, lon:9.1817, label:"Stuttgart Hauptbahnhof" },
+    lsLoc:"transitboardstuttgart.loc", board:"stuttgart.html", cityLabel:"Stuttgart",
+    lsWmataKey:null, lsHidden:"transitboardstuttgart.hiddenCards",
+    transitSource:"", mainStation:"Stuttgart Hauptbahnhof",
+  },
   dc: {
     defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
     lsLoc:"transitboard.loc", board:"index.html", cityLabel:"Washington DC",
@@ -550,7 +569,69 @@ const MBTA_COL = {
 };
 // GVB metro line colors, same map amsterdam.html's board uses.
 const AMS_METRO_COL = { "50":"#00A03C","51":"#F49B00","52":"#00A1E1","53":"#E2001A","54":"#FFD500" };
+/* Departures for the European cities, from the same adapter the boards use.
+   One fetch serves every family card here: it is cached for a few seconds so
+   six collect() calls in one render don't become six round trips. */
+let _tousCache={t:0, rows:null, p:null};
+async function collectTransitousAll(){
+  if(!window.TBTransitous) return [];
+  if(Date.now()-_tousCache.t < 20000 && _tousCache.rows) return _tousCache.rows;
+  if(_tousCache.p) return _tousCache.p;
+  _tousCache.p = (async()=>{
+    try{
+      const stops=await TBTransitous.cityBoard(loc.lat, loc.lon,
+        {stops:4, perStop:14, source:CITY_CFG.transitSource, mainStation:CITY_CFG.mainStation});
+      const all=[]; stops.forEach(st=>st.deps.forEach(d=>all.push(d)));
+      _tousCache={t:Date.now(), rows:all, p:null};
+      return all;
+    }catch(e){ _tousCache={t:Date.now(), rows:[], p:null}; return []; }
+  })();
+  return _tousCache.p;
+}
+const TOUS_COL={longdistance:"#e2504f", regional:"#3ad0c8", metro:"#4ea1ff",
+                tram:"#f0ab00", bus:"#6aa9ff", ferry:"#5ad17a"};
+async function collectTransitousRows(family, count){
+  const all=await collectTransitousAll();
+  return all.filter(d=>d.family===family)
+    .sort((a,b)=>a.when-b.when)
+    .slice(0,count)
+    .map(d=>{
+      const min=Math.max(0, Math.round((d.when-Date.now())/60000));
+      return { sortMin:min, time: min<=0? "NOW" : `${min} MIN`,
+        dest:(d.headsign||"?").toUpperCase(), via:(d.route||d.label||"").toUpperCase(),
+        /* Only claim live where the feed says so — the Swiss trams are live, the
+           Rhine boats are not, and both end up on this board. */
+        status: d.cancelled? "CANCELLED" : (d.realTime? (d.delayMin>0? `+${d.delayMin} MIN`:"ON TIME") : "SCHEDULED"),
+        statusKind: d.cancelled? "bad" : (d.realTime? (d.delayMin>0? "warn":"ok") : "na"),
+        color: TOUS_COL[family]||"#6aa9ff" };
+    });
+}
+
 const SYSTEM_DEFS_BY_CITY = {
+  zurich: [
+    {id:"ld", logo:"RAIL", label:"Long-distance", collect:()=>collectTransitousRows("longdistance",6)},
+    {id:"regio", logo:"REGIO", label:"Regional & S-Bahn", collect:()=>collectTransitousRows("regional",6)},
+    {id:"metro", logo:"U-BAHN", label:"U-Bahn", collect:()=>collectTransitousRows("metro",5)},
+    {id:"tram", logo:"TRAM", label:"Trams", collect:()=>collectTransitousRows("tram",5)},
+    {id:"bus", logo:"BUS", label:"Buses", collect:()=>collectTransitousRows("bus",5)},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  cologne: [
+    {id:"ld", logo:"RAIL", label:"Long-distance", collect:()=>collectTransitousRows("longdistance",6)},
+    {id:"regio", logo:"REGIO", label:"Regional & S-Bahn", collect:()=>collectTransitousRows("regional",6)},
+    {id:"metro", logo:"U-BAHN", label:"U-Bahn", collect:()=>collectTransitousRows("metro",5)},
+    {id:"tram", logo:"TRAM", label:"Trams", collect:()=>collectTransitousRows("tram",5)},
+    {id:"bus", logo:"BUS", label:"Buses", collect:()=>collectTransitousRows("bus",5)},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  stuttgart: [
+    {id:"ld", logo:"RAIL", label:"Long-distance", collect:()=>collectTransitousRows("longdistance",6)},
+    {id:"regio", logo:"REGIO", label:"Regional & S-Bahn", collect:()=>collectTransitousRows("regional",6)},
+    {id:"metro", logo:"U-BAHN", label:"U-Bahn", collect:()=>collectTransitousRows("metro",5)},
+    {id:"tram", logo:"TRAM", label:"Trams", collect:()=>collectTransitousRows("tram",5)},
+    {id:"bus", logo:"BUS", label:"Buses", collect:()=>collectTransitousRows("bus",5)},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
   dc: [
     {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
     {id:"metro", logo:"METRO", label:"Metrorail", collect:()=>collectRailRows(6)},
