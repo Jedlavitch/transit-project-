@@ -1701,6 +1701,19 @@ async function refreshTransit(){
   const all=[];
   stops.forEach(s=>s.deps.forEach(d=>all.push(Object.assign({}, d, {stop:s}))));
 
+  /* Top up the long-distance card from a dedicated, mode-filtered query at the
+     main station. Mixed in with the locals these get crowded out — the next
+     fourteen departures at a big station can be fourteen trams — so the card
+     sat empty and hid itself between trains. It should always show the next few,
+     however far out they are. De-duped by line+time, since a train already in
+     the general list would otherwise appear twice. */
+  try{
+    const ld = await TBTransitous.longDistanceAt(CFG.mainStation, 8, CFG.transitSource);
+    const seen = new Set(all.map(d=>d.route+"@"+d.when));
+    const home = stops[0] || {name:CFG.mainStation};
+    ld.forEach(d=>{ if(!seen.has(d.route+"@"+d.when)) all.push(Object.assign({}, d, {stop:home})); });
+  }catch(e){}
+
   FAMILY_CARDS.forEach(([key,fam])=>{
     const box=$("#"+key+"List"); if(!box) return;
     const mine=all.filter(d=>d.family===fam).sort((a,b)=>a.when-b.when).slice(0,10);
@@ -1724,7 +1737,10 @@ async function refreshTransit(){
       const t=el("div","live", d.cancelled? "cancelled" : (mins<=0? "now" : "in "+mins+" min"));
       if(d.cancelled) t.style.color="var(--warn)";
       times.appendChild(t);
-      if(d.realTime){
+      if(d.cancelled){
+        // a cancelled train is not "on time"; the delay figure is meaningless now
+        times.appendChild(el("div","live-tag","not running"));
+      } else if(d.realTime){
         live++;
         const dm=d.delayMin;
         times.appendChild(el("div","live-tag", dm==null? "live" : (dm>0? `live · +${dm} min` : "live · on time")));
@@ -1954,8 +1970,15 @@ function renderAmtrak(list){
     const mid=el("div");
     mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
     const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
-    mid.appendChild(el("div","sub",
-      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
+    // Amtrak's trainTimely string is empty on every train these days, so the
+    // delay is derived from the next stop's scheduled vs actual time and shown
+    // in its band colour; `late` stays as the fallback for when it does return.
+    const sub=el("div","sub",
+      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}`);
+    const amLi=amtrakLateInfo(ns);
+    if(amLi && amLi.mins>0) sub.appendChild(delayFragment(amLi));
+    else if(late) sub.appendChild(document.createTextNode(` · ${late}`));
+    mid.appendChild(sub);
     const times=el("div","times");
     if(ns){
       const am=minsUntil(ns.arr||ns.dep);

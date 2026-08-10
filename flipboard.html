@@ -582,6 +582,13 @@ async function collectTransitousAll(){
       const stops=await TBTransitous.cityBoard(loc.lat, loc.lon,
         {stops:4, perStop:14, source:CITY_CFG.transitSource, mainStation:CITY_CFG.mainStation});
       const all=[]; stops.forEach(st=>st.deps.forEach(d=>all.push(d)));
+      /* Long-distance asked for separately, mode-filtered: at a big station the
+         next departures are all trams and the ICEs never make the list. */
+      try{
+        const ld=await TBTransitous.longDistanceAt(CITY_CFG.mainStation, 8, CITY_CFG.transitSource);
+        const seen=new Set(all.map(d=>d.route+"@"+d.when));
+        ld.forEach(d=>{ if(!seen.has(d.route+"@"+d.when)) all.push(d); });
+      }catch(e){}
       _tousCache={t:Date.now(), rows:all, p:null};
       return all;
     }catch(e){ _tousCache={t:Date.now(), rows:[], p:null}; return []; }
