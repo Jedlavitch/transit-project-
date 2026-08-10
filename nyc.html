@@ -742,6 +742,22 @@ let state = {
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 const el = (t, c, txt) => { const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e; };
+/* Bundled timetables ship pattern-deduplicated ("v":2): stop sequences and
+   running-time profiles are each stored once and referenced by index, because
+   these files are dominated by repetition (the NYC subway's 18,481 trips share
+   just 121 stop sequences). Expand back to the plain
+   {line,hs,s,st:[[stop,min],...]} shape on load so everything downstream --
+   interpolation, departure lists, route lines -- stays exactly as it was. */
+function expandBundle(s){
+  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
+  const pats=s.pats, offs=s.offs||[];
+  s.trips=(s.trips||[]).map(t=>{
+    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
+    return { line:t.l, hs:t.h, s:t.s, st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
+  });
+  delete s.pats; delete s.offs;
+  return s;
+}
 function haversine(a,b){
   const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
   const s=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
@@ -750,7 +766,7 @@ function haversine(a,b){
 const kmToMi = km => km*0.621371;
 async function getJSON(url, timeout=12000){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return expandBundle(await r.json()); }
   finally{ clearTimeout(t); }
 }
 
@@ -1821,7 +1837,7 @@ function appendLiveTimes(row, late, arrSec){
 async function ensureSubwaySchedule(){
   if(state.subwaySched) return state.subwaySched;
   try{
-    const s=await getJSON("mta-subway-schedule.json", 20000);
+    const s=expandBundle(await getJSON("mta-subway-schedule.json", 20000));
     s._coord={}; s._name={};
     (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     state.subwaySched=s;
@@ -2228,7 +2244,7 @@ const LIRR_COL = "#00985F", MNR_COL = "#A72650";
 async function ensureLirrSchedule(){
   if(state.lirrSched) return state.lirrSched;
   try{
-    const s=await getJSON("lirr-schedule.json", 20000);
+    const s=expandBundle(await getJSON("lirr-schedule.json", 20000));
     s._coord={}; s._name={};
     (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     state.lirrSched=s;
@@ -2239,7 +2255,7 @@ async function ensureLirrSchedule(){
 async function ensureMnrSchedule(){
   if(state.mnrSched) return state.mnrSched;
   try{
-    const s=await getJSON("mnr-schedule.json", 20000);
+    const s=expandBundle(await getJSON("mnr-schedule.json", 20000));
     s._coord={}; s._name={};
     (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     state.mnrSched=s;
@@ -2335,7 +2351,7 @@ function busClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>
 async function ensureBusSchedule(){
   if(state.busSched) return state.busSched;
   try{
-    const s=await getJSON("mta-bus-schedule.json", 20000);
+    const s=expandBundle(await getJSON("mta-bus-schedule.json", 20000));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
@@ -2446,7 +2462,7 @@ const PATH_COL = "#00A9E0";
 async function ensurePathSchedule(){
   if(state.pathSched) return state.pathSched;
   try{
-    const s=await getJSON("path-schedule.json", 20000);
+    const s=expandBundle(await getJSON("path-schedule.json", 20000));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
@@ -2931,7 +2947,7 @@ const njtCol  = l => NJT_COL[l] || "#f0ab00";
 async function ensureNjtSchedule(){
   if(state.njtSched) return state.njtSched;
   try{
-    const s=await getJSON("njt-nyc-schedule.json", 20000);
+    const s=expandBundle(await getJSON("njt-nyc-schedule.json", 20000));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));

@@ -70,21 +70,21 @@
   #airlineLogo{display:none; height:clamp(26px,min(4.4vw,5.2vh),64px); width:auto;
     max-width:34vw; object-fit:contain; background:#fff; border-radius:8px;
     padding:clamp(3px,.5vw,7px); flex:none}
-  .airline{font-size:clamp(1.7rem,min(7.4vw,8.8vh),5.4rem); font-weight:800; line-height:1.08; color:var(--amber);
+  .airline{font-size:calc(var(--fit,1)*clamp(1.7rem,min(7.4vw,8.8vh),5.4rem)); font-weight:800; line-height:1.08; color:var(--amber);
     background:linear-gradient(92deg,var(--amber) 15%,var(--city) 70%,var(--amber-dim));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; width:fit-content}
-  .flight{font-size:clamp(1rem,min(3.1vw,3.5vh),2.3rem); color:var(--amber-dim); font-weight:700; margin-top:.15em}
+  .flight{font-size:calc(var(--fit,1)*clamp(1rem,min(3.1vw,3.5vh),2.3rem)); color:var(--amber-dim); font-weight:700; margin-top:.15em}
 
   .route{display:flex; align-items:baseline; gap:2.5vw; flex-wrap:wrap; margin-top:.5vmin}
-  .route .city{font-size:clamp(1.4rem,min(6.4vw,7.8vh),4.9rem); font-weight:800; line-height:1.08; color:var(--city);
+  .route .city{font-size:calc(var(--fit,1)*clamp(1.4rem,min(6.4vw,7.8vh),4.9rem)); font-weight:800; line-height:1.08; color:var(--city);
     background:linear-gradient(90deg,var(--city) 35%,var(--amber) 130%);
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   .route .code{font-size:clamp(1rem,2.6vw,2.4rem); color:var(--muted); font-weight:700}
-  .route .arrow{font-size:clamp(1.3rem,min(5vw,6vh),3.8rem); color:var(--amber-dim); font-weight:400}
-  .subcity{font-size:clamp(.78rem,min(2.1vw,2.4vh),1.45rem); color:var(--muted); font-weight:600; margin-top:.3em}
+  .route .arrow{font-size:calc(var(--fit,1)*clamp(1.3rem,min(5vw,6vh),3.8rem)); color:var(--amber-dim); font-weight:400}
+  .subcity{font-size:calc(var(--fit,1)*clamp(.78rem,min(2.1vw,2.4vh),1.45rem)); color:var(--muted); font-weight:600; margin-top:.3em}
 
   .status{display:flex; align-items:center; gap:1em; flex-wrap:wrap; margin-top:1vmin;
-    font-size:clamp(1rem,min(3vw,3.3vh),2.2rem); font-weight:800}
+    font-size:calc(var(--fit,1)*clamp(1rem,min(3vw,3.3vh),2.2rem)); font-weight:800}
   .status .phase{color:var(--amber)}
   .status .alt{color:var(--amber-dim); font-weight:700}
   .status .alt:nth-of-type(3n+1){color:#3ad0c8}
@@ -324,19 +324,16 @@
      it clips silently rather than scrolling. Tightening the leading on the two
      biggest blocks buys ~20px there and is invisible elsewhere. Laptops with
      browser chrome land in exactly this band, so it is not a hypothetical. */
-  @media (max-height: 720px){
-    /* Measured at 1024x600, plane view: the text column wanted 509px of a 479px
-       space. Two city names at 7.8vh wrap to two lines (127px) and the status
-       chips wrap to three (120px), which is most of the overrun. Trimming the
-       vh coefficients on just those two blocks, plus the leading, recovers it
-       without touching how the layout looks on a normal screen. Trains and
-       buses already fit here; this band only ever hurt planes, which carry the
-       most content. */
+  /* A little tighter on short screens. This used to be the whole fix and it was
+     the wrong shape: every threshold I picked, a common resolution sat just
+     above it (720 missed 1366x768, 860 missed 1440x900). Chasing breakpoints
+     cannot work when the overflow depends on how long a carrier's name is, so
+     fitSky() measures instead and this only sets a sensible starting point. */
+  @media (max-height: 860px){
     .airline{line-height:1.0}
     .route{line-height:1.05; gap:1.8vw; margin-top:0}
-    .route .city{font-size:clamp(1.2rem,min(5.4vw,6.1vh),3.6rem); line-height:1.02}
-    .route .arrow{font-size:clamp(1.1rem,min(4vw,4.6vh),2.6rem)}
-    .status{font-size:clamp(.9rem,min(2.5vw,2.6vh),1.6rem); gap:.7em; margin-top:.4vmin}
+    .route .city{line-height:1.02}
+    .status{gap:.7em; margin-top:.4vmin}
     .subcity{margin-top:.15em}
     .side{gap:8px}
   }
@@ -419,7 +416,7 @@
         <button data-sky="on"><span class="ic">🌇</span>On</button>
         <button data-sky="off"><span class="ic">🚫</span>Off</button>
       </div>
-      <div class="lbl">Airline colors</div>
+      <div class="lbl">Operator colors</div>
       <div class="seg" id="brandSeg">
         <button data-brand="on"><span class="ic">🎨</span>On</button>
         <button data-brand="off"><span class="ic">🚫</span>Off</button>
@@ -606,6 +603,22 @@ const CITY_CONFIG = {
 const CITY_PARAM = new URLSearchParams(location.search).get("city");
 const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "dc";
 const CITY_CFG = CITY_CONFIG[CITY];
+/* Bundled timetables ship pattern-deduplicated ("v":2): stop sequences and
+   running-time profiles are each stored once and referenced by index, because
+   these files are dominated by repetition (the NYC subway's 18,481 trips share
+   just 121 stop sequences). Expand back to the plain
+   {line,hs,s,st:[[stop,min],...]} shape on load so everything downstream --
+   interpolation, departure lists, route lines -- stays exactly as it was. */
+function expandBundle(s){
+  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
+  const pats=s.pats, offs=s.offs||[];
+  s.trips=(s.trips||[]).map(t=>{
+    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
+    return { line:t.l, hs:t.h, s:t.s, st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
+  });
+  delete s.pats; delete s.offs;
+  return s;
+}
 function loadLiveUrl(key){ return key ? (localStorage.getItem(key)||"") : ""; }
 const CFG = {
   defaultLoc: CITY_CFG.defaultLoc,
@@ -644,7 +657,7 @@ async function skySetAddress(){
   skyMsg("Searching…");
   try{
     const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
-    const d=await r.json();
+    const d=expandBundle(await r.json());
     if(!d || !d.length){ skyMsg("Couldn't find that — try adding a city or state.", "bad"); return; }
     const parts=(d[0].display_name||"").split(",").map(s=>s.trim()).filter(Boolean);
     skyApplyLoc({ lat:parseFloat(d[0].lat), lon:parseFloat(d[0].lon),
@@ -670,7 +683,7 @@ function saveRouteCache(){ try{ localStorage.setItem("nightmode.routes", JSON.st
 
 async function getJSON(url, timeout=10000){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status); return await r.json(); }
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status); return expandBundle(await r.json()); }
   finally{ clearTimeout(t); }
 }
 function haversineNm(a,b){
@@ -1782,7 +1795,7 @@ async function produceLiveBus(){
     return { id:"lb"+v.tripId, nm, unit:"nm", dir:bearingFrom(loc,{lat:v.lat,lon:v.lon}), count:list.length,
       fleet: list.map(({v:v2,nm:n2})=>({ t:`Route ${v2.routeId}`, s:"", nm:n2, unit:"nm",
         dir:bearingFrom(loc,{lat:v2.lat,lon:v2.lon}), x:"live", ll:{lat:v2.lat,lon:v2.lon} })),
-      altText:"", title:`Route ${v.routeId}`, sub:`MTA Bus`,
+      altText:"", title:`Route ${v.routeId}`, sub:`MTA Bus`, sysName:"MTA Bus",
       oCity:null, dCity:null, subline:"",
       oLL:null, dLL:null, posLL:{lat:v.lat,lon:v.lon}, oCode:"", dCode:"",
       statusHtml:`<span class="phase">in service</span><span class="badge na">live</span>`,
@@ -1798,6 +1811,7 @@ async function produceLiveBus(){
       dir:bearingFrom(loc,{lat:+b2.lat,lon:+b2.lng}),
       x:isRealLateNight(b2.late)?`+${b2.late} min`:"on time", ll:{lat:+b2.lat,lon:+b2.lng} })),
     altText:"", title:`Route ${b.route_id}`, sub:`${b.destination||"?"} · ${CITY_CFG.localBusSystem}`,
+    sysName:CITY_CFG.localBusSystem,
     oCity:null, dCity:b.destination||null, subline: b.Direction||"",
     oLL:null, dLL:null, posLL:{lat:+b.lat,lon:+b.lng}, oCode:"", dCode:"",
     statusHtml:`<span class="phase">in service</span>`+headingChip(b.heading)
@@ -1904,7 +1918,7 @@ async function produceBus(){
   const prog=journeyProgress(first?{lat:first[0],lon:first[1]}:null, last?{lat:last[0],lon:last[1]}:null, {lat,lon});
   return { id:"ro"+best.i, nm, unit:"nm", dir:bearingFrom(loc,{lat,lon}), count:inService,
     fleet: cand.sort((a,b2)=>a.nm-b2.nm),
-    altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · ${busSystem}`,
+    altText:"", title:`Route ${tr.line}`, sub:`${tr.hs} · ${busSystem}`, sysName:busSystem,
     oCity: first?first[2]:null, dCity: last?last[2]:tr.hs,
     subline:`scheduled position (${busSystem} has no public live feed)`,
     oLL: first?{lat:first[0],lon:first[1]}:null, dLL: last?{lat:last[0],lon:last[1]}:null,
@@ -2388,6 +2402,7 @@ function render(s){
   })();
   $("#flightno").textContent = s.sub;
   window.__lastSubject=s; applyBrand(s);   // carrier colours, if switched on
+  queueFit();                              // shrink the type if this one runs long
   const routeEl=$("#route");
   if(s.dCity){
     routeEl.innerHTML = (s.oCity?`<span class="city">${escapeHtml(s.oCity)}</span><span class="arrow">→</span>`:`<span class="arrow">→</span>`)
@@ -2488,6 +2503,31 @@ const AIRLINE_BRAND={
   LA:"#1B0088", LAN:"#1B0088",   AV:"#DA291C", AVA:"#DA291C",
   CM:"#0033A0", CMP:"#0033A0",   AD:"#0F2B5B", AZU:"#0F2B5B",
 };
+/* The same idea on the ground: a train or bus paints the screen its OPERATOR's
+   colour, not its line's. A Metro-North train on the Hudson line and one on the
+   Harlem line are both Metro-North, and one colour per agency is what reads
+   from across a room — a per-line palette would restyle the whole wall every
+   time a different letter train came past.
+
+   Keyed by the `sysName` each producer already sets (the agency named in the
+   card's subtitle), so what you read and what you see agree. Where a city board
+   already flies an agency's colour — nyc.html's LIRR green, sanfrancisco's BART
+   blue, index.html's MARC orange — that exact hex is reused, so the same
+   operator doesn't change colour when you switch between board and sky view. */
+const TRANSIT_BRAND={
+  "Amtrak":"#004B8D",
+  // Washington / Baltimore
+  "MARC":"#e8792b",          "Ride On":"#2f9e44",
+  // New York
+  "Subway":"#0039A6",        "Subway/LIRR/MNR":"#0039A6",   "MTA Bus":"#0039A6",
+  "LIRR":"#00985F",          "Metro-North":"#A72650",       "NJ Transit":"#f0ab00",
+  // Philadelphia
+  "SEPTA":"#17458F",
+  // Boston / LA / SF / Amsterdam
+  "MBTA":"#DA291C",          "LA Metro":"#EB131B",          "Metrolink":"#0B5EA9",
+  "BART/Caltrain":"#0099D8", "cable car":"#8C4A2F",         "GVB":"#3FA9E0",
+  "NS":"#FFC917",
+};
 const brandOn = () => localStorage.getItem("nightmode.brand")==="1";
 /* Background and ink for a carrier, chosen together.
 
@@ -2569,6 +2609,35 @@ function setBrand(v){
   brandActive="__";                 // force the next applyBrand to repaint
   applyBrand(window.__lastSubject||null);
 }
+/* ---- make it fit, whatever the screen and whatever the name ----------------
+   main is overflow:hidden by design (a wall display must not scroll), which
+   means anything too tall is silently cut rather than reachable. How tall the
+   text runs depends on the carrier's name and the two city names wrapping, so
+   the same screen fits one flight and clips the next — no media query can know
+   that in advance. Every fixed threshold I tried was missed by a common
+   resolution sitting just above it.
+
+   So: measure, and shrink the type a step at a time until it fits. Floor of
+   0.62 because past that it stops being a glanceable board; if content is still
+   too tall there, being slightly cut is the lesser evil. */
+function fitSky(){
+  const m=document.getElementById("main")||document.querySelector("main");
+  if(!m) return;
+  const R=document.documentElement;
+  R.style.setProperty("--fit","1");
+  // read once per step; each write forces exactly one reflow
+  for(let f=1; f>0.62; f-=0.04){
+    if(m.scrollHeight<=m.clientHeight+1) break;
+    R.style.setProperty("--fit", f.toFixed(2));
+  }
+}
+let fitQueued=false;
+function queueFit(){
+  if(fitQueued) return;
+  fitQueued=true;
+  requestAnimationFrame(()=>{ fitQueued=false; fitSky(); });
+}
+window.addEventListener("resize", queueFit);
 function setNightTheme(t){
   document.documentElement.setAttribute("data-theme", t);
   localStorage.setItem("nightmode.theme", t);

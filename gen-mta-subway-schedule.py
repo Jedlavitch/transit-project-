@@ -37,6 +37,11 @@ Two outputs from one download (avoids a second 5.6MB fetch):
 
 Re-run whenever the MTA changes its timetable: python3 gen-mta-subway-schedule.py
 """
+# NOTE: after regenerating, compress this bundle -- these files are dominated by
+# repeated stop sequences (the subway's 18,481 trips share just 121 of them), and
+# the boards expand the compact form transparently on load:
+#     python3 compress-bundle.py mta-subway-schedule.json
+
 import csv, io, json, os, urllib.request, zipfile, datetime
 from collections import defaultdict
 

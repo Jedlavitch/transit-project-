@@ -259,6 +259,22 @@ const CITY = CITY_CONFIG[CITY_PARAM] ? CITY_PARAM : "dc";
 const CITY_CFG = CITY_CONFIG[CITY];
 const $ = s=>document.querySelector(s);
 
+/* Bundled timetables ship pattern-deduplicated ("v":2): stop sequences and
+   running-time profiles are each stored once and referenced by index, because
+   these files are dominated by repetition (the NYC subway's 18,481 trips share
+   just 121 stop sequences). Expand back to the plain
+   {line,hs,s,st:[[stop,min],...]} shape on load so everything downstream --
+   interpolation, departure lists, route lines -- stays exactly as it was. */
+function expandBundle(s){
+  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
+  const pats=s.pats, offs=s.offs||[];
+  s.trips=(s.trips||[]).map(t=>{
+    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
+    return { line:t.l, hs:t.h, s:t.s, st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
+  });
+  delete s.pats; delete s.offs;
+  return s;
+}
 function loadBoardLoc(){
   try{ const s=JSON.parse(localStorage.getItem(CITY_CFG.lsLoc)); if(s&&s.lat) return s; }catch(e){}
   return null;
@@ -281,7 +297,7 @@ function loadUrl(key){ return key ? (localStorage.getItem(key)||"") : ""; }
 
 async function getJSON(url, timeout=12000){
   const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(), timeout);
-  try{ const r=await fetch(url, {signal:ctrl.signal}); if(!r.ok) throw new Error("http "+r.status); return await r.json(); }
+  try{ const r=await fetch(url, {signal:ctrl.signal}); if(!r.ok) throw new Error("http "+r.status); return expandBundle(await r.json()); }
   finally{ clearTimeout(t); }
 }
 function haversineMi(a,b){

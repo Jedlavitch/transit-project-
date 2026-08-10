@@ -17,6 +17,11 @@ that shared shape just for this one system.
 
 Re-run whenever Metro-North changes its timetable: python3 gen-mnr-schedule.py
 """
+# NOTE: after regenerating, compress this bundle -- these files are dominated by
+# repeated stop sequences (the subway's 18,481 trips share just 121 of them), and
+# the boards expand the compact form transparently on load:
+#     python3 compress-bundle.py mnr-schedule.json
+
 import csv, io, json, os, urllib.request, zipfile, datetime
 
 GTFS_URL = "https://rrgtfsfeeds.s3.amazonaws.com/gtfsmnr.zip"
