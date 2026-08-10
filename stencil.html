@@ -1996,6 +1996,13 @@ function fsElement(){ const d=fsDoc(); return d.fullscreenElement || d.webkitFul
 function toggleFullscreen(){
   const d=fsDoc(), el=d.documentElement;
   if(fsElement()){ const ex=d.exitFullscreen||d.webkitExitFullscreen; if(ex) ex.call(d); return; }
+  /* The licence check lives HERE rather than on the button, so that every way
+     in is covered -- the button, the F key, and whatever gets added next. On
+     the button alone it was one keystroke to walk past the only lock on the
+     feature the licence exists to sell, and the button's own tooltip named the
+     shortcut. Note the position: AFTER the exit branch, because leaving full
+     screen is never gated. Trapping somebody in it is a bug, not a sale. */
+  if(window.TBGate && !TBGate.require("fullscreen")) return;
   const req=el.requestFullscreen||el.webkitRequestFullscreen;
   if(!req){ hintFS(); return; }
   try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>hintFS()); }catch(e){ hintFS(); }
@@ -2016,7 +2023,7 @@ function onFsChange(){
   wakeWanted=true; requestWake();   // awake in or out of kiosk full screen
   if(state.map) setTimeout(()=>{ state.map.invalidateSize(); fitAll(); }, 120);
 }
-$("#fsBtn").onclick=function(){ if(window.TBGate && !TBGate.require("fullscreen")) return; toggleFullscreen(); };
+$("#fsBtn").onclick=toggleFullscreen;
 document.addEventListener("fullscreenchange", onFsChange);
 try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFsChange); }catch(e){}
 document.addEventListener("webkitfullscreenchange", onFsChange);

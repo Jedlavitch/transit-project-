@@ -99,7 +99,11 @@
       '<div class="box">' +
         "<h2>" + title + "</h2>" +
         "<p>" + body + "</p>" +
-        '<input id="tbGateKey" placeholder="TP-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" ' +
+        /* The shape license-worker.js actually issues: TB, then three groups of
+           four. The old placeholder said "TP-" and four groups of five, which is
+           neither this key nor the signed feed-proxy one, so a customer holding
+           a perfectly good key was shown a pattern it did not match. */
+        '<input id="tbGateKey" placeholder="TB-XXXX-XXXX-XXXX" autocomplete="off" ' +
           'spellcheck="false" aria-label="Licence key" />' +
         '<div class="row">' +
           '<button class="go" id="tbGateGo">Unlock</button>' +
