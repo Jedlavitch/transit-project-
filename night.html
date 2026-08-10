@@ -1806,7 +1806,8 @@ async function produceMetroBus(){
   ((d && d.BusPositions)||[]).forEach(v=>{
     if(v.Lat==null || v.Lon==null) return;
     const ll={lat:v.Lat, lon:v.Lon};
-    cand.push({ v, ll, nm:haversineNm(loc, ll) });
+    const dev = typeof v.Deviation==="number" ? v.Deviation : null;
+    cand.push({ v, ll, nm:haversineNm(loc, ll), dev });
   });
   if(!cand.length) return null;
   cand.sort((a,b)=>a.nm-b.nm);
@@ -1816,16 +1817,29 @@ async function produceMetroBus(){
     kind:"bus", nm:w.nm, unit:"nm",
     dir:bearingFrom(loc, w.ll),
     title:`Route ${v.RouteID||"?"}`,
-    sub:`Metrobus${v.TripHeadsign?` → ${v.TripHeadsign}`:""}${v.VehicleID?` · bus ${v.VehicleID}`:""}`,
+    sub:`Metrobus${v.TripHeadsign?` → ${v.TripHeadsign}`:""}${v.VehicleID?` · bus ${v.VehicleID}`:""}`
+      + (typeof w.dev==="number" && Math.abs(Math.round(w.dev))>=2
+         ? `  ·  ${Math.abs(Math.round(w.dev))} min ${w.dev>0?"late":"early"}` : ""),
     oCity:null, dCity:v.TripHeadsign||null, subline:"Metrobus",
     posLL:w.ll, oLL:null, dLL:null,
     altText:"", oCode:"", dCode:"",
     sysTag:"🚌 Nearest Metrobus", sysRange:"Metrobus — shown when no Ride On bus is near",
-    statusHtml:`<span class="phase">in service</span><span class="badge na">Metrobus</span>`,
+    lateMin: w.dev,
+    statusHtml:`<span class="phase">in service</span>`
+      + adherenceChip(w.dev)
+      /* TripEndTime is deliberately not shown. It is the SCHEDULED end of the
+         trip and buses routinely run past it — observed a D80 scheduled to
+         finish 21:17 still running at 21:38 while reporting Deviation 0. Putting
+         both on screen states two things that contradict each other, and WMATA's
+         own numbers are the reason, not a display bug. Deviation alone answers
+         the question actually being asked. */
+      + `<span class="badge na">Metrobus</span>`,
     color:"#6aa9ff",
     photoQuery:CITY_CFG.metroBusPhotoQuery||"WMATA Metrobus",
     fleet:cand.slice(0,40).map(c=>({ t:`Route ${c.v.RouteID||"?"}`, s:c.v.TripHeadsign||"",
-      nm:c.nm, unit:"nm", ll:c.ll })),
+      nm:c.nm, unit:"nm", ll:c.ll,
+      x: typeof c.dev==="number" && Math.abs(Math.round(c.dev))>=2
+         ? `${Math.abs(Math.round(c.dev))}m ${c.dev>0?"late":"early"}` : "on time" })),
     count:cand.length,
   };
 }
@@ -2192,6 +2206,23 @@ function headingChip(track){
 }
 /* A "next stop" chip: the train/bus equivalent of a flight's ETA badge --
    where it's headed next, with a scheduled/estimated time and optional note. */
+/* Schedule adherence, where a feed genuinely reports it.
+   WMATA's jBusPositions carries Deviation in minutes: positive is running late,
+   negative is running early (buses do run ahead of time, and a bus that leaves a
+   stop early is arguably the worse failure — so it is shown, not hidden). Live
+   sample over Bethesda ranged from +22 to -8.
+
+   Deliberately NOT applied to everything: Metrorail's TrainPositions has no
+   schedule field at all, and the bundled-timetable buses are POSITIONED from the
+   timetable, so calling them "on time" would be circular. Neither gets a badge
+   rather than getting an invented one. */
+function adherenceChip(min){
+  if(typeof min!=="number" || !isFinite(min)) return "";
+  const m=Math.round(min);
+  if(Math.abs(m)<2) return `<span class="badge">on time</span>`;
+  if(m>0) return `<span class="badge late">${m} min late</span>`;
+  return `<span class="badge">${Math.abs(m)} min early</span>`;
+}
 function nextStopChip(name, timeStr, note){
   if(!name) return "";
   const extra=[timeStr, note].filter(Boolean).join(" · ");
