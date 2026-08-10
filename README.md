@@ -244,6 +244,24 @@ for at least 45s so a busy corridor can't strobe the room, and the lights are re
 goes quiet, when you switch it off, or when the tab closes. Only while the sky view is actually
 open: nothing is running when the page is closed.
 
+### Philips Hue instead — `hue-lights.py`
+Hue can't go through a Worker, and that's a routing fact rather than a missing feature: the bridge
+sits on your LAN behind a private address and a Cloudflare Worker runs in Cloudflare's network, so
+there is no path between them. Talking to the bridge directly is both the only way and the nicer
+one — no key to apply for, no cloud round-trip, and it keeps running when the board is closed.
+
+```bash
+python3 hue-lights.py --setup      # finds the bridge, asks you to press the link button
+python3 hue-lights.py --list       # your lights and their ids
+python3 hue-lights.py --light <id> # choose one (repeat for more)
+python3 hue-lights.py --test       # 15s of United blue, then back to how it was
+python3 hue-lights.py              # watch, polling every 60s (--once for cron)
+```
+
+Stdlib only, nothing to `pip install`. Carrier colours are **parsed out of `night.html`** rather than
+copied, so the room and the screen can't disagree about what colour United is. If `--setup` can't
+find the bridge, get its IP from the Hue app (Settings → My Hue System) and pass `--bridge <ip>`.
+
 ## Optional: NJ Transit (blocked on your own registration)
 NJ Transit rail (into Penn Station) isn't built in yet — it's the one system in this project that
 breaks the "zero setup" pattern entirely. Unlike every other agency here, NJ Transit requires
