@@ -25,6 +25,42 @@
   /* WMATA line colors (DC board) */
   --RD:#BF0D3E; --BL:#009CDE; --YL:#FFD100; --OR:#ED8B00; --GR:#00B140; --SV:#919D9D;
 }
+/* ---- delay bands ---------------------------------------------------------
+   One scale for lateness everywhere: on time, 1-5, 6-9, 10+. It lives here
+   rather than in each board so eleven cities cannot drift apart, and so a new
+   city copied from stencil.html inherits it for free.
+
+   The severe band is a FILLED CHIP rather than coloured text, and that is a
+   legibility decision, not a decorative one. A genuinely dark red cannot be
+   read as text on these boards: measured against the dark row background,
+   #c92a2a is 3.2:1 and #8f1d1d is 2.0:1, both well under the 4.5:1 text needs.
+   Inverting it -- dark red plate, near-white ink -- gives 7.3:1 and is still
+   unmistakably dark red. Severity then escalates twice, in hue and in
+   treatment, which is what makes 10-plus read as different in kind rather than
+   just further along a gradient.
+
+   The day theme needs its own inks because the dark-theme ones are unreadable
+   on white, and already were: the green this replaces measured 2.0:1 there and
+   the yellow 1.5:1. That was a pre-existing bug in a theme nobody had
+   contrast-checked, not something these bands introduced. */
+:root{
+  --delay-ok:#33d17a;        /* 8.9:1 on the dark row */
+  --delay-min:#ffcc33;       /* 11.7:1 */
+  --delay-mid:#ff8a75;       /* 7.7:1 */
+  --delay-max-bg:#8f1d1d; --delay-max-ink:#ffe3e3;   /* 7.3:1 plate vs ink */
+}
+:root[data-theme="day"]{
+  --delay-ok:#0f7a3d;        /* 5.4:1 on white */
+  --delay-min:#8a5a00;       /* 5.9:1 */
+  --delay-mid:#d13b2e;       /* 4.8:1 */
+  --delay-max-bg:#8f1d1d; --delay-max-ink:#ffffff;   /* 8.9:1 */
+}
+.dly-ok{ color:var(--delay-ok) }
+.dly-min{ color:var(--delay-min) }
+.dly-mid{ color:var(--delay-mid) }
+.dly-max{ background:var(--delay-max-bg); color:var(--delay-max-ink);
+  padding:0 .4em; border-radius:5px; font-weight:800; }
+
 :root[data-rows="more"]{ --row-gap:2px; --row-pad:3px 7px; --badge-h:19px; --dest-fs:12px; --sub-fs:10px; --live-fs:13px; }
 :root[data-rows="fewer"]{ --row-gap:5px; --row-pad:7px 9px; --badge-h:26px; --dest-fs:15px; --sub-fs:12px; --live-fs:18px; }
 :root[data-theme="black"]{

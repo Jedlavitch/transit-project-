@@ -11,6 +11,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
+<script src="delays.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=10" defer></script>
@@ -2102,8 +2103,15 @@ function renderAmtrak(list){
     const mid=el("div");
     mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
     const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
-    mid.appendChild(el("div","sub",
-      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
+    // Amtrak's trainTimely string is empty on every train these days, so the
+    // delay is derived from the next stop's scheduled vs actual time and shown
+    // in its band colour; `late` stays as the fallback for when it does return.
+    const sub=el("div","sub",
+      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}`);
+    const amLi=amtrakLateInfo(ns);
+    if(amLi && amLi.mins>0) sub.appendChild(delayFragment(amLi));
+    else if(late) sub.appendChild(document.createTextNode(` · ${late}`));
+    mid.appendChild(sub);
     const times=el("div","times");
     if(ns){
       const am=minsUntil(ns.arr||ns.dep);

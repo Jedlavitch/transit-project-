@@ -11,6 +11,7 @@
 <script src="license.js" defer></script>
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
+<script src="delays.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=10" defer></script>
@@ -75,7 +76,7 @@ var r=g("tb.rows")||g("transitboardboston.rows");if(r&&r!=="normal")d.setAttribu
   .row .live{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums; color:var(--live)}
   .row .sched{font-size:11px; color:var(--sched)}
   .row .sched b{color:var(--sched-b)}
-  /* Live delay chip (green on-time / yellow slightly late / red very late) --
+  /* Live delay chip (banded green / yellow / light red / dark red -- see delays.js) --
      used by systems with a real-time feed; see appendLiveTimes()/liveLateInfo(). */
   .row .live-eta{font-weight:800; font-size:18px; font-variant-numeric:tabular-nums}
   .row .live-tag{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
@@ -1465,19 +1466,12 @@ function drawScheduleRouteLines(schedule, layer, colorFn){
   });
 }
 function schedClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
-// Live delay chip helpers (green on-time / yellow / red), for systems with a
-// real-time feed. `late` is minutes; out-of-range values are treated as no-data
-// (some feeds send sentinel garbage instead of omitting the field).
-function isRealLate(late){ return typeof late==="number" && isFinite(late) && late>0 && Math.abs(late)<=90; }
-function liveLateInfo(late){
-  if(typeof late!=="number" || !isFinite(late) || Math.abs(late)>90) return null;
-  const color = late>5 ? "var(--late)" : late>=3 ? "var(--warn)" : "var(--good)";
-  return { color, text: late<=0 ? "on time" : `+${late} min` };
-}
+// Lateness scale (bands, colours, sentinel guarding) lives in delays.js,
+// shared by every board so the cities cannot drift apart.
 function appendLiveTimes(row, late){
   const times=el("div","times");
   const li=liveLateInfo(late);
-  if(li){ const eta=el("div","live-eta"); eta.style.color=li.color; eta.textContent=li.text; times.appendChild(eta); }
+  if(li){ const eta=el("div","live-eta"); paintDelay(eta, li); eta.textContent=li.text; times.appendChild(eta); }
   times.appendChild(el("div","live-tag","live"));
   row.appendChild(times);
 }
@@ -2128,8 +2122,15 @@ function renderAmtrak(list){
     const mid=el("div");
     mid.appendChild(el("div","dest", `${t.routeName||"Amtrak"} → ${t.destName||"?"}`));
     const ns=amtrakNextStop(t), late=(t.trainTimely||"").trim();
-    mid.appendChild(el("div","sub",
-      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}${late?` · ${late}`:""}`));
+    // Amtrak's trainTimely string is empty on every train these days, so the
+    // delay is derived from the next stop's scheduled vs actual time and shown
+    // in its band colour; `late` stays as the fallback for when it does return.
+    const sub=el("div","sub",
+      `${distMi.toFixed(0)} mi · ${Math.round(t.velocity||0)} mph${ns?` · next ${ns.code}`:""}`);
+    const amLi=amtrakLateInfo(ns);
+    if(amLi && amLi.mins>0) sub.appendChild(delayFragment(amLi));
+    else if(late) sub.appendChild(document.createTextNode(` · ${late}`));
+    mid.appendChild(sub);
     const times=el("div","times");
     if(ns){
       const am=minsUntil(ns.arr||ns.dep);
