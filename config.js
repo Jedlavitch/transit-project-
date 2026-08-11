@@ -63,7 +63,7 @@ window.TB_CONFIG = {
      wherever the data is shown is a condition of the licence, not a courtesy.
      Note also that adsb.lol omits `desc` and `ownOp`, so plane rows lose the
      aircraft type and operator; adsb.fi carries both. */
-  adsbUrl:      "",       // https://tb-adsb.yourname.workers.dev
+  adsbUrl:      "https://tb-adsb.jacklemonade2.workers.dev",
 
   /* ---- accounts / sign-in ----------------------------------------------
      account-worker.js. Left empty there is simply no sign-in: the Spotter log
