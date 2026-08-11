@@ -73,7 +73,9 @@ curl -X POST https://tb-license.YOU.workers.dev/grant -H "x-admin-secret: YOUR_A
 Several feeds the boards use today are **free for non-commercial use only**. Selling
 the product without swapping them is a terms-of-service violation waiting to happen:
 
-- **airplanes.live** (planes) — free feed prohibits commercial use. Swap to a paid
+- **Aircraft** — RESOLVED. Served by our own proxy (adsb-proxy.py) against
+  adsb.lol under ODbL, which permits commercial use with attribution; the credit
+  renders automatically. Previously this needed a swap to a paid
   plan/alternative (FlightAware AeroAPI, ADS-B Exchange commercial). One URL in each
   board's `fetchPlanes()`.
 - **adsbdb** (flight routes, origin → destination) — free community API with no

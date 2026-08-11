@@ -440,7 +440,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
    several people's logs end up on one board.
 
    One-tap logging uses the two keyless, CORS-open feeds the boards already use:
-   airplanes.live for aircraft overhead and amtraker for Amtrak trains. Local
+   adsb.lol for aircraft overhead and amtraker for Amtrak trains. Local
    buses/metros need a city API key, so those are manual entry.
    ============================================================================ */
 const $ = s => document.querySelector(s);
@@ -685,7 +685,7 @@ async function fetchScheduled(onPartial){
 }
 
 /* Each source paints the moment it lands. The bundled timetables resolve in
-   ~10ms while airplanes.live can take seconds, and waiting for allSettled meant
+   ~10ms while adsb.lol can take seconds, and waiting for allSettled meant
    a local bus you could already see sat invisible behind a slow plane request. */
 function paintNear(){
   near.sort((a,b)=>a.d-b.d);
@@ -786,7 +786,7 @@ function idOrNull(v){
   return t;
 }
 
-/* Aircraft feed. Defaults to airplanes.live, which is free and CORS-open but
+/* Aircraft feed. Defaults to adsb.lol, which is free and CORS-open but
    PROHIBITS COMMERCIAL USE. Set "tb.adsbUrl" to an adsb-worker.js deployment to
    switch to a commercially-usable feed (adsb.lol / adsb.fi) — those send no CORS
    headers of their own, so the Worker is required, not optional. */
@@ -803,7 +803,7 @@ function showPlanesUnconfigured(){
   const c=document.querySelector("#planeCount"); if(c) c.textContent="";
 }
 function adsbBase(){
-  /* NO DEFAULT, on purpose. This used to fall back to airplanes.live, which is
+  /* NO DEFAULT, on purpose. This used to fall back to adsb.lol, which is
      free and CORS-open and PROHIBITS COMMERCIAL USE — so a product that ships
      with it baked in is in breach the day it is sold, however the feature is
      priced. Giving the planes away inside a paid app does not make the use
@@ -837,7 +837,7 @@ async function fetchNear(){
       near = near.filter(n=>!n.scheduled).concat(Object.values(best));
       paintNear();
     }).catch(()=>{}));
-  // planes overhead (airplanes.live — keyless, CORS-open, same feed the boards use)
+  // planes overhead (adsb.lol — keyless, CORS-open, same feed the boards use)
   jobs.push(getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
     .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
         /* Some transponders broadcast a placeholder callsign — all zeros, a

@@ -33,7 +33,7 @@
    route arbitrary traffic through your account -- that is how a Worker gets you
    rate-limited, billed, or banned. Add a host here when a board needs it. */
 const ALLOWED_HOSTS = new Set([
-  "api.airplanes.live",       // aircraft overhead
+  "api.adsb.lol",             // aircraft overhead
   "api-v3.amtraker.com",      // Amtrak
   "api.wmata.com",            // DC rail + bus
   "api.mta.info",             // NYC subway / LIRR / Metro-North

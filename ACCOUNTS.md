@@ -85,6 +85,7 @@ Then enter an email, get the code, sign in.
   destroy someone's log, and a lapsed licence shouldn't lock them out of data
   they created. Wire them together only if you actually want that behaviour.
 - **Check your data feeds allow commercial use.** `SELLING.md` covers this and it
-  remains the biggest blocker: **airplanes.live prohibits commercial use**, and
+  is resolved: the aircraft feed runs through our own proxy on adsb.lol under
+  ODbL, with attribution rendered. What remains is that
   CARTO tiles, Nominatim geocoding and the photo sources all have their own terms.
   Accounts don't change that.

@@ -2,7 +2,7 @@
    adsb-worker.js — a CORS shim for a commercially-usable aircraft feed.
 
    WHY THIS EXISTS
-   airplanes.live is free and CORS-open, which is why the boards use it — but its
+   adsb.lol is free and CORS-open, which is why the boards use it — but its
    terms PROHIBIT COMMERCIAL USE, so it can't ship in a product you sell.
 
    The obvious replacements are adsb.lol and adsb.fi: community ADS-B feeds, free,
@@ -26,7 +26,7 @@
      2. Deploy. Optionally set a variable UPSTREAM to switch provider:
           https://api.adsb.lol/v2   (default)   or   https://opendata.adsb.fi/api/v2
      3. Paste the Worker URL into the app: ⚙︎ → Aircraft feed URL.
-        Leave it empty and everything keeps using airplanes.live, which is
+        Leave it empty and everything keeps using adsb.lol, which is
         correct while the project is non-commercial.
 
    Attribution is not optional under ODbL: credit adsb.lol wherever the data is

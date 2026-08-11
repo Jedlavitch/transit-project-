@@ -9,15 +9,16 @@ That is deliberate, and it is worth thirty seconds of explanation.
 ## Why you have to do this bit
 
 Live aircraft positions come from ADS-B networks run largely by volunteers. The
-easiest of them, `airplanes.live`, is free and works straight from a browser —
-and its terms **prohibit commercial use**. Shipping it inside a product you paid
-for would put whoever sold it to you in breach, and quietly make you part of
-that. Making the plane feature free inside a paid product does not change it;
-the use is still commercial.
+ones that are easiest to call from a browser tend to be the ones whose terms
+**prohibit commercial use** — free for hobbyists, not for a product somebody
+paid for. Shipping one inside a paid product puts the seller in breach and
+quietly makes the buyer part of it, and making the plane feature free inside a
+paid product does not change that: the use is still commercial.
 
-The alternative feeds that *do* allow commercial use — chiefly **adsb.lol**,
-published under the Open Database Licence — send no CORS headers, so a web page
-cannot call them directly. They need a small proxy in between.
+**adsb.lol** does permit commercial use, under the Open Database Licence, which
+is why this project uses it. The catch is that it sends no CORS headers, so a
+web page cannot call it directly. It needs a small proxy in between — which is
+also where the caching lives.
 
 So: you run the proxy, on your machine, under whatever terms you agree with the
 provider. Nobody is speaking for you, and no licence is being stretched.

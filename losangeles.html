@@ -589,7 +589,8 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
 
   <footer>
     <span class="dot" id="statusDot"></span>
-    <span id="statusText">live — Metrolink + Amtrak + airplanes.live · Metro Rail scheduled</span>
+    <span id="statusText">live — Metrolink + Amtrak + adsb.lol · Metro Rail scheduled</span>
+    <span class="sp">Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners and are used to identify their services.</span>
     <span class="grow"></span>
   </footer>
 </div>
@@ -1720,12 +1721,12 @@ function pushRailLive(){
     updateFleet("rail", items, 5000);
     state.liveOk.rail = now;
     const c=$("#railCount"); if(c) c.textContent = items.length+" live · sched times";
-    $("#statusText").textContent="live — Metro Rail + Metrolink + Amtrak + airplanes.live";
+    $("#statusText").textContent="live — Metro Rail + Metrolink + Amtrak + adsb.lol";
   }
 }
 
 /* ---------- flight routes ------------------------------------------------
-   airplanes.live carries no route at all, so a plane row could say what the
+   adsb.lol carries no route at all, so a plane row could say what the
    aircraft WAS but never where it was going. adsbdb.com fills that in by
    callsign -- free, no key, and CORS-open (`access-control-allow-origin: *`,
    verified), so it needs no Worker unlike MARC/SEPTA.
@@ -1958,7 +1959,7 @@ function coastPlanes(fresh){
   }
   return out;
 }
-/* Aircraft feed. Defaults to airplanes.live, which is free and CORS-open but
+/* Aircraft feed. Defaults to adsb.lol, which is free and CORS-open but
    PROHIBITS COMMERCIAL USE. Set "tb.adsbUrl" to an adsb-worker.js deployment to
    switch to a commercially-usable feed (adsb.lol / adsb.fi) — those send no CORS
    headers of their own, so the Worker is required, not optional. */
@@ -1975,7 +1976,7 @@ function showPlanesUnconfigured(){
   const c=document.querySelector("#planeCount"); if(c) c.textContent="";
 }
 function adsbBase(){
-  /* NO DEFAULT, on purpose. This used to fall back to airplanes.live, which is
+  /* NO DEFAULT, on purpose. This used to fall back to adsb.lol, which is
      free and CORS-open and PROHIBITS COMMERCIAL USE — so a product that ships
      with it baked in is in breach the day it is sold, however the feature is
      priced. Giving the planes away inside a paid app does not make the use
@@ -2743,7 +2744,7 @@ function groupSettings(){
     say("Checking\u2026");
     /* Probe /health first, because our own proxy has one and its reply names the
        upstream. But a bare feed is a perfectly good answer here and most have no
-       /health at all — airplanes.live returns 404 for it while serving data
+       /health at all — adsb.lol returns 404 for it while serving data
        fine — so fall back to an actual query rather than rejecting something
        that works. */
     try{

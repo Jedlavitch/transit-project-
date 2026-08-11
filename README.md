@@ -66,7 +66,7 @@ Everything works with **zero setup except the WMATA key** (Bethesda board only, 
 | Metro-North | live [MTA GTFS-Realtime](https://api.mta.info) (direct, CORS-open) + bundled `mnr-schedule.json` fallback | ❌ none | Free |
 | MTA Bus (M42/M15/M34/M34A) | bundled `mta-bus-schedule.json` (MTA GTFS) | ❌ none | Free |
 | PATH | bundled `path-schedule.json` (PATH GTFS via Trillium Transit) | ❌ none | Free |
-| Planes | [airplanes.live](https://airplanes.live) | ❌ none | Free |
+| Planes | [adsb.lol](https://adsb.lol) | ❌ none | Free |
 | Flight routes (origin → destination) | [adsbdb](https://api.adsbdb.com) (CORS-open; answers sanity-checked against the aircraft's real position before display) | ❌ none | Free |
 | Address search | [Nominatim](https://nominatim.openstreetmap.org) (OpenStreetMap) | ❌ none | Free |
 | Map tiles | CARTO / OpenStreetMap | ❌ none | Free |

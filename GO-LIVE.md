@@ -32,7 +32,10 @@ really is. Without them, nothing else on this list matters — customers can't g
 
 ## 2. A plane feed you're allowed to sell — **you**
 
-`airplanes.live` prohibits commercial use. This isn't a judgement call, it's
+The aircraft feed is now our own proxy on our own box, serving `adsb.lol`
+under the Open Database Licence, which does permit commercial use provided the
+source is credited — the boards render that credit automatically. This isn't a
+judgement call, it's
 someone else's licence. `adsb-worker.js` is written and waiting.
 
 1. Cloudflare → **Workers → Create → Hello World → Deploy**, name it `tb-adsb`

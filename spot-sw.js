@@ -1,7 +1,7 @@
 /* spot-sw.js — service worker for the Transit Spotter app.
    Caches the app shell so it opens instantly and keeps working with no signal
    (you're often underground or on a plane when you want to log something).
-   Live data (airplanes.live / amtraker) is always network-first and simply
+   Live data (adsb.lol / amtraker) is always network-first and simply
    absent offline; the log itself is local, so logging never needs a network. */
 /* The shell is NETWORK-first (see the fetch handler): every request tries the
    network and only falls back to the cache when there's no signal. So a shipped

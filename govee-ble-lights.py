@@ -120,7 +120,7 @@ def save_cfg(cfg):
 def airline_brand():
     """Carrier -> hex, parsed out of night.html so the room and the screen can
     never disagree. TRANSIT_BRAND is deliberately skipped: this only asks
-    airplanes.live what is overhead, and a three-letter agency key like GVB
+    adsb.lol what is overhead, and a three-letter agency key like GVB
     could collide with a callsign prefix."""
     try:
         with open(NIGHT_HTML, encoding="utf-8") as fh:
@@ -189,13 +189,13 @@ def cmd_scan():
 # ---------------------------------------------------------------- aircraft
 
 def nearest_carrier(lat, lon, radius_nm, brands):
-    url = f"https://api.airplanes.live/v2/point/{lat:.4f}/{lon:.4f}/{int(radius_nm)}"
+    url = f"https://api.adsb.lol/v2/point/{lat:.4f}/{lon:.4f}/{int(radius_nm)}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=20) as r:
             d = json.load(r)
     except Exception as e:                                    # noqa: BLE001
-        print(f"  ! airplanes.live: {e}", file=sys.stderr)
+        print(f"  ! adsb.lol: {e}", file=sys.stderr)
         return None, None
     ac = [a for a in (d or {}).get("ac", []) if a.get("alt_baro") != "ground"]
     if not ac:

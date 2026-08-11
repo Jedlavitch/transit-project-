@@ -61,7 +61,7 @@ contain your location. Specifically:
 | Who | Why | What they receive |
 |---|---|---|
 | The transit agency for your city — WMATA, MTA, SEPTA, MBTA, BART, NJ Transit, LA Metro, transitous and others | Next departures and vehicle positions near you | Your approximate coordinates, and your IP address |
-| **airplanes.live** | Aircraft overhead | Your approximate coordinates, and your IP address |
+| **adsb.lol** | Aircraft overhead | Your approximate coordinates, and your IP address |
 | **amtraker** | Amtrak train positions | Your IP address |
 | **adsbdb** | Which route a flight is on | The flight's callsign, not anything about you |
 | **CARTO** (`basemaps.cartocdn.com`) | The map background | Your IP address, and which map areas you view |
@@ -150,7 +150,7 @@ your email, so there is nothing to store, lose, or have stolen.
 | **Stripe** | Takes payment | Your name, email and payment details — we receive only the email |
 | **Resend** | Sends sign-in code emails | Your email address |
 | **GitHub Pages** | Serves the site itself | Your IP address, as any web host does |
-| Transit agencies, airplanes.live, amtraker, adsbdb, CARTO, Nominatim, planespotters.net, Wikimedia | Live data, maps and photographs | See the table in §1 |
+| Transit agencies, adsb.lol, amtraker, adsbdb, CARTO, Nominatim, planespotters.net, Wikimedia | Live data, maps and photographs | See the table in §1 |
 
 The last row applies **whether or not you have an account or a licence**,
 because a board cannot draw a map or find your next train without asking

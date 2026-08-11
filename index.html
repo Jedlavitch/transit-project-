@@ -424,7 +424,8 @@
   </section>
 
   <footer>
-    <span>Live data from WMATA, SEPTA, MTA, NJ Transit, MBTA, BART, GVB, SBB, Amtrak and airplanes.live.</span>
+    <span>Live data from WMATA, SEPTA, MTA, NJ Transit, MBTA, BART, GVB, SBB, Amtrak and adsb.lol.</span>
+    <span class="sp">Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners and are used to identify their services.</span>
     <span class="sp"><a href="PRIVACY.md">Privacy</a></span>
   </footer>
 </div>
@@ -593,7 +594,7 @@ setTimeout(paintTrialAnswer, 1500);
 
 /* ---- live strip ----------------------------------------------------------
    Real vehicles, not a mockup. Two feeds that need no key and send CORS
-   headers: airplanes.live for aircraft overhead and amtraker for Amtrak.
+   headers: adsb.lol for aircraft overhead and amtraker for Amtrak.
    Anything requiring a key or a Worker is deliberately excluded -- a landing
    page cannot ask a stranger to configure something.
 
@@ -626,7 +627,7 @@ setTimeout(paintTrialAnswer, 1500);
     return d;
   }
 
-  var planes = getJSON("https://api.airplanes.live/v2/point/"+LOC.lat.toFixed(4)+"/"+LOC.lon.toFixed(4)+"/25")
+  var planes = getJSON("https://api.adsb.lol/v2/point/"+LOC.lat.toFixed(4)+"/"+LOC.lon.toFixed(4)+"/25")
     .then(function(d){
       return (d.ac||[])
         .filter(function(a){ return a.alt_baro!=="ground" && typeof a.lat==="number"; })

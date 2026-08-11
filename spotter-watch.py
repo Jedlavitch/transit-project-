@@ -18,7 +18,7 @@ HOW IT FITS TOGETHER
 
   phone  --publishes-->  jsonblob  <--reads/writes--  this script  --POST-->  ntfy
                                                             |
-                                                    airplanes.live / amtraker
+                                                    adsb.lol / amtraker
 
 RUN
   SPOT_BLOB=<blob-uuid> python3 spotter-watch.py
@@ -80,13 +80,13 @@ def live_now(lat, lon, radius_nm):
     """Vehicle identities currently near that point, by mode.
 
     Only feeds that are keyless and CORS-free are used, so this needs no secrets:
-    airplanes.live for aircraft, amtraker for Amtrak. Local buses and metros need
+    adsb.lol for aircraft, amtraker for Amtrak. Local buses and metros need
     a per-city key or a bundled timetable, so they are left to the in-app alerts
     -- see the note in the workflow about what this can and cannot cover.
     """
     out = {"plane": set(), "train": set()}
     try:
-        d = get_json(f"https://api.airplanes.live/v2/point/{lat:.4f}/{lon:.4f}/{int(radius_nm)}")
+        d = get_json(f"https://api.adsb.lol/v2/point/{lat:.4f}/{lon:.4f}/{int(radius_nm)}")
         for a in d.get("ac", []):
             if a.get("alt_baro") == "ground":
                 continue
@@ -94,7 +94,7 @@ def live_now(lat, lon, radius_nm):
                 if ident(k):
                     out["plane"].add(ident(k))
     except Exception as e:                                   # noqa: BLE001
-        print(f"  ! airplanes.live: {e}", file=sys.stderr)
+        print(f"  ! adsb.lol: {e}", file=sys.stderr)
     try:
         d = get_json("https://api-v3.amtraker.com/v3/trains", timeout=25)
         for arr in (d or {}).values():

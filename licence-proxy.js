@@ -26,7 +26,7 @@
   // Hosts worth paying for. Must match the Worker's ALLOWED_HOSTS, or a request
   // gets rewritten to a proxy that then refuses to forward it.
   const FEED_HOSTS = new Set([
-    "api.airplanes.live",
+    "api.adsb.lol",
     "api-v3.amtraker.com",
     "api.wmata.com",
     "api.mta.info",

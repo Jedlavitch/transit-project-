@@ -16,7 +16,7 @@ WHY THIS EXISTS, AND WHY IT IS NOT A WORKER
   the lights do not actually need it, they need the same data it reads.
 
 HOW IT FITS TOGETHER
-  airplanes.live  -->  this script  -->  Hue bridge  -->  your lights
+  adsb.lol  -->  this script  -->  Hue bridge  -->  your lights
                             |
                      night.html (AIRLINE_BRAND)
 
@@ -138,7 +138,7 @@ def airline_brand():
     for k, v in re.findall(r'"?([A-Z0-9]{2,3})"?\s*:\s*"(#[0-9A-Fa-f]{6})"', block):
         out[k] = v
     # TRANSIT_BRAND is deliberately NOT read. This script only ever asks
-    # airplanes.live what is overhead, so an agency colour could never be
+    # adsb.lol what is overhead, so an agency colour could never be
     # chosen -- but "GVB" and friends are three characters, and a callsign
     # prefix that happened to match one would paint the room a tram colour.
     return out
@@ -231,11 +231,11 @@ def nearest_carrier(lat, lon, radius_nm, brands):
     a colour for". If a private jet is directly overhead, the honest answer is
     no carrier, not the airliner behind it.
     """
-    url = f"https://api.airplanes.live/v2/point/{lat:.4f}/{lon:.4f}/{int(radius_nm)}"
+    url = f"https://api.adsb.lol/v2/point/{lat:.4f}/{lon:.4f}/{int(radius_nm)}"
     try:
         d = _req(url, timeout=20)
     except Exception as e:                                    # noqa: BLE001
-        print(f"  ! airplanes.live: {e}", file=sys.stderr)
+        print(f"  ! adsb.lol: {e}", file=sys.stderr)
         return None, None
     ac = [a for a in (d or {}).get("ac", []) if a.get("alt_baro") != "ground"]
     if not ac:

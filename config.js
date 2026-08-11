@@ -50,7 +50,7 @@ window.TB_CONFIG = {
   spotFeedUrl:  "",       // spotter-worker.js
 
   /* ---- aircraft feed ----------------------------------------------------
-     LEAVE EMPTY WHILE THIS IS FREE. Empty means airplanes.live, which is
+     LEAVE EMPTY WHILE THIS IS FREE. Empty means adsb.lol, which is
      CORS-open and costs nothing — and whose terms PROHIBIT COMMERCIAL USE.
 
      Before charging for this, deploy adsb-worker.js and put its URL here. That
@@ -68,7 +68,7 @@ window.TB_CONFIG = {
      answers 429 to the Worker while serving a laptop fine — measured: direct
      200 with 44 aircraft, through the Worker "upstream 429" three times running.
      That empties the sky on the boards and in Sky mode, which reads as slowness.
-     Empty here puts everything back on airplanes.live, which is correct while
+     Empty here puts everything back on adsb.lol, which is correct while
      this is free. Re-fill it once the Worker serves stale on upstream failure
      (see adsb-worker.js) and the rate limit is resolved. */
   /* Your own proxy, on your own box, with its own IP — which is the whole
@@ -133,7 +133,7 @@ window.TB_CONFIG = {
      field just stops rewriting a value that is still there.
 
      That bit us for real. adsbUrl was set, shipped, then emptied when the proxy
-     turned out to be rate-limited; the file said airplanes.live but every
+     turned out to be rate-limited; the file said adsb.lol but every
      browser that had loaded the site kept calling the throttled Worker, so the
      revert appeared to do nothing.
 
@@ -169,7 +169,7 @@ window.TB_CONFIG = {
 
      Shown ONLY when adsbUrl is set, because that is exactly when the data is
      coming from adsb.lol via adsb-worker.js. While it is empty the boards call
-     airplanes.live, and crediting adsb.lol for someone else's data would be its
+     adsb.lol, and crediting adsb.lol for someone else's data would be its
      own kind of false statement.
 
      Drawn as its own small fixed element rather than folded into the status
@@ -192,7 +192,7 @@ window.TB_CONFIG = {
          their own, and crediting adsb.lol while the data comes from somewhere
          else is a false statement of provenance — the opposite of what
          attribution is for. Unknown hosts get a neutral line rather than a
-         guess, and airplanes.live gets none: it imposes no attribution term,
+         guess, and adsb.lol gets none: it imposes no attribution term,
          and inventing one would misdescribe it too. */
       const host = (active.match(/^https?:\/\/([^\/]+)/) || [])[1] || "";
       let CREDIT = "";
