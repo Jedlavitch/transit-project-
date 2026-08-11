@@ -2,18 +2,23 @@
 
 **Last updated: 7 August 2026**
 
-> **This is a starting draft, not legal advice.** I'm not a lawyer and can't give
-> you legal advice. Before you charge anyone, have someone qualified review this —
-> particularly if you sell to customers in the EU, the UK or California. The
-> placeholders in `[BRACKETS]` must be filled in; several of them are legally
-> required, not cosmetic.
+> **Still not legal advice.** I'm not a lawyer. The blanks are filled in now —
+> controller, contact address, and the map and geocoding providers the code
+> actually calls — but filling blanks is not the same as being reviewed. You are
+> charging money, so have someone qualified read this, particularly if you sell
+> to customers in the EU, the UK or California.
+>
+> Two gaps this does **not** close, both in the operator notes at the bottom:
+> it describes the Spotter app rather than the city boards that are the product
+> being sold, and it does not name the transit and aircraft feeds that receive
+> a user's location.
 
 ---
 
 ## Who is responsible for your data
 
-Transit Spotter is operated by **[YOUR NAME OR COMPANY]**, contactable at
-**[YOUR CONTACT EMAIL]**. Under UK/EU data protection law we are the "data
+Transit Spotter is operated by **Jack Edlavitch**, contactable at
+**info@transitproject.online**. Under UK/EU data protection law we are the "data
 controller" for the information described below.
 
 ## The short version
@@ -57,8 +62,8 @@ only ever readable by your own account, and it is never shared with anyone.
 | **Cloudflare** | Runs the servers that store accounts | Your email, sightings, IP address |
 | **Resend** | Sends sign-in code emails | Your email address |
 | **Stripe** | Takes payment | Your payment details — we never receive them |
-| **[MAP TILE PROVIDER]** | Draws the maps | Your IP address, and which map areas you view |
-| **[GEOCODER]** | Turns coordinates into a place name | The coordinates you look up |
+| **CARTO** (`basemaps.cartocdn.com`) | Draws the map background | Your IP address, and which map areas you view |
+| **OpenStreetMap Nominatim** | Turns an address into coordinates, and back | The address or coordinates you look up |
 
 The last two are used **whether or not you have an account**, because drawing a
 map requires asking someone for map images. They see your IP address, as any web
@@ -75,7 +80,7 @@ You can ask us at any time to:
   to ask
 - **Object** to how we use it, or withdraw consent
 
-Email **[YOUR CONTACT EMAIL]**. We'll respond within 30 days. If you're in the
+Email **info@transitproject.online**. We'll respond within 30 days. If you're in the
 UK or EU, you may also complain to your data protection authority.
 
 **To delete everything yourself:** sign out and clear the site's data in your
@@ -90,8 +95,12 @@ we'll delete it.
 ## Where the data lives
 
 On Cloudflare's global network, which means it may be stored or processed outside
-your country, including in the United States. **[IF YOU HAVE EU CUSTOMERS: state
-your transfer mechanism — Standard Contractual Clauses — here.]**
+your country, including in the United States.
+
+Where data is transferred out of the UK or European Economic Area, the transfer
+relies on the **Standard Contractual Clauses** in the data processing agreements
+published by our processors — Cloudflare, which runs the servers, and Resend,
+which sends sign-in emails.
 
 ## Security, honestly stated
 
@@ -112,16 +121,36 @@ takes effect.
 
 ## Notes for the operator — delete this section before publishing
 
-1. Fill every `[BRACKET]`. `[YOUR CONTACT EMAIL]` is legally required — there
-   must be a working way to reach you.
-2. Name the actual map tile and geocoding providers you ship with, and check
-   their terms allow commercial use. Nominatim's usage policy is strict and a
-   paid product can breach it easily.
+1. ~~Fill every `[BRACKET]`.~~ Done — controller, contact address, tile and
+   geocoding providers are all named from what the code actually calls.
+   **Confirm the controller name.** It is written as a natural person; if you
+   trade through a company, that company is the controller and this must say so.
+2. ~~Name the actual map tile and geocoding providers.~~ Done: CARTO and
+   OpenStreetMap Nominatim. **The terms check is still outstanding and now
+   urgent** — you are charging money. Nominatim's usage policy is strict and
+   explicitly aimed at low-volume, non-commercial use; a paid kiosk geocoding on
+   every location change can breach it. CARTO's free basemap tier likewise has
+   limits and an attribution requirement. Check both before volume arrives.
 3. You need a **route to delete an account**. The Worker has no `/delete`
    endpoint yet — a right-to-erasure request currently means editing KV by hand.
    Build it before volume makes that impractical.
-4. If you sell into the EU/UK you may also need a record of processing
-   activities, and a Data Processing Agreement with Cloudflare and Resend (both
-   publish standard ones).
+4. **The EU/UK transfer wording now claims Standard Contractual Clauses, so go
+   and accept them.** The policy states the mechanism because you ship
+   Amsterdam, Cologne and Stuttgart boards — EU customers are the target, not a
+   hypothetical — but stating it does not create it. Accept Cloudflare's DPA
+   (dashboard → account settings) and Resend's, both of which incorporate the
+   SCCs. Until you do, that paragraph describes something that is not true. You
+   may also need a record of processing activities.
 5. Link this from `buy.html` and from the app's settings. A privacy policy nobody
    can find doesn't count.
+6. **This document covers the Spotter, not the boards.** The title, and most of
+   what follows, is about the phone app and its accounts. The thing customers
+   are buying is the city boards, and those have their own story: no account, no
+   server, everything in the browser — which is a *better* story, and it is not
+   told here. A buyer reading this learns about a feature they may never open.
+7. **The transit and aircraft feeds are missing from the third-party table**
+   above. Every board sends the viewer's coordinates to whichever agency serves
+   that city — WMATA, MTA, SEPTA, MBTA, BART, NJ Transit, transitous — plus
+   airplanes.live and amtraker, and adsbdb for flight routes. That is
+   unavoidable, since asking "what is near me" means saying where you are, and
+   the site's own FAQ already says so. The policy should say it too.
