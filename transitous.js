@@ -112,14 +112,46 @@
     return out.join("&");
   }
 
+  /* ---- one gate in front of each endpoint ---------------------------------
+     These are free public APIs and they rate-limit. A cold European board asks
+     transitous for a trip per departure — Zurich alone wants around 35 — and
+     the fan-outs doing the asking are spread across four Promise.all sites in
+     this file plus the per-family lookup in every city board. Limiting them one
+     at a time does not hold: intlBoard fires fourteen at once by itself, and a
+     429 costs every vehicle on the map rather than just the surplus.
+
+     So the limit goes in front of the transport, where every call has to pass
+     it whatever route it arrived by, including any added later. A queued call
+     starts its timeout when it actually begins rather than burning it waiting.
+
+     Separate gates per host: the Swiss endpoint has its own budget and should
+     not be starved by a burst of transitous trip lookups. */
+  function gate(max) {
+    let inFlight = 0;
+    const waiting = [];
+    return async function run(job) {
+      if (inFlight >= max) await new Promise(res => waiting.push(res));
+      else inFlight++;
+      try { return await job(); }
+      finally {
+        const next = waiting.shift();
+        if (next) next(); else inFlight--;    // hand the slot on, or give it back
+      }
+    };
+  }
+  const tousGate = gate(4);
+  const chGate = gate(4);
+
   async function get(path, params, timeout) {
-    const c = new AbortController();
-    const t = setTimeout(() => c.abort(), timeout || 14000);
-    try {
-      const r = await fetch(BASE + path + "?" + qs(params), { signal: c.signal });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return await r.json();
-    } finally { clearTimeout(t); }
+    return tousGate(async () => {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), timeout || 14000);
+      try {
+        const r = await fetch(BASE + path + "?" + qs(params), { signal: c.signal });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return await r.json();
+      } finally { clearTimeout(t); }
+    });
   }
 
   /* Stops near a point, nearest first.
@@ -237,13 +269,15 @@
                      BAT:"Boat", FUN:"Funicular", GB:"Cable car" };
 
   async function chGet(path, params, timeout) {
-    const c = new AbortController();
-    const t = setTimeout(() => c.abort(), timeout || 14000);
-    try {
-      const r = await fetch(CH_BASE + path + "?" + qs(params), { signal: c.signal });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return await r.json();
-    } finally { clearTimeout(t); }
+    return chGate(async () => {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), timeout || 14000);
+      try {
+        const r = await fetch(CH_BASE + path + "?" + qs(params), { signal: c.signal });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return await r.json();
+      } finally { clearTimeout(t); }
+    });
   }
   /* Their coordinate object is {x: latitude, y: longitude} — x is NOT longitude,
      which is the obvious reading and puts every stop in the wrong hemisphere. */

@@ -18,7 +18,7 @@
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
-<script src="transitous.js?v=1"></script>
+<script src="transitous.js?v=2"></script>
 <script src="spotlog.js?v=10" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -1728,6 +1728,22 @@ const FAMILY_CARDS = [["intl","international"],["ld","longdistance"],["regio","r
 const FAMILY_COL = {intl:"#1D4E9E", ld:"#e2504f", regio:"#3ad0c8", metro:"#4ea1ff",
                     tram:"#f0ab00", busx:"#6aa9ff", ferry:"#5ad17a"};
 function transitMinutes(ms){ return Math.round((ms - Date.now())/60000); }
+/* Past about an hour a countdown stops being useful and starts being unreadable.
+   The lake boats finish for the evening, so the next sailing rendered as "in
+   1026 min" — meaningless to read, and wide enough to wrap the times column onto
+   two lines and clip the tag under it. Beyond the threshold, say WHEN instead,
+   in the city's own timezone like every other clock on this board, with the day
+   named when it is not today. */
+function transitWhen(ms, mins){
+  if(mins <= 0) return "now";
+  if(mins < 90) return "in " + mins + " min";
+  const d = new Date(ms), loc = CFG.clock24 ? "en-GB" : "en-US";
+  const at = d.toLocaleTimeString(loc,
+    {hour:"2-digit", minute:"2-digit", hour12:!CFG.clock24, timeZone:CFG.tz});
+  const dayOf = x => x.toLocaleDateString("en-GB", {day:"numeric", timeZone:CFG.tz});
+  return dayOf(d) === dayOf(new Date()) ? at
+       : at + " " + d.toLocaleDateString("en-GB", {weekday:"short", timeZone:CFG.tz});
+}
 async function refreshTransit(){
   if(!window.TBTransitous) return;
   let stops=[];
@@ -1832,7 +1848,7 @@ async function refreshTransit(){
         [d.label, d.stop&&d.stop.name, d.platform?("Pl. "+d.platform):""].filter(Boolean).join(" · ")));
       const times=el("div","times");
       const mins=transitMinutes(d.when);
-      const t=el("div","live", d.cancelled? "cancelled" : (mins<=0? "now" : "in "+mins+" min"));
+      const t=el("div","live", d.cancelled? "cancelled" : transitWhen(d.when, mins));
       if(d.cancelled) t.style.color="var(--warn-ink)";
       times.appendChild(t);
       if(d.cancelled){
