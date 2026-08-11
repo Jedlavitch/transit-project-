@@ -251,6 +251,9 @@
   .sp-d{ color:#39ff6a; overflow:hidden; text-overflow:ellipsis }   /* green destinations */
   .sp-s{ color:#39ff6a }
   .sp-s.warn{ color:#ffd34d } .sp-s.sched{ color:#9fb4c7 }
+  .sp-live{ display:block; font-size:calc(var(--flap-font) * .52); font-weight:700;
+            letter-spacing:.02em; margin-top:1px }
+  .sp-live.ok{ color:#39ff6a } .sp-live.warn{ color:#ffd34d }
   .sp-empty{ color:#9fb4c7; padding:20px; font:600 14px "IBM Plex Mono",monospace }
   .board-row.empty{ opacity:0 }
   .status-tag{font-size:11px; font-weight:800; letter-spacing:.06em; padding:.2em .5em; border-radius:4px; white-space:nowrap}
@@ -1221,6 +1224,51 @@ function septaGroups(rows){
                     rows: by[code].sort((a,b)=>a.sortMin-b.sortMin).slice(0,4) }))
     .sort((a,b) => a.rows[0].sortMin - b.rows[0].sortMin);
 }
+/* Live running, from SEPTA's own TrainView via the optional worker.
+
+   Deliberately reported PER LINE, not per departure. TrainView describes trains
+   already moving — number, destination, next stop, minutes late — while the
+   panel rows are scheduled departures from the bundled timetable, and there is
+   no train number on the scheduled side to join them on. Stamping a line's
+   delay onto a specific scheduled departure would be inventing a claim about a
+   train we have not actually matched: it might well be the punctual one. So the
+   delay is stated where it is true — of the line — and the rows stay scheduled.
+
+   No worker configured, or the fetch fails: the board is exactly as before. */
+let septaLive = { at:0, byLine:{} };
+async function refreshSeptaLive(){
+  /* This page has no `state` object — that is a city-board global — so read the
+     worker URL from the same localStorage key the Philadelphia board saves it
+     to. Referencing an undeclared binding threw inside tick() and took the
+     whole board down with it. */
+  let base = "";
+  try { base = localStorage.getItem("transitboardphl.septaUrl") || ""; } catch(e){}
+  if(!base && window.TB_CONFIG && TB_CONFIG.septaUrl) base = TB_CONFIG.septaUrl;
+  if(!base) return;
+  try{
+    const list = await getJSON(base.replace(/\/+$/,"") + "/trainview", 12000);
+    const by = {};
+    (Array.isArray(list)?list:[]).forEach(t=>{
+      const name = String(t.line||"").trim();
+      if(!name) return;
+      const late = Number(t.late);
+      const g = by[name] = by[name] || { n:0, late:0, worst:0 };
+      g.n++;
+      /* SEPTA reports phantom sentinel lateness (998/999) on stale vehicles —
+         the same guard the city boards already use for this feed. */
+      if(isFinite(late) && late>0 && late<200){ g.late++; g.worst=Math.max(g.worst, late); }
+    });
+    septaLive = { at:Date.now(), byLine:by };
+  }catch(e){ /* leave the last good reading; the board stays scheduled */ }
+}
+function liveFor(lineName){
+  const key = lineName.replace(/\s+Line$/,"");
+  const g = septaLive.byLine[key] || septaLive.byLine[lineName];
+  if(!g || !g.n) return null;
+  return g.worst>0 ? { cls:"warn", text:`${g.n} running · up to +${g.worst} min` }
+                   : { cls:"ok",   text:`${g.n} running · on time` };
+}
+
 function renderSepta(rows){
   const host = $("#septaBoard"); if (!host) return;
   const groups = septaGroups(rows);
@@ -1230,7 +1278,8 @@ function renderSepta(rows){
   }
   host.innerHTML = groups.map(g => `
     <section class="sp-panel">
-      <h3>${g.name}</h3>
+      <h3>${g.name}${(()=>{ const L=liveFor(g.name);
+        return L ? `<span class="sp-live ${L.cls}">${esc(L.text)}</span>` : ""; })()}</h3>
       ${g.rows.map(r => `<div class="sp-row">
         <span class="sp-t">${esc(r.time)}</span>
         <span class="sp-d">${esc(r.dest)}</span>
@@ -1457,7 +1506,8 @@ async function tick(){
   $("#statusText").textContent="updating…";
   try{
     const rows=await collectAllRows();
-    if(STYLE==="septa") renderSepta(rows); else renderRows(rows);
+    if(STYLE==="septa"){ await refreshSeptaLive(); renderSepta(rows); }
+    else renderRows(rows);
     $("#statusText").textContent="live — "+CITY_CFG.board.replace(".html","");
   }catch(e){
     $("#statusText").textContent="update failed, retrying…";
