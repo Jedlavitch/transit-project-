@@ -240,26 +240,36 @@
   }
   /* the red rules that divide the physical panels */
   .sp-panel{ border-right:2px solid #e01b1b; border-bottom:2px solid #e01b1b; padding:6px 12px 10px; min-width:0 }
+  /* --sp-scale is driven by fitSeptaPanels(): thirteen lines on a short window
+     do not fit even at one departure each, and shrinking the type is the only
+     move left that keeps every line on the board. */
   .sp-panel h3{
     margin:0 0 4px; text-align:center; color:#fff; font-weight:700;
-    font:700 calc(var(--flap-font) * .78)/1.5 "IBM Plex Mono",monospace; letter-spacing:.04em;
+    font:700 calc(var(--flap-font) * .78 * var(--sp-scale,1))/1.5 "IBM Plex Mono",monospace;
+    letter-spacing:.04em;
   }
   .sp-row{
     display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; gap:10px; align-items:baseline;
-    font:700 calc(var(--flap-font) * .68)/1.65 "IBM Plex Mono",monospace; white-space:nowrap;
+    font:700 calc(var(--flap-font) * .68 * var(--sp-scale,1))/1.65 "IBM Plex Mono",monospace;
+    white-space:nowrap;
   }
   .sp-t{ color:#22d3ee }                       /* cyan times, as on the real board */
   .sp-n{ color:#e8b04b; font-variant-numeric:tabular-nums }   /* train number */
   .sp-d{ color:#39ff6a; overflow:hidden; text-overflow:ellipsis }   /* green destinations */
   .sp-s{ color:#39ff6a }
   .sp-s.warn{ color:#ffd34d } .sp-s.sched{ color:#9fb4c7 }
-  .sp-live{ display:block; font-size:calc(var(--flap-font) * .52); font-weight:700;
+  .sp-live{ display:block; font-size:calc(var(--flap-font) * .52 * var(--sp-scale,1)); font-weight:700;
             letter-spacing:.02em; margin-top:1px }
   .sp-live.ok{ color:#39ff6a } .sp-live.warn{ color:#ffd34d }
   /* The scrolling strip along the bottom of the real board. Two copies of the
      message ride a single translated track, so the loop is seamless rather than
      snapping back at the end. Duration scales with nothing — it is a fixed,
      slow, readable crawl. */
+  .datestr{ display:none }
+  :root[data-style="septa"] .datestr{
+    display:inline-block; color:#e8b04b; font:700 calc(var(--flap-font) * .62)/1 "IBM Plex Mono",monospace;
+    letter-spacing:.06em; margin-left:auto; padding-right:14px; white-space:nowrap;
+  }
   #septaTicker{ display:none }
   :root[data-style="septa"] #septaTicker{
     display:block; overflow:hidden; white-space:nowrap; background:#000;
@@ -348,6 +358,9 @@
 <body>
   <header>
     <div class="title" id="titleEl">Departure Board<small id="loclbl"></small></div>
+    <!-- SEPTA's board carries the date next to the time; the Solari and DB
+         boards it shares this header with do not, so it is shown per style. -->
+    <span class="datestr" id="datestr"></span>
     <span class="clock" id="clock">—</span>
     <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)">⤢</button>
@@ -621,11 +634,27 @@ async function collectScheduleRows(cfg){
    never enters the candidate set, at ANY sampling depth. Measured — 2 stations
    x 2 gave 3 of the 13 lines, 10 x 12 gave 6, and 10 x 40 also gave 6.
 
-   So this inverts the loop. Walk every station inside a Center City radius,
-   bucket the departures BY LINE, and take each line's next few. A line is
-   represented if it runs at all, however sparse, so Cynwyd and the Airport line
-   hold their panel next to Paoli. */
-const SEPTA_RADIUS_MI = 6;      // comfortably covers Penn Medicine -> Temple
+   So this inverts the loop. Walk the Center City stations, bucket the
+   departures BY LINE, and take each line's next few. A line is represented if
+   it runs at all, however sparse, so Cynwyd and the Airport line hold their
+   panel next to Paoli. */
+/* Penn Medicine through Temple: the five Regional Rail stations the real board
+   covers, named rather than measured. A six-mile radius around the saved
+   location was standing in for this and pulled in 38 of the bundle's 156
+   stations — Germantown, Olney, Manayunk and Wayne Junction were filling the
+   panels with departures from places this sign does not serve. Naming them also
+   makes the board independent of where the viewer happens to have pinned
+   themselves, which a station board should be.
+
+   Bundle spellings, not colloquial ones: SEPTA renamed 30th Street to "Gray
+   30th St Station", and this matches on the bundle's exact `name`. */
+const SEPTA_CENTER_CITY = new Set([
+  "Penn Medicine Station",
+  "Gray 30th St Station",
+  "Suburban Station",
+  "Jefferson Station",
+  "Temple University",
+]);
 async function collectSeptaByLine(cfg){
   try{
     let s=scheduleCache[cfg.url];
@@ -638,8 +667,9 @@ async function collectSeptaByLine(cfg){
     }
     const nowP=schedNowParts(s.tz), nowMin=nowP.min, active=activeServices(s, nowP);
     const byLine={};
+    const scope = cfg.stations || null;
     (s.stations||[]).forEach(st=>{
-      if(haversineMi(loc,{lat:st.lat,lon:st.lon}) > SEPTA_RADIUS_MI) return;
+      if(scope && !scope.has(st.name)) return;
       (s._dep[st.id]||[]).forEach(d=>{
         if(!active.has(d.s)) return;
         /* Schedules run past midnight as 24:xx+, so a departure can be "later
@@ -970,7 +1000,8 @@ const SYSTEM_DEFS_BY_CITY = {
        the board is pointed. Showing all thirteen needs collecting per LINE
        (each line's next departure from any Center City station) rather than per
        station, which is a different function, not a bigger number here. */
-    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectSeptaByLine({url:"septa-rail-schedule.json", perLine:3, color:"#4F758B"})},
+    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectSeptaByLine({url:"septa-rail-schedule.json", perLine:3, color:"#4F758B",
+      stations:SEPTA_CENTER_CITY})},
     {id:"septasubway", logo:"SEPTA", label:"SEPTA Subway", collect:()=>collectScheduleRows({url:"septa-subway-schedule.json", stationCount:2, perStation:2,
       colorFn:l=>({L1:"#1c6bb0",B1:"#f7941d",B2:"#f7941d",B3:"#f7941d"}[l])||"#556"})},
     {id:"septabus", logo:"SEPTA BUS", label:"SEPTA Bus", collect:()=>collectScheduleRows({url:"septa-bus-schedule.json", stationCount:2, perStation:2, color:"#e8a33c"})},
@@ -1394,7 +1425,67 @@ function renderSeptaTicker(){
   t.querySelectorAll(".sp-tick-in span").forEach(el => { el.textContent = msg; });
 }
 
+/* SEPTA's own signs do not print the full GTFS headsign: the bundle says
+   "Center City Philadelphia" where the board says CENTER CITY, and the column is
+   sized for the latter. Left alone, 16 of 39 destinations ellipsised mid-word
+   ("CENTER CITY PHILADE…"), which is the one field a rider is reading. Only
+   names the bundle actually produces are listed; anything else keeps its own
+   wording minus a trailing "STATION". */
+const SEPTA_DEST = {
+  "CENTER CITY PHILADELPHIA": "CENTER CITY",
+  "AIRPORT TERMINALS E & F":  "AIRPORT TERM E-F",
+  "NORRISTOWN ELM STREET":    "NORRISTOWN ELM ST",
+  "GRAY 30TH ST STATION":     "30TH ST",
+};
+function septaDest(d){
+  const k = String(d||"").toUpperCase().trim();
+  return SEPTA_DEST[k] || k.replace(/\s+STATION$/, "");
+}
+
+/* Every line keeps its panel; the DEPTH is what gives way.
+
+   The grid lays 13 panels out in however many columns fit, and the overflow is
+   hidden — so four lines, Cynwyd among them, were being drawn and then clipped
+   off the bottom of the board. A line that runs at all must be visible, which is
+   the entire reason this board groups by line instead of merging into one sorted
+   list. So the deepest panels shed their last departure, repeatedly, until the
+   whole board fits. Never below one: a panel showing a line's next train is
+   still doing its job, where a panel nobody can see is not. */
+function fitSeptaPanels(){
+  const host = $("#septaBoard"); if(!host) return;
+  const panels = [...host.querySelectorAll(".sp-panel")];
+  if(!panels.length) return;
+  /* A hidden or not-yet-laid-out board measures zero high, and every panel looks
+     like it overflows — trimming against that reading strips the whole board to
+     one departure a line and it stays that way until the next tick. No height,
+     no decision. */
+  if(host.clientHeight < 40) return;
+  /* Always start from full size, or a board that shrank once to fit a small
+     window would stay shrunk after it was made large again. */
+  host.style.setProperty("--sp-scale", 1);
+  for(let guard=0; guard<8 && host.scrollHeight > host.clientHeight + 1; guard++){
+    const deepest = Math.max(...panels.map(p => p.querySelectorAll(".sp-row").length));
+    if(deepest <= 1) break;                       // nothing left to give
+    panels.forEach(p => {
+      const rows = p.querySelectorAll(".sp-row");
+      if(rows.length === deepest) rows[rows.length-1].remove();
+    });
+  }
+  /* Thirteen panels one departure deep still overflow a short window. Depth is
+     spent; the type gives next, down to a floor — below about 70% the board
+     stops being readable from across a concourse, and a board nobody can read
+     at all is no better than one missing a line. */
+  for(let scale=1; scale>0.7 && host.scrollHeight > host.clientHeight + 1; ){
+    scale = Math.round((scale - 0.06) * 100) / 100;
+    host.style.setProperty("--sp-scale", scale);
+  }
+}
+
+/* The septa path never calls renderRows(), so `lastRows` stays null here — it
+   keeps its own copy so a resize has something to redraw from. */
+let lastSeptaRows = null;
 function renderSepta(rows){
+  lastSeptaRows = rows;
   renderSeptaTicker();
   const host = $("#septaBoard"); if (!host) return;
   const groups = septaGroups(rows);
@@ -1408,11 +1499,14 @@ function renderSepta(rows){
         return L ? `<span class="sp-live ${L.cls}">${esc(L.text)}</span>` : ""; })()}</h3>
       ${g.rows.map(r => `<div class="sp-row">
         <span class="sp-t">${esc(r.time)}</span>
-        <span class="sp-d">${esc(r.dest)}</span>
+        <span class="sp-d">${esc(septaDest(r.dest))}</span>
         <span class="sp-n">${esc(r.trainNo||"")}</span>
         <span class="sp-s ${r.statusKind==="ok"?"ok":r.statusKind==="na"?"sched":"warn"}">${esc(r.status)}</span>
       </div>`).join("")}
     </section>`).join("");
+  /* After layout, not during: the panels have no measurable height until the
+     grid has placed them. */
+  requestAnimationFrame(fitSeptaPanels);
 }
 function esc(x){ return String(x==null?"":x).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -1658,7 +1752,21 @@ function cityClock(t){
   return d.toLocaleTimeString(CITY_CFG.clock24 ? "en-GB" : "en-US",
     {hour:"2-digit", minute:"2-digit", hour12:!CITY_CFG.clock24, timeZone:tz});
 }
-function clock(){ $("#clock").textContent=cityClock(Date.now()); }
+/* Same timezone rule as the clock: this board is read from anywhere, so the
+   date it shows has to be the CITY's, not the viewer's — a board read from
+   Europe at 01:00 must not print tomorrow over Philadelphia's evening trains. */
+function cityDate(t){
+  const d = (t instanceof Date) ? t : new Date(t);
+  if(isNaN(d)) return "";
+  const tz = CITY_CFG && CITY_CFG.tz;
+  return d.toLocaleDateString("en-US",
+    Object.assign({weekday:"short", month:"short", day:"numeric"}, tz ? {timeZone:tz} : {}))
+    .toUpperCase();
+}
+function clock(){
+  $("#clock").textContent=cityClock(Date.now());
+  const el=$("#datestr"); if(el) el.textContent=cityDate(Date.now());
+}
 
 /* ---- full-screen kiosk mode ---- */
 /* Full screen must act on the TOP document. Boards run inside the same-origin
@@ -1773,7 +1881,17 @@ function boot(){
   buildRows();
   requestAnimationFrame(measureAndRefit);        // once the grid has real widths
   let rt=null;
-  addEventListener("resize", ()=>{ clearTimeout(rt); rt=setTimeout(measureAndRefit, 150); });
+  /* measureAndRefit() reads rowFields[0] and returns early when there is none,
+     which is every SEPTA render (ROW_COUNTS.septa is 0) — so that board never
+     responded to a resize at all, and kept whatever panel depth it was first
+     drawn at. Re-render it instead; fitSeptaPanels then trims to the new size. */
+  addEventListener("resize", ()=>{
+    clearTimeout(rt);
+    rt=setTimeout(()=>{
+      if(STYLE==="septa"){ if(lastSeptaRows) renderSepta(lastSeptaRows); }
+      else measureAndRefit();
+    }, 150);
+  });
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
   $("#boardBtn").title = `Back to the ${CITY_CFG.cityLabel} board`;
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
