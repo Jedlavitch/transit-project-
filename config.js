@@ -63,7 +63,15 @@ window.TB_CONFIG = {
      wherever the data is shown is a condition of the licence, not a courtesy.
      Note also that adsb.lol omits `desc` and `ownOp`, so plane rows lose the
      aircraft type and operator; adsb.fi carries both. */
-  adsbUrl:      "https://tb-adsb.jacklemonade2.workers.dev",
+  /* PARKED, not abandoned. The Worker is deployed and correct, but adsb.lol
+     rate-limits per IP and Cloudflare Workers egress from a SHARED pool, so it
+     answers 429 to the Worker while serving a laptop fine — measured: direct
+     200 with 44 aircraft, through the Worker "upstream 429" three times running.
+     That empties the sky on the boards and in Sky mode, which reads as slowness.
+     Empty here puts everything back on airplanes.live, which is correct while
+     this is free. Re-fill it once the Worker serves stale on upstream failure
+     (see adsb-worker.js) and the rate limit is resolved. */
+  adsbUrl:      "",       // https://tb-adsb.jacklemonade2.workers.dev
 
   /* ---- accounts / sign-in ----------------------------------------------
      account-worker.js. Left empty there is simply no sign-in: the Spotter log
