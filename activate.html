@@ -113,7 +113,64 @@
     show("keyWrap", true); show("manualWrap", false);
   }
 
+  /* ---- rehearsal mode: ?test=… ------------------------------------------
+     This is the page a customer sees in the thirty seconds after paying, and
+     until now the only way to look at it was to pay. So every branch can be
+     summoned directly:
+
+       ?test            the happy path — key issued
+       ?test=refused    paid, but Stripe would not confirm it
+       ?test=noserver   paid, no licence server configured
+       ?test=down       paid, licence server did not answer
+       ?test=nosession  the redirect dropped the session id
+
+     It talks to nothing and issues nothing. The key shown is deliberately not a
+     valid one: right shape so the layout is honest, no signature, so it would
+     be refused everywhere. Activation is disabled while rehearsing, because the
+     real handler writes tb.license to disk BEFORE verifying it, and a rehearsal
+     that leaves a dud licence on the machine is a support ticket you have filed
+     against yourself. */
+  const TEST = qs.has("test") ? (qs.get("test") || "success").toLowerCase() : null;
+  const FAKE_KEY = "TB-TEST0-TEST0-TEST0-TEST0";
+  const FAKE_SESSION = "cs_test_rehearsal_0000000000000000000000000000";
+
+  function testBanner(){
+    const b = document.createElement("div");
+    b.style.cssText = "position:sticky;top:0;z-index:99;background:#8a5a00;color:#fff;"
+      + "padding:10px 14px;font-size:13px;font-weight:700;text-align:center;line-height:1.5";
+    b.innerHTML = "REHEARSAL — nothing was paid and this key is not real.<br>"
+      + '<span style="font-weight:500;opacity:.92">'
+      + ["success","refused","noserver","down","nosession"]
+          .map(t => '<a style="color:#fff" href="?test=' + t + '">' + t + "</a>").join(" · ")
+      + ' · <a style="color:#fff" href="activate.html">exit</a></span>';
+    document.body.insertBefore(b, document.body.firstChild);
+  }
+
   (async function boot(){
+    if (TEST) {
+      testBanner();
+      if (TEST === "refused") {
+        show("manualWrap", true);
+        msg("Couldn't confirm the purchase (stripe_lookup_failed).");
+        strandedHelp(FAKE_SESSION, "Stripe couldn't confirm that payment automatically.");
+      } else if (TEST === "noserver") {
+        show("manualWrap", false);
+        document.getElementById("activateBtn").style.display = "none";
+        msg("Your payment went through — but this site can't issue keys yet, so there's "
+          + "nothing to activate on this device.");
+        strandedHelp(FAKE_SESSION, "The licence server isn't connected.");
+      } else if (TEST === "down") {
+        show("manualWrap", true);
+        msg("Couldn't reach the licence server.");
+        strandedHelp(FAKE_SESSION, "The licence server didn't answer.");
+      } else if (TEST === "nosession") {
+        strandedHelp("", "");
+      } else {
+        showKey(FAKE_KEY);
+      }
+      return;
+    }
+
     const session = qs.get("session_id");
     if (key) { showKey(key); return; }
     /* Came back from a real Stripe checkout, but there is no licence server to
@@ -163,6 +220,11 @@
   })();
 
   document.getElementById("activateBtn").onclick = async () => {
+    /* Rehearsals must not write to disk. The line below stores the key BEFORE
+       verifying it, so activating a fake one would leave a dud licence behind
+       and the next real board would report itself unlicensed for no visible
+       reason. */
+    if (TEST) { msg("Rehearsal — activation is disabled. Nothing was saved."); return; }
     const k = (key || document.getElementById("keyInput").value || "").trim().toUpperCase();
     if (!k) { msg("Enter a key first."); return; }
     localStorage.setItem("tb.license", k);
