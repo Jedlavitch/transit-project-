@@ -115,14 +115,38 @@ window.TB_CONFIG = {
     acctUrl:     ["tb.acctUrl"],
     adsbUrl:     ["tb.adsbUrl"],
   };
+  /* Blank means "leave the device alone" so this file never wipes a setting a
+     customer entered by hand. But that alone makes every value here a ONE-WAY
+     DOOR: fill a field, ship it, and no later edit can take it back — the key is
+     already written to every browser that loaded the site, and emptying the
+     field just stops rewriting a value that is still there.
+
+     That bit us for real. adsbUrl was set, shipped, then emptied when the proxy
+     turned out to be rate-limited; the file said airplanes.live but every
+     browser that had loaded the site kept calling the throttled Worker, so the
+     revert appeared to do nothing.
+
+     So remember what THIS file wrote, and clear exactly that when the field goes
+     empty. A value the customer set themselves was never in the ledger and is
+     still left alone. */
+  const LEDGER = "tb.configWrote";
   try {
+    let wrote = {};
+    try { wrote = JSON.parse(localStorage.getItem(LEDGER) || "{}") || {}; } catch (_) {}
     Object.keys(MAP).forEach(field => {
       const v = String(C[field] == null ? "" : C[field]).trim();
-      if (!v) return;                       // unset here: leave the device alone
       MAP[field].forEach(k => {
-        if (localStorage.getItem(k) !== v) localStorage.setItem(k, v);
+        if (v) {
+          if (localStorage.getItem(k) !== v) localStorage.setItem(k, v);
+          wrote[k] = true;
+        } else if (wrote[k]) {
+          // we put it there, and it is gone from the config now: take it back
+          localStorage.removeItem(k);
+          delete wrote[k];
+        }
       });
     });
+    localStorage.setItem(LEDGER, JSON.stringify(wrote));
   } catch (_) { /* private mode: boards still run, just unconfigured */ }
 
   /* ---- ODbL attribution for the aircraft feed -----------------------------
