@@ -229,6 +229,29 @@
     width:100%; text-align:right;
     text-shadow:0 0 8px color-mix(in srgb, var(--metro-ink,#ffb02e) 45%, transparent);
   }
+  /* ---- SEPTA Regional Rail LED matrix ---- */
+  #septaBoard{ display:none }
+  :root[data-style="septa"] #boardRows, :root[data-style="septa"] .board-head{ display:none }
+  :root[data-style="septa"] #septaBoard{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+    gap:0; flex:1; min-height:0; background:#000; overflow:hidden;
+    border-top:2px solid #e01b1b;
+  }
+  /* the red rules that divide the physical panels */
+  .sp-panel{ border-right:2px solid #e01b1b; border-bottom:2px solid #e01b1b; padding:6px 12px 10px; min-width:0 }
+  .sp-panel h3{
+    margin:0 0 4px; text-align:center; color:#fff; font-weight:700;
+    font:700 calc(var(--flap-font) * .78)/1.5 "IBM Plex Mono",monospace; letter-spacing:.04em;
+  }
+  .sp-row{
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:baseline;
+    font:700 calc(var(--flap-font) * .68)/1.65 "IBM Plex Mono",monospace; white-space:nowrap;
+  }
+  .sp-t{ color:#22d3ee }                       /* cyan times, as on the real board */
+  .sp-d{ color:#39ff6a; overflow:hidden; text-overflow:ellipsis }   /* green destinations */
+  .sp-s{ color:#39ff6a }
+  .sp-s.warn{ color:#ffd34d } .sp-s.sched{ color:#9fb4c7 }
+  .sp-empty{ color:#9fb4c7; padding:20px; font:600 14px "IBM Plex Mono",monospace }
   .board-row.empty{ opacity:0 }
   .status-tag{font-size:11px; font-weight:800; letter-spacing:.06em; padding:.2em .5em; border-radius:4px; white-space:nowrap}
   .status-tag.ok{background:rgba(90,209,122,.15); color:var(--good-ink)}
@@ -351,6 +374,7 @@
       <span>TIME</span><span>DESTINATION</span><span>OPERATOR</span><span>VIA</span><span>STATUS</span>
     </div>
     <div class="board-rows" id="boardRows"></div>
+    <div id="septaBoard"></div>
   </main>
   <footer>
     <span id="updated">—</span>
@@ -1019,7 +1043,7 @@ class FlapField{
 
 /* A departure hall board is a long list; a platform display is a handful of
    lines you read from thirty feet away. */
-const ROW_COUNTS = { euro:16, usa:16, metro:8 };
+const ROW_COUNTS = { euro:16, usa:16, metro:8, septa:0 };
 let ROW_COUNT = 16;
 const TIME_CHARS=7;                 // must match the FlapField built below
 /* The time column is sized from the flaps it has to hold, not guessed. It was a
@@ -1094,16 +1118,67 @@ const METRO_SKINS = {
                lines:{ } },
 };
 
+/* ---------- SEPTA Regional Rail, the Center City LED matrix ------------------
+   Modelled on the board at Suburban/Jefferson: departures GROUPED INTO PANELS
+   BY LINE, each with its own header, divided by red rules — not one merged
+   time-sorted list, which is what every other style here renders. Green
+   destinations and ON TIME, cyan times, white headers, on black.
+
+   Regional Rail only. The same feed also carries the Broad Street Line, PATCO
+   and buses, and none of those appear on a Regional Rail board. */
+const SEPTA_LINES = {
+  AIR:"Airport Line",            CHE:"Chestnut Hill East Line",
+  CHW:"Chestnut Hill West Line", CYN:"Cynwyd Line",
+  FOX:"Fox Chase Line",          LAN:"Lansdale/Doylestown Line",
+  MED:"Media/Wawa Line",         NOR:"Manayunk/Norristown Line",
+  PAO:"Paoli/Thorndale Line",    TRE:"Trenton Line",
+  WAR:"Warminster Line",         WIL:"Wilmington/Newark Line",
+  WTR:"West Trenton Line",
+};
+function septaGroups(rows){
+  const by = {};
+  (rows||[]).forEach(r => {
+    const code = (r.via||"").toUpperCase();
+    if (!SEPTA_LINES[code]) return;            // drops BSL, PATCO and buses
+    (by[code] = by[code] || []).push(r);
+  });
+  /* Soonest line first, so the next thing to leave leads the board. */
+  return Object.keys(by)
+    .map(code => ({ code, name: SEPTA_LINES[code],
+                    rows: by[code].sort((a,b)=>a.sortMin-b.sortMin).slice(0,4) }))
+    .sort((a,b) => a.rows[0].sortMin - b.rows[0].sortMin);
+}
+function renderSepta(rows){
+  const host = $("#septaBoard"); if (!host) return;
+  const groups = septaGroups(rows);
+  if (!groups.length) {
+    host.innerHTML = `<div class="sp-empty">No Regional Rail departures right now.</div>`;
+    return;
+  }
+  host.innerHTML = groups.map(g => `
+    <section class="sp-panel">
+      <h3>${g.name}</h3>
+      ${g.rows.map(r => `<div class="sp-row">
+        <span class="sp-t">${esc(r.time)}</span>
+        <span class="sp-d">${esc(r.dest)}</span>
+        <span class="sp-s ${r.statusKind==="ok"?"ok":r.statusKind==="na"?"sched":"warn"}">${esc(r.status)}</span>
+      </div>`).join("")}
+    </section>`).join("");
+}
+function esc(x){ return String(x==null?"":x).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
 const EURO_CITIES = new Set(["zurich","cologne","stuttgart","amsterdam"]);
 const LS_STYLE = "flipboard.style";
 function resolveStyle(pref){
   if (pref && pref !== "auto") return pref;
+  if (CITY === "philly") return "septa";       // its real board is this one
   return EURO_CITIES.has(CITY) ? "euro" : "usa";
 }
 let STYLE = resolveStyle(localStorage.getItem(LS_STYLE) || "auto");
 
 const TIME_COL = `calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px)`;
 const STYLE_COLS = {
+  septa: `1fr`,
   /* DB reading order: time, the train-number chip, the via-stops, then the
      destination large, then Gleis. The row's children are in a different order
      in the DOM (shared with the other styles), so euro places them explicitly
@@ -1113,6 +1188,7 @@ const STYLE_COLS = {
   metro: `0px 120px minmax(0,1fr) 150px`,
 };
 const STYLE_HEADS = {
+  septa: [],
   /* Bilingual, as they are on the real thing. */
   euro:  ["Zeit <i>Time</i>","Zug <i>Train</i>","Ziel <i>Destination</i>","Gleis <i>Pl.</i>","Hinweis <i>Note</i>"],
   usa:   ["TIME","DESTINATION","OPERATOR","VIA","STATUS"],
@@ -1308,7 +1384,7 @@ async function tick(){
   $("#statusText").textContent="updating…";
   try{
     const rows=await collectAllRows();
-    renderRows(rows);
+    if(STYLE==="septa") renderSepta(rows); else renderRows(rows);
     $("#statusText").textContent="live — "+CITY_CFG.board.replace(".html","");
   }catch(e){
     $("#statusText").textContent="update failed, retrying…";
