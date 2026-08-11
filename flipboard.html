@@ -116,14 +116,72 @@
     50%{ transform:rotateX(-90deg) }
     100%{ transform:rotateX(0deg) }
   }
-  /* ---- style: euro (Solari) ----
-     The platform is the column the row is read for, so it carries the weight a
-     status tag does not. */
-  :root[data-style="euro"] .status-tag.platform{
-    font:800 calc(var(--flap-font) * 1.05)/1 "IBM Plex Mono",monospace;
-    color:var(--flap-text); background:none; border:none; letter-spacing:0;
-    width:100%; text-align:right; padding-right:.15em;
+  /* ---- style: euro — a Deutsche Bahn panel -----------------------------
+     Modelled on a real DB board: white on blue, not flaps on black. Split-flap
+     is the wrong object for a modern European station — those boards are LCD,
+     and the flap texture was fighting the thing it was imitating. The American
+     style keeps its flaps, which is right: Penn Station's really are Solari.
+     Destination is the largest element on the row, the train number sits in a
+     pale chip, and the via-stops are deliberately secondary. */
+  :root[data-style="euro"]{ --db-blue:#0a7bc8; --db-blue2:#0968aa; --db-chip:#e8f1f8; }
+  :root[data-style="euro"] .board-row{
+    background:linear-gradient(180deg,var(--db-blue),var(--db-blue2));
+    align-items:center; border-radius:2px; padding:0 10px;
   }
+  /* Real boards are built from two-row physical panels, so the pairs sit
+     together with a gap between them. */
+  :root[data-style="euro"] .board-row:nth-child(odd){ margin-top:6px }
+  :root[data-style="euro"] .board-row.empty{ background:none }
+
+  /* place the shared row children into DB's reading order */
+  /* grid-row:1 on every child matters. Grid auto-placement only ever moves
+     forward, so assigning child 2 to column 4 and then child 3 to column 2 sent
+     child 3 to a SECOND row — which is why time, chip, destination and platform
+     each sat at a different height in a tall block. Pinning the row keeps one
+     line regardless of the column order. */
+  :root[data-style="euro"] .board-row > *{ grid-row:1 }
+  :root[data-style="euro"] .board-row > *:nth-child(1){ grid-column:1 }  /* time   */
+  :root[data-style="euro"] .board-row > *:nth-child(2){ grid-column:4 }  /* ziel   */
+  :root[data-style="euro"] .board-row > *:nth-child(3){ grid-column:2 }  /* train  */
+  :root[data-style="euro"] .board-row > *:nth-child(4){ grid-column:3 }  /* über   */
+  :root[data-style="euro"] .board-row > *:nth-child(5){ grid-column:5 }  /* gleis  */
+
+  /* no flap furniture: plain white text on the panel */
+  /* width:auto collapses a blank cell to nothing, so ZÜRICH FLUGHAFEN lost its
+     space and read as one word. A blank keeps a space's worth of width. */
+  :root[data-style="euro"] .flap{ background:none; box-shadow:none; border-radius:0; width:auto }
+  :root[data-style="euro"] .flap.blank{ width:.34em }
+  :root[data-style="euro"] .flap::after{ display:none }
+  :root[data-style="euro"] .flap-field{ gap:0 }
+  :root[data-style="euro"] .flap .ch{
+    color:#fff; font:600 calc(var(--flap-font) * .82)/1 "IBM Plex Sans","Helvetica Neue",sans-serif;
+    letter-spacing:.01em;
+  }
+  /* Ziel is the row's headline */
+  :root[data-style="euro"] .board-row > *:nth-child(2) .ch{
+    font-weight:700; font-size:calc(var(--flap-font) * 1.12);
+  }
+  /* Über is secondary */
+  :root[data-style="euro"] .board-row > *:nth-child(4) .ch{
+    font-size:calc(var(--flap-font) * .62); opacity:.92;
+  }
+  /* the train-number chip, in place of the operator logo */
+  :root[data-style="euro"] .op-logo-img{ display:none !important }
+  :root[data-style="euro"] .op-logo{
+    display:inline-block !important; background:var(--db-chip) !important; color:#123a5c;
+    font:700 calc(var(--flap-font) * .62)/1.7 "IBM Plex Mono",monospace;
+    border-radius:2px; padding:.1em .5em; letter-spacing:.02em; white-space:nowrap;
+  }
+  :root[data-style="euro"] .status-tag.platform{
+    font:700 calc(var(--flap-font) * 1.25)/1 "IBM Plex Sans","Helvetica Neue",sans-serif;
+    color:#fff; background:none; border:none; letter-spacing:0;
+    width:100%; text-align:right;
+  }
+  /* header band + page: the dark navy strip over blue panels */
+  body.euro-skin .board-head{
+    background:#0d1b2a; color:#cfe4f5; border-radius:2px; padding:4px 10px;
+  }
+  body.euro-skin .board-head i{ font-style:italic; opacity:.75; font-weight:500 }
   /* ---- style: metro (platform countdown) ----
      Not a split-flap at all: a dot-matrix panel. Bigger type, fewer rows, and
      the minutes doing the shouting. */
@@ -976,12 +1034,17 @@ let STYLE = resolveStyle(localStorage.getItem(LS_STYLE) || "auto");
 
 const TIME_COL = `calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px)`;
 const STYLE_COLS = {
-  euro:  `${TIME_COL} minmax(0,1.9fr) 104px minmax(0,1fr) 86px`,
+  /* DB reading order: time, the train-number chip, the via-stops, then the
+     destination large, then Gleis. The row's children are in a different order
+     in the DOM (shared with the other styles), so euro places them explicitly
+     by grid-column rather than duplicating the row markup. */
+  euro:  `86px 104px 0px minmax(0,1fr) 78px`,
   usa:   `${TIME_COL} minmax(0,1.7fr) 104px minmax(0,1fr) 96px`,
   metro: `96px minmax(0,1fr) 128px`,
 };
 const STYLE_HEADS = {
-  euro:  ["TIME","DESTINATION","OPERATOR","LINE","PLATFORM"],
+  /* Bilingual, as they are on the real thing. */
+  euro:  ["Zeit <i>Time</i>","Zug <i>Train</i>","","Ziel <i>Destination</i>","Gleis <i>Platform</i>"],
   usa:   ["TIME","DESTINATION","OPERATOR","VIA","STATUS"],
   metro: ["LINE","DESTINATION","MIN"],
 };
@@ -993,6 +1056,7 @@ function applyStyleChrome(){
   const head=$("#boardHead");
   head.style.setProperty("--cols", COLS);
   head.innerHTML = STYLE_HEADS[STYLE].map(h=>`<span>${h}</span>`).join("");
+  document.body.classList.toggle("euro-skin", STYLE==="euro");
 }
 applyStyleChrome();
 const rowFields=[]; // [{el, logoEl, time:FlapField, dest:FlapField, via:FlapField, statusEl}]
@@ -1084,9 +1148,21 @@ function renderRows(rows){
       f.statusEl.className = "status-tag countdown " + (r.statusKind||"na");
     } else if(STYLE==="euro"){
       f.time.setText(r.clock || r.time);           // 24h departure, not a countdown
-      f.dest.setText(r.dest); f.via.setText(r.via);
+      f.dest.setText(r.dest);
+      /* The chip is the train's identity — RE 5361, ICE 38, S 16 — which is
+         what r.via actually holds. "Über" wants the intermediate stops, and no
+         feed here supplies them: a departure carries its line and its headsign,
+         not the calling pattern. So the column stays empty rather than being
+         padded with the operator name to look full, and the layout gives the
+         space to the destination instead. */
+      f.via.setText("");
+      f.logoTextEl.style.display=""; f.logoImgEl.style.display="none";
+      f.logoTextEl.textContent = r.via || "";
+      f.logoTextEl.style.background = "";
       f.statusEl.textContent = r.platform || "—";
       f.statusEl.className = "status-tag platform";
+      f.el.classList.remove("empty");
+      continue;
     } else {
       f.time.setText(r.time); f.dest.setText(r.dest); f.via.setText(r.via);
       f.statusEl.textContent=r.status; f.statusEl.className="status-tag "+(r.statusKind||"na");
