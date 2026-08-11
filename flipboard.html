@@ -581,6 +581,59 @@ async function collectScheduleRows(cfg){
   }catch(e){ return []; }
 }
 
+/* Every Regional Rail line, not just the ones calling nearest.
+
+   collectScheduleRows takes the N nearest stations and reads whatever departs
+   from them. That is right for a "what's near me" card and wrong for a
+   departure board: a line that does not stop near where the board is pointed
+   never enters the candidate set, at ANY sampling depth. Measured — 2 stations
+   x 2 gave 3 of the 13 lines, 10 x 12 gave 6, and 10 x 40 also gave 6.
+
+   So this inverts the loop. Walk every station inside a Center City radius,
+   bucket the departures BY LINE, and take each line's next few. A line is
+   represented if it runs at all, however sparse, so Cynwyd and the Airport line
+   hold their panel next to Paoli. */
+const SEPTA_RADIUS_MI = 6;      // comfortably covers Penn Medicine -> Temple
+async function collectSeptaByLine(cfg){
+  try{
+    let s=scheduleCache[cfg.url];
+    if(!s){
+      s=await getJSON(cfg.url, 15000);
+      s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
+      s._dep={};
+      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+      scheduleCache[cfg.url]=s;
+    }
+    const nowP=schedNowParts(s.tz), nowMin=nowP.min, active=activeServices(s, nowP);
+    const byLine={};
+    (s.stations||[]).forEach(st=>{
+      if(haversineMi(loc,{lat:st.lat,lon:st.lon}) > SEPTA_RADIUS_MI) return;
+      (s._dep[st.id]||[]).forEach(d=>{
+        if(!active.has(d.s)) return;
+        /* Schedules run past midnight as 24:xx+, so a departure can be "later
+           today" while numerically smaller than now. */
+        let min=d.t; if(min < nowMin) min += 1440;
+        if(min - nowMin > 180) return;                 // three hours is a boardful
+        const line=(d.line||"").toUpperCase();
+        if(!SEPTA_LINES[line]) return;                 // rail only
+        (byLine[line]=byLine[line]||[]).push({ min, hs:d.hs, st:st.name });
+      });
+    });
+    const rows=[];
+    Object.keys(byLine).forEach(line=>{
+      const seen=new Set();
+      byLine[line].sort((a,b)=>a.min-b.min)
+        .filter(d=>{ const k=d.min+"|"+d.hs; if(seen.has(k)) return false; seen.add(k); return true; })
+        .slice(0, cfg.perLine||3)
+        .forEach(d=>rows.push({
+          sortMin:d.min, time:(s.tz?clock24Of:clockOf)(d.min % 1440),
+          dest:(d.hs||d.st||"").toUpperCase(), via:line,
+          status:"SCHEDULED", statusKind:"na", color:cfg.color }));
+    });
+    return rows;
+  }catch(e){ return []; }
+}
+
 /* Amtrak (both cities) -- amtraker is a genuinely live API, so status
    reflects real on-time/late info instead of "scheduled". TIME is a rough
    ETA to the train's own destination (speed + great-circle distance, same
@@ -863,7 +916,7 @@ const SYSTEM_DEFS_BY_CITY = {
        the board is pointed. Showing all thirteen needs collecting per LINE
        (each line's next departure from any Center City station) rather than per
        station, which is a different function, not a bigger number here. */
-    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectScheduleRows({url:"septa-rail-schedule.json", stationCount:10, perStation:12, color:"#4F758B"})},
+    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectSeptaByLine({url:"septa-rail-schedule.json", perLine:3, color:"#4F758B"})},
     {id:"septasubway", logo:"SEPTA", label:"SEPTA Subway", collect:()=>collectScheduleRows({url:"septa-subway-schedule.json", stationCount:2, perStation:2,
       colorFn:l=>({L1:"#1c6bb0",B1:"#f7941d",B2:"#f7941d",B3:"#f7941d"}[l])||"#556"})},
     {id:"septabus", logo:"SEPTA BUS", label:"SEPTA Bus", collect:()=>collectScheduleRows({url:"septa-bus-schedule.json", stationCount:2, perStation:2, color:"#e8a33c"})},
