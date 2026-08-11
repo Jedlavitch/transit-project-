@@ -118,6 +118,23 @@
   </div>
 
   <div class="grp">
+    <h2>Give a key</h2>
+    <p class="note">Issues a licence key from <code>license-worker.js</code>'s <code>/grant</code>
+       endpoint — for friends, giveaways and support. The admin secret is <b>not saved</b>: it is
+       typed per session and kept in memory only, because it can mint unlimited keys.
+       Expiry comes from the Worker's <code>LICENCE_DAYS</code> (default ~100 years), and each key
+       below shows the date it actually carries.</p>
+    <label><em>Licence Worker URL</em><input data-ls="tb.licenceUrl" placeholder="https://tb-licence.you.workers.dev" /></label>
+    <label><em>Admin secret (not stored)</em><input type="password" id="grantSecret" autocomplete="off" placeholder="ADMIN_SECRET from the Worker" /></label>
+    <p style="margin:10px 0 0">
+      <button class="ghost" id="grantBtn" type="button">Give a key</button>
+      <button class="ghost" id="grant5Btn" type="button">Give 5</button>
+      <span id="grantMsg" style="font-size:12px; margin-left:10px"></span>
+    </p>
+    <div id="grantOut" style="margin-top:10px"></div>
+  </div>
+
+  <div class="grp">
     <h2>Spotter feed (all boards)</h2>
     <p class="note">A share code is the zero-setup option and is set from the phone app. These two
        are only for the Worker or spreadsheet routes.</p>
@@ -268,7 +285,88 @@
       m.style.color = r.ok ? "var(--good,#4ade80)" : "var(--warn,#ffb454)";
       m.textContent = r.why;
     };
-    $("#lock").onclick = () => { window.TBAdmin.set(false); show(false); };
+    /* ---- Give a key -------------------------------------------------------
+       Calls the licence Worker's /grant endpoint, which mints and returns a
+       signed key. The signing secret never comes near this page; the admin
+       secret does, so it is held in a variable for the life of the page and
+       never written to localStorage (unlike every data-ls field here). */
+    const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";   // matches gen-licence.py
+    const KEY_EPOCH = 1577836800;                      // 2020-01-01
+    // The expiry is encoded in the key itself, so it can be READ without any
+    // secret -- only verifying the signature needs one. Worth showing, because
+    // the Worker's default is 36500 days and a "giveaway" key is then forever.
+    function keyExpiry(key){
+      // The "TB-" prefix must come off FIRST: T and B are both in the alphabet,
+      // so filtering before stripping silently folds them into the number and
+      // every decoded date comes out decades wrong.
+      const txt = String(key || "").toUpperCase().replace(/^TB-/, "")
+                    .split("").filter(c => B32.indexOf(c) >= 0).join("");
+      if (txt.length < 12) return null;
+      let bits = 0n;
+      for (const c of txt) bits = (bits << 5n) | BigInt(B32.indexOf(c));
+      const nbytes = Math.floor(txt.length * 5 / 8);
+      const bytes = [];
+      for (let i = nbytes - 1; i >= 0; i--) { bytes.unshift(Number(bits & 0xffn)); bits >>= 8n; }
+      if (bytes.length < 7) return null;
+      const days = (bytes[5] << 8) | bytes[6];
+      return new Date((KEY_EPOCH + days * 86400) * 1000);
+    }
+    function grantRow(key){
+      const when = keyExpiry(key);
+      const far  = when && (when - Date.now()) / 86400000 > 3650;   // >10 years
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; gap:10px; margin-top:6px; flex-wrap:wrap";
+      const code = document.createElement("code");
+      code.textContent = key;
+      code.style.cssText = "font-size:14px; letter-spacing:.5px; user-select:all";
+      const exp = document.createElement("span");
+      exp.style.cssText = "font-size:12px; color:" + (far ? "var(--warn,#ffb454)" : "var(--muted,#8fa3bf)");
+      exp.textContent = when
+        ? (far ? "expires " + when.toISOString().slice(0,10) + " — effectively permanent"
+               : "expires " + when.toISOString().slice(0,10))
+        : "";
+      const copy = document.createElement("button");
+      copy.className = "ghost"; copy.type = "button"; copy.textContent = "Copy";
+      copy.style.cssText = "padding:3px 9px; font-size:12px";
+      copy.onclick = () => {
+        navigator.clipboard.writeText(key)
+          .then(() => { copy.textContent = "Copied"; setTimeout(() => copy.textContent = "Copy", 1200); })
+          .catch(() => { copy.textContent = "Select it"; });
+      };
+      row.append(code, exp, copy);
+      $("#grantOut").appendChild(row);
+    }
+    async function grant(n){
+      const m = $("#grantMsg");
+      const base = ($('[data-ls="tb.licenceUrl"]').value || "").trim().replace(/\/+$/, "");
+      const sec  = $("#grantSecret").value;
+      if (!base) { m.style.color = "var(--warn,#ffb454)"; m.textContent = "Set the licence Worker URL first."; return; }
+      if (!sec)  { m.style.color = "var(--warn,#ffb454)"; m.textContent = "Type the admin secret first."; return; }
+      save();                                   // keep the URL (not the secret)
+      m.style.color = "var(--muted,#8fa3bf)";
+      m.textContent = n > 1 ? `Issuing ${n} keys…` : "Issuing…";
+      let ok = 0, err = "";
+      for (let i = 0; i < n; i++) {
+        try {
+          const r = await fetch(base + "/grant", { method: "POST", headers: { "x-admin-secret": sec } });
+          const d = await r.json().catch(() => ({}));
+          if (d && d.ok && d.key) { grantRow(d.key); ok++; }
+          else { err = d && d.error === "forbidden" ? "admin secret rejected" : (d && d.error) || ("HTTP " + r.status); break; }
+        } catch (e) { err = "could not reach the Worker"; break; }
+      }
+      m.style.color = ok ? "var(--good,#4ade80)" : "var(--warn,#ffb454)";
+      m.textContent = ok
+        ? `Issued ${ok} key${ok === 1 ? "" : "s"}.` + (err ? ` Stopped: ${err}.` : "")
+        : (err || "Nothing issued.");
+    }
+    $("#grantBtn").onclick  = () => grant(1);
+    $("#grant5Btn").onclick = () => grant(5);
+
+    $("#lock").onclick = () => {
+      $("#grantSecret").value = "";        // never outlive the unlocked session
+      $("#grantOut").innerHTML = "";
+      window.TBAdmin.set(false); show(false);
+    };
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
