@@ -998,7 +998,15 @@ async function collectAllRows(){
     rows.push(r);
   }); });
   rows.sort((a,b)=>a.sortMin-b.sortMin);
-  return rows.slice(0, ROW_COUNT);
+  /* The row-based styles have a fixed number of slots, so trimming to the
+     soonest ROW_COUNT is exactly right for them. The grouped SEPTA board is not
+     a slot list — it panels BY LINE and trims within each line itself — so the
+     same cut silently starved it: sixteen slots shared with the subway, buses,
+     PATCO, Amtrak and planes left only the soonest handful of rail departures,
+     and five of the thirteen lines never reached the renderer. Verified against
+     the bundled schedule: all 13 lines have departures at every hour tested,
+     including the midday one where the board was showing 8. */
+  return STYLE==="septa" ? rows : rows.slice(0, ROW_COUNT);
 }
 
 /* ===== flip-click sound (synthesized, no audio file needed) =====
