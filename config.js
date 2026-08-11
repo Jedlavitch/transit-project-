@@ -116,4 +116,42 @@ window.TB_CONFIG = {
       });
     });
   } catch (_) { /* private mode: boards still run, just unconfigured */ }
+
+  /* ---- ODbL attribution for the aircraft feed -----------------------------
+     adsb.lol publishes under the Open Database Licence, which requires the
+     source to be credited wherever the data is shown. That is a condition, not
+     a courtesy, so it is enforced here rather than left to each board to
+     remember: config.js is on every page that draws aircraft, and one place
+     that cannot be forgotten beats eleven that can.
+
+     Shown ONLY when adsbUrl is set, because that is exactly when the data is
+     coming from adsb.lol via adsb-worker.js. While it is empty the boards call
+     airplanes.live, and crediting adsb.lol for someone else's data would be its
+     own kind of false statement.
+
+     Drawn as its own small fixed element rather than folded into the status
+     line: the boards rewrite that line on every refresh tick, so a credit
+     written there is erased within seconds. */
+  function creditAircraftSource() {
+    try {
+      if (!String(C.adsbUrl || "").trim()) return;          // airplanes.live: nothing to credit
+      if (document.getElementById("tbAdsbCredit")) return;
+      const CREDIT = "Aircraft data adsb.lol (ODbL)";
+      /* A separate element, NOT an edit to #statusText. The boards rewrite that
+         line on every refresh tick, so a one-shot edit there survives about
+         fifteen seconds — verified: it was gone by the next paint. Attribution a
+         repaint can erase is not attribution. This element is owned by nothing
+         else on the page, so nothing else clears it. */
+      const d = document.createElement("div");
+      d.id = "tbAdsbCredit";
+      d.textContent = CREDIT;
+      d.style.cssText = "position:fixed;left:8px;bottom:5px;z-index:900;opacity:.6;" +
+        "font:600 10px/1.2 system-ui,-apple-system,sans-serif;color:#9fb4c7;" +
+        "pointer-events:none;letter-spacing:.02em";
+      (document.body || document.documentElement).appendChild(d);
+    } catch (_) {}
+  }
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", creditAircraftSource);
+  else creditAircraftSource();
 })();
