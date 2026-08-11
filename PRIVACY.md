@@ -1,101 +1,188 @@
-# Privacy Policy — Transit Spotter
+# Privacy Policy — Transit Project
 
-**Last updated: 7 August 2026**
+**Last updated: 10 August 2026**
 
-> **Still not legal advice.** I'm not a lawyer. The blanks are filled in now —
-> controller, contact address, and the map and geocoding providers the code
-> actually calls — but filling blanks is not the same as being reviewed. You are
-> charging money, so have someone qualified read this, particularly if you sell
-> to customers in the EU, the UK or California.
->
-> Two gaps this does **not** close, both in the operator notes at the bottom:
-> it describes the Spotter app rather than the city boards that are the product
-> being sold, and it does not name the transit and aircraft feeds that receive
-> a user's location.
+> **Not legal advice.** I'm not a lawyer. This is written to be accurate about
+> what the code actually does, which is a necessary start and not a substitute
+> for review. You are charging money and selling into the EU, so have someone
+> qualified read it.
 
 ---
 
 ## Who is responsible for your data
 
-Transit Spotter is operated by **Jack Edlavitch**, contactable at
-**info@transitproject.online**. Under UK/EU data protection law we are the "data
-controller" for the information described below.
+Transit Project is operated by **Jack Edlavitch**, contactable at
+**info@transitproject.online**. Under UK/EU data protection law that is the
+"data controller" for everything described below.
 
 ## The short version
 
-The app works without an account, and if you never sign in, **nothing about you
-ever leaves your device**. Your sightings live in your browser's local storage
-and we cannot see them.
+Transit Project is three things, and they have genuinely different answers, so
+this policy treats them separately rather than averaging them into one
+reassuring paragraph.
 
-If you choose to create an account, we store your email address and the sightings
-you log, so the same log appears on your other devices. That's the whole purpose.
-We don't sell it, share it, or advertise against it.
+- **The city boards** — the product most people buy. No account, no server of
+  ours involved at all. Your location stays in your browser. It is sent to
+  transit agencies only in order to ask them what is near you.
+- **Buying a licence** — Stripe takes the payment. We keep your purchase email
+  and a random identifier per device, only to reissue your key and to count the
+  five devices your licence covers.
+- **The Spotter app** — optional. Signed out, nothing leaves your phone. Signed
+  in, your sightings sync between your devices.
 
-## What we collect, and only if you sign in
+There is no advertising, no analytics, no tracking, and nothing is sold to
+anybody. That is not a promise about intentions; there is no analytics code in
+the site to switch on.
+
+---
+
+## 1. The city boards
+
+A board is a web page that runs entirely in your browser and talks straight to
+transit agencies. There is no server in between that we operate.
+
+### What stays on your device
+
+Held in your browser's local storage, readable only by this site, and never
+transmitted to us:
+
+- the location you set, as an address and coordinates
+- your display settings — theme, which cards you show, row density
+- your licence key and a random device identifier (see §2)
+- anything the Spotter has logged, unless you sign in (see §3)
+
+Clearing the site's data in your browser erases all of it. There is no copy.
+
+### What leaves your device, and who receives it
+
+Drawing a live board means asking other people questions, and the questions
+contain your location. Specifically:
+
+| Who | Why | What they receive |
+|---|---|---|
+| The transit agency for your city — WMATA, MTA, SEPTA, MBTA, BART, NJ Transit, LA Metro, transitous and others | Next departures and vehicle positions near you | Your approximate coordinates, and your IP address |
+| **airplanes.live** | Aircraft overhead | Your approximate coordinates, and your IP address |
+| **amtraker** | Amtrak train positions | Your IP address |
+| **adsbdb** | Which route a flight is on | The flight's callsign, not anything about you |
+| **CARTO** (`basemaps.cartocdn.com`) | The map background | Your IP address, and which map areas you view |
+| **OpenStreetMap Nominatim** | Turning a typed address into coordinates | The address or coordinates you look up |
+| **planespotters.net**, **Wikimedia Commons** | Photographs of aircraft and trains | The aircraft or line being shown |
+
+This is unavoidable rather than a design choice: "what is near me" cannot be
+asked without saying where you are. Each of these is a direct request from your
+browser to them, under their own privacy policies, and we neither see nor keep a
+copy.
+
+**We do not receive your location.** Nothing in the list above reports back to
+us, and there is no endpoint of ours for it to report to.
+
+---
+
+## 2. Buying a licence
+
+### Payment
+
+Payment is handled entirely by **Stripe**. Card details go from you to Stripe;
+they never touch this site and we never see them.
+
+### What we store, and why
+
+When a purchase completes, our licence server records, against your licence key:
 
 | What | Why | How long |
 |---|---|---|
-| Your email address | To sign you in and to send sign-in codes | Until you delete your account |
+| The email address you gave Stripe | So a lost key can be reissued to the person who bought it | Until you ask us to delete it |
+| Your Stripe checkout session id | So the same purchase cannot claim two keys, and so a support request can be matched to a real payment | Until you ask us to delete it |
+| A random identifier for each device you activate, and when it was last seen | To enforce the five-device limit the licence is sold with | Until you ask us to delete it |
+
+**The device identifier is not a fingerprint.** It is sixteen random hexadecimal
+characters generated by your own browser the first time you activate, stored
+locally, and meaningless anywhere else. It identifies a browser profile as "one
+of the five", and nothing more. It tells us nothing about your device, and two
+people with identical hardware get different values.
+
+Checking a licence sends your key and that identifier to our licence server,
+which — like any web request — also sees your IP address. We do not log it.
+
+### The feed relay
+
+Licensed boards can be configured to fetch their live data through a relay we
+run, so that a licence is required for live data rather than only for the
+interface. Where that is in use, the relay sees your IP address and which feed
+you asked for. It does not store either, and it is not part of the boards
+today — this section is here because it is wired into the product and may be
+switched on.
+
+---
+
+## 3. The Spotter app
+
+The Spotter is a separate phone app for logging vehicles you have seen. **It
+works fully without an account**, and signed out nothing about you ever leaves
+your device: sightings live in your browser's local storage and we cannot see
+them.
+
+If you choose to sign in, we store:
+
+| What | Why | How long |
+|---|---|---|
+| Your email address | To sign you in and send sign-in codes | Until you delete your account |
 | Your sightings — vehicle, route, place, note, and **the location where you logged it** | To sync your log between your devices | Until you delete them, or your account |
 | A session token | To keep you signed in | About 13 months, then it expires |
-| Temporary sign-in codes | To verify it's you | 15 minutes |
+| Temporary sign-in codes | To verify it is you | 15 minutes |
 | Rate-limiting counters, tied to a hashed email or IP | To stop abuse of the sign-in system | Up to 1 hour |
 
 **Your location history deserves calling out.** A sighting can include the
 coordinates where you logged it. Taken together, that is a record of places you
-have been. We treat it as sensitive. It is only ever stored if you are signed in,
-only ever readable by your own account, and it is never shared with anyone.
+have been. It is only ever stored if you are signed in, only ever readable by
+your own account, and never shared.
 
-## What we do not collect
+There are **no passwords** anywhere in this system. Signing in is a code sent to
+your email, so there is nothing to store, lose, or have stolen.
 
-- No passwords. Sign-in is a code sent to your email — there is no password to
-  store, lose, or have stolen.
-- No analytics, tracking pixels, advertising identifiers, or third-party
-  trackers.
-- No payment details. Payments are handled entirely by Stripe; we never see or
-  store your card number.
+---
 
 ## Who else is involved
 
-| Service | What it does | What it sees |
+| Service | Used for | What it sees |
 |---|---|---|
-| **Cloudflare** | Runs the servers that store accounts | Your email, sightings, IP address |
+| **Cloudflare** | Runs our licence and account servers | Licence keys, device identifiers, purchase emails, account data, IP addresses |
+| **Stripe** | Takes payment | Your name, email and payment details — we receive only the email |
 | **Resend** | Sends sign-in code emails | Your email address |
-| **Stripe** | Takes payment | Your payment details — we never receive them |
-| **CARTO** (`basemaps.cartocdn.com`) | Draws the map background | Your IP address, and which map areas you view |
-| **OpenStreetMap Nominatim** | Turns an address into coordinates, and back | The address or coordinates you look up |
+| **GitHub Pages** | Serves the site itself | Your IP address, as any web host does |
+| Transit agencies, airplanes.live, amtraker, adsbdb, CARTO, Nominatim, planespotters.net, Wikimedia | Live data, maps and photographs | See the table in §1 |
 
-The last two are used **whether or not you have an account**, because drawing a
-map requires asking someone for map images. They see your IP address, as any web
-request does.
+The last row applies **whether or not you have an account or a licence**,
+because a board cannot draw a map or find your next train without asking
+somebody.
 
 ## Your rights
 
-You can ask us at any time to:
+You can ask at any time to:
 
 - **See** everything we hold about you
 - **Correct** anything wrong
-- **Delete** your account and all its data
-- **Export** your data — the app also has built-in CSV and JSON export, no need
-  to ask
+- **Delete** your account, your licence record, or both
+- **Export** your data — the Spotter also has built-in CSV and JSON export
 - **Object** to how we use it, or withdraw consent
 
-Email **info@transitproject.online**. We'll respond within 30 days. If you're in the
-UK or EU, you may also complain to your data protection authority.
+Email **info@transitproject.online**. We will respond within 30 days. If you are
+in the UK or EU you may also complain to your data protection authority.
 
-**To delete everything yourself:** sign out and clear the site's data in your
-browser, then email us to remove the server-side copy.
+**To delete most of it yourself:** clear the site's data in your browser. That
+removes your location, settings, licence key and device identifier. The
+server-side records described in §2 and §3 need an email to us.
 
 ## Children
 
-Not intended for children under 13 (16 in parts of the EU). We don't knowingly
-collect their data. If you believe a child has given us information, email us and
-we'll delete it.
+Not intended for children under 13, or under 16 in parts of the EU. We do not
+knowingly collect their data. If you believe a child has given us information,
+email us and we will delete it.
 
 ## Where the data lives
 
-On Cloudflare's global network, which means it may be stored or processed outside
-your country, including in the United States.
+On Cloudflare's global network and GitHub's, which means data may be stored or
+processed outside your country, including in the United States.
 
 Where data is transferred out of the UK or European Economic Area, the transfer
 relies on the **Standard Contractual Clauses** in the data processing agreements
@@ -105,52 +192,46 @@ which sends sign-in emails.
 ## Security, honestly stated
 
 Sign-in codes and session tokens are stored hashed, and account identifiers are
-derived from a salted hash of your email rather than the address itself. There
-are no passwords in the system at all.
+derived from a salted hash of your email rather than the address itself. Licence
+keys are cryptographically signed rather than guessable. There are no passwords
+in the system at all.
 
 That said: no service is perfectly secure, and this one is run by an individual
-rather than a security team. If we ever discover a breach affecting your data,
-we'll tell you and the relevant regulator within 72 hours.
+rather than a security team. If we discover a breach affecting your data we will
+tell you and the relevant regulator within 72 hours.
 
 ## Changes
 
-If we change this policy in a way that matters, we'll say so in the app before it
-takes effect.
+If this policy changes in a way that matters, we will say so on the site before
+it takes effect.
 
 ---
 
 ## Notes for the operator — delete this section before publishing
 
-1. ~~Fill every `[BRACKET]`.~~ Done — controller, contact address, tile and
-   geocoding providers are all named from what the code actually calls.
-   **Confirm the controller name.** It is written as a natural person; if you
-   trade through a company, that company is the controller and this must say so.
-2. ~~Name the actual map tile and geocoding providers.~~ Done: CARTO and
-   OpenStreetMap Nominatim. **The terms check is still outstanding and now
-   urgent** — you are charging money. Nominatim's usage policy is strict and
-   explicitly aimed at low-volume, non-commercial use; a paid kiosk geocoding on
-   every location change can breach it. CARTO's free basemap tier likewise has
-   limits and an attribution requirement. Check both before volume arrives.
-3. You need a **route to delete an account**. The Worker has no `/delete`
-   endpoint yet — a right-to-erasure request currently means editing KV by hand.
-   Build it before volume makes that impractical.
-4. **The EU/UK transfer wording now claims Standard Contractual Clauses, so go
-   and accept them.** The policy states the mechanism because you ship
-   Amsterdam, Cologne and Stuttgart boards — EU customers are the target, not a
-   hypothetical — but stating it does not create it. Accept Cloudflare's DPA
-   (dashboard → account settings) and Resend's, both of which incorporate the
-   SCCs. Until you do, that paragraph describes something that is not true. You
-   may also need a record of processing activities.
-5. Link this from `buy.html` and from the app's settings. A privacy policy nobody
-   can find doesn't count.
-6. **This document covers the Spotter, not the boards.** The title, and most of
-   what follows, is about the phone app and its accounts. The thing customers
-   are buying is the city boards, and those have their own story: no account, no
-   server, everything in the browser — which is a *better* story, and it is not
-   told here. A buyer reading this learns about a feature they may never open.
-7. **The transit and aircraft feeds are missing from the third-party table**
-   above. Every board sends the viewer's coordinates to whichever agency serves
-   that city — WMATA, MTA, SEPTA, MBTA, BART, NJ Transit, transitous — plus
-   airplanes.live and amtraker, and adsbdb for flight routes. That is
-   unavoidable, since asking "what is near me" means saying where you are, and
-   the site's own FAQ already says so. The policy should say it too.
+1. **Confirm the controller name.** Written as a natural person. If you trade
+   through a company, that company is the controller and §"Who is responsible"
+   must say so.
+2. **The EU/UK transfer wording claims Standard Contractual Clauses, so go and
+   accept them.** You ship Amsterdam, Cologne and Stuttgart boards, so EU
+   customers are the target rather than a hypothetical. Accept Cloudflare's DPA
+   (dashboard → account settings) and Resend's; both incorporate the SCCs. Until
+   you do, that paragraph describes something that is not true.
+3. **Check the map and geocoding terms — this is now urgent, because the product
+   is paid.** Nominatim's usage policy is aimed at low-volume, non-commercial
+   use and a paid kiosk geocoding on every location change can breach it.
+   CARTO's free basemap tier has limits and an attribution requirement.
+4. **There is still no route to delete an account or a licence record.** Neither
+   Worker has a `/delete` endpoint, so a right-to-erasure request means editing
+   KV by hand. The policy above promises deletion within 30 days; keep that
+   promise manually until it is built, and build it before volume makes that
+   impossible.
+5. **The feed relay section is written as "may be switched on".** When
+   feed-proxy-worker.js is deployed and `feedProxy` is set in config.js, remove
+   that qualifier — at that point every board's live data goes through it and
+   the relay genuinely does see every viewer's IP.
+6. **Link this from the home page, buy.html and the Spotter's settings.** A
+   privacy policy nobody can find does not count. It is currently only linked
+   from the home-page footer.
+7. You may also need a record of processing activities if you sell into the
+   EU/UK.
