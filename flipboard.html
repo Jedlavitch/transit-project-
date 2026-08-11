@@ -254,6 +254,22 @@
   .sp-live{ display:block; font-size:calc(var(--flap-font) * .52); font-weight:700;
             letter-spacing:.02em; margin-top:1px }
   .sp-live.ok{ color:#39ff6a } .sp-live.warn{ color:#ffd34d }
+  /* The scrolling strip along the bottom of the real board. Two copies of the
+     message ride a single translated track, so the loop is seamless rather than
+     snapping back at the end. Duration scales with nothing — it is a fixed,
+     slow, readable crawl. */
+  #septaTicker{ display:none }
+  :root[data-style="septa"] #septaTicker{
+    display:block; overflow:hidden; white-space:nowrap; background:#000;
+    border-top:2px solid #e01b1b; padding:5px 0;
+  }
+  .sp-tick-in{ display:inline-flex; will-change:transform; animation:spTick 34s linear infinite }
+  .sp-tick-in span{
+    padding-right:5rem; color:#ffb02e; letter-spacing:.06em;
+    font:700 calc(var(--flap-font) * .6)/1.4 "IBM Plex Mono",monospace;
+  }
+  @keyframes spTick{ from{ transform:translateX(0) } to{ transform:translateX(-50%) } }
+  @media (prefers-reduced-motion:reduce){ .sp-tick-in{ animation:none } }
   .sp-empty{ color:#9fb4c7; padding:20px; font:600 14px "IBM Plex Mono",monospace }
   .board-row.empty{ opacity:0 }
   .status-tag{font-size:11px; font-weight:800; letter-spacing:.06em; padding:.2em .5em; border-radius:4px; white-space:nowrap}
@@ -378,6 +394,7 @@
     </div>
     <div class="board-rows" id="boardRows"></div>
     <div id="septaBoard"></div>
+    <div id="septaTicker"><div class="sp-tick-in"><span></span><span></span></div></div>
   </main>
   <footer>
     <span id="updated">—</span>
@@ -1269,7 +1286,21 @@ function liveFor(lineName){
                    : { cls:"ok",   text:`${g.n} running · on time` };
 }
 
+/* The message the real board crawls, plus anything the live feed makes worth
+   saying. Written once per render into both copies so the loop stays seamless. */
+function renderSeptaTicker(){
+  const t = $("#septaTicker"); if(!t) return;
+  const bits = ["For schedule and travel information go to SEPTA.org"];
+  const worst = Object.entries(septaLive.byLine||{})
+    .filter(([,g]) => g.worst >= 10)
+    .sort((a,b) => b[1].worst - a[1].worst)[0];
+  if(worst) bits.push(`${worst[0]} Line delays of up to ${worst[1].worst} minutes`);
+  const msg = bits.join("   •   ");
+  t.querySelectorAll(".sp-tick-in span").forEach(el => { el.textContent = msg; });
+}
+
 function renderSepta(rows){
+  renderSeptaTicker();
   const host = $("#septaBoard"); if (!host) return;
   const groups = septaGroups(rows);
   if (!groups.length) {
