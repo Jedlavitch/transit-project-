@@ -48,56 +48,13 @@
   function gtfsrtStr(b, s, e){ return new TextDecoder().decode(b.subarray(s, e)); }
   function gtfsrtInt32(v){ return Number(BigInt.asIntN(32, v)); }
   function gtfsrtInt64(v){ return Number(BigInt.asIntN(64, v)); }
+  /* Wiretype 5 carries the offset of the word, not the value. NYCT publishes no
+     lat/lon today, so nothing below calls this — but decodeVehiclePosition reads
+     the position sub-message unconditionally, and fetchAll swallows decode
+     errors per feed. Left out (as it was), the day MTA starts populating
+     position is the day all seven feeds go quiet with nothing in the console. */
+  function gtfsrtF32(b, i){ return new DataView(b.buffer, b.byteOffset + i, 4).getFloat32(0, true); }
 
-  function decodeVehiclePosition(b, s, e){
-    const v = {};
-    for(const [vf, vwt, vv] of gtfsrtFields(b, s, e)){
-      if(vf === 1 && vwt === 2){                // trip (TripDescriptor)
-        for(const [tf, twt, tv] of gtfsrtFields(b, vv[0], vv[1])){
-          if(tf === 1) v.tripId = gtfsrtStr(b, tv[0], tv[1]);
-          else if(tf === 5) v.routeId = gtfsrtStr(b, tv[0], tv[1]);
-        }
-      } else if(vf === 2 && vwt === 2){         // position
-        for(const [pf, pwt, pv] of gtfsrtFields(b, vv[0], vv[1])){
-          if(pf === 1) v.lat = gtfsrtF32(b, pv);
-          else if(pf === 2) v.lon = gtfsrtF32(b, pv);
-          else if(pf === 3) v.bearing = gtfsrtF32(b, pv);
-          else if(pf === 5) v.speed = gtfsrtF32(b, pv);
-        }
-      } else if(vf === 4 && vwt === 0){         // current_status (0=INCOMING_AT,1=STOPPED_AT,2=IN_TRANSIT_TO)
-        v.status = Number(vv);
-      } else if(vf === 7 && vwt === 2){         // stop_id (platform-level)
-        v.stopId = gtfsrtStr(b, vv[0], vv[1]);
-      }
-    }
-    return v;
-  }
-  function gtfsrtInt32(v){ return Number(BigInt.asIntN(32, v)); }
-  function gtfsrtInt64(v){ return Number(BigInt.asIntN(64, v)); }
-
-  function decodeVehiclePosition(b, s, e){
-    const v = {};
-    for(const [vf, vwt, vv] of gtfsrtFields(b, s, e)){
-      if(vf === 1 && vwt === 2){                // trip (TripDescriptor)
-        for(const [tf, twt, tv] of gtfsrtFields(b, vv[0], vv[1])){
-          if(tf === 1) v.tripId = gtfsrtStr(b, tv[0], tv[1]);
-          else if(tf === 5) v.routeId = gtfsrtStr(b, tv[0], tv[1]);
-        }
-      } else if(vf === 2 && vwt === 2){         // position
-        for(const [pf, pwt, pv] of gtfsrtFields(b, vv[0], vv[1])){
-          if(pf === 1) v.lat = gtfsrtF32(b, pv);
-          else if(pf === 2) v.lon = gtfsrtF32(b, pv);
-          else if(pf === 3) v.bearing = gtfsrtF32(b, pv);
-          else if(pf === 5) v.speed = gtfsrtF32(b, pv);
-        }
-      } else if(vf === 4 && vwt === 0){         // current_status (0=INCOMING_AT,1=STOPPED_AT,2=IN_TRANSIT_TO)
-        v.status = Number(vv);
-      } else if(vf === 7 && vwt === 2){         // stop_id (platform-level)
-        v.stopId = gtfsrtStr(b, vv[0], vv[1]);
-      }
-    }
-    return v;
-  }
   function decodeVehiclePosition(b, s, e){
     const v = {};
     for(const [vf, vwt, vv] of gtfsrtFields(b, s, e)){
@@ -219,7 +176,14 @@
         dir: dirOf(here.stopId),
         minutes: Math.max(0, Math.round(mins)),
         atSec: here.timeSec,
-        delaySec: here.delaySec != null ? here.delaySec : null,
+        /* Stop-level delay first, then the trip-level one. decodeTripUpdate has
+           always captured TripUpdate.delay and this dropped it on the floor —
+           per the GTFS-RT spec that field applies to every stop that carries no
+           delay of its own. NYCT populates neither widely (measured: delays on
+           ~2% of trips, trip-level on none), so this changes nothing visible
+           today; it stops the fallback being decoded and then discarded. */
+        delaySec: here.delaySec != null ? here.delaySec
+                : u.tripDelaySec != null ? u.tripDelaySec : null,
         destStation: last ? stationOf(last.stopId) : "",
         remaining: rest.map(s => ({ station: stationOf(s.stopId), timeSec: s.timeSec })),
       });

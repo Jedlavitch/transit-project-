@@ -145,7 +145,26 @@
   #clock .foot{flex:none; display:flex; align-items:center; gap:12px;
     padding:clamp(3px,.8vh,8px) clamp(12px,1.8vw,30px); background:#0a3a52; color:#dff6ff;
     font-size:clamp(9px,2vh,17px)}
-  #clock .foot .right{margin-left:auto; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  /* Everything left of the ticker is a fixed label and must never wrap: the
+     strip is only a few percent of the screen high, so a wrapped "01:43 PM"
+     eats the whole bar's height and pushes the type down to nothing. */
+  #clock .foot > span{white-space:nowrap; flex:none}
+  #clock .foot .wx{opacity:.9}
+  #clock .foot .sep{opacity:.4}
+  /* The advisory takes whatever room the clock, weather and station name leave,
+     and scrolls only when its text is genuinely wider than that — a short
+     message that fits should sit still, the way the real ones do. min-width:0
+     is what lets a flex item shrink below its content and actually clip. */
+  #clock .foot .ticker{margin-left:auto; flex:1 1 auto; min-width:0; overflow:hidden;
+    position:relative; mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}
+  #clock .foot .ticker > span{display:inline-block; white-space:nowrap; opacity:.9}
+  #clock .foot .ticker.scroll > span{padding-left:100%; animation:tick linear infinite}
+  @keyframes tick{ from{transform:translateX(0)} to{transform:translateX(-100%)} }
+  @media (prefers-reduced-motion:reduce){
+    /* Never trap the message off-screen: with the animation suppressed the
+       padding-left that sets up the scroll would park the text out of view. */
+    #clock .foot .ticker.scroll > span{animation:none; padding-left:0}
+  }
 
   #msg{position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
     text-align:center; padding:24px; font-size:clamp(14px,2.4vh,22px); color:#cfe0ff;
@@ -218,8 +237,10 @@
   <div class="rows" id="crows"></div>
   <div class="foot">
     <span id="cClock"></span>
+    <span class="wx" id="cWx"></span>
+    <span class="sep">·</span>
     <span id="cStation"></span>
-    <span class="right">Please stand back from the platform edge</span>
+    <div class="ticker" id="cTicker"><span id="cAdvisory">Please stand back from the platform edge</span></div>
   </div>
 </div>
 
@@ -366,10 +387,16 @@ function render(){
      counting down from predictions made minutes ago, which is worse than an
      empty screen: it looks authoritative and is wrong. */
   const staleMin = state.lastOk ? Math.round((Date.now() - state.lastOk)/60000) : 0;
+  /* Three states, and the third one matters: the feed reports a delay for some
+     trips and says nothing at all for others. "On time" is only claimed where
+     the feed actually said so — with delaySec null we know nothing, and a sign
+     that asserts "On time" on no evidence is the one failure a rider cannot
+     detect. (This read the literal word "Status" in every case.) */
   $("#leadStatus").textContent =
     staleMin >= 3 ? "Times last updated " + staleMin + " min ago"
-    : lead.delaySec != null && lead.delaySec > 60
-      ? "Delayed " + Math.round(lead.delaySec/60) + " min" : "Status";
+    : lead.delaySec == null ? ""
+    : lead.delaySec > 60 ? "Delayed " + Math.round(lead.delaySec/60) + " min"
+    : "On time";
 
   /* The strip map. The feed hands back every remaining stop, so the only work
      is fitting them: a long run has more stops than rows that fit, and a
@@ -434,6 +461,82 @@ function render(){
       ? "now" : `${liveMins(a)}<small>min</small>`;
     rows.appendChild(r);
   });
+  }
+}
+
+/* ---- the bottom bar: weather, and what's actually wrong right now -------
+   The countdown panels carry a strip along the bottom, and on the real ones it
+   is not decoration — it is where service information goes. Both sources are
+   already proven elsewhere in this project and neither needs a key: open-meteo
+   (tour.html) and MTA's camsys all-alerts JSON (nyc.html's ticker). */
+const WMO = {0:["Clear","☀"],1:["Mainly clear","🌤"],2:["Partly cloudy","⛅"],3:["Overcast","☁"],
+  45:["Fog","🌫"],48:["Freezing fog","🌫"],51:["Light drizzle","🌦"],53:["Drizzle","🌦"],
+  55:["Heavy drizzle","🌦"],56:["Freezing drizzle","🌧"],57:["Freezing drizzle","🌧"],
+  61:["Light rain","🌧"],63:["Rain","🌧"],65:["Heavy rain","🌧"],66:["Freezing rain","🌧"],
+  67:["Freezing rain","🌧"],71:["Light snow","🌨"],73:["Snow","🌨"],75:["Heavy snow","🌨"],
+  77:["Snow grains","🌨"],80:["Rain showers","🌦"],81:["Rain showers","🌦"],82:["Heavy showers","⛈"],
+  85:["Snow showers","🌨"],86:["Snow showers","🌨"],95:["Thunderstorm","⛈"],
+  96:["Thunderstorm, hail","⛈"],99:["Thunderstorm, hail","⛈"]};
+
+async function refreshWeather(){
+  const s = state.stations[state.stopId];
+  if(!s || s.lat == null) return;
+  try{
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${s.lat.toFixed(3)}`+
+      `&longitude=${s.lon.toFixed(3)}&current=temperature_2m,weather_code`+
+      `&temperature_unit=fahrenheit`);
+    const j = await r.json();
+    if(!j || !j.current) return;
+    const d = WMO[j.current.weather_code] || ["",""];
+    $("#cWx").textContent = `${d[1]} ${Math.round(j.current.temperature_2m)}°F`;
+  }catch(e){ /* weather is a nicety; a platform sign without it is still a sign */ }
+}
+
+/* Only what is wrong NOW. Planned-work notices are the bulk of the feed and
+   would push a live suspension off the end of the strip, which is exactly
+   backwards for the one line a rider reads while a train is coming. */
+const DEFAULT_ADVISORY = "Please stand back from the platform edge";
+function tidyAdvisory(txt){
+  let s = (txt||"").replace(/\s+/g," ").trim();
+  s = s.replace(/^(attention|attn|notice|alert|update|service advisory)[:\s-]+/i,"");
+  s = s.replace(/\s*(we apologize|please (allow|seek|use|expect)|customers (should|may)|allow (extra|additional)|for more info\w*|seek alternate|thank you for your patience)\b[^.]*\.?/ig,"");
+  return s.replace(/\s+([.,;])/g,"$1").replace(/\s+/g," ").trim();
+}
+async function refreshAdvisory(){
+  try{
+    const r = await fetch("https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fall-alerts.json");
+    const d = await r.json();
+    const now = Date.now()/1000, seen = new Set(), out = [];
+    for(const e of (d.entity||[])){
+      const al = e.alert; if(!al) continue;
+      if(/planned/i.test(((al["transit_realtime.mercury_alert"]||{}).alert_type)||"")) continue;
+      const per = al.active_period||[];
+      if(per.length && !per.some(p => now >= (p.start||0) && now <= (p.end||Infinity))) continue;
+      const tr = ((al.header_text||{}).translation||[]).find(t => !t.language || /^en$/i.test(t.language));
+      const txt = tidyAdvisory(tr && tr.text);
+      if(!txt || seen.has(txt)) continue;
+      seen.add(txt); out.push(txt);
+      /* Four is about a minute of strip at the speed below. Six made the cycle
+         two and a half minutes, which on a platform means the last alert is one
+         nobody ever waits to read. */
+      if(out.length >= 4) break;
+    }
+    setAdvisory(out.length ? out.join("   •   ") : DEFAULT_ADVISORY);
+  }catch(e){ /* leave the standing message up rather than blanking the strip */ }
+}
+function setAdvisory(text){
+  const span = $("#cAdvisory"), box = $("#cTicker");
+  if(span.textContent !== text) span.textContent = text;
+  /* Measure before deciding to scroll: the class itself adds padding-left:100%,
+     so asking while it is on would always say "too wide" and nothing would ever
+     stand still again. */
+  box.classList.remove("scroll");
+  if(span.scrollWidth > box.clientWidth + 4){
+    box.classList.add("scroll");
+    /* Constant speed, not constant duration: ~55px per second reads comfortably
+       at this size, and tying it to width means a long advisory takes longer
+       rather than racing past to finish on schedule. */
+    span.style.animationDuration = Math.max(14, Math.round(span.scrollWidth / 55)) + "s";
   }
 }
 
@@ -523,6 +626,7 @@ function fillPicker(){
     state.stopId = sel.value;
     try{ localStorage.setItem("tb.stationStop", sel.value); }catch(_){}
     refresh();
+    refreshWeather();          // a different station can be a different borough
   };
   $("#viewPick").onchange = () => { decideView(); render(); };
 }
@@ -552,7 +656,11 @@ async function boot(){
   decideView();
   hookFullscreen();
   watchIdle();
-  window.addEventListener("resize", () => { decideView(); measurePicker(); render(); });
+  /* The advisory's decision to scroll depends on how much room the strip has,
+     so it has to be re-measured whenever that changes. */
+  window.addEventListener("resize", () => {
+    decideView(); measurePicker(); render(); setAdvisory($("#cAdvisory").textContent);
+  });
   try{ await loadStations(); }
   catch(e){ $("#msg").textContent = "Could not load the station list."; return; }
 
@@ -578,6 +686,13 @@ async function boot(){
   await refresh();
   setInterval(refresh, 20000);          // the feed itself updates about every 30s
   setInterval(render, 1000);            // keep the clock and the minutes honest
+  /* Neither of these gates the board: the trains are the point, so they are
+     started after the first paint and refreshed on their own slow clocks —
+     weather cannot meaningfully change inside 15 minutes, and re-pulling the
+     whole alerts feed more often than every couple of minutes is rude to a
+     free endpoint that a wall display will hit all day. */
+  refreshWeather();  setInterval(refreshWeather, 900000);
+  refreshAdvisory(); setInterval(refreshAdvisory, 120000);
 }
 if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();

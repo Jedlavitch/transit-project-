@@ -570,7 +570,16 @@ function activeServices(s, parts){
   return act;
 }
 
-/* ===== row collectors -- each returns an array of {sortMin, time, dest, via, status, statusKind, color} ===== */
+/* ===== row collectors -- each returns an array of
+   {sortMin, etaMin, time, dest, via, status, statusKind, color} =====
+
+   etaMin is MINUTES FROM NOW, or null where the collector genuinely cannot say
+   (an Amtrak train with no speed fix, an aircraft overhead). It exists because
+   sortMin does NOT mean one thing: minutes-since-midnight on the bundled
+   schedules and Amtrak, minutes-from-now on WMATA/bus/transitous, and tenths of
+   a mile on planes. A metro board reading a countdown off sortMin therefore
+   printed "720 MIN" at noon. Every new collector must set etaMin; it is the one
+   field the countdown styles can trust. */
 
 /* Generic bundled-schedule collector: MARC, Ride On, SEPTA Rail, SEPTA
    Subway, SEPTA Bus (schedule fallback), PATCO all share the identical
@@ -594,7 +603,8 @@ async function collectScheduleRows(cfg){
     near.forEach(({st})=>{
       const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d,min:d.t})).filter(d=>d.min>=nowMin).sort((a,b)=>a.min-b.min).slice(0, cfg.perStation||2);
       deps.forEach(d=>{
-        rows.push({ sortMin:d.min, time:(s.tz?clock24Of:clockOf)(d.min), dest:(d.hs||st.name||"").toUpperCase(),
+        rows.push({ sortMin:d.min, etaMin:d.min-nowMin,
+          time:(s.tz?clock24Of:clockOf)(d.min), dest:(d.hs||st.name||"").toUpperCase(),
           via:(d.line||"").toUpperCase(), status:"SCHEDULED", statusKind:"na",
           color:cfg.colorFn?cfg.colorFn(d.line):cfg.color });
       });
@@ -654,7 +664,7 @@ async function collectSeptaByLine(cfg){
         .filter(d=>{ const k=d.n || (d.min+"|"+d.hs); if(seen.has(k)) return false; seen.add(k); return true; })
         .slice(0, cfg.perLine||3)
         .forEach(d=>rows.push({
-          sortMin:d.min, time:(s.tz?clock24Of:clockOf)(d.min % 1440),
+          sortMin:d.min, etaMin:d.min-nowMin, time:(s.tz?clock24Of:clockOf)(d.min % 1440),
           dest:(d.hs||d.st||"").toUpperCase(), via:line,
           /* GTFS gives the number prefixed with the line code (CYN1052); the
              board prints just the digits, as SEPTA's own does. */
@@ -705,15 +715,16 @@ async function collectAmtrakRows(count){
         ? (amLi.mins>0 ? `+${amLi.mins} MIN` : "ON TIME")
         : (late||"EN ROUTE").toUpperCase();
       const dLL=st[t.destCode];
-      let sortMin=1440, time="EN ROUTE";
+      let sortMin=1440, time="EN ROUTE", etaMin=null;
       if(dLL && t.velocity>15){
         const mins=Math.round(haversineMi({lat:t.lat,lon:t.lon},{lat:dLL[0],lon:dLL[1]})/t.velocity*60);
         if(mins>=0 && mins<900){
           sortMin=(now.getHours()*60+now.getMinutes()+mins)%1440;
           time=mins<=1 ? "ARR" : clockOf(sortMin);
+          etaMin=mins;                 // the run-time estimate, before the clock wrap
         }
       }
-      return { sortMin, time, dest:(t.destName||t.destCode||"?").toUpperCase(),
+      return { sortMin, etaMin, time, dest:(t.destName||t.destCode||"?").toUpperCase(),
         via:(t.routeName||"AMTRAK").toUpperCase(), status:statusText, statusKind,
         color:"#3ad0c8" };
     });
@@ -741,7 +752,7 @@ async function collectRailRows(count){
     const trains=(data.Trains||[]).filter(t=>t.Line && t.Line!=="--" && t.Min!=="---");
     return trains.slice(0,count).map(t=>{
       const min=t.Min==="BRD"?0 : t.Min==="ARR"?0 : parseInt(t.Min,10)||99;
-      return { sortMin:min, time: t.Min==="BRD"?"BRD":t.Min==="ARR"?"ARR":`${min} MIN`,
+      return { sortMin:min, etaMin:min, time: t.Min==="BRD"?"BRD":t.Min==="ARR"?"ARR":`${min} MIN`,
         dest:(t.DestinationName||"?").toUpperCase(), via:`${RAIL_NAMES[t.Line]||t.Line} LINE`,
         status:"LIVE", statusKind:"ok", color:RAIL_COLORS[t.Line]||"#888" };
     });
@@ -762,7 +773,8 @@ async function collectBusRows(count){
       if(rows.length>=count) break;
       let pred={}; try{ pred=await getJSON(`https://api.wmata.com/NextBusService.svc/json/jPredictions?StopID=${stop.StopID}&api_key=${encodeURIComponent(key)}`, 10000); }catch(e){}
       (pred.Predictions||[]).slice(0,3).forEach(p=>{
-        rows.push({ sortMin:p.Minutes<=0?0:p.Minutes, time:p.Minutes<=0?"NOW":`${p.Minutes} MIN`,
+        rows.push({ sortMin:p.Minutes<=0?0:p.Minutes, etaMin:p.Minutes<=0?0:p.Minutes,
+          time:p.Minutes<=0?"NOW":`${p.Minutes} MIN`,
           dest:(p.DirectionText||"?").toUpperCase(), via:`ROUTE ${p.RouteID}`, status:"LIVE", statusKind:"ok", color:"#6aa9ff" });
       });
     }
@@ -789,7 +801,9 @@ async function collectPlaneRows(count){
     return air.map(({a})=>{
       const rate=a.baro_rate||0, alt=typeof a.alt_baro==="number"?a.alt_baro:null;
       const phase = alt==null?"EN ROUTE" : rate<-350?"DESCENDING" : rate>350?"CLIMBING" : alt>=28000?"CRUISING":"EN ROUTE";
-      return { sortMin:Math.round(a.mi*10), time: alt!=null?`${alt.toLocaleString()}FT`:"—",
+      /* Sorted by distance, not time: an aircraft overhead is not departing
+         from anywhere, so there is no countdown to show and etaMin stays null. */
+      return { sortMin:Math.round(a.mi*10), etaMin:null, time: alt!=null?`${alt.toLocaleString()}FT`:"—",
         dest:(a.flight||a.r||"UNKNOWN").trim().toUpperCase(), via:(a.desc||a.t||"AIRCRAFT").toUpperCase(),
         status:phase, statusKind:"na", color:"#ffd166" };
     });
@@ -879,7 +893,7 @@ async function collectTransitousRows(family, count){
     .slice(0,count)
     .map(d=>{
       const min=Math.max(0, Math.round((d.when-Date.now())/60000));
-      return { sortMin:min, time: min<=0? "NOW" : `${min} MIN`,
+      return { sortMin:min, etaMin:min, time: min<=0? "NOW" : `${min} MIN`,
         /* The European style leads with a wall-clock departure and a platform,
            the way a Solari board does; the countdown suits the metro style. Both
            are carried so the renderer can pick, rather than the collector
@@ -897,6 +911,15 @@ async function collectTransitousRows(family, count){
           : (d.realTime? ((liveLateInfo(d.delayMin)||{}).cls || "ok") : "na"),
         color: TOUS_COL[family]||"#6aa9ff" };
     });
+}
+
+/* True when the active skin has cut the board down to this one system. Sampling
+   depth was chosen for a board sharing sixteen slots between six systems; the
+   same depth on a subway-only platform sign fills six of its eight rows and
+   leaves two dark. Asked at collect time, so the Solari board — which still
+   shows every operator — keeps its original mix. */
+function soloSystem(id){
+  return !!(SKIN && SKIN.only && SKIN.only.length === 1 && SKIN.only[0] === id);
 }
 
 const SYSTEM_DEFS_BY_CITY = {
@@ -959,7 +982,8 @@ const SYSTEM_DEFS_BY_CITY = {
   // the protobuf decoder into a third file just for this departure board.
   nyc: [
     {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
-    {id:"subway", logo:"SUBWAY", label:"Subway", collect:()=>collectScheduleRows({url:"mta-subway-schedule.json", stationCount:3, perStation:2,
+    {id:"subway", logo:"SUBWAY", label:"Subway", collect:()=>collectScheduleRows({url:"mta-subway-schedule.json",
+      stationCount:soloSystem("subway")?4:3, perStation:soloSystem("subway")?4:2,
       colorFn:l=>NYC_SUBWAY_COL[l]||"#888"})},
     {id:"lirr", logo:"LIRR", label:"LIRR", collect:()=>collectScheduleRows({url:"lirr-schedule.json", stationCount:2, perStation:2, color:"#00985F"})},
     {id:"mnr", logo:"MNR", label:"Metro-North", collect:()=>collectScheduleRows({url:"mnr-schedule.json", stationCount:2, perStation:2, color:"#A72650"})},
@@ -1020,7 +1044,13 @@ const SYSTEM_DEFS_BY_CITY = {
 };
 const SYSTEM_DEFS = SYSTEM_DEFS_BY_CITY[CITY];
 async function collectAllRows(){
-  const active=SYSTEM_DEFS.filter(sys=>systemVisible(sys.id));
+  /* A metro skin may declare the systems its real signage carries (`only`).
+     Applied here rather than in the renderer so the other systems are never
+     fetched or sorted in the first place — filtering after the ROW_COUNT cut
+     below would let a bus departure take a slot and then vanish, leaving a
+     platform sign with visible holes in it. */
+  const permitted = (STYLE==="metro" && SKIN && SKIN.only) ? new Set(SKIN.only) : null;
+  const active=SYSTEM_DEFS.filter(sys=>systemVisible(sys.id) && (!permitted || permitted.has(sys.id)));
   const results=await Promise.all(active.map(sys=>sys.collect()));
   const rows=[];
   active.forEach((sys,i)=>{ results[i].forEach(r=>{
@@ -1116,7 +1146,7 @@ class FlapField{
       const flap=document.createElement("span"); flap.className="flap";
       const ch=document.createElement("span"); ch.className="ch"; ch.textContent=" ";
       flap.appendChild(ch); container.appendChild(flap);
-      this.cells.push({flap, ch, current:" "});
+      this.cells.push({flap, ch, current:" ", gen:0});
     }
   }
   setText(str){
@@ -1128,18 +1158,33 @@ class FlapField{
       this._flip(cell, target, i*14);
     }
   }
+  /* A flip is a chain of timers ~400ms long across a field, and the board can be
+     asked to repaint sooner than that — a 20s tick landing on a resize, or
+     measureAndRefit() rebuilding the rows underneath it. Two chains on one cell
+     used to interleave their writes, which is where the mixed-up destinations
+     ("GLENMONTNGER") came from.
+
+     `gen` settles it: starting a flip invalidates every earlier chain on that
+     cell, and a superseded chain drops out instead of finishing into a cell that
+     has moved on. `current` is claimed HERE rather than at the end of the chain,
+     because a repaint arriving mid-flip compared against the old value and took
+     the `continue` above — so a value that changed and changed back within one
+     animation never repainted, and the board sat there showing the wrong
+     destination indefinitely with no way to correct itself. */
   _flip(cell, target, delay){
+    const gen = ++cell.gen;
+    cell.current = target;
     const steps=[randChar(), target];
     let i=0;
     const runStep=()=>{
+      if(cell.gen !== gen) return;
       const c=steps[i];
       cell.flap.classList.remove("flipping"); void cell.flap.offsetWidth;
       cell.flap.classList.add("flipping");
       playFlipClick();
-      setTimeout(()=>{ cell.ch.textContent=c; }, 55);
+      setTimeout(()=>{ if(cell.gen === gen) cell.ch.textContent=c; }, 55);
       i++;
       if(i<steps.length) setTimeout(runStep, 90);
-      else cell.current=target;
     };
     setTimeout(runStep, delay);
   }
@@ -1187,15 +1232,54 @@ const TIME_CHARS=7;                 // must match the FlapField built below
    colour; anything unmatched falls back to the skin's own ink, so an unexpected
    route shows plainly instead of vanishing.
 
-   NYC is deliberately absent: its two real displays (the cyan countdown clock
-   and the OUTFRONT vertical next-train panel) are different layouts, not skins,
-   and it needs a subway-only filter first. */
+   `only` names the systems the operator's real signage carries, and is what
+   makes nyc a platform sign rather than a departure hall.
+
+   NYC's two OTHER displays — the cyan countdown clock and the OUTFRONT vertical
+   next-train panel — are genuinely different layouts rather than skins, so they
+   live in station.html and not here. */
+/* The MIN column, which is the column a platform sign exists for. Reads etaMin
+   — never sortMin — and falls back to whatever clock time the collector printed
+   when the eta is genuinely unknown, because "1:36P" is at least true where a
+   made-up countdown would not be. Over an hour out it stays a clock time: no
+   real sign counts down from 94. */
+function metroMins(r){
+  const m = r.etaMin;
+  if(m == null || m > 60) return r.time;
+  return m <= 0 ? "NOW" : m + " MIN";
+}
+
+/* Which ink reads on a bullet of a given colour. This was "does the hex start
+   with f, e or d" — a test that calls MTA's #EE352E light and prints the 1/2/3
+   discs in black, where every one in the system is white on red. Relative
+   luminance (WCAG) still gets the yellow N/Q/R/W right, which is the case the
+   original test existed for. */
+function inkOn(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex||""));
+  if(!m) return "#fff";
+  const n = parseInt(m[1],16);
+  const lin = c => { c/=255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); };
+  const L = 0.2126*lin((n>>16)&255) + 0.7152*lin((n>>8)&255) + 0.0722*lin(n&255);
+  return L > 0.42 ? "#111" : "#fff";
+}
+
 const METRO_SKINS = {
   dc:        { op:"WMATA",     ink:"#ff9e1b", bg:"#0d0b08", bullet:"code",
                codes:{ "RED LINE":"RD","ORANGE LINE":"OR","BLUE LINE":"BL",
                        "SILVER LINE":"SV","GREEN LINE":"GR","YELLOW LINE":"YL" },
                lines:{ "RED LINE":"#bf0d3e","ORANGE LINE":"#ed8b00","BLUE LINE":"#009cde",
                        "SILVER LINE":"#919d9d","GREEN LINE":"#00b140","YELLOW LINE":"#ffd100" } },
+  /* The MTA's line mark is a coloured disc with the letter or number in it, and
+     it is the whole identity of the system — so nyc reuses the same palette the
+     New York board already decodes rather than restating 26 colours here.
+
+     `only` is why this board is a platform sign and not a departure hall: New
+     York's flipboard otherwise merges the subway with LIRR, Metro-North, MTA
+     Bus, PATH and Amtrak, and no sign in the system shows six operators at
+     once. The Solari style still shows all of them, which is right — Penn
+     Station's board really does. */
+  nyc:       { op:"MTA",       ink:"#e9edf2", bg:"#08090b", bullet:"disc",
+               only:["subway"], lines: NYC_SUBWAY_COL },
   philly:    { op:"SEPTA",     ink:"#e8eef4", bg:"#08131c", bullet:"tab",
                lines:{ MFL:"#0072ce", BSL:"#ff7f32", L:"#0072ce", B:"#ff7f32" } },
   boston:    { op:"MBTA",      ink:"#e9eef3", bg:"#0b0f14", bullet:"tab",
@@ -1483,20 +1567,24 @@ function renderRows(rows){
            that operator's real palette. */
         const col = SKIN.lines[key] || SKIN.lines[key.split(" ")[0]] || SKIN.ink;
         const shown = (SKIN.codes && SKIN.codes[key]) || route;
+        /* A disc holds one or two characters. Anything longer has to become a
+           lozenge or it is a circle with the text spilling out of both sides —
+           PATH's "JOURNAL SQUARE - 33RD STREET" is the case that shows it. */
+        const shape = (SKIN.bullet==="disc" && shown.length>2) ? "tab" : SKIN.bullet;
         f.time.setText("");
         f.logoImgEl.style.display="none";
         f.logoTextEl.style.display="";
         f.logoTextEl.textContent=shown;
-        f.logoTextEl.className="op-logo metro-bullet "+SKIN.bullet;
+        f.logoTextEl.className="op-logo metro-bullet "+shape;
         f.logoTextEl.style.background=col;
-        f.logoTextEl.style.color = /^#(f|e|d)/i.test(col) ? "#111" : "#fff";
+        f.logoTextEl.style.color = inkOn(col);
       } else {
         f.time.setText(route);
         f.logoTextEl.style.display="none"; f.logoImgEl.style.display="none";
       }
       f.dest.setText(r.dest);
       f.via.setText("");
-      f.statusEl.textContent = r.time;             // big minutes
+      f.statusEl.textContent = metroMins(r);
       f.statusEl.className = "status-tag countdown " + (r.statusKind||"na");
       f.el.classList.remove("empty");
       continue;
