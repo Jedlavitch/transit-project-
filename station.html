@@ -28,6 +28,12 @@
   mta-live.js. No key, no Worker: MTA serves those feeds CORS-open.
 -->
 <link rel="stylesheet" href="theme.css" />
+<!-- NOT loading license.js/gate.js, deliberately. Full screen is a licensed
+     feature on the city boards, and toggleFullscreen() below still asks TBGate
+     for permission — so adding those two script tags is all it takes to put
+     this page behind the same licence. It is left off because gate.js also
+     starts a 15-minute demo timer that clears every interval and walls the
+     page, and a station display's whole job is to run unattended for hours. -->
 <script src="config.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
@@ -148,21 +154,26 @@
   .picker{position:fixed; top:8px; right:10px; z-index:6; display:flex; gap:6px;
     transition:opacity .35s ease}
   body.idle .picker{opacity:0; pointer-events:none}
-  .picker select,.picker a{font:inherit; font-size:12px; padding:5px 8px; border-radius:7px;
-    background:rgba(0,0,0,.45); color:#fff; border:1px solid rgba(255,255,255,.25); text-decoration:none}
+  .picker select,.picker a,.picker button{font:inherit; font-size:12px; padding:5px 8px;
+    border-radius:7px; background:rgba(0,0,0,.45); color:#fff;
+    border:1px solid rgba(255,255,255,.25); text-decoration:none}
   .picker select{max-width:190px}
-  body[data-view="clock"] .picker select,body[data-view="clock"] .picker a{
+  .picker button{cursor:pointer; line-height:1; display:flex; align-items:center}
+  body[data-view="clock"] .picker select,body[data-view="clock"] .picker a,
+  body[data-view="clock"] .picker button{
     background:rgba(10,58,82,.75); border-color:rgba(255,255,255,.35)}
-  @media (max-width:600px){ .picker{display:none} }
-  /* "to Van Cortlandt Park-242 St" is 28 characters; on a 390px phone there is
-     no font size that both fits it on one line and stays readable. The big
-     screens have the width, a phone does not, so here it wraps to two lines
-     instead of shrinking away — the lead row is flex:none and the strip below
-     simply gets the remaining height. */
-  @media (max-width:560px){
-    .lead .to .d1{white-space:normal; display:-webkit-box; -webkit-line-clamp:2;
-      -webkit-box-orient:vertical; overflow:hidden; line-height:1.08}
-  }
+  /* The selects crowd a phone, but full screen is the control that matters most
+     there — a phone propped up on a desk IS the display. Hide the pickers, keep
+     the button. */
+  @media (max-width:600px){ .picker select{display:none} }
+  /* "to Flatbush Av-Brooklyn College" is 31 characters, and at the size this
+     line wants to be it does not fit one line on a 800px portrait panel either
+     — not just on a phone. So it wraps to two rather than shrinking away or
+     ellipsising the interesting half. A short name still occupies one line:
+     -webkit-box sizes to its content, and the lead row is flex:none, so the
+     strip below simply gets whatever height is left. */
+  .lead .to .d1{white-space:normal; display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden; line-height:1.08}
 </style>
 </head>
 <body data-view="next">
@@ -174,6 +185,7 @@
     <option value="next">Next train</option>
     <option value="clock">Countdown</option>
   </select>
+  <button id="fsBtn" type="button" title="Full screen (F)"></button>
   <a href="nyc.html" title="Back to the New York board">‹ board</a>
 </div>
 
@@ -309,9 +321,12 @@ function render(){
   const staleFoot = state.lastOk ? Math.round((Date.now() - state.lastOk)/60000) : 0;
   $("#cStation").textContent = stationName(state.stopId) +
     (staleFoot >= 3 ? " · times " + staleFoot + " min old" : "");
-  /* "Welcome to X" is what the big screens say; on a phone that greeting eats
-     the half of the bar the station name needs, so the name goes alone. */
-  $("#welcome").textContent = (window.innerWidth < 560 ? "" : "Welcome to ") +
+  /* "Welcome to X" is what the big screens say, and they have the width for it.
+     Below that the greeting eats the room the station name needs — the header
+     also gives up a gutter to the controls — so the name goes alone. The
+     threshold is on window width, not on whether the controls happen to be
+     showing, so the title does not rewrite itself every time they fade. */
+  $("#welcome").textContent = (window.innerWidth < 1000 ? "" : "Welcome to ") +
     stationName(state.stopId);
 
   if(!arr.length){
@@ -419,6 +434,76 @@ function render(){
   }
 }
 
+/* ---- full screen -------------------------------------------------------
+   A station display's natural state is full screen, so this is the one control
+   that earns its place. Two things carried over from the city boards, both of
+   which were bugs there first:
+
+   fsDoc()  the boards run inside the same-origin cityswitch shell iframe, where
+            the fullscreen element belongs to the OUTER document. Read from the
+            inner one and fullscreenElement is null and exitFullscreen() quietly
+            does nothing, which is how Exit ends up doing nothing.
+
+   order    the exit branch comes BEFORE the licence check. Leaving full screen
+            is never gated: trapping somebody in it is a bug, not a sale. */
+const SVG_EXPAND = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
+const SVG_COMPRESS = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m8 0v-3a2 2 0 0 1 2-2h3"/></svg>`;
+
+function fsDoc(){
+  try{ if(window.top && window.top !== window && window.top.document) return window.top.document; }
+  catch(e){}
+  return document;
+}
+function fsElement(){ const d = fsDoc(); return d.fullscreenElement || d.webkitFullscreenElement; }
+function toggleFullscreen(){
+  const d = fsDoc(), el = d.documentElement;
+  if(fsElement()){ const ex = d.exitFullscreen || d.webkitExitFullscreen; if(ex) ex.call(d); return; }
+  if(window.TBGate && !TBGate.require("fullscreen")) return;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if(!req){ hintFS(); return; }
+  try{ const p = req.call(el); if(p && p.catch) p.catch(() => hintFS()); }
+  catch(e){ hintFS(); }
+}
+let hintTimer = null;
+function hintFS(){
+  let t = document.getElementById("fsHint");
+  if(!t){
+    t = document.createElement("div"); t.id = "fsHint";
+    t.style.cssText = "position:fixed;top:0;left:50%;transform:translate(-50%,-120%);z-index:9999;" +
+      "background:#0d1a33;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:0 0 12px 12px;" +
+      "padding:12px 20px;font-size:14px;max-width:90vw;text-align:center;transition:transform .35s ease";
+    document.body.appendChild(t);
+  }
+  t.textContent = "Full screen is blocked here. Open this page in its own browser tab to go full screen.";
+  t.style.transform = "translate(-50%,0)";
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { t.style.transform = "translate(-50%,-120%)"; }, 4500);
+}
+function onFsChange(){
+  const on = !!fsElement(), b = $("#fsBtn");
+  if(b){ b.innerHTML = on ? SVG_COMPRESS : SVG_EXPAND;
+         b.title = on ? "Exit full screen (F)" : "Full screen (F)"; }
+  /* Going full screen changes the screen shape, which is the one input
+     decideView() has — a 16:9 window that becomes a 16:9 screen stays put, but
+     a maximised strip should flip to the countdown. */
+  decideView(); measurePicker(); render();
+}
+function hookFullscreen(){
+  $("#fsBtn").innerHTML = SVG_EXPAND;
+  $("#fsBtn").onclick = toggleFullscreen;
+  ["fullscreenchange","webkitfullscreenchange"].forEach(ev => {
+    document.addEventListener(ev, onFsChange);
+    try{ if(fsDoc() !== document) fsDoc().addEventListener(ev, onFsChange); }catch(e){}
+  });
+  document.addEventListener("keydown", e => {
+    if(e.key !== "f" && e.key !== "F") return;
+    const t = e.target;
+    if(t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;   // typing, not a shortcut
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault(); toggleFullscreen();
+  });
+}
+
 /* ---- boot -------------------------------------------------------------- */
 function fillPicker(){
   const sel = $("#stopPick");
@@ -462,6 +547,7 @@ function watchIdle(){
 
 async function boot(){
   decideView();
+  hookFullscreen();
   watchIdle();
   window.addEventListener("resize", () => { decideView(); measurePicker(); render(); });
   try{ await loadStations(); }
