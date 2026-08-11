@@ -182,8 +182,34 @@ export default {
 
     /* ---- everything below needs a session ------------------------------ */
     const id = await whoami(req, env);
-    if (url.pathname.startsWith("/spots") || url.pathname === "/me" || url.pathname === "/auth/signout") {
+    if (url.pathname.startsWith("/spots") || url.pathname === "/me"
+        || url.pathname === "/auth/signout" || url.pathname === "/auth/delete") {
       if (!id) return json({ ok: false, error: "not signed in" }, 401);
+    }
+
+    /* ---- erasure: delete the account and everything in it ----------------
+       The privacy policy promises deletion on request within 30 days. Without
+       this, that promise was kept by hand-editing KV, which is a promise you
+       break the first busy week.
+
+       Being signed in IS the authorisation. There is no email or account id to
+       supply, for the same reason /spots takes none: an endpoint that deletes
+       whatever account you name is a way to delete other people's.
+
+       Deliberately irreversible, and deliberately not gated behind an emailed
+       confirmation link -- that would mean holding the data while waiting for a
+       click, which is the opposite of what was asked for. */
+    if (url.pathname === "/auth/delete" && req.method === "POST") {
+      await env.ACCOUNTS.delete(`acct:${id}:spots`);
+      await env.ACCOUNTS.delete("acct:" + id);
+      const h = req.headers.get("authorization") || "";
+      await env.ACCOUNTS.delete("sess:" + (await sha(h.slice(7).trim())));
+      /* Sessions on the account's OTHER devices cannot be enumerated: they are
+         stored hashed and keyed by the token, with no index back to the
+         account. They now resolve to an id with no record behind it, which the
+         routes below already handle as an empty account, and they expire on
+         their own TTL. Nothing identifying survives either way. */
+      return json({ ok: true, deleted: true });
     }
 
     if (url.pathname === "/me") {

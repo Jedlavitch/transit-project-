@@ -45,6 +45,10 @@
                                           session always returns same key)
      GET  /claim (TEST_MODE only)       → { ok:true, key } demo key, no Stripe
      POST /grant  (x-admin-secret hdr)  → { ok:true, key } manual key issue
+     POST /delete {key}                 → { ok:true, erased:true } forgets the
+                                          buyer's email and device list for that
+                                          key. The key keeps working; erasure is
+                                          not the same act as revocation.
    ============================================================================ */
 
 const CORS = {
@@ -109,6 +113,10 @@ function sameBytes(a, b) {
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
 }
+/* Tombstone written over a Stripe session mapping when its buyer is erased.
+   Not a valid key in any format, so it can never be mistaken for one. */
+const ERASED = "__erased__";
+
 const keyId = raw => [...raw.slice(0, 5)].map(b => b.toString(16).padStart(2, "0")).join("");
 
 /* Mint a key this Worker, the feed proxy and gen-licence.py all accept. */
@@ -258,6 +266,61 @@ export default {
                     warning: "This key predates the unified format and will not pass the feed proxy. Ask for a replacement." });
     }
 
+    /* ---- erasure: forget who bought this licence -------------------------
+       The privacy policy promises deletion on request within 30 days, and until
+       now honouring it meant editing KV by hand.
+
+       Holding the key is the authorisation, which is the same rule the rest of
+       this Worker runs on: the key is the entitlement, and there is nothing
+       else a buyer could prove. It is checked by signature first so a random
+       string cannot be used to probe for records.
+
+       WHAT IT DOES NOT DO: it does not stop the licence working. The key is
+       signed, not stored, so it stays valid and the boards keep running -- and
+       that is the right outcome. Somebody exercising a data right should not
+       lose the thing they paid for. Disabling a licence is a different act,
+       done by adding the id to REVOKED.
+
+       A consequence worth knowing rather than discovering: the boards
+       re-verify every few hours, so a licence still in use grows a fresh KV
+       record within the day. That record holds ONLY the random device
+       identifiers and timestamps the five-device limit needs. The email address
+       and the Stripe session never come back -- /verify has no way to learn
+       them -- so what returns is the counter, not the person. Confirmed by
+       test: after erasure the recreated record contains devices and nothing
+       else. */
+    if (url.pathname === "/delete" && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const key = String(body.key || url.searchParams.get("key") || "").trim().toUpperCase();
+      const admin = env.ADMIN_SECRET && req.headers.get("x-admin-secret") === env.ADMIN_SECRET;
+      if (!key) return json({ ok: false, error: "missing_key" }, 400);
+
+      const signed = await checkSigned(env, key);
+      // An expired key still identifies a record its owner may want erased.
+      const id = signed.ok ? signed.id
+               : (signed.error === "expired" || signed.error === "revoked"
+                   ? keyId(b32decode(key.replace(/^TB-/i, "")).slice(0, 7)) : null);
+      if (!id && !admin) return json({ ok: false, error: "unknown_key" }, 404);
+
+      const slot = "lic:" + (id || "");
+      let rec = null;
+      try { rec = JSON.parse((await env.LICENSES.get(slot)) || "null"); } catch (_) {}
+      if (rec) {
+        await env.LICENSES.delete(slot);
+        if (rec.session) await env.LICENSES.put("sess:" + rec.session, ERASED);
+      }
+      // Legacy KV-issued keys keep their record under the key itself.
+      const legacy = await env.LICENSES.get("key:" + key);
+      if (legacy) {
+        try { const l = JSON.parse(legacy); if (l.session) await env.LICENSES.put("sess:" + l.session, ERASED); } catch (_) {}
+        await env.LICENSES.delete("key:" + key);
+      }
+      /* Idempotent on purpose. Somebody who asks twice should be told it is
+         gone, not handed a 404 that reads like the first request failed. */
+      return json({ ok: true, erased: true, hadRecord: !!(rec || legacy),
+        note: "Personal data for this licence is deleted. The key itself still works." });
+    }
+
     /* ---- claim: turn a paid Stripe Checkout session into a key ---- */
     if (url.pathname === "/claim") {
       const session = url.searchParams.get("session");
@@ -266,6 +329,13 @@ export default {
         if (!env.STRIPE_SECRET) return json({ ok: false, error: "stripe_not_configured" }, 500);
         // Idempotent: a session that already claimed a key gets the same key back.
         const prior = await env.LICENSES.get("sess:" + session);
+        /* ...unless the buyer asked to be forgotten. /delete leaves a tombstone
+           here rather than removing the mapping, because a bare delete would
+           make this branch miss, mint a fresh key, and store their email again
+           the next time they opened the link in their receipt -- an erasure
+           that undoes itself is not one. */
+        if (prior === ERASED) return json({ ok: false, error: "erased",
+          detail: "This purchase was erased at the buyer's request. Contact support if that was a mistake." }, 410);
         if (prior) return json({ ok: true, key: prior });
         const r = await fetch("https://api.stripe.com/v1/checkout/sessions/" + encodeURIComponent(session), {
           headers: { Authorization: "Bearer " + env.STRIPE_SECRET },
