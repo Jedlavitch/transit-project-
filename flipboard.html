@@ -851,7 +851,19 @@ const SYSTEM_DEFS_BY_CITY = {
   ],
   philly: [
     {id:"amtrak", logo:"AMTRAK", label:"Amtrak", collect:()=>collectAmtrakRows(6)},
-    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectScheduleRows({url:"septa-rail-schedule.json", stationCount:2, perStation:2, color:"#4F758B"})},
+    /* Wider than the other systems on purpose. The Regional Rail board shows
+       EVERY line, and two stations x two departures could only ever surface
+       three or four of the thirteen. In Center City all the lines pass through
+       the same handful of stations, so sampling more of them is what makes the
+       whole railroad appear; septaGroups() then trims each line to its next few
+       so a busy line cannot crowd the others off the board.
+       Measured: 2 stations x 2 gave 3 lines, 10 x 12 gives 6. Going deeper does
+       NOT help — 10 x 40 also gives 6 — because the ceiling is not sampling
+       depth, it is that proximity can only ever see lines calling near where
+       the board is pointed. Showing all thirteen needs collecting per LINE
+       (each line's next departure from any Center City station) rather than per
+       station, which is a different function, not a bigger number here. */
+    {id:"septarail", logo:"SEPTA", label:"SEPTA Rail", collect:()=>collectScheduleRows({url:"septa-rail-schedule.json", stationCount:10, perStation:12, color:"#4F758B"})},
     {id:"septasubway", logo:"SEPTA", label:"SEPTA Subway", collect:()=>collectScheduleRows({url:"septa-subway-schedule.json", stationCount:2, perStation:2,
       colorFn:l=>({L1:"#1c6bb0",B1:"#f7941d",B2:"#f7941d",B3:"#f7941d"}[l])||"#556"})},
     {id:"septabus", logo:"SEPTA BUS", label:"SEPTA Bus", collect:()=>collectScheduleRows({url:"septa-bus-schedule.json", stationCount:2, perStation:2, color:"#e8a33c"})},
