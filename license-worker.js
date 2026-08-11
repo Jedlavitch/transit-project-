@@ -179,6 +179,46 @@ export default {
     if (url.pathname === "/health") {
       const kv = !!env.LICENSES, stripe = !!env.STRIPE_SECRET, test = env.TEST_MODE === "1";
       const secret = !!env.LICENCE_SECRET;
+
+      /* ACTUALLY TEST THE STRIPE KEY, do not just notice that one is present.
+
+         This endpoint reported stripe:true for a key belonging to a different
+         mode entirely. The Worker looked healthy, /claim failed on every real
+         purchase, and the only symptom was a customer who paid and got nothing
+         -- twice, before anyone thought to look. "A value is set" is not a
+         health check; it is a spelling check.
+
+         GET /v1/balance is the cheapest authenticated call Stripe has, and its
+         livemode flag is the specific thing that was wrong: a test key against
+         a live payment link. Cached in KV for ten minutes because /health is
+         public and unauthenticated, and a health endpoint that calls a payment
+         processor on every hit is an amplifier pointed at your own rate
+         limits. */
+      let sc = { checked: false };
+      if (stripe && kv) {
+        try {
+          const cached = await env.LICENSES.get("health:stripe");
+          if (cached) sc = JSON.parse(cached);
+          else {
+            const r = await fetch("https://api.stripe.com/v1/balance", {
+              headers: { Authorization: "Bearer " + env.STRIPE_SECRET } });
+            const b = await r.json().catch(() => ({}));
+            sc = r.ok
+              ? { checked: true, ok: true, mode: b.livemode ? "live" : "TEST",
+                  warning: b.livemode ? null
+                    : "STRIPE_SECRET is a TEST key. Every real purchase will fail at /claim with stripe_lookup_failed." }
+              : { checked: true, ok: false,
+                  error: (b.error && b.error.message) || ("http_" + r.status),
+                  warning: "STRIPE_SECRET is set but Stripe rejects it. Purchases cannot be turned into keys." };
+            await env.LICENSES.put("health:stripe", JSON.stringify(sc), { expirationTtl: 600 });
+          }
+        } catch (_) {
+          sc = { checked: true, ok: false, error: "unreachable",
+                 warning: "Could not reach Stripe to test the key." };
+        }
+      } else if (stripe) {
+        sc = { checked: false, note: "needs the KV binding to cache the result" };
+      }
       return json({
         ok: true,
         kv, stripe,
@@ -189,9 +229,12 @@ export default {
         testMode: test,
         deviceLimit: parseInt(env.DEVICE_LIMIT || "5", 10),
         // can this Worker actually issue a USABLE key to somebody right now?
-        ready: kv && secret && (stripe || test),
+        ready: kv && secret && ((stripe && sc.ok !== false && sc.mode !== "TEST") || test),
+        // Does the Stripe key WORK, and is it the right mode? See below.
+        stripeCheck: sc,
         secretWarning: secret ? null
           : "LICENCE_SECRET is not set. Keys cannot be minted, and any that were will not work with the feed proxy.",
+        stripeWarning: sc.warning || null,
         // loud on purpose: TEST_MODE hands free keys to anyone who asks
         warning: test ? "TEST_MODE is on -- /claim issues free keys with no payment. Remove it before selling." : null,
       });
