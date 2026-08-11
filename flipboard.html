@@ -141,10 +141,10 @@
      line regardless of the column order. */
   :root[data-style="euro"] .board-row > *{ grid-row:1 }
   :root[data-style="euro"] .board-row > *:nth-child(1){ grid-column:1 }  /* time   */
-  :root[data-style="euro"] .board-row > *:nth-child(2){ grid-column:4 }  /* ziel   */
+  :root[data-style="euro"] .board-row > *:nth-child(2){ grid-column:3 }  /* ziel   */
   :root[data-style="euro"] .board-row > *:nth-child(3){ grid-column:2 }  /* train  */
-  :root[data-style="euro"] .board-row > *:nth-child(4){ grid-column:3 }  /* über   */
-  :root[data-style="euro"] .board-row > *:nth-child(5){ grid-column:5 }  /* gleis  */
+  :root[data-style="euro"] .board-row > *:nth-child(4){ grid-column:5 }  /* hinweis*/
+  :root[data-style="euro"] .board-row > *:nth-child(5){ grid-column:4 }  /* gleis  */
 
   /* no flap furniture: plain white text on the panel */
   /* width:auto collapses a blank cell to nothing, so ZÜRICH FLUGHAFEN lost its
@@ -161,10 +161,13 @@
   :root[data-style="euro"] .board-row > *:nth-child(2) .ch{
     font-weight:700; font-size:calc(var(--flap-font) * 1.12);
   }
-  /* Über is secondary */
+  /* The note column: small, and only ever occupied by an exception. */
   :root[data-style="euro"] .board-row > *:nth-child(4) .ch{
-    font-size:calc(var(--flap-font) * .62); opacity:.92;
+    font-size:calc(var(--flap-font) * .58); opacity:.95; font-weight:700;
   }
+  :root[data-style="euro"] .board-row.late  > *:nth-child(4) .ch{ color:#ffd34d }
+  :root[data-style="euro"] .board-row.gone  > *:nth-child(4) .ch{ color:#ff8a8a }
+  :root[data-style="euro"] .board-row.gone  > *:nth-child(2) .ch{ text-decoration:line-through; opacity:.75 }
   /* the train-number chip, in place of the operator logo */
   :root[data-style="euro"] .op-logo-img{ display:none !important }
   :root[data-style="euro"] .op-logo{
@@ -1038,13 +1041,13 @@ const STYLE_COLS = {
      destination large, then Gleis. The row's children are in a different order
      in the DOM (shared with the other styles), so euro places them explicitly
      by grid-column rather than duplicating the row markup. */
-  euro:  `86px 104px 0px minmax(0,1fr) 78px`,
+  euro:  `86px 104px minmax(0,1fr) 74px 120px`,
   usa:   `${TIME_COL} minmax(0,1.7fr) 104px minmax(0,1fr) 96px`,
   metro: `96px minmax(0,1fr) 128px`,
 };
 const STYLE_HEADS = {
   /* Bilingual, as they are on the real thing. */
-  euro:  ["Zeit <i>Time</i>","Zug <i>Train</i>","","Ziel <i>Destination</i>","Gleis <i>Platform</i>"],
+  euro:  ["Zeit <i>Time</i>","Zug <i>Train</i>","Ziel <i>Destination</i>","Gleis <i>Pl.</i>","Hinweis <i>Note</i>"],
   usa:   ["TIME","DESTINATION","OPERATOR","VIA","STATUS"],
   metro: ["LINE","DESTINATION","MIN"],
 };
@@ -1072,8 +1075,18 @@ const rowFields=[]; // [{el, logoEl, time:FlapField, dest:FlapField, via:FlapFie
    window resizes, which is what a real board does when you build a bigger one. */
 const FLAP_GAP = 2;
 function flapsThatFit(px){
-  const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--flap-w")) || 28;
-  return Math.max(3, Math.floor((px + FLAP_GAP) / (w + FLAP_GAP)));
+  const cs = getComputedStyle(document.documentElement);
+  let w = parseFloat(cs.getPropertyValue("--flap-w")) || 28;
+  let gap = FLAP_GAP;
+  /* The euro skin drops the flap furniture for proportional text, so a glyph is
+     roughly half the width of a flap cell and there is no gap. Measuring it as
+     though it were still 28px wide under-counted every column by half — which
+     is why the note column fitted "+9" where "+9 MIN" had room. */
+  if (document.documentElement.getAttribute("data-style") === "euro") {
+    w = (parseFloat(cs.getPropertyValue("--flap-font")) || 22) * 0.52;
+    gap = 0;
+  }
+  return Math.max(3, Math.floor((px + gap) / (w + gap)));
 }
 let fitWidths = null;      // {dest, via} in flaps, measured from the real layout
 function measureAndRefit(){
@@ -1155,7 +1168,17 @@ function renderRows(rows){
          not the calling pattern. So the column stays empty rather than being
          padded with the operator name to look full, and the layout gives the
          space to the destination instead. */
-      f.via.setText("");
+      /* A real board's note column is empty on a punctual train and carries the
+         exception when there is one — "10 Minuten später", "Zug fällt aus".
+         Printing ON TIME on every row would be noise, and the absence of a note
+         is itself the information. Delay and cancellation were being dropped
+         entirely when this column became the platform, which left the board
+         unable to say the one thing it exists to say. */
+      const late = /^\+(\d+)/.exec(r.status||"");
+      f.via.setText(r.statusKind==="bad" ? "FÄLLT AUS"
+                   : late ? `+${late[1]} MIN` : "");
+      f.el.classList.toggle("late", !!late);
+      f.el.classList.toggle("gone", r.statusKind==="bad");
       f.logoTextEl.style.display=""; f.logoImgEl.style.display="none";
       f.logoTextEl.textContent = r.via || "";
       f.logoTextEl.style.background = "";
