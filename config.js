@@ -71,7 +71,18 @@ window.TB_CONFIG = {
      Empty here puts everything back on airplanes.live, which is correct while
      this is free. Re-fill it once the Worker serves stale on upstream failure
      (see adsb-worker.js) and the rate limit is resolved. */
-  adsbUrl:      "",       // https://tb-adsb.jacklemonade2.workers.dev
+  /* Your own proxy, on your own box, with its own IP — which is the whole
+     point: adsb.lol rate-limits per IP and Cloudflare Workers share one, so the
+     Worker drew 429s this does not. Filled in, customers inherit a working feed
+     rather than each standing one up; AIRCRAFT-FEED.md stays for anyone who
+     would rather run their own.
+
+     sslip.io rather than a subdomain of this site because the zone is still
+     served by IONOS, not Cloudflare — a record added in the Cloudflare
+     dashboard does not resolve while that is true. sslip.io maps the IP into a
+     real public name, so Let's Encrypt issues for it normally. Swap this for
+     adsb.transitproject.online once the nameservers actually move. */
+  adsbUrl:      "https://142.93.200.253.sslip.io",
 
   /* ---- accounts / sign-in ----------------------------------------------
      account-worker.js. Left empty there is simply no sign-in: the Spotter log
