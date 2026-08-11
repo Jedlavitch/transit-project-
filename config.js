@@ -176,7 +176,20 @@ window.TB_CONFIG = {
       if (!active) { try { active = (localStorage.getItem("tb.adsbUrl") || "").trim(); } catch (_) {} }
       if (!active) return;                                  // no feed: nothing to credit
       if (document.getElementById("tbAdsbCredit")) return;
-      const CREDIT = "Aircraft data adsb.lol (ODbL)";
+      /* Name the source actually in use. A fixed adsb.lol string was fine when
+         that was the only feed this could point at; now an operator supplies
+         their own, and crediting adsb.lol while the data comes from somewhere
+         else is a false statement of provenance — the opposite of what
+         attribution is for. Unknown hosts get a neutral line rather than a
+         guess, and airplanes.live gets none: it imposes no attribution term,
+         and inventing one would misdescribe it too. */
+      const host = (active.match(/^https?:\/\/([^\/]+)/) || [])[1] || "";
+      let CREDIT = "";
+      if (/adsb\.lol/i.test(host))        CREDIT = "Aircraft data adsb.lol (ODbL)";
+      else if (/adsb\.fi/i.test(host))    CREDIT = "Aircraft data adsb.fi";
+      else if (/airplanes\.live/i.test(host)) CREDIT = "";
+      else                                CREDIT = "Aircraft data via " + host;
+      if (!CREDIT) return;
       /* A separate element, NOT an edit to #statusText. The boards rewrite that
          line on every refresh tick, so a one-shot edit there survives about
          fifteen seconds — verified: it was gone by the next paint. Attribution a

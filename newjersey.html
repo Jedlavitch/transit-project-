@@ -2802,12 +2802,26 @@ function groupSettings(){
     if(!v){ try{ localStorage.removeItem("tb.adsbUrl"); }catch(e){}
             say("Cleared \u2014 the board will run without aircraft."); return; }
     say("Checking\u2026");
+    /* Probe /health first, because our own proxy has one and its reply names the
+       upstream. But a bare feed is a perfectly good answer here and most have no
+       /health at all — airplanes.live returns 404 for it while serving data
+       fine — so fall back to an actual query rather than rejecting something
+       that works. */
     try{
-      const r=await fetch(v+"/health",{cache:"no-store"});
-      const d=await r.json();
-      if(!d||d.ok!==true) throw new Error("that URL answered, but not like an aircraft proxy");
+      let label="your feed", ok=false;
+      try{
+        const r=await fetch(v+"/health",{cache:"no-store"});
+        if(r.ok){ const d=await r.json(); if(d&&d.ok===true){ ok=true; label=d.upstream||label; } }
+      }catch(e){}
+      if(!ok){
+        const q=await fetch(v+"/v2/point/38.9/-77.1/5",{cache:"no-store"});
+        if(!q.ok) throw new Error("HTTP "+q.status);
+        const d=await q.json();
+        if(!d || !Array.isArray(d.ac||d.aircraft)) throw new Error("answered, but not with aircraft");
+        ok=true;
+      }
       try{ localStorage.setItem("tb.adsbUrl", v); }catch(e){}
-      say("Connected to "+(d.upstream||"your feed")+". Reload to see aircraft.", true);
+      say("Connected to "+label+". Reload to see aircraft.", true);
     }catch(e){ say("Could not reach that feed: "+e.message, false); }
   };
 })();
