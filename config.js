@@ -57,7 +57,7 @@ window.TB_CONFIG = {
      needs a KV namespace bound as ACCOUNTS and an email API key, or the codes
      never arrive. Deliberately NOT the licence server: that decides who paid,
      this decides who they are. */
-  acctUrl:      "",       // https://tbaccounts.yourname.workers.dev
+  acctUrl:      "https://tbaccounts.jacklemonade2.workers.dev",
 };
 
 /* ---------------------------------------------------------------------------
