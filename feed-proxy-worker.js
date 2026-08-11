@@ -1,14 +1,14 @@
 /* ============================================================================
-   feed-proxy-worker.js — the hard gate: live data only flows with a valid licence.
+   feed-proxy-worker.js -- the hard gate: live data only flows with a valid licence.
 
    Cloudflare Access stops people reaching the site. It does nothing about a
-   paying customer who saves the files and runs their own copy — everything the
+   paying customer who saves the files and runs their own copy -- everything the
    browser received is theirs. This is the layer that makes that copy useless:
    the boards fetch their live feeds through here, and without a valid key there
    is no data to show. Timetables and UI can be copied; a dead board is not a
    product.
 
-   DEPLOY — one Worker, one variable, NO KV namespace and NO binding.
+   DEPLOY -- one Worker, one variable, NO KV namespace and NO binding.
      1. Workers & Pages -> Create -> "Hello World" -> name it "tb-feeds" -> Deploy
         (create from the template first; pasting code at creation is blocked)
      2. Open it -> Edit Code -> paste THIS file -> Deploy
@@ -30,7 +30,7 @@
    ============================================================================ */
 
 /* An ALLOWLIST, not an open proxy. Without this anyone who found the URL could
-   route arbitrary traffic through your account — that is how a Worker gets you
+   route arbitrary traffic through your account -- that is how a Worker gets you
    rate-limited, billed, or banned. Add a host here when a board needs it. */
 const ALLOWED_HOSTS = new Set([
   "api.airplanes.live",       // aircraft overhead

@@ -1,19 +1,19 @@
 /* ============================================================================
-   license-worker.js — Transit Project license server (Cloudflare Worker)
+   license-worker.js -- Transit Project license server (Cloudflare Worker)
 
    Issues and verifies license keys for the transit-board kiosk product.
    Works hand-in-hand with license.js (loaded by every board), buy.html
    (checkout) and activate.html (key delivery after purchase).
 
-   DEPLOY (dashboard, no CLI needed — and note Cloudflare blocks pasting big
+   DEPLOY (dashboard, no CLI needed -- and note Cloudflare blocks pasting big
    code blocks at CREATION time, so do it in two steps):
-     1. Cloudflare dashboard → Workers & Pages → Create → "Hello World"
-        template → name it e.g. "tb-license" → Deploy.
-     2. Open the worker → Edit Code → replace everything with THIS file → Deploy.
-     3. Storage & Databases → KV → Create namespace "TB_LICENSES".
-        Worker → Settings → Bindings → KV namespace: variable name LICENSES,
+     1. Cloudflare dashboard -> Workers & Pages -> Create -> "Hello World"
+        template -> name it e.g. "tb-license" -> Deploy.
+     2. Open the worker -> Edit Code -> replace everything with THIS file -> Deploy.
+     3. Storage & Databases -> KV -> Create namespace "TB_LICENSES".
+        Worker -> Settings -> Bindings -> KV namespace: variable name LICENSES,
         namespace TB_LICENSES.
-     4. Worker → Settings → Variables and Secrets:
+     4. Worker -> Settings -> Variables and Secrets:
           LICENCE_SECRET (secret)  from: python3 gen-licence.py --new-secret
                                    *** MUST BE THE IDENTICAL VALUE you give
                                    feed-proxy-worker.js. This is what makes one
@@ -21,7 +21,7 @@
                                    proxy. Two different secrets means customers
                                    who can open a board that shows no data. ***
           STRIPE_SECRET  (secret)  sk_live_... or sk_test_...   [optional
-                                   until you have Stripe — see TEST_MODE]
+                                   until you have Stripe -- see TEST_MODE]
           ADMIN_SECRET   (secret)  any long random string you keep private
           TEST_MODE      (var)     "1" while testing (issues free demo keys
                                    from /claim with no Stripe session);
@@ -36,16 +36,16 @@
         activate.html (WORKER_URL), redeploy the site.
 
    ROUTES (all JSON, CORS-open):
-     GET  /health                       → { ok:true }
-     GET  /verify?key=K&device=D        → { ok:true, devices:n } or
+     GET  /health                       -> { ok:true }
+     GET  /verify?key=K&device=D        -> { ok:true, devices:n } or
                                           { ok:false, error:"unknown_key"|"device_limit" }
-     GET  /claim?session=SESSION_ID     → { ok:true, key } — verifies a paid
+     GET  /claim?session=SESSION_ID     -> { ok:true, key } -- verifies a paid
                                           Stripe Checkout session and returns
                                           the key for it (idempotent: same
                                           session always returns same key)
-     GET  /claim (TEST_MODE only)       → { ok:true, key } demo key, no Stripe
-     POST /grant  (x-admin-secret hdr)  → { ok:true, key } manual key issue
-     POST /delete {key}                 → { ok:true, erased:true } forgets the
+     GET  /claim (TEST_MODE only)       -> { ok:true, key } demo key, no Stripe
+     POST /grant  (x-admin-secret hdr)  -> { ok:true, key } manual key issue
+     POST /delete {key}                 -> { ok:true, erased:true } forgets the
                                           buyer's email and device list for that
                                           key. The key keeps working; erasure is
                                           not the same act as revocation.
@@ -171,7 +171,7 @@ export default {
     /* Health has to answer "is this deployment actually wired up", not merely
        "is a Worker running here". Both setup guides say to check /health after
        deploying, and an unconditional {ok:true} passes that check on a Worker
-       with no KV binding and no Stripe key — so the first thing you learn is
+       with no KV binding and no Stripe key -- so the first thing you learn is
        wrong, and the next thing you learn is a customer's failed purchase.
 
        Booleans only. Whether a secret is set is a deployment fact; what it is
@@ -193,30 +193,30 @@ export default {
         secretWarning: secret ? null
           : "LICENCE_SECRET is not set. Keys cannot be minted, and any that were will not work with the feed proxy.",
         // loud on purpose: TEST_MODE hands free keys to anyone who asks
-        warning: test ? "TEST_MODE is on — /claim issues free keys with no payment. Remove it before selling." : null,
+        warning: test ? "TEST_MODE is on -- /claim issues free keys with no payment. Remove it before selling." : null,
       });
     }
 
     /* Every route below reads or writes KV. Without the binding, env.LICENSES
-       is undefined and the first property access throws — which Cloudflare
+       is undefined and the first property access throws -- which Cloudflare
        turns into a bare 500 carrying none of the CORS headers above, so the
        browser reports a cross-origin failure and the actual cause (one
-       unchecked box in Settings → Bindings) is invisible. The binding is the
+       unchecked box in Settings -> Bindings) is invisible. The binding is the
        step that most often gets missed, so it gets named rather than guessed. */
     if (!env.LICENSES) {
       return json({ ok: false, error: "kv_not_bound",
-        detail: "This Worker has no KV binding named LICENSES. Cloudflare → Storage & Databases → KV → create a namespace, then Worker → Settings → Bindings → add KV namespace, variable name LICENSES." }, 500);
+        detail: "This Worker has no KV binding named LICENSES. Cloudflare -> Storage & Databases -> KV -> create a namespace, then Worker -> Settings -> Bindings -> add KV namespace, variable name LICENSES." }, 500);
     }
 
     /* ---- verify a key + register the device using it ----
 
        Two kinds of key reach here, and both must work:
 
-         signed  — the format everything now issues, and the only one the feed
+         signed  -- the format everything now issues, and the only one the feed
                    proxy can validate. Checked by signature, so a key minted by
                    gen-licence.py on a laptop verifies here without this Worker
                    ever having seen it.
-         legacy  — the random KV keys this Worker minted before unification.
+         legacy  -- the random KV keys this Worker minted before unification.
                    Somebody paid for one of those; refusing it to tidy up the
                    code would be taking their money and breaking their board.
 

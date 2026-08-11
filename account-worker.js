@@ -1,9 +1,9 @@
 /* ============================================================================
-   account-worker.js — accounts for the Transit Spotter, on Cloudflare Workers.
+   account-worker.js -- accounts for the Transit Spotter, on Cloudflare Workers.
 
    WHY THIS SHAPE
    Sign-in is a one-time code emailed to the address you type. There are no
-   passwords anywhere in this system — not hashed, not salted, not stored — which
+   passwords anywhere in this system -- not hashed, not salted, not stored -- which
    removes the entire class of breach where someone walks off with a password
    table. It also means this Worker never handles a credential you could reuse
    elsewhere.
@@ -13,30 +13,30 @@
    the device that opens it.
 
    WHAT IT STORES
-     acct:<id>            → { email, created, lastSeen }
-     acct:<id>:spots      → that account's sightings, and ONLY that account's
-     login:<token>        → { emailHash, codeHash, tries } 15-minute TTL
-     sess:<tokenHash>     → { id } 400-day TTL
-     rl:<bucket>          → rate-limit counters, short TTL
+     acct:<id>            -> { email, created, lastSeen }
+     acct:<id>:spots      -> that account's sightings, and ONLY that account's
+     login:<token>        -> { emailHash, codeHash, tries } 15-minute TTL
+     sess:<tokenHash>     -> { id } 400-day TTL
+     rl:<bucket>          -> rate-limit counters, short TTL
 
    The account id is a SHA-256 of the lowercased email plus a server-side salt,
    so the id in a URL or log line can't be reversed into someone's address.
    Codes and session tokens are stored hashed for the same reason: a dump of the
    KV namespace should not hand over live sessions.
 
-   SETUP  (all of it yours to do — I can't create accounts on your behalf)
-     1. KV → create a namespace, bind it to this Worker as  ACCOUNTS
+   SETUP  (all of it yours to do -- I can't create accounts on your behalf)
+     1. KV -> create a namespace, bind it to this Worker as  ACCOUNTS
      2. An email sender. Resend is the default here (free tier, simple API):
         create an account, verify your sending domain, make an API key.
-        Worker → Settings → Variables → add SECRETS (not plain vars):
+        Worker -> Settings -> Variables -> add SECRETS (not plain vars):
           RESEND_KEY   your Resend API key
           MAIL_FROM    e.g. "Transit Spotter <login@yourdomain.com>"
           ID_SALT      any long random string; changing it invalidates all ids
-     3. Deploy, then paste the Worker URL into the app's ⚙︎ settings.
+     3. Deploy, then paste the Worker URL into the app's [gear] settings.
 
    Cloudflare's dashboard has been known to block pasting AI-written code when
    CREATING a worker. Make it from the "Hello World" template first, then use
-   Edit Code to replace the contents — that path works.
+   Edit Code to replace the contents -- that path works.
    ============================================================================ */
 
 const CORS = {
@@ -89,13 +89,13 @@ async function sendCode(env, email, code) {
       to: [email],
       subject: `${code} is your Transit Spotter sign-in code`,
       text: `Your sign-in code is ${code}\n\nIt expires in 15 minutes. `
-          + `If you didn't ask to sign in, you can ignore this email — nothing has changed.`,
+          + `If you didn't ask to sign in, you can ignore this email -- nothing has changed.`,
     }),
   });
   if (!r.ok) throw new Error("mail send failed: " + r.status);
 }
 
-/* Bearer session → account id, or null. */
+/* Bearer session -> account id, or null. */
 async function whoami(req, env) {
   const h = req.headers.get("authorization") || "";
   const tok = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
@@ -142,7 +142,7 @@ export default {
       }), { expirationTtl: CODE_TTL });
 
       try { await sendCode(env, addr, code); }
-      catch (e) { return json({ ok: false, error: "couldn't send the email — check the Worker's mail settings" }, 502); }
+      catch (e) { return json({ ok: false, error: "couldn't send the email -- check the Worker's mail settings" }, 502); }
 
       /* The token identifies WHICH sign-in attempt; the code proves it's you.
          Returning the token is safe, returning the code would not be. */
@@ -153,12 +153,12 @@ export default {
     if (url.pathname === "/auth/verify" && req.method === "POST") {
       const { token, code } = await req.json().catch(() => ({}));
       const raw = token ? await env.ACCOUNTS.get("login:" + token) : null;
-      if (!raw) return json({ ok: false, error: "that code has expired — ask for a new one" }, 400);
+      if (!raw) return json({ ok: false, error: "that code has expired -- ask for a new one" }, 400);
       const rec = JSON.parse(raw);
 
       if (rec.tries >= MAX_TRIES) {
         await env.ACCOUNTS.delete("login:" + token);
-        return json({ ok: false, error: "too many wrong codes — ask for a new one" }, 429);
+        return json({ ok: false, error: "too many wrong codes -- ask for a new one" }, 429);
       }
       if ((await sha(String(code || "").trim())) !== rec.codeHash) {
         rec.tries++;
@@ -225,7 +225,7 @@ export default {
     }
 
     /* Reads and writes are keyed by the session's OWN account id, never by
-       anything the caller supplies — so there is no id to tamper with in order
+       anything the caller supplies -- so there is no id to tamper with in order
        to read somebody else's log. */
     if (url.pathname === "/spots" && req.method === "GET") {
       const raw = await env.ACCOUNTS.get(`acct:${id}:spots`);
