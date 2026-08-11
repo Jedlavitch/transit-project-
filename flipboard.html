@@ -939,7 +939,11 @@ async function collectTransitousRows(family, count){
         status: d.cancelled? "CANCELLED" : (d.realTime? (d.delayMin>0? `+${d.delayMin} MIN`:"ON TIME") : "SCHEDULED"),
         statusKind: d.cancelled? "bad"
           : (d.realTime? ((liveLateInfo(d.delayMin)||{}).cls || "ok") : "na"),
-        color: TOUS_COL[family]||"#6aa9ff" };
+        color: TOUS_COL[family]||"#6aa9ff",
+        /* The operator's own line colour, where their feed carries one, for the
+           metro skin's bullet. Kept apart from `color`, which is the per-family
+           tint the Solari style uses and is not a line colour at all. */
+        lineColor: d.lineColor||null, lineTextColor: d.lineTextColor||null };
     });
 }
 
@@ -1098,7 +1102,30 @@ async function collectAllRows(){
      and five of the thirteen lines never reached the renderer. Verified against
      the bundled schedule: all 13 lines have departures at every hour tested,
      including the midday one where the board was showing 8. */
-  return STYLE==="septa" ? rows : rows.slice(0, ROW_COUNT);
+  if(STYLE==="septa") return rows;
+  /* A countdown board is spent on whatever it shows, and the bundled schedules
+     are minute-resolution: around Penn Station six lines genuinely leave inside
+     the same minute, so the soonest eight were six rows of NOW and two of the
+     next minute. Every one of them true, and together they say nothing — a
+     rider learns what is leaving in the next quarter hour from a board that
+     spends its rows on distinct times.
+
+     So the surplus simultaneous departures are DEMOTED, never dropped or
+     restated: at most two share a minute up front, the rest fall behind them
+     and are trimmed by the row count like anything else. Same real departures,
+     a selection that carries more. Only the countdown styles do this; a
+     departure hall listing everything leaving at 14:05 is correct. */
+  const spread = STYLE==="metro" ? demoteSimultaneous(rows, 2) : rows;
+  return spread.slice(0, ROW_COUNT).sort((a,b)=>a.sortMin-b.sortMin);
+}
+function demoteSimultaneous(rows, maxPerMinute){
+  const seen={}, front=[], back=[];
+  rows.forEach(r=>{
+    const k = r.etaMin==null ? "?" : r.etaMin;
+    seen[k] = (seen[k]||0) + 1;
+    (seen[k] <= maxPerMinute ? front : back).push(r);
+  });
+  return front.concat(back);
 }
 
 /* ===== flip-click sound (synthesized, no audio file needed) =====
@@ -1659,7 +1686,12 @@ function renderRows(rows){
         /* The line mark is the operator's signature, so it is drawn, not
            spelled: a tinted code for WMATA, a lozenge elsewhere, tinted from
            that operator's real palette. */
-        const col = SKIN.lines[key] || SKIN.lines[key.split(" ")[0]] || SKIN.ink;
+        /* The operator's own colour wins. A hardcoded `lines` map is a copy of
+           somebody else's palette and goes stale when they repaint a line; the
+           feed is that palette. The map stays for the agencies whose feeds carry
+           no colour — WMATA and MTA come from bundled schedules, and the Swiss
+           feed has no colour field at all, so Zurich still lands on skin ink. */
+        const col = r.lineColor || SKIN.lines[key] || SKIN.lines[key.split(" ")[0]] || SKIN.ink;
         const shown = (SKIN.codes && SKIN.codes[key]) || route;
         /* A disc holds one or two characters. Anything longer has to become a
            lozenge or it is a circle with the text spilling out of both sides —
@@ -1671,7 +1703,8 @@ function renderRows(rows){
         f.logoTextEl.textContent=shown;
         f.logoTextEl.className="op-logo metro-bullet "+shape;
         f.logoTextEl.style.background=col;
-        f.logoTextEl.style.color = inkOn(col);
+        // the feed states its own text colour alongside the fill; trust it first
+        f.logoTextEl.style.color = r.lineTextColor || inkOn(col);
       } else {
         f.time.setText(route);
         f.logoTextEl.style.display="none"; f.logoImgEl.style.display="none";

@@ -197,6 +197,15 @@
         delayMin: (t.realTime && schedMs && realMs) ? Math.round((realMs - schedMs) / 60000) : null,
         realTime: !!t.realTime,
         cancelled: !!t.cancelled,
+        /* The operator's OWN line colours, straight out of their GTFS, so a
+           metro skin does not have to restate a palette per city — and cannot
+           get one wrong. Verified live: Cologne publishes them (line 18 is
+           85d1f5, line 16 07ada5) and so does Stuttgart (U9 ffd036), both with
+           a matching text colour. Switzerland's feed has no such field at all,
+           which is why Zurich still falls back to its skin ink. Hex arrives
+           bare, so the "#" is added here rather than at three call sites. */
+        lineColor: t.routeColor ? "#" + String(t.routeColor).replace(/^#/, "") : null,
+        lineTextColor: t.routeTextColor ? "#" + String(t.routeTextColor).replace(/^#/, "") : null,
         platform: (t.place && (t.place.track || t.place.scheduledTrack)) || "",
         tripId: t.tripId || "",          // needed to locate the vehicle (see nearestVehicle)
         /* Where this train STARTED and where it ENDS, each carrying its own
