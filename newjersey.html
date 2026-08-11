@@ -619,6 +619,18 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
+    <div class="section-lbl">Aircraft feed (optional)</div>
+    <p style="font-size:12px">Planes overhead need a feed you run yourself — this board ships without one,
+      because the free public feeds do not permit commercial use and we will not
+      make that your problem. <b>AIRCRAFT-FEED.md</b> has a ready-made proxy and
+      takes a few minutes on any small server. Leave this empty and the board
+      simply runs without the aircraft card.</p>
+    <div class="addr-row">
+      <input id="adsbInput" type="text" placeholder="https://adsb.yourdomain.com" autocomplete="off" spellcheck="false" />
+      <button id="adsbSetBtn" type="button">Save</button>
+    </div>
+    <div id="adsbStatus" style="font-size:12px;margin-top:6px"></div>
+
     <div class="accent-lbl">Theme</div>
     <div class="theme-row" id="themeRow">
       <button type="button" class="theme-btn" data-theme="dark">Dark</button>
@@ -1995,15 +2007,40 @@ function coastPlanes(fresh){
    PROHIBITS COMMERCIAL USE. Set "tb.adsbUrl" to an adsb-worker.js deployment to
    switch to a commercially-usable feed (adsb.lol / adsb.fi) — those send no CORS
    headers of their own, so the Worker is required, not optional. */
+/* An empty card that explains itself. A board with no aircraft feed is not
+   broken, it is unconfigured, and the difference matters to someone who just
+   paid for this. */
+function showPlanesUnconfigured(){
+  const box=document.querySelector("#planeList"); if(!box) return;
+  if(box.dataset.unconfigured==="1") return;       // don't rebuild every tick
+  box.dataset.unconfigured="1";
+  box.innerHTML='<div class="empty">No aircraft feed configured.<br>'
+    + '<span style="opacity:.75">Add one in \u2699 Settings \u2192 Aircraft feed. '
+    + 'See AIRCRAFT-FEED.md \u2014 it takes a few minutes and runs on your own machine.</span></div>';
+  const c=document.querySelector("#planeCount"); if(c) c.textContent="";
+}
 function adsbBase(){
+  /* NO DEFAULT, on purpose. This used to fall back to airplanes.live, which is
+     free and CORS-open and PROHIBITS COMMERCIAL USE — so a product that ships
+     with it baked in is in breach the day it is sold, however the feature is
+     priced. Giving the planes away inside a paid app does not make the use
+     non-commercial; it is still the seller's product calling that feed.
+
+     So the seller ships no aircraft feed at all. The operator of each board
+     supplies their own URL, on their own machine, under whatever terms they
+     agree with the provider — which takes the seller out of the licence chain
+     entirely. adsb-proxy.py in this repo is a ready-made one; AIRCRAFT-FEED.md
+     is the setup. Unset, the card says so and nothing is fetched. */
   try{ var u=(localStorage.getItem("tb.adsbUrl")||"").trim().replace(/\/+$/,"");
        if(u) return u+"/v2"; }catch(e){}
-  return "https://api.airplanes.live/v2";
+  return "";
 }
 async function fetchPlanes(){
+  const base=adsbBase();
+  if(!base){ showPlanesUnconfigured(); return; }   // no feed set: say so, fetch nothing
   const {lat,lon}=state.loc;
   let data;
-  try{ data=await getJSON(`${adsbBase()}/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
+  try{ data=await getJSON(`${base}/point/${lat.toFixed(4)}/${lon.toFixed(4)}/${CFG.planeRadiusNm}`, 10000); }
   catch(e){ return; }
   const ac=coastPlanes((data.ac||[]).filter(a=>a.lat&&a.lon))
     .map(a=>({...a, _dist: a.dst!=null? a.dst : kmToMi(haversine(state.loc,{lat:a.lat,lon:a.lon}))/1.15078 }))
@@ -2749,6 +2786,31 @@ function groupSettings(){
   box.append(head, body, foot);
 }
 
+
+/* Aircraft feed: the operator's own, or none. Checked before it is saved —
+   a URL that does not answer is worth catching here rather than as an empty
+   card ten minutes later. */
+(function(){
+  const inp=document.getElementById("adsbInput");
+  const btn=document.getElementById("adsbSetBtn");
+  const msg=document.getElementById("adsbStatus");
+  if(!inp||!btn) return;
+  try{ inp.value=localStorage.getItem("tb.adsbUrl")||""; }catch(e){}
+  const say=(t,ok)=>{ if(msg){ msg.textContent=t; msg.style.color= ok===true?"var(--live-ink,#33d17a)": ok===false?"#ff7a7a":"var(--muted)"; } };
+  btn.onclick=async ()=>{
+    const v=(inp.value||"").trim().replace(/\/+$/,"");
+    if(!v){ try{ localStorage.removeItem("tb.adsbUrl"); }catch(e){}
+            say("Cleared \u2014 the board will run without aircraft."); return; }
+    say("Checking\u2026");
+    try{
+      const r=await fetch(v+"/health",{cache:"no-store"});
+      const d=await r.json();
+      if(!d||d.ok!==true) throw new Error("that URL answered, but not like an aircraft proxy");
+      try{ localStorage.setItem("tb.adsbUrl", v); }catch(e){}
+      say("Connected to "+(d.upstream||"your feed")+". Reload to see aircraft.", true);
+    }catch(e){ say("Could not reach that feed: "+e.message, false); }
+  };
+})();
 </script>
 </body>
 </html>

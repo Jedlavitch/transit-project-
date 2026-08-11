@@ -166,7 +166,15 @@ window.TB_CONFIG = {
      written there is erased within seconds. */
   function creditAircraftSource() {
     try {
-      if (!String(C.adsbUrl || "").trim()) return;          // airplanes.live: nothing to credit
+      /* Key off the feed ACTUALLY IN USE, not the shipped config. The product
+         no longer ships an aircraft feed at all — each operator supplies their
+         own, which lands in localStorage — so checking C.adsbUrl meant the
+         credit never appeared for the only people who now have a feed. ODbL
+         attribution is a licence condition, and the licence follows the data,
+         not the config file. */
+      let active = String(C.adsbUrl || "").trim();
+      if (!active) { try { active = (localStorage.getItem("tb.adsbUrl") || "").trim(); } catch (_) {} }
+      if (!active) return;                                  // no feed: nothing to credit
       if (document.getElementById("tbAdsbCredit")) return;
       const CREDIT = "Aircraft data adsb.lol (ODbL)";
       /* A separate element, NOT an edit to #statusText. The boards rewrite that

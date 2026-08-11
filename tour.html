@@ -620,14 +620,44 @@ function coastPlanes(fresh){
    PROHIBITS COMMERCIAL USE. Set "tb.adsbUrl" to an adsb-worker.js deployment to
    switch to a commercially-usable feed (adsb.lol / adsb.fi) — those send no CORS
    headers of their own, so the Worker is required, not optional. */
+/* An empty card that explains itself. A board with no aircraft feed is not
+   broken, it is unconfigured, and the difference matters to someone who just
+   paid for this. */
+function showPlanesUnconfigured(){
+  const box=document.querySelector("#planeList"); if(!box) return;
+  if(box.dataset.unconfigured==="1") return;       // don't rebuild every tick
+  box.dataset.unconfigured="1";
+  box.innerHTML='<div class="empty">No aircraft feed configured.<br>'
+    + '<span style="opacity:.75">Add one in \u2699 Settings \u2192 Aircraft feed. '
+    + 'See AIRCRAFT-FEED.md \u2014 it takes a few minutes and runs on your own machine.</span></div>';
+  const c=document.querySelector("#planeCount"); if(c) c.textContent="";
+}
 function adsbBase(){
+  /* NO DEFAULT, on purpose. This used to fall back to airplanes.live, which is
+     free and CORS-open and PROHIBITS COMMERCIAL USE — so a product that ships
+     with it baked in is in breach the day it is sold, however the feature is
+     priced. Giving the planes away inside a paid app does not make the use
+     non-commercial; it is still the seller's product calling that feed.
+
+     So the seller ships no aircraft feed at all. The operator of each board
+     supplies their own URL, on their own machine, under whatever terms they
+     agree with the provider — which takes the seller out of the licence chain
+     entirely. adsb-proxy.py in this repo is a ready-made one; AIRCRAFT-FEED.md
+     is the setup. Unset, the card says so and nothing is fetched. */
   try{ var u=(localStorage.getItem("tb.adsbUrl")||"").trim().replace(/\/+$/,"");
        if(u) return u+"/v2"; }catch(e){}
-  return "https://api.airplanes.live/v2";
+  return "";
+}
+/* Throws when no feed is configured, so the callers below fail into their
+   existing error handling instead of fetching a relative URL off this site. */
+function adsbRequire(){
+  const b = adsbBase();
+  if(!b) throw new Error("no aircraft feed configured (see AIRCRAFT-FEED.md)");
+  return b;
 }
 async function planeSubject(stop, pin){
   const {loc}=stop;
-  const data=await getJSON(`${adsbBase()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${RADIUS_NM}`);
+  const data=await getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${RADIUS_NM}`);
   const air=(coastPlanes(data.ac||[])).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
     .map(a=>({a, nm:a.dst!=null?a.dst:haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
