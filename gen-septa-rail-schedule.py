@@ -50,13 +50,17 @@ def main():
         tr = trips.get(st["trip_id"]); dt = (st.get("departure_time") or "").strip()
         if not tr or not dt:
             continue
+        # `n` is the train number SEPTA prints on its boards (GTFS trip_short_name,
+        # e.g. 9402). Carried through because the departure board has a column for
+        # it and had nothing truthful to put there.
         d = seq.setdefault(st["trip_id"], {"line": (routes.get(tr["route_id"], {}).get("route_short_name") or "?").strip(),
-                                           "hs": (tr.get("trip_headsign") or "").strip(), "s": tr["service_id"], "seq": []})
+                                           "hs": (tr.get("trip_headsign") or "").strip(), "s": tr["service_id"],
+                                           "n": (tr.get("trip_short_name") or "").strip(), "seq": []})
         d["seq"].append((int(st["stop_sequence"]), st["stop_id"], to_min(dt)))
     trips_out = []
     for d in seq.values():
         d["seq"].sort()
-        trips_out.append({"line": d["line"], "hs": d["hs"], "s": d["s"],
+        trips_out.append({"line": d["line"], "hs": d["hs"], "s": d["s"], "n": d["n"],
                           "st": [[x[1], x[2]] for x in d["seq"]]})
 
     svc = {c["service_id"]: {"dow": [int(c[k]) for k in ("monday","tuesday","wednesday","thursday","friday","saturday","sunday")],

@@ -244,10 +244,11 @@
     font:700 calc(var(--flap-font) * .78)/1.5 "IBM Plex Mono",monospace; letter-spacing:.04em;
   }
   .sp-row{
-    display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:baseline;
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; gap:10px; align-items:baseline;
     font:700 calc(var(--flap-font) * .68)/1.65 "IBM Plex Mono",monospace; white-space:nowrap;
   }
   .sp-t{ color:#22d3ee }                       /* cyan times, as on the real board */
+  .sp-n{ color:#e8b04b; font-variant-numeric:tabular-nums }   /* train number */
   .sp-d{ color:#39ff6a; overflow:hidden; text-overflow:ellipsis }   /* green destinations */
   .sp-s{ color:#39ff6a }
   .sp-s.warn{ color:#ffd34d } .sp-s.sched{ color:#9fb4c7 }
@@ -621,7 +622,7 @@ async function collectSeptaByLine(cfg){
       s=await getJSON(cfg.url, 15000);
       s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
       s._dep={};
-      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, n:tr.n, t:min}); }));
       scheduleCache[cfg.url]=s;
     }
     const nowP=schedNowParts(s.tz), nowMin=nowP.min, active=activeServices(s, nowP);
@@ -636,18 +637,27 @@ async function collectSeptaByLine(cfg){
         if(min - nowMin > 180) return;                 // three hours is a boardful
         const line=(d.line||"").toUpperCase();
         if(!SEPTA_LINES[line]) return;                 // rail only
-        (byLine[line]=byLine[line]||[]).push({ min, hs:d.hs, st:st.name });
+        (byLine[line]=byLine[line]||[]).push({ min, hs:d.hs, st:st.name, n:d.n });
       });
     });
     const rows=[];
     Object.keys(byLine).forEach(line=>{
+      /* One row per TRAIN, not per calling point. A Center City train stops at
+         30th Street, Suburban and Jefferson — all inside the radius — so it was
+         being listed three times over, at three different minutes. Keying on
+         time+headsign could never catch that, since the times genuinely differ;
+         the train number can, and only exists here because the bundle now
+         carries it. Earliest call wins, which is the one you would catch. */
       const seen=new Set();
       byLine[line].sort((a,b)=>a.min-b.min)
-        .filter(d=>{ const k=d.min+"|"+d.hs; if(seen.has(k)) return false; seen.add(k); return true; })
+        .filter(d=>{ const k=d.n || (d.min+"|"+d.hs); if(seen.has(k)) return false; seen.add(k); return true; })
         .slice(0, cfg.perLine||3)
         .forEach(d=>rows.push({
           sortMin:d.min, time:(s.tz?clock24Of:clockOf)(d.min % 1440),
           dest:(d.hs||d.st||"").toUpperCase(), via:line,
+          /* GTFS gives the number prefixed with the line code (CYN1052); the
+             board prints just the digits, as SEPTA's own does. */
+          trainNo:String(d.n||"").replace(/^[A-Z]+/, ""),
           status:"SCHEDULED", statusKind:"na", color:cfg.color }));
     });
     return rows;
@@ -1314,6 +1324,7 @@ function renderSepta(rows){
       ${g.rows.map(r => `<div class="sp-row">
         <span class="sp-t">${esc(r.time)}</span>
         <span class="sp-d">${esc(r.dest)}</span>
+        <span class="sp-n">${esc(r.trainNo||"")}</span>
         <span class="sp-s ${r.statusKind==="ok"?"ok":r.statusKind==="na"?"sched":"warn"}">${esc(r.status)}</span>
       </div>`).join("")}
     </section>`).join("");
