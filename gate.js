@@ -99,11 +99,11 @@
       '<div class="box">' +
         "<h2>" + title + "</h2>" +
         "<p>" + body + "</p>" +
-        /* The shape license-worker.js actually issues: TB, then three groups of
-           four. The old placeholder said "TP-" and four groups of five, which is
-           neither this key nor the signed feed-proxy one, so a customer holding
-           a perfectly good key was shown a pattern it did not match. */
-        '<input id="tbGateKey" placeholder="TB-XXXX-XXXX-XXXX" autocomplete="off" ' +
+        /* The one key format: TB, then four groups of five. license-worker.js,
+           feed-proxy-worker.js and gen-licence.py all mint and accept exactly
+           this, so the key that unlocks the interface is the same key that gets
+           live data through the proxy. */
+        '<input id="tbGateKey" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" ' +
           'spellcheck="false" aria-label="Licence key" />' +
         '<div class="row">' +
           '<button class="go" id="tbGateGo">Unlock</button>' +

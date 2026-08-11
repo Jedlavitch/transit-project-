@@ -43,7 +43,7 @@ unlicensed browsers.
 ## Step 3 — Test the whole flow (no Stripe needed yet)
 
 1. Open `buy.html` → **"Demo checkout (test mode)"** → you land on `activate.html`
-   with a fresh `TB-XXXX-XXXX-XXXX` key.
+   with a fresh `TB-XXXXX-XXXXX-XXXXX-XXXXX` key.
 2. **Activate this device** → back to the board, chip gone.
 3. On another device/browser: click the chip → enter the same key → chip gone.
 4. A 6th device should be refused (device cap).

@@ -6,6 +6,23 @@
 <title>Transit Project — live trains, buses and planes on any screen</title>
 <meta name="description" content="A live transit and flight board for your wall. Trains, buses and aircraft overhead, in real time, across the US and Europe. Runs in any browser." />
 <meta name="theme-color" content="#081020" />
+<!-- Social preview. Without these a shared link renders as a bare rectangle,
+     which for a product whose whole argument is "look at it" is the worst
+     possible first impression. Absolute URLs on purpose: Slack, iMessage and
+     the rest fetch these from their own servers, where a relative path is
+     meaningless. -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Transit Project" />
+<meta property="og:title" content="Transit Project — live trains, buses and planes on any screen" />
+<meta property="og:description" content="A live departure board for your wall. Real trains, buses and aircraft overhead, across the US and Europe. Runs in any browser — no server, no subscription." />
+<meta property="og:url" content="https://transitproject.online/" />
+<meta property="og:image" content="https://transitproject.online/shots/board-dc.jpg" />
+<meta property="og:image:width" content="1600" />
+<meta property="og:image:height" content="900" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Transit Project — live trains, buses and planes on any screen" />
+<meta name="twitter:description" content="A live departure board for your wall. Real trains, buses and aircraft overhead, across the US and Europe." />
+<meta name="twitter:image" content="https://transitproject.online/shots/board-dc.jpg" />
 <link rel="stylesheet" href="theme.css" />
 <script src="cityswitch.js?v=2"></script>
 <script src="config.js?v=1"></script>
@@ -92,6 +109,19 @@
   .sub{color:var(--muted); font-size:14px; margin:0 0 20px; max-width:620px; line-height:1.5}
 
   /* ---- city grid ---- */
+  /* Screenshots. Every one is a real capture of the running product with live
+     data on it, not a mock-up — which is the only kind worth showing for
+     something whose selling point is that it is actually live. */
+  .shot{margin:26px 0 8px; border:1px solid var(--line); border-radius:16px; overflow:hidden;
+    background:var(--panel); box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .shot img{display:block; width:100%; height:auto}
+  .shot .cap{padding:11px 15px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line)}
+  .gallery{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-top:6px}
+  .gallery figure{margin:0; border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    background:var(--panel)}
+  .gallery img{display:block; width:100%; height:auto}
+  .gallery figcaption{padding:10px 13px; color:var(--muted); font-size:12.5px; line-height:1.45}
+  .gallery b{color:var(--text)}
   .cities{display:grid; grid-template-columns:repeat(auto-fill,minmax(232px,1fr)); gap:12px}
   .city{display:flex; align-items:center; gap:13px; padding:15px 16px; border-radius:14px;
     border:1px solid var(--line); background:var(--panel); position:relative; overflow:hidden;
@@ -187,7 +217,7 @@
          activate.html still exists for the link in the purchase email. -->
     <div id="keyBox" hidden>
       <div class="keyrow">
-        <input id="keyInput" placeholder="TB-XXXX-XXXX-XXXX" autocomplete="off"
+        <input id="keyInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"
                spellcheck="false" aria-label="Licence key" />
         <button class="btn primary" id="keyGo">Unlock</button>
       </div>
@@ -205,6 +235,54 @@
     </div>
     <div class="live-rows" id="liveRows"></div>
   </div>
+
+  <!-- The hero shot goes after the live strip, not before it: the strip proves
+       the data is real in two seconds, and this then shows what that looks like
+       at full size. loading="eager" on this one because it is the thing the
+       page is for; everything below is lazy. -->
+  <figure class="shot">
+    <img src="shots/board-dc.jpg" width="1600" height="900" loading="eager" decoding="async"
+         alt="The Washington DC board: a live map covered in labelled Metro trains, buses and
+              aircraft, beside cards showing Metrorail predictions, Amtrak services running
+              between 11 and 107 minutes late, MARC commuter trains and planes overhead." />
+    <figcaption class="cap">The Washington board on a normal evening — 142 vehicles tracked,
+      10 aircraft overhead, and every delay coloured by how late it actually is.</figcaption>
+  </figure>
+
+  <section>
+    <h2>What it looks like</h2>
+    <p class="sub">Real captures of the running product, live data and all. Nothing here is a
+      mock-up — the delays, the aircraft and the running times were true at the moment each
+      one was taken.</p>
+    <div class="gallery">
+      <figure>
+        <img src="shots/sky-dc.jpg" width="1600" height="900" loading="lazy" decoding="async"
+             alt="Sky view: an American Airlines Boeing 737 MAX 8 from San Diego to Philadelphia
+                  on final approach, with a live weather-radar map of the United States." />
+        <figcaption><b>Sky view.</b> The nearest aircraft, full screen — where it came from,
+          where it is going, and how far through the flight it is.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/flipboard-dc.jpg" width="1600" height="900" loading="lazy" decoding="async"
+             alt="Split-flap departure board showing Metro Red Line trains marked live and two
+                  Amtrak Northeast Regional services 50 and 93 minutes late." />
+        <figcaption><b>Departure board.</b> A split-flap wall for the hallway, with the
+          operator on every row.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/board-nyc.jpg" width="1600" height="900" loading="lazy" decoding="async"
+             alt="The New York board with subway, PATH, Long Island Rail Road and Metro-North
+                  departures beside a live map of moving trains." />
+        <figcaption><b>New York.</b> Subway, PATH, LIRR and Metro-North on one screen.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/board-sf.jpg" width="1600" height="900" loading="lazy" decoding="async"
+             alt="The San Francisco board showing BART, Muni, Caltrain and cable car departures
+                  with a live vehicle map." />
+        <figcaption><b>San Francisco.</b> BART, Muni, Caltrain — and the cable cars.</figcaption>
+      </figure>
+    </div>
+  </section>
 
   <section id="cities">
     <h2 id="cityCount">Cities</h2>

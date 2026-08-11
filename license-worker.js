@@ -14,6 +14,12 @@
         Worker → Settings → Bindings → KV namespace: variable name LICENSES,
         namespace TB_LICENSES.
      4. Worker → Settings → Variables and Secrets:
+          LICENCE_SECRET (secret)  from: python3 gen-licence.py --new-secret
+                                   *** MUST BE THE IDENTICAL VALUE you give
+                                   feed-proxy-worker.js. This is what makes one
+                                   key unlock the interface AND pass the feed
+                                   proxy. Two different secrets means customers
+                                   who can open a board that shows no data. ***
           STRIPE_SECRET  (secret)  sk_live_... or sk_test_...   [optional
                                    until you have Stripe — see TEST_MODE]
           ADMIN_SECRET   (secret)  any long random string you keep private
@@ -21,6 +27,11 @@
                                    from /claim with no Stripe session);
                                    REMOVE or set "0" before going live!
           DEVICE_LIMIT   (var)     optional, default "5"
+          LICENCE_DAYS   (var)     optional, default 36500 (~100 years, i.e.
+                                   the "one-off, forever" the product promises)
+          REVOKED        (var)     optional, comma-separated key ids to refuse.
+                                   Same list the feed proxy takes; the id is
+                                   printed by gen-licence.py --check.
      5. Put the worker URL into license.js (workerUrl) and buy.html/
         activate.html (WORKER_URL), redeploy the site.
 
@@ -44,18 +55,101 @@ const CORS = {
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", ...CORS } });
 
-// No 0/O/1/I/L — keys get typed on TVs with remotes; keep every character unambiguous.
-const KEY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function genKey() {
-  const buf = new Uint8Array(12);
-  crypto.getRandomValues(buf);
-  const c = [...buf].map(b => KEY_ALPHABET[b % KEY_ALPHABET.length]);
-  return `TB-${c.slice(0, 4).join("")}-${c.slice(4, 8).join("")}-${c.slice(8, 12).join("")}`;
+/* ---------------------------------------------------------------------------
+   ONE KEY FORMAT, SHARED WITH feed-proxy-worker.js AND gen-licence.py.
+
+   This Worker used to mint its own random key and remember it in KV. The feed
+   proxy cannot use those: it validates by SIGNATURE precisely so it needs no
+   database on the hot path of every feed request. So a customer ended up
+   needing two different keys -- one to unlock the interface, another to let
+   data through -- and buying only got them the first.
+
+   The signed format wins because it is the one that works in both places. A key
+   carries its own expiry and signature, so anything holding the same
+   LICENCE_SECRET can validate it with no lookup. KV stays, but only for what a
+   signature genuinely cannot express: how many devices a key is on.
+
+   The primitives below are byte-for-byte the ones in feed-proxy-worker.js and
+   gen-licence.py. If you change one, change all three -- a signature differing
+   by a byte is a paying customer whose key is refused.
+   --------------------------------------------------------------------------- */
+const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";   // Crockford-ish: no I, L, O, U
+const SIG_LEN = 5;
+const EPOCH = 1577836800;                              // 2020-01-01
+
+function b32encode(data) {
+  let bits = 0n;
+  for (const b of data) bits = (bits << 8n) | BigInt(b);
+  const width = Math.floor((data.length * 8 + 4) / 5);
+  let out = "";
+  for (let i = 0; i < width; i++)
+    out += ALPHABET[Number((bits >> BigInt(5 * (width - 1 - i))) & 31n)];
+  return out;
+}
+function b32decode(text) {
+  const clean = [...text.toUpperCase()].filter(c => ALPHABET.indexOf(c) >= 0);
+  let bits = 0n;
+  for (const c of clean) bits = (bits << 5n) | BigInt(ALPHABET.indexOf(c));
+  const nbytes = Math.floor((clean.length * 5) / 8);
+  const out = new Uint8Array(nbytes);
+  for (let i = nbytes - 1; i >= 0; i--) { out[i] = Number(bits & 255n); bits >>= 8n; }
+  return out;
+}
+async function sign(secret, raw) {
+  const k = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, raw)).slice(0, SIG_LEN);
+}
+/* Constant time: an early return leaks how much of a forged signature was
+   right, which is enough to rebuild one a byte at a time. */
+function sameBytes(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+const keyId = raw => [...raw.slice(0, 5)].map(b => b.toString(16).padStart(2, "0")).join("");
+
+/* Mint a key this Worker, the feed proxy and gen-licence.py all accept. */
+async function mintKey(env, days) {
+  const ident = crypto.getRandomValues(new Uint8Array(5));
+  const expiryDay = Math.floor((Date.now() / 1000 - EPOCH) / 86400) + days;
+  if (expiryDay < 0 || expiryDay > 0xFFFF) throw new Error("expiry out of range");
+  const raw = new Uint8Array(7);
+  raw.set(ident, 0);
+  raw[5] = (expiryDay >> 8) & 255;
+  raw[6] = expiryDay & 255;
+  const body = b32encode(new Uint8Array([...raw, ...(await sign(env.LICENCE_SECRET, raw))]));
+  return "TB-" + (body.match(/.{1,5}/g) || []).join("-");
 }
 
+/* Signature check. Returns the key's id so callers can count devices against
+   it -- the id rather than the key string, because the id is what
+   gen-licence.py --check prints and what REVOKED lists. */
+async function checkSigned(env, key) {
+  if (!env.LICENCE_SECRET) return { ok: false, error: "secret_not_set" };
+  const data = b32decode(String(key).replace(/^TB-/i, ""));
+  if (data.length < 7 + SIG_LEN) return { ok: false, error: "unknown_key" };
+  const raw = data.slice(0, 7), sig = data.slice(7, 7 + SIG_LEN);
+  if (!sameBytes(sig, await sign(env.LICENCE_SECRET, raw)))
+    return { ok: false, error: "unknown_key" };
+  const expiryDay = (raw[5] << 8) | raw[6];
+  if (EPOCH + expiryDay * 86400 < Date.now() / 1000) return { ok: false, error: "expired" };
+  const id = keyId(raw);
+  if ((env.REVOKED || "").split(",").map(s => s.trim()).filter(Boolean).includes(id))
+    return { ok: false, error: "revoked" };
+  return { ok: true, id, expires: EPOCH + expiryDay * 86400 };
+}
+
+/* The product is sold as one-off and permanent, so the default expiry is a
+   century -- the honest encoding of "forever" in two bytes of days.
+   LICENCE_DAYS exists for trials. */
 async function issueKey(env, source, extra = {}) {
-  const key = genKey();
-  await env.LICENSES.put("key:" + key, JSON.stringify({
+  const days = Math.min(parseInt(env.LICENCE_DAYS || "36500", 10), 0xFFFF - 2600);
+  const key = await mintKey(env, days);
+  const chk = await checkSigned(env, key);
+  await env.LICENSES.put("lic:" + chk.id, JSON.stringify({
     created: Date.now(), source, devices: {}, ...extra,
   }));
   return key;
@@ -76,14 +170,20 @@ export default {
        stays in Cloudflare, and this endpoint is open to the world. */
     if (url.pathname === "/health") {
       const kv = !!env.LICENSES, stripe = !!env.STRIPE_SECRET, test = env.TEST_MODE === "1";
+      const secret = !!env.LICENCE_SECRET;
       return json({
         ok: true,
         kv, stripe,
+        // Must be the SAME value as the feed proxy's LICENCE_SECRET, or the keys
+        // sold here will unlock the interface and then be refused live data.
+        licenceSecret: secret,
         admin: !!env.ADMIN_SECRET,
         testMode: test,
         deviceLimit: parseInt(env.DEVICE_LIMIT || "5", 10),
-        // can this Worker actually issue a key to somebody right now?
-        ready: kv && (stripe || test),
+        // can this Worker actually issue a USABLE key to somebody right now?
+        ready: kv && secret && (stripe || test),
+        secretWarning: secret ? null
+          : "LICENCE_SECRET is not set. Keys cannot be minted, and any that were will not work with the feed proxy.",
         // loud on purpose: TEST_MODE hands free keys to anyone who asks
         warning: test ? "TEST_MODE is on — /claim issues free keys with no payment. Remove it before selling." : null,
       });
@@ -100,22 +200,62 @@ export default {
         detail: "This Worker has no KV binding named LICENSES. Cloudflare → Storage & Databases → KV → create a namespace, then Worker → Settings → Bindings → add KV namespace, variable name LICENSES." }, 500);
     }
 
-    /* ---- verify a key + register the device using it ---- */
+    /* ---- verify a key + register the device using it ----
+
+       Two kinds of key reach here, and both must work:
+
+         signed  — the format everything now issues, and the only one the feed
+                   proxy can validate. Checked by signature, so a key minted by
+                   gen-licence.py on a laptop verifies here without this Worker
+                   ever having seen it.
+         legacy  — the random KV keys this Worker minted before unification.
+                   Somebody paid for one of those; refusing it to tidy up the
+                   code would be taking their money and breaking their board.
+
+       Signed is tried first because it needs no KV read, and because a legacy
+       lookup on a signed key would simply miss and report "unknown". */
     if (url.pathname === "/verify") {
       const key = (url.searchParams.get("key") || "").trim().toUpperCase();
       const device = (url.searchParams.get("device") || "unknown").slice(0, 64);
       if (!key) return json({ ok: false, error: "missing_key" }, 400);
+      const limit = parseInt(env.DEVICE_LIMIT || "5", 10);
+
+      const signed = await checkSigned(env, key);
+      if (signed.ok) {
+        // The signature is the licence; KV only counts devices against it.
+        const slot = "lic:" + signed.id;
+        let rec = {};
+        try { rec = JSON.parse((await env.LICENSES.get(slot)) || "{}"); } catch (_) {}
+        if (rec.revoked) return json({ ok: false, error: "revoked" });
+        rec.devices = rec.devices || {};
+        if (!(device in rec.devices) && Object.keys(rec.devices).length >= limit)
+          return json({ ok: false, error: "device_limit", limit });
+        rec.devices[device] = Date.now();
+        rec.created = rec.created || Date.now();
+        await env.LICENSES.put(slot, JSON.stringify(rec));
+        return json({ ok: true, devices: Object.keys(rec.devices).length, limit,
+                      expires: signed.expires, format: "signed" });
+      }
+      // An expired or revoked signature is a definite answer, not a miss --
+      // falling through would relabel it the misleading "unknown_key".
+      if (signed.error === "expired" || signed.error === "revoked")
+        return json({ ok: false, error: signed.error });
+
       const raw = await env.LICENSES.get("key:" + key);
       if (!raw) return json({ ok: false, error: "unknown_key" });
       const rec = JSON.parse(raw);
       if (rec.revoked) return json({ ok: false, error: "revoked" });
-      const limit = parseInt(env.DEVICE_LIMIT || "5", 10);
       rec.devices = rec.devices || {};
       if (!(device in rec.devices) && Object.keys(rec.devices).length >= limit)
         return json({ ok: false, error: "device_limit", limit });
       rec.devices[device] = Date.now();
       await env.LICENSES.put("key:" + key, JSON.stringify(rec));
-      return json({ ok: true, devices: Object.keys(rec.devices).length, limit });
+      /* Legacy keys unlock the interface but the feed proxy will refuse them,
+         so say so rather than reporting a clean pass. Anyone holding one needs
+         a signed replacement before their live data works. */
+      return json({ ok: true, devices: Object.keys(rec.devices).length, limit,
+                    format: "legacy",
+                    warning: "This key predates the unified format and will not pass the feed proxy. Ask for a replacement." });
     }
 
     /* ---- claim: turn a paid Stripe Checkout session into a key ---- */

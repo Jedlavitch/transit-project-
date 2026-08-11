@@ -836,7 +836,14 @@ class FlapField{
 }
 
 const ROW_COUNT=16;
-const COLS="52px minmax(0,1.7fr) 88px minmax(0,1fr) 96px";
+const TIME_CHARS=7;                 // must match the FlapField built below
+/* The time column is sized from the flaps it has to hold, not guessed. It was a
+   flat 52px against seven 28px flaps — 208px of content in 52px of column, with
+   overflow:hidden — so the one column a departure board exists for showed about
+   two characters: "12:02A" read as "12", "1 MIN" as "1", "BRD" as "BR". Wrong at
+   every size setting too, since the flaps scale with --flap-w and 52px did not.
+   Six 2px gaps between seven flaps, hence the +12. */
+const COLS=`calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px) minmax(0,1.7fr) 88px minmax(0,1fr) 96px`;
 $("#boardHead").style.setProperty("--cols", COLS);
 const rowFields=[]; // [{el, logoEl, time:FlapField, dest:FlapField, via:FlapField, statusEl}]
 function buildRows(){

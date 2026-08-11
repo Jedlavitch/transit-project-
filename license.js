@@ -120,7 +120,7 @@
       <h3>License this board</h3>
       <p>You're running the free evaluation. A license removes this notice on up to 5
          of your devices and supports development.</p>
-      <input id="tbLicInput" placeholder="TB-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false"
+      <input id="tbLicInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false"
              value="${state.key || ""}" />
       <div id="tbLicMsg"></div>
       <div class="btns">
