@@ -29,6 +29,11 @@
           DEVICE_LIMIT   (var)     optional, default "5"
           LICENCE_DAYS   (var)     optional, default 36500 (~100 years, i.e.
                                    the "one-off, forever" the product promises)
+          STRIPE_WEBHOOK_SECRET (secret) whsec_... from Stripe -> Developers ->
+                                   Webhooks. Without it /webhook refuses every
+                                   request, which is correct: it is a
+                                   revocation endpoint with no other way to
+                                   tell a real Stripe delivery from a forgery.
           REVOKED        (var)     optional, comma-separated key ids to refuse.
                                    Same list the feed proxy takes; the id is
                                    printed by gen-licence.py --check.
@@ -45,6 +50,9 @@
                                           session always returns same key)
      GET  /claim (TEST_MODE only)       -> { ok:true, key } demo key, no Stripe
      POST /grant  (x-admin-secret hdr)  -> { ok:true, key } manual key issue
+     POST /webhook  (Stripe-signed)     -> revokes the key for a refunded or
+                                          disputed payment. Needs
+                                          STRIPE_WEBHOOK_SECRET.
      POST /delete {key}                 -> { ok:true, erased:true } forgets the
                                           buyer's email and device list for that
                                           key. The key keeps working; erasure is
@@ -147,6 +155,15 @@ async function checkSigned(env, key) {
   const id = keyId(raw);
   if ((env.REVOKED || "").split(",").map(s => s.trim()).filter(Boolean).includes(id))
     return { ok: false, error: "revoked" };
+  /* KV revocations come from the refund webhook, which cannot edit an
+     environment variable. Wrapped because a KV hiccup must not turn every
+     licence in the world invalid -- failing open here costs at most one
+     refunded key still working until the next check; failing closed would
+     take every paying customer down with it. */
+  try {
+    if (env.LICENSES && await env.LICENSES.get("revoked:" + id))
+      return { ok: false, error: "revoked" };
+  } catch (_) {}
   return { ok: true, id, expires: EPOCH + expiryDay * 86400 };
 }
 
@@ -309,6 +326,102 @@ export default {
                     warning: "This key predates the unified format and will not pass the feed proxy. Ask for a replacement." });
     }
 
+    /* ---- Stripe webhook: a refund takes the licence back -----------------
+
+       Without this, a licence is permanent the moment it is issued and a
+       refund only returns the money. Buy, claim the key, refund, keep the
+       product forever -- for $19 that is a nuisance rather than a catastrophe,
+       but it is a hole with a sign on it.
+
+       THE SIGNATURE CHECK IS THE WHOLE SECURITY MODEL. This endpoint disables
+       people's licences, so an unauthenticated version is a way for anybody to
+       switch off a paying customer. Stripe signs every delivery; a request that
+       does not verify is rejected before the body is even parsed, and the
+       timestamp is checked so a captured payload cannot be replayed later.
+
+       SETUP: Stripe -> Developers -> Webhooks -> add endpoint
+              URL:    https://<this worker>/webhook
+              Events: charge.refunded, charge.dispute.created
+              Copy the signing secret (whsec_...) into this Worker as
+              STRIPE_WEBHOOK_SECRET.
+       Until that variable is set the endpoint refuses everything, which is the
+       correct behaviour for a revocation endpoint with no way to authenticate. */
+    if (url.pathname === "/webhook" && req.method === "POST") {
+      if (!env.STRIPE_WEBHOOK_SECRET)
+        return json({ ok: false, error: "webhook_not_configured" }, 503);
+
+      // Raw body, read once: the signature covers the exact bytes Stripe sent,
+      // so re-serialising parsed JSON would never match.
+      const raw = await req.text();
+      const sigHeader = req.headers.get("stripe-signature") || "";
+      const parts = Object.fromEntries(sigHeader.split(",").map(p => {
+        const i = p.indexOf("="); return [p.slice(0, i).trim(), p.slice(i + 1).trim()];
+      }));
+      const t = parts.t, v1 = parts.v1;
+      if (!t || !v1) return json({ ok: false, error: "bad_signature_header" }, 400);
+
+      // Replay window. Stripe's own libraries use five minutes.
+      if (Math.abs(Date.now() / 1000 - Number(t)) > 300)
+        return json({ ok: false, error: "stale_signature" }, 400);
+
+      const mac = await crypto.subtle.importKey("raw",
+        new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET),
+        { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const digest = new Uint8Array(await crypto.subtle.sign("HMAC", mac,
+        new TextEncoder().encode(t + "." + raw)));
+      const expected = [...digest].map(b => b.toString(16).padStart(2, "0")).join("");
+      // Constant time, same reasoning as the licence signature check above.
+      const given = String(v1);
+      if (expected.length !== given.length) return json({ ok: false, error: "bad_signature" }, 400);
+      let diff = 0;
+      for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
+      if (diff !== 0) return json({ ok: false, error: "bad_signature" }, 400);
+
+      let evt = null;
+      try { evt = JSON.parse(raw); } catch (_) { return json({ ok: false, error: "bad_json" }, 400); }
+      const type = evt.type || "";
+      const obj = (evt.data && evt.data.object) || {};
+
+      /* Only events that mean "this person no longer paid". A dispute counts:
+         the money is gone whichever way the case eventually lands, and a key
+         can always be un-revoked by hand if the customer wins. */
+      const revoking = type === "charge.refunded" || type === "charge.dispute.created";
+      if (!revoking) return json({ ok: true, ignored: type });
+
+      // A dispute carries the charge; a refunded charge carries itself.
+      const pi = obj.payment_intent || (obj.charge && obj.charge.payment_intent) || null;
+      if (!pi) return json({ ok: true, note: "no payment_intent on event", type });
+
+      let key = await env.LICENSES.get("pi:" + pi);
+      /* Keys sold before the reverse index existed have no pi: entry, so fall
+         back to asking Stripe which session that payment belongs to. */
+      if (!key && env.STRIPE_SECRET) {
+        try {
+          const r = await fetch("https://api.stripe.com/v1/checkout/sessions?payment_intent="
+            + encodeURIComponent(pi) + "&limit=1",
+            { headers: { Authorization: "Bearer " + env.STRIPE_SECRET } });
+          const d = await r.json();
+          const sess = d && d.data && d.data[0];
+          if (sess && sess.id) key = await env.LICENSES.get("sess:" + sess.id);
+        } catch (_) {}
+      }
+      if (!key || key === ERASED) return json({ ok: true, note: "no key for that payment", pi });
+
+      const chk = await checkSigned(env, key);
+      const id = chk.id || null;
+      if (!id) return json({ ok: true, note: "key not in the signed format", pi });
+
+      await env.LICENSES.put("revoked:" + id, JSON.stringify({
+        at: Date.now(), reason: type, paymentIntent: pi,
+      }));
+      /* The feed proxy validates by signature with no database, so it cannot
+         see this. Until its REVOKED variable is updated by hand, a refunded key
+         still gets live data even though the interface refuses it. Reported
+         here so the answer is in the response rather than in someone's memory. */
+      return json({ ok: true, revoked: id, reason: type,
+        alsoDo: "Add " + id + " to the REVOKED variable on the feed proxy; it has no database to read this from." });
+    }
+
     /* ---- erasure: forget who bought this licence -------------------------
        The privacy policy promises deletion on request within 30 days, and until
        now honouring it meant editing KV by hand.
@@ -388,6 +501,12 @@ export default {
         if (sess.payment_status !== "paid") return json({ ok: false, error: "not_paid" }, 402);
         const key = await issueKey(env, "stripe", { session, email: sess.customer_details?.email || null });
         await env.LICENSES.put("sess:" + session, key);
+        /* Reverse index for the refund webhook. A refund event names a payment
+           intent, not a checkout session, and turning one into the other means
+           another Stripe call at exactly the moment you least want a dependency.
+           Recording it here costs one write per sale. */
+        if (sess.payment_intent)
+          await env.LICENSES.put("pi:" + sess.payment_intent, key);
         return json({ ok: true, key });
       }
 
