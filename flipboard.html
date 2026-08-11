@@ -116,6 +116,39 @@
     50%{ transform:rotateX(-90deg) }
     100%{ transform:rotateX(0deg) }
   }
+  /* ---- style: euro (Solari) ----
+     The platform is the column the row is read for, so it carries the weight a
+     status tag does not. */
+  :root[data-style="euro"] .status-tag.platform{
+    font:800 calc(var(--flap-font) * 1.05)/1 "IBM Plex Mono",monospace;
+    color:var(--flap-text); background:none; border:none; letter-spacing:0;
+    width:100%; text-align:right; padding-right:.15em;
+  }
+  /* ---- style: metro (platform countdown) ----
+     Not a split-flap at all: a dot-matrix panel. Bigger type, fewer rows, and
+     the minutes doing the shouting. */
+  :root[data-style="metro"]{ --flap-h:calc(var(--flap-h) * 1.25) }
+  :root[data-style="metro"] .flap{ background:none; box-shadow:none; border-radius:0 }
+  :root[data-style="metro"] .flap::after{ display:none }
+  :root[data-style="metro"] .flap .ch{
+    color:var(--metro-ink,#ffb02e);
+    font:700 calc(var(--flap-font) * 1.15)/1 "IBM Plex Mono",monospace;
+    text-shadow:0 0 6px color-mix(in srgb, var(--metro-ink,#ffb02e) 45%, transparent);
+  }
+  /* The countdown is a plain element next to fields of taller flaps, so it has
+     to be centred against them explicitly or it sits half a row low. */
+  :root[data-style="metro"] .board-row{
+    border-bottom:1px solid rgba(255,255,255,.05); align-items:center;
+  }
+  :root[data-style="metro"] .board-row > *{ display:flex; align-items:center }
+  :root[data-style="metro"] .op-logo-img, :root[data-style="metro"] .op-logo{ display:none !important }
+  :root[data-style="metro"] .status-tag.countdown{
+    font:800 calc(var(--flap-font) * 1.7)/1 "IBM Plex Mono",monospace;
+    color:var(--metro-ink,#ffb02e); background:none; border:none; letter-spacing:0;
+    width:100%; text-align:right;
+    text-shadow:0 0 8px color-mix(in srgb, var(--metro-ink,#ffb02e) 45%, transparent);
+  }
+  .board-row.empty{ opacity:0 }
   .status-tag{font-size:11px; font-weight:800; letter-spacing:.06em; padding:.2em .5em; border-radius:4px; white-space:nowrap}
   .status-tag.ok{background:rgba(90,209,122,.15); color:var(--good-ink)}
   .status-tag.warn{background:rgba(255,204,51,.15); color:var(--warn-ink)}
@@ -210,6 +243,13 @@
         <button data-size="sm">Small</button>
         <button data-size="md">Medium</button>
         <button data-size="lg">Large</button>
+      </div>
+      <div class="lbl">Board style</div>
+      <div class="seg" id="styleSeg">
+        <button data-style="auto">Auto</button>
+        <button data-style="euro">European</button>
+        <button data-style="usa">American</button>
+        <button data-style="metro">Metro</button>
       </div>
       <div class="lbl">Flip sound</div>
       <div class="seg" id="soundSeg">
@@ -651,6 +691,12 @@ async function collectTransitousRows(family, count){
     .map(d=>{
       const min=Math.max(0, Math.round((d.when-Date.now())/60000));
       return { sortMin:min, time: min<=0? "NOW" : `${min} MIN`,
+        /* The European style leads with a wall-clock departure and a platform,
+           the way a Solari board does; the countdown suits the metro style. Both
+           are carried so the renderer can pick, rather than the collector
+           deciding which one this city is allowed to show. */
+        clock: cityClock(d.when),
+        platform: (d.platform||"").toUpperCase(),
         dest:(d.headsign||"?").toUpperCase(), via:(d.route||d.label||"").toUpperCase(),
         /* Only claim live where the feed says so — the Swiss trams are live, the
            Rhine boats are not, and both end up on this board. */
@@ -890,7 +936,10 @@ class FlapField{
   }
 }
 
-const ROW_COUNT=16;
+/* A departure hall board is a long list; a platform display is a handful of
+   lines you read from thirty feet away. */
+const ROW_COUNTS = { euro:16, usa:16, metro:8 };
+let ROW_COUNT = 16;
 const TIME_CHARS=7;                 // must match the FlapField built below
 /* The time column is sized from the flaps it has to hold, not guessed. It was a
    flat 52px against seven 28px flaps — 208px of content in 52px of column, with
@@ -898,10 +947,54 @@ const TIME_CHARS=7;                 // must match the FlapField built below
    two characters: "12:02A" read as "12", "1 MIN" as "1", "BRD" as "BR". Wrong at
    every size setting too, since the flaps scale with --flap-w and 52px did not.
    Six 2px gaps between seven flaps, hence the +12. */
-/* 104px, not 88: a 9:1 wordmark capped to an 88px box renders about 8px tall,
-   which is past the point of being readable across a room. */
-const COLS=`calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px) minmax(0,1.7fr) 104px minmax(0,1fr) 96px`;
-$("#boardHead").style.setProperty("--cols", COLS);
+/* ---------- board styles ----------------------------------------------------
+   A Solari board in Zurich, an Amtrak board at Penn Station and a subway
+   platform display look nothing alike, and the last one is not a departure
+   board at all — which mattered here, because most of what these boards show is
+   metro and bus being rendered as though it were intercity rail.
+
+     euro   Solari. 24-hour departure time, destination, and the PLATFORM as the
+            column that carries the row — which is what you actually walk up to
+            a European board to read. Delay shown against the time.
+     usa    Amtrak. Clock time and a STATUS word doing the work: ON TIME,
+            BOARDING, DELAYED. Track where a feed gives one.
+     metro  Not split-flap. A platform countdown: line bullet, destination, and
+            big minutes. Fewer rows, larger type, meant to be read at a glance
+            from further away.
+
+   Platform only exists on the transitous feeds, which is the European cities —
+   the WMATA, Amtrak and bundled-GTFS collectors have no track field to give. So
+   the column populates exactly where the style that wants it is the default,
+   and shows a dash elsewhere rather than pretending. */
+const EURO_CITIES = new Set(["zurich","cologne","stuttgart","amsterdam"]);
+const LS_STYLE = "flipboard.style";
+function resolveStyle(pref){
+  if (pref && pref !== "auto") return pref;
+  return EURO_CITIES.has(CITY) ? "euro" : "usa";
+}
+let STYLE = resolveStyle(localStorage.getItem(LS_STYLE) || "auto");
+
+const TIME_COL = `calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px)`;
+const STYLE_COLS = {
+  euro:  `${TIME_COL} minmax(0,1.9fr) 104px minmax(0,1fr) 86px`,
+  usa:   `${TIME_COL} minmax(0,1.7fr) 104px minmax(0,1fr) 96px`,
+  metro: `96px minmax(0,1fr) 128px`,
+};
+const STYLE_HEADS = {
+  euro:  ["TIME","DESTINATION","OPERATOR","LINE","PLATFORM"],
+  usa:   ["TIME","DESTINATION","OPERATOR","VIA","STATUS"],
+  metro: ["LINE","DESTINATION","MIN"],
+};
+let COLS = STYLE_COLS[STYLE];
+function applyStyleChrome(){
+  COLS = STYLE_COLS[STYLE];
+  ROW_COUNT = ROW_COUNTS[STYLE] || 16;
+  document.documentElement.setAttribute("data-style", STYLE);
+  const head=$("#boardHead");
+  head.style.setProperty("--cols", COLS);
+  head.innerHTML = STYLE_HEADS[STYLE].map(h=>`<span>${h}</span>`).join("");
+}
+applyStyleChrome();
 const rowFields=[]; // [{el, logoEl, time:FlapField, dest:FlapField, via:FlapField, statusEl}]
 
 /* How many flaps actually fit a column of `px`.
@@ -975,11 +1068,30 @@ function renderRows(rows){
     if(!r){
       f.time.setText(""); f.dest.setText(""); f.via.setText("");
       f.statusEl.textContent=""; f.statusEl.className="status-tag na";
+      f.el.classList.add("empty");
       showLogoText(f, null);
       continue;
     }
-    f.time.setText(r.time); f.dest.setText(r.dest); f.via.setText(r.via);
-    f.statusEl.textContent=r.status; f.statusEl.className="status-tag "+(r.statusKind||"na");
+    /* Slot five is the column each style exists for: a European board's
+       platform, an American board's status word, the countdown on a metro
+       display. The first four slots are shared, so the flap animation and the
+       fitting work is not duplicated three times. */
+    if(STYLE==="metro"){
+      f.time.setText(r.via);                       // line bullet reads first here
+      f.dest.setText(r.dest);
+      f.via.setText("");
+      f.statusEl.textContent = r.time;             // big minutes
+      f.statusEl.className = "status-tag countdown " + (r.statusKind||"na");
+    } else if(STYLE==="euro"){
+      f.time.setText(r.clock || r.time);           // 24h departure, not a countdown
+      f.dest.setText(r.dest); f.via.setText(r.via);
+      f.statusEl.textContent = r.platform || "—";
+      f.statusEl.className = "status-tag platform";
+    } else {
+      f.time.setText(r.time); f.dest.setText(r.dest); f.via.setText(r.via);
+      f.statusEl.textContent=r.status; f.statusEl.className="status-tag "+(r.statusKind||"na");
+    }
+    f.el.classList.remove("empty");
     if(r.logoImg){
       f.logoTextEl.style.display="none";
       f.logoImgEl.style.display="";
@@ -1082,6 +1194,15 @@ function applySize(size){
   if (typeof measureAndRefit === "function") requestAnimationFrame(measureAndRefit);
   document.querySelectorAll("#sizeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.size===size));
 }
+function applyStyle(pref){
+  localStorage.setItem(LS_STYLE, pref);
+  STYLE = resolveStyle(pref);
+  applyStyleChrome();
+  document.querySelectorAll("#styleSeg button").forEach(b=>b.classList.toggle("active", b.dataset.style===pref));
+  fitWidths=null; buildRows();
+  requestAnimationFrame(measureAndRefit);
+  if(lastRows) renderRows(lastRows);
+}
 function applySound(on){
   soundOn=on;
   localStorage.setItem(LS_SOUND, on?"on":"off");
@@ -1111,6 +1232,8 @@ function initSettings(){
   $("#setBtn").onclick=()=>$("#settings").classList.add("show");
   $("#setDone").onclick=()=>$("#settings").classList.remove("show");
   $("#settings").addEventListener("click", e=>{ if(e.target.id==="settings") $("#settings").classList.remove("show"); });
+  $("#styleSeg").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) applyStyle(b.dataset.style); });
+  applyStyle(localStorage.getItem(LS_STYLE) || "auto");
   $("#sizeSeg").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) applySize(b.dataset.size); });
   $("#soundSeg").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) applySound(b.dataset.sound==="on"); });
 }
