@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Station display — NYC subway</title>
+<!--
+  station.html — the platform display, in the shape New Yorkers already read.
+
+  Two formats, both modelled on the real thing:
+
+    NEXT TRAIN   the tall OUTFRONT screen: line bullet, destination, minutes,
+                 and the stop-by-stop strip map of everywhere it calls, then the
+                 trains after it.
+    CLOCK        the overhead countdown: two or three rows, nothing else, legible
+                 from the far end of a platform.
+
+  It picks the format from the screen it finds itself on — a very wide, short
+  screen gets the clock, anything else gets the next-train view — because those
+  are physically different pieces of hardware in a station. ?view= overrides.
+
+  URL:  station.html?stop=127            a specific station (GTFS parent id)
+        station.html?stop=127&dir=S      one direction only, like a real platform
+        station.html?view=clock|next     force a format
+        (no stop given -> asks for location, falls back to Times Sq)
+
+  Data is the live MTA GTFS-Realtime feed, decoded in the browser by
+  mta-live.js. No key, no Worker: MTA serves those feeds CORS-open.
+-->
+<link rel="stylesheet" href="theme.css" />
+<script src="config.js?v=1"></script>
+<script src="schedule-health.js?v=1"></script>
+<script src="worker-health.js?v=1"></script>
+<script src="mta-live.js?v=1"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; overflow:hidden}
+  body{background:#0a1020; color:#fff;
+    font-family:"Helvetica Neue",Helvetica,Arial,ui-sans-serif,system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+
+  /* ---- shared bullet: the round line badge, MTA's most recognisable object -- */
+  .bul{display:inline-flex; align-items:center; justify-content:center; flex:none;
+    border-radius:50%; font-weight:700; color:#fff; line-height:1;
+    font-variant-numeric:lining-nums}
+  /* the yellow and grey lines carry black text on the real thing */
+  .bul.dark{color:#000}
+
+  /* ================= NEXT TRAIN (portrait / landscape) ==================== */
+  #next{display:none; height:100%; flex-direction:column; background:linear-gradient(180deg,#0d1a33,#0a1020)}
+  body[data-view="next"] #next{display:flex}
+
+  /* The right padding keeps the title and the clock clear of the floating
+     picker, which hovers over this bar. --pickw is measured in JS because the
+     widest station name is what decides how wide that select ends up. When the
+     picker fades out the gutter goes with it, so an unattended screen shows the
+     clock flush right the way a real one does. */
+  .hdr{display:flex; align-items:center; gap:14px; flex:none;
+    padding:14px 20px; padding-right:calc(20px + var(--pickw,0px));
+    background:linear-gradient(90deg,#0b3a86,#0a2c66);
+    transition:padding-right .35s ease}
+  body.idle .hdr{padding-right:20px}
+  .hdr .mta{width:30px; height:30px; border-radius:50%; background:#0039a6; color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex:none}
+  .hdr h1{margin:0; font-size:clamp(15px,min(2.6vh,4.6vw),30px); font-weight:600; letter-spacing:.2px;
+    min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .hdr .clock{margin-left:auto; font-size:clamp(13px,min(2.3vh,4vw),26px); font-weight:600;
+    font-variant-numeric:tabular-nums; flex:none}
+
+  .barlbl{display:flex; align-items:center; padding:7px 20px; background:#123a7a; flex:none;
+    font-size:clamp(12px,1.7vh,17px); font-weight:700; letter-spacing:.02em}
+  .barlbl .right{margin-left:auto; opacity:.85}
+
+  /* Sized from BOTH axes. Keyed off height alone, a phone in portrait gets
+     28px type in 195px of room and "to New Lots Av" ellipsises — plenty of
+     height, no width. min() lets whichever axis is tighter decide. */
+  .lead{display:flex; align-items:center; gap:clamp(12px,2vw,22px); padding:clamp(12px,2.2vh,22px) 20px; flex:none}
+  .lead .bul{width:clamp(46px,min(8.4vh,15vw),104px); height:clamp(46px,min(8.4vh,15vw),104px);
+    font-size:clamp(24px,min(4.6vh,8vw),58px)}
+  .lead .to{min-width:0}
+  .lead .to .d1{font-size:clamp(17px,min(3.4vh,6.2vw),42px); font-weight:700; line-height:1.1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .lead .to .d2{font-size:clamp(11px,min(1.8vh,3.3vw),20px); opacity:.72; margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .lead .mins{margin-left:auto; text-align:right; flex:none}
+  .lead .mins b{display:block; font-size:clamp(20px,min(4vh,7vw),50px); font-weight:700;
+    font-variant-numeric:tabular-nums; line-height:1}
+  .lead .mins span{font-size:clamp(11px,1.5vh,16px); opacity:.7}
+
+  /* ---- the strip map: the part that makes it look like the real screen ---- */
+  .strip{flex:1 1 auto; min-height:0; overflow:hidden; padding:2px 20px 8px; position:relative}
+  .strip .stops{display:flex; flex-direction:column; height:100%}
+  .stop{display:flex; align-items:center; gap:12px; min-height:0; flex:1 1 0}
+  .stop .rail{position:relative; width:20px; flex:none; align-self:stretch; display:flex;
+    align-items:center; justify-content:center}
+  /* One continuous line behind the dots, capped at the ends. Each row draws its
+     own segment, so only the first and last may round — rounding every segment
+     pinches the line at every row boundary and the rail looks like a dashed one. */
+  .stop .rail::before{content:""; position:absolute; top:0; bottom:0; width:6px;
+    background:var(--linecol,#ffd166)}
+  .stop:first-child .rail::before{top:50%; border-radius:3px 3px 0 0}
+  .stop:last-child .rail::before{bottom:50%; border-radius:0 0 3px 3px}
+  .stop .dot{position:relative; width:9px; height:9px; border-radius:50%; background:#fff;
+    box-shadow:0 0 0 2px var(--linecol,#ffd166)}
+  .stop.here .dot{width:15px; height:15px; box-shadow:0 0 0 3px #fff}
+  .stop .nm{font-size:clamp(10px,1.55vh,17px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .stop.here .nm{font-weight:700; background:#fff; color:#0a1020; padding:1px 7px; border-radius:3px}
+  .stop .eta{margin-left:auto; font-size:clamp(9px,1.35vh,14px); opacity:.6;
+    font-variant-numeric:tabular-nums; flex:none}
+
+  .later{flex:none; border-top:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.22)}
+  .later .lrow{display:flex; align-items:center; gap:11px; padding:6px 20px}
+  .later .bul{width:clamp(22px,3.1vh,34px); height:clamp(22px,3.1vh,34px); font-size:clamp(12px,1.7vh,18px)}
+  .later .nm{font-size:clamp(12px,1.7vh,18px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .later .m{margin-left:auto; font-size:clamp(12px,1.7vh,18px); font-variant-numeric:tabular-nums; flex:none}
+
+  /* ================= CLOCK (wide strip) ================================== */
+  #clock{display:none; height:100%; flex-direction:column; background:#29e0f5; color:#0a3a52}
+  body[data-view="clock"] #clock{display:flex}
+  #clock .rows{flex:1 1 auto; display:flex; flex-direction:column; min-height:0}
+  #clock .crow{flex:1 1 0; display:flex; align-items:center; gap:clamp(10px,1.6vw,26px);
+    padding:0 clamp(12px,1.8vw,30px); min-height:0; border-bottom:1px solid rgba(10,58,82,.22)}
+  #clock .crow:last-child{border-bottom:none}
+  /* The countdown is normally on a wide, short panel, where height is the tight
+     axis. Forced onto a phone it is the other way round, so both axes get a say
+     here too — otherwise 7.2vh of an 844px screen is 61px type on a 390px line. */
+  #clock .idx{font-size:clamp(18px,min(7.2vh,6.4vw),64px); font-weight:600;
+    font-variant-numeric:tabular-nums; flex:none}
+  #clock .bul{width:clamp(28px,min(8.2vh,7.4vw),74px); height:clamp(28px,min(8.2vh,7.4vw),74px);
+    font-size:clamp(15px,min(4.8vh,4.3vw),42px)}
+  #clock .dest{font-size:clamp(18px,min(7.2vh,6.4vw),64px); font-weight:500; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; min-width:0}
+  #clock .min{margin-left:auto; font-size:clamp(18px,min(7.2vh,6.4vw),64px); font-weight:600;
+    font-variant-numeric:tabular-nums; flex:none}
+  #clock .min small{font-size:.45em; font-weight:600; margin-left:.15em}
+  #clock .foot{flex:none; display:flex; align-items:center; gap:12px;
+    padding:clamp(3px,.8vh,8px) clamp(12px,1.8vw,30px); background:#0a3a52; color:#dff6ff;
+    font-size:clamp(9px,2vh,17px)}
+  #clock .foot .right{margin-left:auto; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+  #msg{position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:24px; font-size:clamp(14px,2.4vh,22px); color:#cfe0ff;
+    background:#0a1020; z-index:5}
+  #msg.hide{display:none}
+  /* Controls no real station display has. They fade out once nobody has touched
+     the screen for a few seconds, so a board left running looks like the thing
+     it is imitating; any tap, move or key brings them straight back. */
+  .picker{position:fixed; top:8px; right:10px; z-index:6; display:flex; gap:6px;
+    transition:opacity .35s ease}
+  body.idle .picker{opacity:0; pointer-events:none}
+  .picker select,.picker a{font:inherit; font-size:12px; padding:5px 8px; border-radius:7px;
+    background:rgba(0,0,0,.45); color:#fff; border:1px solid rgba(255,255,255,.25); text-decoration:none}
+  .picker select{max-width:190px}
+  body[data-view="clock"] .picker select,body[data-view="clock"] .picker a{
+    background:rgba(10,58,82,.75); border-color:rgba(255,255,255,.35)}
+  @media (max-width:600px){ .picker{display:none} }
+  /* "to Van Cortlandt Park-242 St" is 28 characters; on a 390px phone there is
+     no font size that both fits it on one line and stays readable. The big
+     screens have the width, a phone does not, so here it wraps to two lines
+     instead of shrinking away — the lead row is flex:none and the strip below
+     simply gets the remaining height. */
+  @media (max-width:560px){
+    .lead .to .d1{white-space:normal; display:-webkit-box; -webkit-line-clamp:2;
+      -webkit-box-orient:vertical; overflow:hidden; line-height:1.08}
+  }
+</style>
+</head>
+<body data-view="next">
+
+<div class="picker">
+  <select id="stopPick" aria-label="Station"></select>
+  <select id="viewPick" aria-label="Display format">
+    <option value="auto">Auto</option>
+    <option value="next">Next train</option>
+    <option value="clock">Countdown</option>
+  </select>
+  <a href="nyc.html" title="Back to the New York board">‹ board</a>
+</div>
+
+<!-- ============ next-train format ============ -->
+<div id="next">
+  <div class="hdr">
+    <div class="mta">MTA</div>
+    <h1 id="welcome">Loading…</h1>
+    <div class="clock" id="hClock"></div>
+  </div>
+  <div class="barlbl"><span>Next train</span><span class="right" id="leadStatus"></span></div>
+  <div class="lead">
+    <div class="bul" id="leadBul"></div>
+    <div class="to">
+      <div class="d1" id="leadDest">—</div>
+      <div class="d2" id="leadSub"></div>
+    </div>
+    <div class="mins"><b id="leadMin">—</b><span id="leadMinLbl">min</span></div>
+  </div>
+  <div class="barlbl"><span>Stopping at</span><span class="right" id="stripCount"></span></div>
+  <div class="strip"><div class="stops" id="strip"></div></div>
+  <div class="later" id="later"></div>
+</div>
+
+<!-- ============ countdown format ============ -->
+<div id="clock">
+  <div class="rows" id="crows"></div>
+  <div class="foot">
+    <span id="cClock"></span>
+    <span id="cStation"></span>
+    <span class="right">Please stand back from the platform edge</span>
+  </div>
+</div>
+
+<div id="msg">Finding your station…</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const P = new URLSearchParams(location.search);
+
+/* Yellow, grey and the brown/olive lines carry BLACK text on the real bullets;
+   everything else is white. Getting this wrong is instantly obvious to anyone
+   who has stood on a platform. */
+const DARK_TEXT = new Set(["N","Q","R","W","GS","FS","H","SI"]);
+
+const state = { stations:{}, stopId:null, dir:P.get("dir")||"", data:null, lastOk:0 };
+
+function stationName(id){
+  const s = state.stations[id];
+  return (s && s.n) || id || "—";
+}
+function bulletColor(route){
+  return (window.TBMta && TBMta.SUBWAY_COL[route]) || "#6a6a6a";
+}
+function paintBullet(el, route){
+  el.textContent = route || "?";
+  el.style.background = bulletColor(route);
+  el.classList.toggle("dark", DARK_TEXT.has(route));
+}
+function clockStr(d){
+  return d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}).toLowerCase();
+}
+function etaStr(sec){
+  const d = new Date(sec*1000);
+  return d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+}
+
+/* ---- which format ------------------------------------------------------
+   A platform countdown is a physically wide, short panel; the OUTFRONT screen
+   is tall. Rather than ask, measure the screen: aspect over ~2.6:1 with little
+   height is the strip, everything else is the full display. ?view= wins. */
+function decideView(){
+  const forced = (P.get("view")||"").toLowerCase();
+  const pick = document.getElementById("viewPick").value;
+  const want = (pick && pick !== "auto") ? pick : forced;
+  if(want === "clock" || want === "next"){ document.body.dataset.view = want; return; }
+  const r = window.innerWidth / Math.max(1, window.innerHeight);
+  document.body.dataset.view = (r >= 2.6 || window.innerHeight < 420) ? "clock" : "next";
+}
+
+/* ---- data -------------------------------------------------------------- */
+async function loadStations(){
+  const d = await (await fetch("mta-stations.json")).json();
+  state.stations = d.stations || {};
+}
+/* Nearest station, but only if it is actually near. Without the radius this
+   answers "which subway platform are you on?" for somebody in Maryland, and
+   answers it confidently — the nearest of 496 stations is always *some*
+   station. Outside New York the honest answer is that location tells you
+   nothing, so the display falls back to Times Square instead. */
+const NEAR_KM = 60;
+function nearestStation(lat, lon){
+  let best = null, bd = Infinity;
+  Object.keys(state.stations).forEach(id => {
+    const s = state.stations[id];
+    if(s.lat == null) return;
+    const dx = (s.lat-lat)*111, dy = (s.lon-lon)*85;   // rough km, fine for ranking
+    const d2 = dx*dx + dy*dy;
+    if(d2 < bd){ bd = d2; best = id; }
+  });
+  return Math.sqrt(bd) <= NEAR_KM ? best : null;
+}
+async function refresh(){
+  if(!state.stopId) return;
+  let d;
+  try{ d = await TBMta.fetchAll(); }
+  catch(e){ return; }                        // keep the last good screen up
+  state.lastOk = Date.now();
+  let arr = TBMta.arrivalsAt(d.updates, state.stopId, {horizonMin:40});
+  if(state.dir) arr = arr.filter(a => a.dir === state.dir);
+  state.data = arr;
+  render();
+}
+
+/* Minutes are recomputed on every paint, not taken from the fetch. The feed is
+   polled every 20 seconds; a countdown frozen for 20 seconds and then jumping
+   two is exactly the thing people standing on a platform notice. */
+function liveMins(a){
+  return Math.max(0, Math.round((a.atSec - Date.now()/1000) / 60));
+}
+function minsText(a){
+  return liveMins(a) <= 0 ? "now" : liveMins(a);
+}
+
+function render(){
+  const now = new Date();
+  /* Trains that have already gone stay in state until the next fetch. Drop them
+     here or a departed train sits at the top of the board reading "now". */
+  const arr = (state.data || []).filter(a => a.atSec > Date.now()/1000 - 45);
+  $("#hClock").textContent = clockStr(now);
+  $("#cClock").textContent = now.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  const staleFoot = state.lastOk ? Math.round((Date.now() - state.lastOk)/60000) : 0;
+  $("#cStation").textContent = stationName(state.stopId) +
+    (staleFoot >= 3 ? " · times " + staleFoot + " min old" : "");
+  /* "Welcome to X" is what the big screens say; on a phone that greeting eats
+     the half of the bar the station name needs, so the name goes alone. */
+  $("#welcome").textContent = (window.innerWidth < 560 ? "" : "Welcome to ") +
+    stationName(state.stopId);
+
+  if(!arr.length){
+    $("#msg").classList.remove("hide");
+    $("#msg").textContent = "No trains due at " + stationName(state.stopId) + " right now.";
+    return;
+  }
+  $("#msg").classList.add("hide");
+
+  /* Only paint the format that is on screen. The hidden one measures as zero
+     high, and the strip map sizes itself from that measurement — rendering it
+     while hidden fills it with a four-row map that is wrong the instant the
+     view is switched back. This runs once a second, so it is also half the work
+     thrown away. */
+  const showNext = document.body.dataset.view === "next";
+
+  /* ---- next-train format ---- */
+  if(showNext){
+  const lead = arr[0];
+  paintBullet($("#leadBul"), lead.routeId);
+  $("#leadDest").textContent = "to " + stationName(lead.destStation);
+  /* remaining[0] is the platform you are standing on, so what is AHEAD is one
+     fewer — a screen that counts your own station among the stops to come is
+     the sort of thing a regular notices immediately. */
+  const ahead = Math.max(0, lead.remaining.length - 1);
+  const endsAt = lead.remaining[lead.remaining.length - 1];
+  $("#leadSub").textContent = ahead
+    ? ahead + " stop" + (ahead === 1 ? "" : "s") +
+      (endsAt && endsAt.timeSec ? " · arrives " + etaStr(endsAt.timeSec) : "")
+    : "Last stop";
+  $("#leadMin").textContent = minsText(lead);
+  $("#leadMinLbl").textContent = liveMins(lead) <= 0 ? "" : "min";
+  /* A display that has lost the feed must say so. Left alone it would keep
+     counting down from predictions made minutes ago, which is worse than an
+     empty screen: it looks authoritative and is wrong. */
+  const staleMin = state.lastOk ? Math.round((Date.now() - state.lastOk)/60000) : 0;
+  $("#leadStatus").textContent =
+    staleMin >= 3 ? "Times last updated " + staleMin + " min ago"
+    : lead.delaySec != null && lead.delaySec > 60
+      ? "Delayed " + Math.round(lead.delaySec/60) + " min" : "Status";
+
+  /* The strip map. The feed hands back every remaining stop, so the only work
+     is fitting them: a long run has more stops than rows that fit, and a
+     squeezed unreadable list is worse than an honest gap, so the middle is
+     dropped and marked rather than shrinking everything to nothing. */
+  const strip = $("#strip");
+  strip.style.setProperty("--linecol", bulletColor(lead.routeId));
+  strip.innerHTML = "";
+  const box = strip.parentElement;
+  const rowH = Math.max(14, Math.min(30, box.clientHeight / 18));
+  const fit = Math.max(4, Math.floor(box.clientHeight / rowH));
+  let stops = lead.remaining;
+  let elided = 0;
+  if(stops.length > fit){
+    const head = Math.ceil(fit/2), tail = fit - head - 1;
+    elided = stops.length - head - tail;
+    stops = stops.slice(0, head).concat([{gap:true, n:elided}], stops.slice(stops.length - tail));
+  }
+  stops.forEach((s, i) => {
+    const row = document.createElement("div");
+    row.className = "stop" + (i === 0 ? " here" : "");
+    if(s.gap){
+      row.innerHTML = `<div class="rail"><div class="dot" style="opacity:.45"></div></div>
+        <div class="nm" style="opacity:.6">+ ${s.n} more stops</div>`;
+    } else {
+      row.innerHTML = `<div class="rail"><div class="dot"></div></div>
+        <div class="nm"></div><div class="eta"></div>`;
+      row.querySelector(".nm").textContent = stationName(s.station);
+      row.querySelector(".eta").textContent = s.timeSec ? etaStr(s.timeSec) : "";
+    }
+    strip.appendChild(row);
+  });
+  $("#stripCount").textContent = ahead + (ahead === 1 ? " stop ahead" : " stops ahead");
+
+  const later = $("#later");
+  later.innerHTML = "";
+  arr.slice(1, 4).forEach(a => {
+    const r = document.createElement("div");
+    r.className = "lrow";
+    r.innerHTML = `<div class="bul"></div><div class="nm"></div><div class="m"></div>`;
+    paintBullet(r.querySelector(".bul"), a.routeId);
+    r.querySelector(".nm").textContent = "to " + stationName(a.destStation);
+    r.querySelector(".m").textContent = liveMins(a) <= 0 ? "now" : liveMins(a) + " min";
+    later.appendChild(r);
+  });
+  }
+
+  /* ---- countdown format ---- */
+  if(!showNext){
+  const rows = $("#crows");
+  rows.innerHTML = "";
+  const n = Math.max(2, Math.min(4, Math.floor(window.innerHeight / 70)));
+  arr.slice(0, n).forEach((a, i) => {
+    const r = document.createElement("div");
+    r.className = "crow";
+    r.innerHTML = `<div class="idx"></div><div class="bul"></div>
+      <div class="dest"></div><div class="min"></div>`;
+    r.querySelector(".idx").textContent = (i+1) + ".";
+    paintBullet(r.querySelector(".bul"), a.routeId);
+    r.querySelector(".dest").textContent = stationName(a.destStation);
+    r.querySelector(".min").innerHTML = liveMins(a) <= 0
+      ? "now" : `${liveMins(a)}<small>min</small>`;
+    rows.appendChild(r);
+  });
+  }
+}
+
+/* ---- boot -------------------------------------------------------------- */
+function fillPicker(){
+  const sel = $("#stopPick");
+  const ids = Object.keys(state.stations)
+    .sort((a,b) => stationName(a).localeCompare(stationName(b)));
+  sel.innerHTML = "";
+  ids.forEach(id => {
+    const o = document.createElement("option");
+    o.value = id; o.textContent = stationName(id);
+    if(id === state.stopId) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => {
+    state.stopId = sel.value;
+    try{ localStorage.setItem("tb.stationStop", sel.value); }catch(_){}
+    refresh();
+  };
+  $("#viewPick").onchange = () => { decideView(); render(); };
+}
+
+/* Reserve exactly as much header gutter as the picker actually occupies. The
+   station select sizes itself to its longest option, and @media hides the whole
+   thing on a phone, where offsetWidth is 0 and the gutter closes by itself. */
+function measurePicker(){
+  const w = $(".picker").offsetWidth;
+  document.documentElement.style.setProperty("--pickw", (w ? w + 14 : 0) + "px");
+}
+
+/* Fade the controls away when the screen is left alone. */
+function watchIdle(){
+  let t;
+  const wake = () => {
+    document.body.classList.remove("idle");
+    clearTimeout(t);
+    t = setTimeout(() => document.body.classList.add("idle"), 5000);
+  };
+  ["pointermove","pointerdown","keydown","touchstart","wheel"]
+    .forEach(ev => window.addEventListener(ev, wake, {passive:true}));
+  wake();
+}
+
+async function boot(){
+  decideView();
+  watchIdle();
+  window.addEventListener("resize", () => { decideView(); measurePicker(); render(); });
+  try{ await loadStations(); }
+  catch(e){ $("#msg").textContent = "Could not load the station list."; return; }
+
+  let want = P.get("stop");
+  if(!want){ try{ want = localStorage.getItem("tb.stationStop"); }catch(_){} }
+  if(want && state.stations[want]) state.stopId = want;
+
+  fillPicker();
+
+  if(!state.stopId && navigator.geolocation){
+    $("#msg").textContent = "Finding your station…";
+    await new Promise(res => navigator.geolocation.getCurrentPosition(
+      p => { state.stopId = nearestStation(p.coords.latitude, p.coords.longitude); res(); },
+      () => res(), {timeout:6000, maximumAge:600000}));
+  }
+  // Times Square: the busiest station in the system, so a screen with no
+  // location still shows a plausible board rather than an error.
+  if(!state.stopId) state.stopId = "127";
+  fillPicker();
+  measurePicker();
+
+  $("#msg").textContent = "Loading trains at " + stationName(state.stopId) + "…";
+  await refresh();
+  setInterval(refresh, 20000);          // the feed itself updates about every 30s
+  setInterval(render, 1000);            // keep the clock and the minutes honest
+}
+if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+</script>
+</body>
+</html>
