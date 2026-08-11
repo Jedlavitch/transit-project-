@@ -65,11 +65,24 @@
   /* Real operator logo, on its own light chip so brand colors/black marks
      (WMATA's logo is solid black) stay legible regardless of the row's own
      accent color or the page's dark theme. */
+  /* Operator marks come in wildly different shapes: WMATA's is taller than it is
+     wide (250x307), Amtrak's is a long wordmark at 250x27 — nine times wider
+     than tall. Pinning HEIGHT and letting width follow made Amtrak 215px wide in
+     an 88px column, straight across the VIA column next to it. The img's own
+     max-width could never help: it resolves against this box, and an inline-flex
+     box with no width bound just grows to fit its content.
+     So the BOX is bounded by the column, and the image is capped in BOTH axes
+     and left to scale itself down — a wide wordmark ends up short rather than
+     wide, which is the shape it has to be to fit. */
   .op-logo-img{
-    display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    flex-shrink:1; min-width:0; max-width:100%;
     background:#fff; border-radius:5px; padding:4px 7px; height:calc(var(--flap-h) * .78);
   }
-  .op-logo-img img{ display:block; height:100%; width:auto; max-width:100%; object-fit:contain; }
+  .op-logo-img img{
+    display:block; width:auto; height:auto;
+    max-width:100%; max-height:100%; object-fit:contain;
+  }
   .flap-field{display:flex; gap:2px; flex-wrap:nowrap; overflow:hidden}
   .flap-field.left{justify-content:flex-start}
   .flap-field.right{justify-content:flex-end}
@@ -80,6 +93,14 @@
     border-radius:2px; overflow:hidden;
     box-shadow:inset 0 0 0 1px #000, 0 1px 0 rgba(255,255,255,.05);
   }
+  /* A position holding no character is a dark gap, not a lit empty box. Fields
+     are fixed-width, so a third of every board (225 of 672 cells, measured) was
+     blank tiles — and giving them the same panel treatment as a real character
+     made emptiness the loudest texture on the screen. A real Solari board's
+     unused flaps read as black. The element stays in place, so the flap still
+     animates when a character arrives. */
+  .flap.blank{ background:none; box-shadow:none; }
+  .flap.blank::after{ display:none }
   .flap::after{
     content:""; position:absolute; left:0; right:0; top:50%; height:1px;
     background:var(--seam); transform:translateY(-.5px); z-index:2;
@@ -801,6 +822,37 @@ document.addEventListener("pointerdown", ()=>ensureAudio(), {once:true});
 const CHARS=" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:'&-/,";
 function randChar(){ return CHARS[Math.floor(Math.random()*CHARS.length)]; }
 
+/* Make a destination fit its column without slicing through a word.
+   A hard .slice() turned SOUTH TO FRIENDSHIP into "SOUTH TO FRIENDS" and
+   NORTH TO ROCKVILLE into "NORTH TO ROCKVIL" — the reader cannot tell a cut
+   word from a real one, which is worse than showing less. In order: use it
+   whole; drop a leading direction word that the line already implies; drop
+   interior vowels from the longest word, the way transit signage does
+   (FRIENDSHIP -> FRNDSHP); and only then cut, at a word boundary. */
+function fitText(str, width){
+  let t=(str||"").toUpperCase().replace(/\s+/g," ").trim();
+  if(t.length<=width) return t;
+
+  const lead=t.match(/^(NORTH|SOUTH|EAST|WEST|NORTHBOUND|SOUTHBOUND|INBOUND|OUTBOUND)\s+TO\s+/);
+  if(lead && (t=t.slice(lead[0].length)).length<=width) return t;
+
+  const squeeze=w => w.length<5 ? w : w[0]+w.slice(1,-1).replace(/[AEIOU]/g,"")+w.slice(-1);
+  let words=t.split(" ");
+  while(t.length>width){
+    let longest=0;
+    for(let i=1;i<words.length;i++) if(words[i].length>words[longest].length) longest=i;
+    const shorter=squeeze(words[longest]);
+    if(shorter===words[longest]) break;          // nothing left to squeeze
+    words[longest]=shorter; t=words.join(" ");
+  }
+  if(t.length<=width) return t;
+
+  // still too long: cut whole words off the end rather than mid-word
+  while(words.length>1 && words.join(" ").length>width) words.pop();
+  t=words.join(" ");
+  return t.length<=width ? t : t.slice(0,width);
+}
+
 class FlapField{
   constructor(container, width, align){
     this.width=width; this.cells=[];
@@ -813,9 +865,10 @@ class FlapField{
     }
   }
   setText(str){
-    const padded=(str||"").toUpperCase().slice(0,this.width).padEnd(this.width," ");
+    const padded=fitText(str, this.width).padEnd(this.width," ");
     for(let i=0;i<this.width;i++){
       const target=padded[i], cell=this.cells[i];
+      cell.flap.classList.toggle("blank", target===" ");
       if(cell.current===target) continue;
       this._flip(cell, target, i*14);
     }
@@ -845,11 +898,47 @@ const TIME_CHARS=7;                 // must match the FlapField built below
    two characters: "12:02A" read as "12", "1 MIN" as "1", "BRD" as "BR". Wrong at
    every size setting too, since the flaps scale with --flap-w and 52px did not.
    Six 2px gaps between seven flaps, hence the +12. */
-const COLS=`calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px) minmax(0,1.7fr) 88px minmax(0,1fr) 96px`;
+/* 104px, not 88: a 9:1 wordmark capped to an 88px box renders about 8px tall,
+   which is past the point of being readable across a room. */
+const COLS=`calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px) minmax(0,1.7fr) 104px minmax(0,1fr) 96px`;
 $("#boardHead").style.setProperty("--cols", COLS);
 const rowFields=[]; // [{el, logoEl, time:FlapField, dest:FlapField, via:FlapField, statusEl}]
+
+/* How many flaps actually fit a column of `px`.
+
+   The fields used to be hardcoded — dest was always 20 flaps — while the grid
+   gives dest a fluid `1.7fr`. At 1280px that is 598px of flaps in a 467px
+   column, and `overflow:hidden` silently ate the last five characters: NORTH TO
+   ROCKVILLE rendered as NORTH TO ROCKVIL, indistinguishable from a real name.
+   The time column already had this bug and a comment explaining it; this is the
+   same fix generalised, so the board also gains and loses characters as the
+   window resizes, which is what a real board does when you build a bigger one. */
+const FLAP_GAP = 2;
+function flapsThatFit(px){
+  const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--flap-w")) || 28;
+  return Math.max(3, Math.floor((px + FLAP_GAP) / (w + FLAP_GAP)));
+}
+let fitWidths = null;      // {dest, via} in flaps, measured from the real layout
+function measureAndRefit(){
+  const row = rowFields[0] && rowFields[0].el;
+  if (!row) return;
+  const destPx = row.children[1].getBoundingClientRect().width;
+  const viaPx  = row.children[3].getBoundingClientRect().width;
+  if (!destPx || !viaPx) return;                       // laid out yet?
+  const want = { dest: flapsThatFit(destPx), via: flapsThatFit(viaPx) };
+  if (fitWidths && want.dest === fitWidths.dest && want.via === fitWidths.via) return;
+  fitWidths = want;
+  buildRows();                                          // rebuild at the new widths
+  if (typeof lastRows !== "undefined" && lastRows) renderRows(lastRows);
+}
+
 function buildRows(){
   const wrap=$("#boardRows"); wrap.innerHTML="";
+  /* Reset the field list too. This only ever ran once, so appending was
+     harmless; now that a resize can rebuild at new widths, leaving the old
+     entries in place meant renderRows kept writing into detached nodes and the
+     board went blank while still reporting "16 shown". */
+  rowFields.length=0;
   for(let i=0;i<ROW_COUNT;i++){
     const row=document.createElement("div"); row.className="board-row"; row.style.setProperty("--cols", COLS);
     const timeWrap=document.createElement("div"); row.appendChild(timeWrap);
@@ -864,9 +953,9 @@ function buildRows(){
     wrap.appendChild(row);
     rowFields.push({
       el:row, logoImgEl, logoImg, logoTextEl,
-      time:new FlapField(timeWrap, 7, "left"),
-      dest:new FlapField(destWrap, 20, "left"),
-      via:new FlapField(viaWrap, 12, "left"),
+      time:new FlapField(timeWrap, TIME_CHARS, "left"),
+      dest:new FlapField(destWrap, (fitWidths&&fitWidths.dest)||20, "left"),
+      via:new FlapField(viaWrap,  (fitWidths&&fitWidths.via) ||12, "left"),
       statusEl:statusWrap,
     });
   }
@@ -877,7 +966,9 @@ function showLogoText(f, r){
   f.logoTextEl.textContent=r?(r.logo||""):"";
   f.logoTextEl.style.background=r?(r.color||"transparent"):"transparent";
 }
+let lastRows=null;
 function renderRows(rows){
+  lastRows=rows;
   $("#rowCount").textContent = rows.length ? `${rows.length} shown` : "";
   for(let i=0;i<ROW_COUNT;i++){
     const f=rowFields[i], r=rows[i];
@@ -987,6 +1078,8 @@ const LS_SIZE="flipboard.textSize";
 function applySize(size){
   document.documentElement.setAttribute("data-size", size);
   localStorage.setItem(LS_SIZE, size);
+  // bigger flaps mean fewer of them fit; re-measure rather than clip
+  if (typeof measureAndRefit === "function") requestAnimationFrame(measureAndRefit);
   document.querySelectorAll("#sizeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.size===size));
 }
 function applySound(on){
@@ -1026,6 +1119,9 @@ function boot(){
   initFullscreen();
   initSettings();
   buildRows();
+  requestAnimationFrame(measureAndRefit);        // once the grid has real widths
+  let rt=null;
+  addEventListener("resize", ()=>{ clearTimeout(rt); rt=setTimeout(measureAndRefit, 150); });
   $("#boardBtn").setAttribute("href", CITY_CFG.board);
   $("#boardBtn").title = `Back to the ${CITY_CFG.cityLabel} board`;
   $("#loclbl").textContent = loc.label ? "near "+loc.label : "";
