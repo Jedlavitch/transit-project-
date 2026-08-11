@@ -34,6 +34,12 @@
     "gtfsrt.prod.obanyc.com",
     "www3.septa.org",
     "api.adsbdb.com",
+    "api-v3.mbta.com",
+    "api.bart.gov",
+    "api.transitous.org",
+    "transport.opendata.ch",
+    "rtt.metrolinktrains.com",
+    "api.wheretheiss.at",
   ]);
 
   const get = k => { try { return (localStorage.getItem(k) || "").trim(); } catch (_) { return ""; } };
