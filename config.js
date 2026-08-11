@@ -49,6 +49,22 @@ window.TB_CONFIG = {
   spotBlob:     "",       // share code from the phone app
   spotFeedUrl:  "",       // spotter-worker.js
 
+  /* ---- aircraft feed ----------------------------------------------------
+     LEAVE EMPTY WHILE THIS IS FREE. Empty means airplanes.live, which is
+     CORS-open and costs nothing — and whose terms PROHIBIT COMMERCIAL USE.
+
+     Before charging for this, deploy adsb-worker.js and put its URL here. That
+     switches every board to adsb.lol (Open Database Licence, commercial use
+     permitted with attribution) or adsb.fi. Both send no CORS headers of their
+     own, which is why the Worker exists rather than a direct swap.
+
+     Two things that are on you, not on this file: confirm the current licence
+     terms yourself, and carry the ODbL attribution — crediting adsb.lol
+     wherever the data is shown is a condition of the licence, not a courtesy.
+     Note also that adsb.lol omits `desc` and `ownOp`, so plane rows lose the
+     aircraft type and operator; adsb.fi carries both. */
+  adsbUrl:      "",       // https://tb-adsb.yourname.workers.dev
+
   /* ---- accounts / sign-in ----------------------------------------------
      account-worker.js. Left empty there is simply no sign-in: the Spotter log
      stays on one device, and the Account panel on profile.html says so plainly
@@ -89,6 +105,7 @@ window.TB_CONFIG = {
     spotBlob:    ["tb.spotBlob"],
     spotFeedUrl: ["tb.spotFeedUrl"],
     acctUrl:     ["tb.acctUrl"],
+    adsbUrl:     ["tb.adsbUrl"],
   };
   try {
     Object.keys(MAP).forEach(field => {
