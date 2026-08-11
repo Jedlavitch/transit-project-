@@ -38,6 +38,30 @@ const CORS = {
   "access-control-allow-methods": "GET,OPTIONS",
   "access-control-allow-headers": "content-type",
 };
+/* Serve the last good answer when upstream refuses.
+
+   adsb.lol rate-limits per IP and Cloudflare Workers egress from a SHARED pool,
+   so this Worker gets 429s a laptop does not — measured: direct 200 with 44
+   aircraft, through here "upstream 429" three times running. Returning an empty
+   list on that blanks the sky on every board and in Sky mode, which reads as the
+   product being slow rather than the feed being throttled.
+
+   Aircraft a minute old beat no aircraft, so the last success is replayed and
+   flagged `stale` with its age, letting the board say so instead of implying
+   live. Ten minutes is the ceiling: past that, positions are too old to draw
+   honestly even dead-reckoned. */
+async function serveStale(cache, key, why, trim) {
+  const hit = await cache.match(key);
+  if (!hit) return json({ ok: false, error: why, ac: [] }, 502);
+  let saved;
+  try { saved = await hit.json(); } catch (e) { return json({ ok: false, error: why, ac: [] }, 502); }
+  const ageMs = Date.now() - (saved.at || 0);
+  if (ageMs > 600000) return json({ ok: false, error: why + " (stale expired)", ac: [] }, 502);
+  return json({ ac: trim(saved.ac || []), stale: true,
+                ageSec: Math.round(ageMs / 1000), error: why }, 200,
+              { "cache-control": "no-store" });
+}
+
 const json = (o, status = 200, extra = {}) =>
   new Response(JSON.stringify(o), {
     status,
@@ -45,7 +69,7 @@ const json = (o, status = 200, extra = {}) =>
   });
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
@@ -78,6 +102,31 @@ export default {
     const qLat = snap(m[1]), qLon = snap(m[2]);
     const qRadius = Math.min(250, radius + SNAP_PAD_NM);
 
+    /* Keyed on the GRID cell, not the caller, so every board in a metro area
+       shares one banked copy. */
+    const cache = caches.default;
+    const stableKey = new Request(
+      "https://adsb-cache.internal/" + qLat + "/" + qLon + "/" + qRadius);
+
+    /* The trim is per-caller, so what gets banked is the RAW upstream list and
+       this re-centres it — for a live answer and a replayed one alike. */
+    const tLat = parseFloat(m[1]), tLon = parseFloat(m[2]);
+    const nmBetween = (la, lo) => {
+      const dLat = (la - tLat) * 60;
+      const dLon = (lo - tLon) * 60 * Math.cos(tLat * Math.PI / 180);
+      return Math.hypot(dLat, dLon);
+    };
+    const trim = list => {
+      const out = [];
+      for (const a of list) {
+        if (typeof a.lat !== "number" || typeof a.lon !== "number") continue;
+        const nm = nmBetween(a.lat, a.lon);
+        if (nm > radius) continue;
+        out.push({ ...a, dst: Math.round(nm * 100) / 100 });
+      }
+      return out;
+    };
+
     try {
       const r = await fetch(`${upstream}/point/${qLat}/${qLon}/${qRadius}`, {
         headers: { accept: "application/json", "user-agent": "transit-board/1.0" },
@@ -85,39 +134,20 @@ export default {
            upstream calls nobody sees, a longer one shows stale aircraft. */
         cf: { cacheTtl: 15, cacheEverything: true },
       });
-      if (!r.ok) return json({ ok: false, error: "upstream " + r.status, ac: [] }, 502);
+      if (!r.ok) return await serveStale(cache, stableKey, "upstream " + r.status, trim);
       const d = await r.json();
       /* adsb.fi answers with `aircraft`, adsb.lol with `ac`. Normalise to `ac`
          so the app doesn't need to know which provider is behind this. */
-      /* Trim back to what the CALLER actually asked for. The shared query is
-         deliberately wider than their radius, so returning it raw would show
-         every board aircraft up to 5nm past its own range. The expensive part —
-         the upstream fetch — stays shared and cached; this re-centres and clips
-         per caller, which costs nothing.
+      const raw = d.ac || d.aircraft || [];
+      /* Bank the raw list for the next caller in this cell to fall back on. */
+      ctx.waitUntil(cache.put(stableKey, new Response(
+        JSON.stringify({ at: Date.now(), ac: raw }),
+        { headers: { "content-type": "application/json", "cache-control": "max-age=600" } })));
 
-         `dst` is recomputed for the same reason: upstream measures it from the
-         grid centre, so passing it through would put "nearest aircraft" up to
-         2.5nm out on every board. */
-      const tLat = parseFloat(m[1]), tLon = parseFloat(m[2]);
-      const nmBetween = (la, lo) => {
-        const dLat = (la - tLat) * 60;
-        const dLon = (lo - tLon) * 60 * Math.cos(tLat * Math.PI / 180);
-        return Math.hypot(dLat, dLon);
-      };
-      const ac = [];
-      for (const a of (d.ac || d.aircraft || [])) {
-        if (typeof a.lat !== "number" || typeof a.lon !== "number") continue;
-        const nm = nmBetween(a.lat, a.lon);
-        if (nm > radius) continue;
-        ac.push({ ...a, dst: Math.round(nm * 100) / 100 });
-      }
-      /* Vary on nothing: the response differs per caller, so it must not be
-         stored by the edge under the request URL. Only the upstream fetch above
-         is cached, which is the request that costs anything. */
-      return json({ ac, source: upstream, grid: [qLat, qLon, qRadius] }, 200,
+      return json({ ac: trim(raw), source: upstream, grid: [qLat, qLon, qRadius] }, 200,
                   { "cache-control": "no-store" });
     } catch (e) {
-      return json({ ok: false, error: "upstream unreachable", ac: [] }, 502);
+      return await serveStale(cache, stableKey, "upstream unreachable", trim);
     }
   },
 };
