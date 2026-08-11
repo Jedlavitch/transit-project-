@@ -201,7 +201,27 @@
   :root[data-style="metro"] .board-row{
     border-bottom:1px solid rgba(255,255,255,.05); align-items:center;
   }
-  :root[data-style="metro"] .board-row > *{ display:flex; align-items:center }
+  /* Unused fields are HIDDEN, not parked. Assigning two children to the same
+     grid-column stacked them in one cell and their text overlaid the row —
+     GLENMONT and a route name rendering on top of each other as GLENMONTNGER. */
+  :root[data-style="metro"] .board-row > *{ display:flex; align-items:center; grid-row:1 }
+  :root[data-style="metro"] .board-row > *:nth-child(1){ display:none }   /* time  */
+  :root[data-style="metro"] .board-row > *:nth-child(4){ display:none }   /* via   */
+  :root[data-style="metro"] .board-row > *:nth-child(3){ grid-column:2 }  /* line  */
+  :root[data-style="metro"] .board-row > *:nth-child(2){ grid-column:3 }  /* dest  */
+  :root[data-style="metro"] .board-row > *:nth-child(5){ grid-column:4 }  /* min   */
+  :root[data-style="metro"] .op-logo.metro-bullet{
+    display:inline-flex !important; align-items:center; justify-content:center;
+    font:800 calc(var(--flap-font) * .9)/1 "IBM Plex Sans","Helvetica Neue",sans-serif;
+    letter-spacing:0; text-shadow:none; white-space:nowrap;
+  }
+  .op-logo.metro-bullet.code{ border-radius:3px; padding:.18em .55em; min-width:calc(var(--flap-font)*2) }
+  .op-logo.metro-bullet.tab { border-radius:calc(var(--flap-font)*.6); padding:.16em .8em }
+  .op-logo.metro-bullet.disc{ width:calc(var(--flap-font)*1.85); height:calc(var(--flap-font)*1.85);
+                              border-radius:50%; padding:0 }
+  :root[data-style="metro"] .board-rows, :root[data-style="metro"] .board-head{
+    background:var(--metro-bg, transparent);
+  }
   :root[data-style="metro"] .op-logo-img, :root[data-style="metro"] .op-logo{ display:none !important }
   :root[data-style="metro"] .status-tag.countdown{
     font:800 calc(var(--flap-font) * 1.7)/1 "IBM Plex Mono",monospace;
@@ -1027,6 +1047,53 @@ const TIME_CHARS=7;                 // must match the FlapField built below
    the WMATA, Amtrak and bundled-GTFS collectors have no track field to give. So
    the column populates exactly where the style that wants it is the default,
    and shows a dash elsewhere rather than pretending. */
+/* ---------- metro: one skin per city ----------------------------------------
+   A generic amber panel everywhere is the same mistake as one departure board
+   for twelve cities, a level down. WMATA's sign, a SEPTA sign and a GVB sign
+   are different objects, and the line mark is the whole identity — so it is
+   drawn in each operator's idiom rather than spelled out.
+
+   No skin is ever shared between cities. `bullet` picks the shape: `code` for a
+   tinted two-letter block (WMATA), `tab` for a rounded lozenge, `disc` for a
+   circle. `lines` maps the route text a feed gives us to that operator's real
+   colour; anything unmatched falls back to the skin's own ink, so an unexpected
+   route shows plainly instead of vanishing.
+
+   NYC is deliberately absent: its two real displays (the cyan countdown clock
+   and the OUTFRONT vertical next-train panel) are different layouts, not skins,
+   and it needs a subway-only filter first. */
+const METRO_SKINS = {
+  dc:        { op:"WMATA",     ink:"#ff9e1b", bg:"#0d0b08", bullet:"code",
+               codes:{ "RED LINE":"RD","ORANGE LINE":"OR","BLUE LINE":"BL",
+                       "SILVER LINE":"SV","GREEN LINE":"GR","YELLOW LINE":"YL" },
+               lines:{ "RED LINE":"#bf0d3e","ORANGE LINE":"#ed8b00","BLUE LINE":"#009cde",
+                       "SILVER LINE":"#919d9d","GREEN LINE":"#00b140","YELLOW LINE":"#ffd100" } },
+  philly:    { op:"SEPTA",     ink:"#e8eef4", bg:"#08131c", bullet:"tab",
+               lines:{ MFL:"#0072ce", BSL:"#ff7f32", L:"#0072ce", B:"#ff7f32" } },
+  boston:    { op:"MBTA",      ink:"#e9eef3", bg:"#0b0f14", bullet:"tab",
+               lines:{ RED:"#da291c","RED LINE":"#da291c", ORANGE:"#ed8b00","ORANGE LINE":"#ed8b00",
+                       BLUE:"#003da5","BLUE LINE":"#003da5", GREEN:"#00843d","GREEN LINE":"#00843d",
+                       SILVER:"#7c878e" } },
+  sf:        { op:"BART/Muni", ink:"#f0f0f0", bg:"#0a0a0a", bullet:"tab",
+               lines:{ YELLOW:"#ffce00", BLUE:"#00aeef", GREEN:"#4db848",
+                       RED:"#ed1c24", ORANGE:"#f9a01b" } },
+  la:        { op:"LA Metro",  ink:"#f2f2f2", bg:"#101010", bullet:"tab",
+               lines:{ A:"#0072bc", B:"#eb131b", C:"#58a738", D:"#a05da5",
+                       E:"#fdb913", K:"#e96bb0" } },
+  nj:        { op:"NJ Transit",ink:"#e6ecf5", bg:"#0b1220", bullet:"tab",
+               lines:{ NEC:"#f5a800", NJCL:"#3b7dd8", MNE:"#00a94f", HBLR:"#0075c9",
+                       "RIVER LINE":"#e03c31" } },
+  amsterdam: { op:"GVB",       ink:"#eaf3fb", bg:"#08131f", bullet:"tab",
+               lines:{ "50":"#bc4b9c","51":"#e35e2b","52":"#009de0",
+                       "53":"#ee7d00","54":"#f9c700" } },
+  zurich:    { op:"VBZ/SBB",   ink:"#f2eeea", bg:"#120c0c", bullet:"tab",
+               lines:{ } },
+  cologne:   { op:"KVB",       ink:"#f6ecec", bg:"#140b0b", bullet:"tab",
+               lines:{ } },
+  stuttgart: { op:"SSB",       ink:"#fbf4de", bg:"#12100a", bullet:"tab",
+               lines:{ } },
+};
+
 const EURO_CITIES = new Set(["zurich","cologne","stuttgart","amsterdam"]);
 const LS_STYLE = "flipboard.style";
 function resolveStyle(pref){
@@ -1043,7 +1110,7 @@ const STYLE_COLS = {
      by grid-column rather than duplicating the row markup. */
   euro:  `86px 104px minmax(0,1fr) 74px 120px`,
   usa:   `${TIME_COL} minmax(0,1.7fr) 104px minmax(0,1fr) 96px`,
-  metro: `96px minmax(0,1fr) 128px`,
+  metro: `0px 120px minmax(0,1fr) 150px`,
 };
 const STYLE_HEADS = {
   /* Bilingual, as they are on the real thing. */
@@ -1052,9 +1119,23 @@ const STYLE_HEADS = {
   metro: ["LINE","DESTINATION","MIN"],
 };
 let COLS = STYLE_COLS[STYLE];
+let SKIN = null;
 function applyStyleChrome(){
   COLS = STYLE_COLS[STYLE];
   ROW_COUNT = ROW_COUNTS[STYLE] || 16;
+  SKIN = (STYLE==="metro") ? (METRO_SKINS[CITY] || null) : null;
+  const root=document.documentElement;
+  if(SKIN){
+    root.setAttribute("data-skin", CITY);
+    root.style.setProperty("--metro-ink", SKIN.ink);
+    root.style.setProperty("--metro-bg", SKIN.bg);
+    STYLE_HEADS.metro = ["", "LINE", "DESTINATION", "MIN"];
+  } else {
+    root.removeAttribute("data-skin");
+    root.style.removeProperty("--metro-ink");
+    root.style.removeProperty("--metro-bg");
+    STYLE_HEADS.metro = ["", "LINE", "DESTINATION", "MIN"];
+  }
   document.documentElement.setAttribute("data-style", STYLE);
   const head=$("#boardHead");
   head.style.setProperty("--cols", COLS);
@@ -1154,11 +1235,30 @@ function renderRows(rows){
        display. The first four slots are shared, so the flap animation and the
        fitting work is not duplicated three times. */
     if(STYLE==="metro"){
-      f.time.setText(r.via);                       // line bullet reads first here
+      const route=(r.via||"").trim(), key=route.toUpperCase();
+      if(SKIN){
+        /* The line mark is the operator's signature, so it is drawn, not
+           spelled: a tinted code for WMATA, a lozenge elsewhere, tinted from
+           that operator's real palette. */
+        const col = SKIN.lines[key] || SKIN.lines[key.split(" ")[0]] || SKIN.ink;
+        const shown = (SKIN.codes && SKIN.codes[key]) || route;
+        f.time.setText("");
+        f.logoImgEl.style.display="none";
+        f.logoTextEl.style.display="";
+        f.logoTextEl.textContent=shown;
+        f.logoTextEl.className="op-logo metro-bullet "+SKIN.bullet;
+        f.logoTextEl.style.background=col;
+        f.logoTextEl.style.color = /^#(f|e|d)/i.test(col) ? "#111" : "#fff";
+      } else {
+        f.time.setText(route);
+        f.logoTextEl.style.display="none"; f.logoImgEl.style.display="none";
+      }
       f.dest.setText(r.dest);
       f.via.setText("");
       f.statusEl.textContent = r.time;             // big minutes
       f.statusEl.className = "status-tag countdown " + (r.statusKind||"na");
+      f.el.classList.remove("empty");
+      continue;
     } else if(STYLE==="euro"){
       f.time.setText(r.clock || r.time);           // 24h departure, not a countdown
       f.dest.setText(r.dest);
