@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
+<title>shot setup</title>
+<!--
+  shot-setup.html — loaded first by shoot-shots.sh, never linked from the site.
+
+  The capture profile is thrown away after every run, so the boards come up in
+  demo mode and photograph with "EVALUATION — CLICK TO LICENSE" across them.
+  This writes the same cached-licence keys gate.js reads on a real licensed
+  kiosk, into that disposable profile only, so the marketing shots show the
+  product rather than the paywall.
+
+  It grants nothing: gate.js re-verifies against the licence Worker, and the
+  profile is deleted seconds later. Nothing here ships to a visitor.
+-->
+<body style="background:#0a1020;color:#8aa;font:13px system-ui;padding:20px">
+<script>
+  var DAY = 86400000;
+  try {
+    /* license.js draws its own "evaluation" chip and bails early when there is
+       no key at all, so the cached-ok timestamp alone was not enough. With a key
+       present AND okUntil ahead it short-circuits to licensed without any
+       network call — entirely local, in a profile deleted seconds later. */
+    localStorage.setItem("tb.license", "SHOT-CAPTURE-LOCAL");
+    localStorage.setItem("tb.license.okUntil", String(Date.now() + 7 * DAY));
+    localStorage.setItem("tb.license.lastOk", String(Date.now()));
+    // The station display's own picker default, so shots are not at the mercy
+    // of whatever station geolocation lands on in a headless browser.
+    localStorage.setItem("tb.stationStop", "127");   // Times Sq-42 St
+  } catch (e) {}
+  /* Seed and go, in ONE browser run. Doing it as a separate run first did not
+     work: headless Chrome is killed the moment --screenshot completes and never
+     flushes localStorage to the profile, so the board still came up in demo
+     mode. Same process means the keys are already in memory when the board
+     reads them. ?next= carries the real target. */
+  try {
+    var next = new URLSearchParams(location.search).get("next");
+    if (next && /^[\w.-]+\.html(\?|$)/.test(next)) location.replace(next);
+    else document.write("seeded (no ?next=)");
+  } catch (e) { document.write("failed: " + e.message); }
+</script>
+</body>

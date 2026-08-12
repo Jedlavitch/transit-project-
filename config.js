@@ -84,6 +84,20 @@ window.TB_CONFIG = {
      adsb.transitproject.online once the nameservers actually move. */
   adsbUrl:      "https://142.93.200.253.sslip.io",
 
+  /* What that proxy FRONTS, which is not something its hostname can tell you.
+     The credit line below matches on the host, so a self-hosted proxy fell
+     through to the neutral "Aircraft data via 142.93.200.253.sslip.io" — an IP
+     address, which is ugly on the page and useless as attribution, since the
+     entire point is to name the source.
+
+     It is adsb.lol: adsb-proxy.py defaults to https://api.adsb.lol/v2 and the
+     running proxy confirms it on /health. That makes the data ODbL and the
+     credit a licence condition, not a decoration — see AIRCRAFT-FEED.md.
+
+     Repoint the proxy's UPSTREAM and this has to change with it. Leave it empty
+     to fall back to matching on the hostname. */
+  adsbUpstream: "adsb.lol",
+
   /* ---- accounts / sign-in ----------------------------------------------
      account-worker.js. Left empty there is simply no sign-in: the Spotter log
      stays on one device, and the Account panel on profile.html says so plainly
@@ -194,7 +208,13 @@ window.TB_CONFIG = {
          attribution is for. Unknown hosts get a neutral line rather than a
          guess, and adsb.lol gets none: it imposes no attribution term,
          and inventing one would misdescribe it too. */
-      const host = (active.match(/^https?:\/\/([^\/]+)/) || [])[1] || "";
+      /* Match on the DECLARED upstream first, and only fall back to the
+         hostname. A proxy is the normal setup now, and its host says nothing
+         about whose data is passing through it — that is how a board serving
+         adsb.lol data ended up crediting an IP address, which satisfies neither
+         the licence nor the eye. */
+      const host = String(C.adsbUpstream || "").trim() ||
+                   (active.match(/^https?:\/\/([^\/]+)/) || [])[1] || "";
       let CREDIT = "";
       if (/adsb\.lol/i.test(host))        CREDIT = "Aircraft data adsb.lol (ODbL)";
       else if (/adsb\.fi/i.test(host))    CREDIT = "Aircraft data adsb.fi";
