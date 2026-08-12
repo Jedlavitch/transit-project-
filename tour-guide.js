@@ -237,12 +237,13 @@
     // one day pass a station name in here and that must never become markup.
     card.querySelector(".tg-title").textContent = s.title;
     card.querySelector(".tg-body").textContent = s.body;
-    if (art) {
-      var img = card.querySelector("img.tg-bird");
-      // Fall back to the placeholder rather than showing a broken image if the
-      // artwork is missing, misspelled, or not deployed yet.
-      img.onerror = function () { var w = img.parentNode; img.remove(); w.insertAdjacentHTML("afterbegin", PENGUIN); };
-      img.src = art;
+    // The cast takes turns as the tour goes, so all three characters get an
+    // introduction rather than one of them doing all the talking.
+    var slot = card.querySelector(".tg-bird");
+    if (slot && window.TBMascot) {
+      slot.replaceWith(window.TBMascot.el({ width: 58, src: s.mascot, index: idx }));
+    } else if (slot) {
+      slot.outerHTML = PENGUIN;
     }
 
     // Place immediately, then refine. The refinement matters because a step may

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="tb-mascot" viewBox="0 0 64 76" role="img" aria-label="Owl">
+  <title>Owl</title>
+  <!-- Same grid as the penguin and fox. Teal is the guide's ink-surfaces-only
+       colour, which is exactly where this card lives. The big face discs are
+       what make an owl read instantly at 34px. -->
+  <ellipse cx="32" cy="70" rx="17" ry="4.6" fill="#12101A" opacity=".10"/>
+  <!-- feet -->
+  <path d="M22 61 q-5 5 -1 7 h8 q2 -3 -2 -7 z" fill="#FF3D77"/>
+  <path d="M42 61 q5 5 1 7 h-8 q-2 -3 2 -7 z" fill="#FF3D77"/>
+  <!-- ear tufts -->
+  <path d="M16 20 L14 7 L27 15 Z" fill="#00E0C6"/>
+  <path d="M48 20 L50 7 L37 15 Z" fill="#00E0C6"/>
+  <!-- body -->
+  <path d="M32 10 c13 0 20 11 20 25 v14 c0 9 -8 15 -20 15 s-20 -6 -20 -15 v-14 c0 -14 7 -25 20 -25 z" fill="#00E0C6"/>
+  <!-- Wings, folded down each side. Ink at low opacity turned the teal muddy
+       and read as a smudge rather than a wing; a defined shape with a crisp
+       edge holds up small, and the ink stays light enough to keep the body
+       colour teal rather than grey. -->
+  <path d="M14 33 c-3 8 -3 18 0 23 c2 3 6 2 6 -2 v-20 c0 -4 -4 -4 -6 -1 z" fill="#12101A" opacity=".30"/>
+  <path d="M50 33 c3 8 3 18 0 23 c-2 3 -6 2 -6 -2 v-20 c0 -4 4 -4 6 -1 z" fill="#12101A" opacity=".30"/>
+  <!-- belly -->
+  <path d="M32 38 c7 0 11 6 11 13 v3 c0 6 -4 10 -11 10 s-11 -4 -11 -10 v-3 c0 -7 4 -13 11 -13 z" fill="#FFFCF5" opacity=".85"/>
+  <!-- the face: two big discs, which is the whole point of an owl -->
+  <circle cx="24" cy="25" r="9" fill="#FFFCF5"/>
+  <circle cx="40" cy="25" r="9" fill="#FFFCF5"/>
+  <circle class="tb-eye" cx="24" cy="25" r="4" fill="#12101A"/>
+  <circle class="tb-eye" cx="40" cy="25" r="4" fill="#12101A"/>
+  <!-- beak, sitting where the discs meet -->
+  <path d="M32 27 l3.6 4.6 l-3.6 3.4 l-3.6 -3.4 z" fill="#FF3D77"/>
+  <!-- scarf -->
+  <path d="M18 47 h28" stroke="#2F7BFF" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M44 47 l7 8" stroke="#2F7BFF" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <circle cx="25" cy="47" r="2.3" fill="#FFFCF5"/>
+  <circle cx="38" cy="47" r="2.3" fill="#FFFCF5"/>
+</svg>

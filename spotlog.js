@@ -226,11 +226,19 @@
 
     wrap.innerHTML = "";
     if (window.TBMascot) {
-      var m = window.TBMascot.el({ width: 34 });
+      var m = window.TBMascot.el({ width: 34, index: window.TBMascot.pickIndex() });
       m.classList && m.classList.add("spot-mascot");
-      m.title = got === MODES.length
+      m.style.cursor = "pointer";
+      // Tap to change character. Small thing, but it makes the one on your
+      // board yours rather than the one we assigned you.
+      m.title = (got === MODES.length
         ? "Every mode logged. Nicely done."
-        : got + " of " + MODES.length + " modes logged so far";
+        : got + " of " + MODES.length + " modes logged so far") + " — tap to change companion";
+      m.addEventListener("click", function (e) {
+        e.stopPropagation();                 // the card header opens the phone app
+        window.TBMascot.cycle();
+        renderCollection(all);
+      });
       wrap.appendChild(m);
     }
     var row = document.createElement("div");
@@ -245,7 +253,26 @@
       row.appendChild(b);
     });
     wrap.appendChild(row);
+
+    // …and what it has to say about all that.
+    var say = document.getElementById("spotSay");
+    if (!say) {
+      say = document.createElement("div"); say.id = "spotSay"; say.className = "spot-say";
+      wrap.parentNode.insertBefore(say, wrap.nextSibling);
+    }
+    if (window.TBMascot && window.TBMascot.line) {
+      say.textContent = window.TBMascot.line({
+        total: (all || []).length,
+        ridden: (all || []).filter(function (s) { return s.ridden; }).length,
+        modesGot: got, modesAll: MODES.length,
+      });
+      say.style.display = say.textContent ? "" : "none";
+    }
   }
+  // Re-say every few minutes so a board left up all day keeps changing its mind.
+  setInterval(function () {
+    if (document.getElementById("spotCollect")) { try { render(); } catch (_) {} }
+  }, 300000);
 
   function ensureCard() {
     let card = document.getElementById("spotCard");
@@ -290,7 +317,11 @@
         /* lit: the mode has been logged. Border + colour + a real number, so the
            state never rests on hue alone. */
         ".spot-cb.on{opacity:1; border-color:var(--cb); box-shadow:0 0 0 1px var(--cb) inset}" +
-        ".spot-cb.on i{color:var(--cb)} .spot-cb.on b{color:var(--text,#eef3ff)}";
+        ".spot-cb.on i{color:var(--cb)} .spot-cb.on b{color:var(--text,#eef3ff)}" +
+        /* one line, never wrapping into a second: the card's height budget goes
+           to sightings, not to chatter */
+        ".spot-say{font-size:var(--sub-fs,11px); color:var(--muted,#93a5cf); font-style:italic;" +
+          "margin:0 2px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}";
       document.head.appendChild(st);
     }
     // tapping the header opens the phone app (same place you'd add a sighting)
@@ -437,12 +468,14 @@
           : `<div class="empty">Trains, buses and planes you log in the Spotter app
                show up here.</div>`;
       stat.innerHTML = ""; count.textContent = "";
+      renderCollection([]);
       return;
     }
     if (!shown.length) {
       list.innerHTML = `<div class="empty">No sightings within ${NEAR_MI} mi of here.
         ${elsewhere} logged elsewhere — tap “near here” above to show them.</div>`;
       stat.innerHTML = ""; count.textContent = `0 near here`;
+      renderCollection([]);
       return;
     }
     const all = shown.map(p => p.s);

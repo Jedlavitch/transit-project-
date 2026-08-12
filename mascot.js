@@ -46,38 +46,154 @@
       '</svg>';
   }
 
-  function src(override) {
+  /* The cast. There are three characters, so this is a list rather than one
+     file: the tour walks through them as it goes, and the Spotted card keeps
+     whichever one you picked, which turns "a logo" into "your companion".
+     A single `mascot:` string still works and is treated as a cast of one. */
+  /* All three are front-facing and symmetrical on purpose. The first pass had a
+     camel and a llama drawn in profile, and they turned to mush in the Spotted
+     card — at 34px a side-on quadruped is a blob with legs, while a face with
+     two big eyes still reads. Each takes one brand colour so the set is
+     distinguishable at a glance even when it is tiny. */
+  var DEFAULT_CAST = [
+    "brand/mascot-penguin.svg",   // ink + blue
+    "brand/mascot-fox.svg",       // pink
+    "brand/mascot-owl.svg",       // teal
+  ];
+  function list() {
+    var c = null;
+    try { c = window.TB_CONFIG || null; } catch (_) {}
+    if (c && Array.isArray(c.mascots) && c.mascots.length) return c.mascots.slice();
+    if (c && c.mascot) return [c.mascot];
+    var one = "";
+    try { one = localStorage.getItem("tb.mascot") || ""; } catch (_) {}
+    if (one) return [one];
+    return DEFAULT_CAST.slice();
+  }
+  function src(override, index) {
     if (override) return override;
-    try { if (window.TB_CONFIG && window.TB_CONFIG.mascot) return window.TB_CONFIG.mascot; } catch (_) {}
-    try { return localStorage.getItem("tb.mascot") || ""; } catch (_) { return ""; }
+    var l = list();
+    if (!l.length) return "";
+    var i = typeof index === "number" ? ((index % l.length) + l.length) % l.length : 0;
+    return l[i];
+  }
+  /* Which character is "yours". Remembered per device, and cycled by clicking
+     the mascot on the Spotted card. */
+  function pickIndex() {
+    var v = 0;
+    try { v = parseInt(localStorage.getItem("tb.mascotPick") || "0", 10) || 0; } catch (_) {}
+    var n = list().length || 1;
+    return ((v % n) + n) % n;
+  }
+  function cycle() {
+    var next = pickIndex() + 1;
+    try { localStorage.setItem("tb.mascotPick", String(next)); } catch (_) {}
+    return pickIndex();
   }
 
-  /* Returns an element rather than a string so the load failure can be handled
-     here, once, instead of at each call site. */
+  /* Always returns the SAME wrapper element, with the artwork swapped inside it.
+     Returning the <img> directly meant the fallback had to replace that node —
+     taking the caller's class, title and click handler with it, so a board whose
+     artwork had not been deployed yet lost the tap-to-change behaviour and the
+     styling along with the image. The wrapper is the caller's handle and never
+     goes away; only its contents change. */
   function el(opts) {
     opts = opts || {};
     var w = opts.width || 58, h = opts.height || Math.round(w * 76 / 64);
-    var file = src(opts.src);
-    if (!file) {
-      var span = document.createElement("span");
-      span.style.cssText = "display:inline-flex; flex:none; line-height:0";
-      span.innerHTML = penguin(w, h);
-      return span;
-    }
+    var file = src(opts.src, typeof opts.index === "number" ? opts.index : undefined);
+    var box = document.createElement("span");
+    box.style.cssText = "display:inline-flex; flex:none; line-height:0";
+    if (!file) { box.innerHTML = penguin(w, h); return box; }
     var img = document.createElement("img");
     img.alt = ""; img.width = w; img.height = h;
-    img.style.cssText = "display:block; flex:none; object-fit:contain";
-    img.onerror = function () {
-      var span2 = document.createElement("span");
-      span2.style.cssText = "display:inline-flex; flex:none; line-height:0";
-      span2.innerHTML = penguin(w, h);
-      if (img.parentNode) img.parentNode.replaceChild(span2, img);
-    };
-    img.src = file;
-    return img;
+    img.style.cssText = "display:block; object-fit:contain";
+    img.onerror = function () { box.innerHTML = penguin(w, h); };
+    box.appendChild(img);
+    img.src = file;                     // set last: onerror must be attached first
+    return box;
   }
 
-  window.TBMascot = { el: el, svg: penguin, src: src };
+  /* ---- what the mascot says ------------------------------------------------
+     A board is a thing people glance at fifty times a day, so the line has to
+     earn its place fifty times: short, dry, and about something that is
+     actually true right now. Three sources, in priority order — a milestone you
+     just hit, the state of your collection, then the time of day — so the line
+     is never generic when it could be specific. No emoji, per the brand guide.
+
+     Deliberately NOT jokes-at-random: the same gag on a wall display at 3pm and
+     again at 3:05 stops being a gag. Lines are chosen from the bucket that fits,
+     and rotate slowly. */
+  var SAY = {
+    empty: [
+      "Nothing logged yet. Tap Spotted to add your first.",
+      "The log is empty. Something is going past right now.",
+    ],
+    full: [
+      "Rail, road and air. That is the full set.",
+      "Every mode logged. Not many people do that.",
+    ],
+    milestone: {
+      1:   ["First one logged. It begins."],
+      10:  ["Ten sightings. You are properly at it now."],
+      25:  ["Twenty-five logged. That is a habit."],
+      50:  ["Fifty. Consider a spreadsheet."],
+      100: ["One hundred sightings. Genuinely impressive."],
+    },
+    ridden: [
+      "You have actually ridden a few of these. Respect.",
+      "Logged and ridden is the harder half.",
+    ],
+    dawn: [
+      "First trains are out. Nobody else is.",
+      "Early. The good light is now.",
+    ],
+    rush: [
+      "Rush hour. Everything at once.",
+      "Peak service. The map earns its keep.",
+    ],
+    midday: [
+      "Quiet stretch. Good time to catch a rare one.",
+      "Off peak. Everything runs a little looser.",
+    ],
+    evening: [
+      "Evening peak. Home time for most of the fleet.",
+      "The busy hour again, in reverse.",
+    ],
+    night: [
+      "Late service. Fewer trains, longer waits.",
+      "Night shift. The night owls are still running.",
+    ],
+  };
+
+  function pickFrom(arr, salt) {
+    if (!arr || !arr.length) return "";
+    // Rotates every 5 minutes, so a wall display changes through the day
+    // without ever flickering between lines while someone is reading it.
+    var slot = Math.floor(Date.now() / 300000) + (salt || 0);
+    return arr[((slot % arr.length) + arr.length) % arr.length];
+  }
+
+  /* ctx: { total, today, ridden, modesGot, modesAll, hour } */
+  function line(ctx) {
+    ctx = ctx || {};
+    var total = ctx.total || 0, hour = typeof ctx.hour === "number" ? ctx.hour : new Date().getHours();
+    if (!total) return pickFrom(SAY.empty);
+    // A milestone only speaks on the exact number, so it reads as "you just did
+    // that" rather than as a permanent label.
+    if (SAY.milestone[total]) return pickFrom(SAY.milestone[total]);
+    if (ctx.modesAll && ctx.modesGot === ctx.modesAll) return pickFrom(SAY.full);
+    if (ctx.ridden >= 3 && (Math.floor(Date.now() / 300000) % 4 === 0)) return pickFrom(SAY.ridden, 1);
+    if (hour < 6) return pickFrom(SAY.night);
+    if (hour < 9) return pickFrom(SAY.dawn);
+    if (hour < 10) return pickFrom(SAY.rush);
+    if (hour < 16) return pickFrom(SAY.midday);
+    if (hour < 19) return pickFrom(SAY.evening);
+    if (hour < 23) return pickFrom(SAY.midday, 2);
+    return pickFrom(SAY.night, 1);
+  }
+
+  window.TBMascot = { el: el, svg: penguin, src: src, list: list,
+                      pickIndex: pickIndex, cycle: cycle, line: line };
 
   // Blink, shared by every placement. Only the placeholder has eyes to blink;
   // supplied artwork is left exactly as drawn.
