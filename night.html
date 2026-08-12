@@ -3284,5 +3284,7 @@ function boot(){
 function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
+<script src="mascot.js?v=2" defer></script>
+<script src="mascot-buddy.js?v=6" defer></script>
 </body>
 </html>

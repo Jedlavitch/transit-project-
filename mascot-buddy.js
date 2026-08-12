@@ -41,8 +41,17 @@
   if (window.TBBuddy) return;                 // one to a page
 
   var LS_OFF = "tb.buddyOff";
-  var IDLE_MS = 240000;                       // ~4 minutes between unprompted lines
   var FIRST_MS = 9000;                        // let the board settle before saying hello
+
+  /* Sky view is an ambient screen — one aircraft, full bleed, the room lights
+     matched to it. A character piping up every four minutes there is not
+     company, it is an interruption of the only page whose job is to be calm.
+     So it talks half as often, and says hello later. A city board is glanceable
+     and busy already; this costs it nothing to be livelier. */
+  function ambient() {
+    return /(^|\/)night\.html$/.test(location.pathname);
+  }
+  var IDLE_MS = ambient() ? 540000 : 240000;  // 9 minutes on Sky view, 4 elsewhere
 
   function off() { try { return localStorage.getItem(LS_OFF) === "1"; } catch (_) { return false; } }
   function setOff(v) { try { localStorage.setItem(LS_OFF, v ? "1" : "0"); } catch (_) {} }
@@ -246,7 +255,39 @@
       "♪ Clone the stencil, change the feeds, ship a city ♪",
       "Give your city its own lines in mascot-buddy.js. That is the fun part.",
     ],
+    /* Sky view watches one aircraft at a time, so its lines look up rather than
+       at a timetable. */
+    "night.html": [
+      "That is 38,000 feet of people wondering when the trolley is coming.",
+      "The aircraft overhead is doing about 500 knots. Your bus is doing eleven.",
+      "♪ Wheels up, tray table stowed, seatbelt sign staying on out of spite ♪",
+      "Contrails are just very high clouds running to a schedule.",
+      "Right now, above you, somebody is standing up before the sign goes off.",
+      "There are people up there eating a small warm bread roll. Think about that.",
+      "♪ Up she goes, up she goes, and nobody down here looked ♪",
+      "Every one of those is going somewhere you have not been.",
+      "Look up occasionally. That is the entire pitch of this screen.",
+    ],
   };
+
+  /* ---- naming what is actually overhead ----------------------------------
+     Sky view keeps its current subject on window.__lastSubject, and a line that
+     names the airline you are looking at beats any generic one. Read
+     defensively: that variable belongs to night.html, not to this file, and a
+     mascot must never be why a wall display throws. */
+  function subjectLine() {
+    var s = null;
+    try { s = window.__lastSubject || null; } catch (_) { return ""; }
+    if (!s) return "";
+    var who = "";
+    try { who = String(s.airline || s.operator || s.sysName || "").trim(); } catch (_) { return ""; }
+    if (!who || who.length > 26) return "";       // long leasing-trust names read badly
+    return pick([
+      who + " overhead. Somebody up there has a better view than both of us.",
+      who + ", going somewhere, at speed, without consulting either of us.",
+      "That is " + who + ". The screen went their colour, which is only polite.",
+    ]);
+  }
 
   function localLines() {
     var f = (location.pathname.split("/").pop() || "").toLowerCase();
@@ -315,6 +356,9 @@
        a joke about single tracking only lands on the board where it happens.
        The general and sung sets are the fallback, and the only set on a city
        with no entry yet. */
+    // Best of all is a line about the thing currently on screen. Only Sky view
+    // publishes one, and only sometimes, so this is opportunistic, not a tier.
+    if (Math.random() < 0.3) { var subj = subjectLine(); if (subj) return subj; }
     var loc = localLines();
     var r = Math.random();
     if (loc && r < 0.45) return pick(loc);
@@ -337,7 +381,11 @@
       "#tbBuddy .fig img,#tbBuddy .fig svg{display:block;width:54px;height:64px}",
       /* Paper card, ink text — the brand's own pairing, and the one combination
          that stays readable over a dark map or a bright one. */
-      "#tbBuddy .bub{pointer-events:auto;position:relative;max-width:min(46vw,300px);",
+      /* The bubble does not take clicks. On a narrow screen it can lie over a
+         real control — Sky view's CLOSE UP button, for one — and a speech
+         bubble swallowing a button press is worse than one that overlaps it.
+         Its own two buttons opt back in. */
+      "#tbBuddy .bub{pointer-events:none;position:relative;max-width:min(46vw,300px);",
         "background:#FFFCF5;color:#12101A;border-radius:14px;padding:10px 26px 10px 13px;",
         "font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.4);",
         "opacity:0;transform:translateY(6px) scale(.96);transform-origin:0 100%;",
@@ -346,11 +394,11 @@
       /* the tail, pointing back at whoever is speaking */
       "#tbBuddy .bub::after{content:'';position:absolute;left:-6px;bottom:12px;width:12px;height:12px;",
         "background:#FFFCF5;transform:rotate(45deg);border-radius:2px}",
-      "#tbBuddy .x{position:absolute;top:4px;right:5px;width:18px;height:18px;border:0;background:none;",
+      "#tbBuddy .x{pointer-events:auto;position:absolute;top:4px;right:5px;width:18px;height:18px;border:0;background:none;",
         "color:#6E6A78;font:600 13px/1 system-ui;cursor:pointer;border-radius:50%}",
       "#tbBuddy .x:hover{background:rgba(18,16,26,.09);color:#12101A}",
       /* the picker: a row of candidates, opened from the bubble */
-      "#tbBuddy .who{position:absolute;top:4px;right:24px;width:18px;height:18px;border:0;background:none;",
+      "#tbBuddy .who{pointer-events:auto;position:absolute;top:4px;right:24px;width:18px;height:18px;border:0;background:none;",
         "color:#6E6A78;font:600 13px/1 system-ui;cursor:pointer;border-radius:50%}",
       "#tbBuddy .who:hover{background:rgba(18,16,26,.09);color:#12101A}",
       "#tbBuddy .pick{pointer-events:auto;position:absolute;left:0;bottom:calc(100% + 8px);",
@@ -439,6 +487,11 @@
 
   function say(text, ms) {
     if (!root || !text) return;
+    /* Recomputed on every line rather than once at build. Sky view is still
+       laying itself out when this script runs — measured once at build the
+       footer was 60px higher than it ended up, and the bubble sat 9px into the
+       credits. Speaking is exactly the moment the position has to be right. */
+    liftAboveFooter();
     textEl.textContent = text;
     root.classList.add("talking");
     clearTimeout(hideTimer);
@@ -463,6 +516,22 @@
       }
       schedule();
     }, IDLE_MS);
+  }
+
+  /* Sky view does not scroll — it is one full-height screen with a footer
+     pinned at the bottom of the layout — so a mascot at bottom:26 lands on top
+     of the credits. On a page that DOES scroll the footer travels away on its
+     own and this leaves it alone, because permanently reserving space for a
+     footer nobody is looking at wastes the corner. */
+  function liftAboveFooter() {
+    if (!root) return;
+    var scrolls = document.documentElement.scrollHeight > window.innerHeight + 4;
+    if (scrolls) { root.style.bottom = ""; return; }
+    var f = document.querySelector("footer");
+    if (!f) { root.style.bottom = ""; return; }
+    var r = f.getBoundingClientRect();
+    if (!r.height || r.bottom < window.innerHeight - 80) { root.style.bottom = ""; return; }
+    root.style.bottom = Math.round(window.innerHeight - r.top + 8) + "px";
   }
 
   function dismiss() {
@@ -518,6 +587,11 @@
 
     charIndex = window.TBMascot && TBMascot.pickIndex ? TBMascot.pickIndex() : 0;
     drawCharacter();
+    liftAboveFooter();
+    window.addEventListener("resize", liftAboveFooter);
+    // late passes: some pages finish arranging themselves seconds after load
+    setTimeout(liftAboveFooter, 2500);
+    setTimeout(liftAboveFooter, 8000);
 
     setTimeout(function () { if (root && !off()) say(pick(SAY.hello)); }, FIRST_MS);
     schedule();
