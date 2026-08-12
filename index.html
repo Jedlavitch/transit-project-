@@ -277,7 +277,7 @@
       <a href="spot.html">Spotter</a>
       <a href="tv.html">All views</a>
       <a href="profile.html?from=index.html">Your account</a>
-      <a class="hi" href="buy.html">Get a license</a>
+      <a class="hi" id="navBuy" href="buy.html">Get a license</a>
     </nav>
   </header>
 
@@ -439,7 +439,7 @@
       </div>
       <div class="buy-side">
         <div class="price-big">$19<small>one-time · up to 5 devices</small></div>
-        <a class="btn primary" href="buy.html" style="margin-top:18px; width:100%; justify-content:center">Get a license</a>
+        <a class="btn primary" id="priceBuy" href="buy.html" style="margin-top:18px; width:100%; justify-content:center">Get a license</a>
         <div class="note" style="margin-top:10px">Already bought? <a href="activate.html">Activate a key</a></div>
       </div>
     </div>
@@ -666,6 +666,50 @@ if (document.readyState === "loading")
 else paintTrialAnswer();
 setTimeout(paintTrialAnswer, 1500);
 
+/* ---- somebody who already paid should not be sold to ---------------------
+   Once a licence verifies on this device (or they are signed in), the two "Get
+   a license" calls to action are the wrong thing to show: a returning customer
+   opening the site is trying to REACH their board, not buy a second copy. So
+   they become a way in instead, pointed at the city they last opened.
+
+   Reads the same signals the rest of the page does. license.js is DEFERRED, so
+   this repaints on DOMContentLoaded and once more after verification has had a
+   moment — the same trap paintTrialAnswer already documents, and getting it
+   wrong here would show a paying customer a buy button. */
+function paintOwnerCtas(){
+  var licensed = !!(window.TBLicense && TBLicense.configured && TBLicense.licensed);
+  var signedIn = !!(window.TBAccount && TBAccount.signedIn && TBAccount.signedIn());
+  if(!licensed && !signedIn) return;               // still a prospect: leave the page selling
+
+  /* Send them where they were, not where we would guess. */
+  var href = "dc.html", label = "Washington";
+  try{
+    var last = localStorage.getItem("tb.lastCity");
+    if(last){
+      var c = CITIES.filter(function(x){ return x.id===last; })[0];
+      if(c){ href = c.file; label = c.name; }
+    }
+  }catch(e){}
+
+  var nav = document.getElementById("navBuy");
+  if(nav){ nav.textContent = "Let's go \u2192"; nav.href = href;
+           nav.title = "Open your " + label + " board"; }
+
+  var price = document.getElementById("priceBuy");
+  if(price){ price.textContent = "You're all set \u2014 open your board";
+             price.href = href; }
+
+  /* "I have a licence key" is noise once the key is in. */
+  var have = document.getElementById("haveKey");
+  if(have) have.hidden = true;
+}
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", paintOwnerCtas);
+else paintOwnerCtas();
+setTimeout(paintOwnerCtas, 1500);
+setTimeout(paintOwnerCtas, 4000);   // a cold licence check can take a beat
+
+
 /* ---- licence key entry ---------------------------------------------------
    The gate on the boards can take a key too, but somebody who has just bought
    one lands HERE, from the purchase email, with the key on the clipboard. Make
@@ -801,6 +845,6 @@ setTimeout(paintTrialAnswer, 1500);
 })();
 </script>
 <script src="mascot.js?v=2" defer></script>
-<script src="mascot-buddy.js?v=2" defer></script>
+<script src="mascot-buddy.js?v=4" defer></script>
 </body>
 </html>
