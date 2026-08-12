@@ -42,6 +42,20 @@
     display:flex; align-items:center; gap:14px; padding:2vmin 3vw;
     border-bottom:1px solid var(--line); flex-shrink:0;
   }
+  /* One mark shows, the other is hidden, chosen by theme rather than by script:
+     this page has no zoom and no per-operator repaint, so the theme attribute is
+     the whole question and CSS can answer it on its own. The dot-less small mark
+     is used because the header sizes off vmin and can land under the 40px floor
+     on a short screen. */
+  /* Not a button. `header a` gives every link a bordered pill, which would draw
+     a box straight through the mark's clear space and make the logo read as a
+     control you can press for something. */
+  header .homelink{display:flex; align-items:center; flex:none;
+    border:0; padding:0; background:none; border-radius:0}
+  header .homelink:hover{border:0; background:none}
+  header .mk-light{display:none}
+  :root[data-theme="day"] header .mk-dark{display:none}
+  :root[data-theme="day"] header .mk-light{display:block}
   header .title{font-size:clamp(1rem,2.2vw,1.6rem); font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-ink)}
   header .title small{display:block; font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--muted); text-transform:none; margin-top:2px}
   header .clock{margin-left:auto; font-size:clamp(1rem,2vw,1.5rem); font-variant-numeric:tabular-nums; color:var(--muted)}
@@ -362,6 +376,13 @@
 </head>
 <body>
   <header>
+    <!-- Both variants ship; CSS shows the one that matches the theme. The dot
+         centres are drawn in the background colour, so the dark mark on the day
+         theme's pale header would punch holes through its own station dots. -->
+    <a class="homelink" href="index.html" title="Transit Project" aria-label="Transit Project"
+       onclick="window.location.href='index.html'; return false;"
+      ><img class="brandmark--sm mk-dark"  src="brand/mark-on-dark.svg"  alt="" width="30" height="30"
+      ><img class="brandmark--sm mk-light" src="brand/mark-on-light.svg" alt="" width="30" height="30"></a>
     <div class="title" id="titleEl">Departure Board<small id="loclbl"></small></div>
     <!-- SEPTA's board carries the date next to the time; the Solari and DB
          boards it shares this header with do not, so it is shown per style. -->
