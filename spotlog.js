@@ -204,6 +204,49 @@
     try { return localStorage.getItem("tb.admin") === "1"; } catch (_) { return false; }
   };
 
+  /* ---- the collection strip ------------------------------------------------
+     The mascot sits with a badge per mode, lit once you have logged one and dim
+     until then, so the card answers "what have I caught?" at a glance instead of
+     only listing the most recent sightings. Colour is never the only signal —
+     an unlit badge is also greyed and captionless, and each carries its count.
+     Modes are the three the Spotter records; a board with no bus data simply
+     leaves that one dim rather than hiding it, because the empty slot is the
+     part that invites you to go find one. */
+  var MODES = [
+    { k: "train", label: "Rail" },
+    { k: "bus",   label: "Bus" },
+    { k: "plane", label: "Air" },
+  ];
+  function renderCollection(all) {
+    var wrap = document.getElementById("spotCollect");
+    if (!wrap) return;
+    var counts = {};
+    (all || []).forEach(function (s) { counts[s.mode] = (counts[s.mode] || 0) + 1; });
+    var got = MODES.filter(function (m) { return counts[m.k]; }).length;
+
+    wrap.innerHTML = "";
+    if (window.TBMascot) {
+      var m = window.TBMascot.el({ width: 34 });
+      m.classList && m.classList.add("spot-mascot");
+      m.title = got === MODES.length
+        ? "Every mode logged. Nicely done."
+        : got + " of " + MODES.length + " modes logged so far";
+      wrap.appendChild(m);
+    }
+    var row = document.createElement("div");
+    row.className = "spot-badges";
+    MODES.forEach(function (mo) {
+      var n = counts[mo.k] || 0;
+      var b = document.createElement("span");
+      b.className = "spot-cb" + (n ? " on" : "");
+      if (n) b.style.setProperty("--cb", COLOR[mo.k]);
+      b.innerHTML = '<i>' + GLYPH[mo.k] + '</i><b>' + (n ? n : "—") + '</b>';
+      b.title = n ? n + " " + mo.label.toLowerCase() + " logged" : "No " + mo.label.toLowerCase() + " logged yet";
+      row.appendChild(b);
+    });
+    wrap.appendChild(row);
+  }
+
   function ensureCard() {
     let card = document.getElementById("spotCard");
     if (card) return card;
@@ -218,6 +261,7 @@
          <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button>
          <button type="button" id="spotFeedBtn" data-admin title="Shared feed — see sightings logged on your phone">⇄</button></h2>
        <div class="statline" id="spotStat"></div>
+       <div class="spot-collect" id="spotCollect"></div>
        <div id="spotFeedBox" data-admin style="display:none"></div>
        <div class="list" id="spotList"></div>`;
     cards.appendChild(card);
@@ -233,7 +277,20 @@
         ".row.spot-route .dest{color:var(--accent,#ffd166)}" +
         ".row.spot-route .live-tag{animation:spotPulse 2s ease-in-out infinite}" +
         "@keyframes spotPulse{0%,100%{opacity:1}50%{opacity:.55}}" +
-        ".row.spot-passing .live-tag{animation:spotPulse 2s ease-in-out infinite}";
+        ".row.spot-passing .live-tag{animation:spotPulse 2s ease-in-out infinite}" +
+        /* collection strip: mascot + one badge per mode */
+        ".spot-collect{display:flex; align-items:center; gap:10px; margin:2px 2px 6px}" +
+        ".spot-mascot{flex:none}" +
+        ".spot-badges{display:flex; gap:6px; flex-wrap:wrap; min-width:0}" +
+        ".spot-cb{display:inline-flex; align-items:baseline; gap:5px; padding:3px 8px; border-radius:999px;" +
+          "border:1px solid var(--row-line,#1c2c4e); background:var(--row-bg,#0d1830); opacity:.55}" +
+        ".spot-cb i{font-style:normal; font-family:var(--mono,monospace); font-size:9px; font-weight:700;" +
+          "letter-spacing:.1em; color:var(--muted,#93a5cf)}" +
+        ".spot-cb b{font-family:var(--mono,monospace); font-size:11px; color:var(--muted,#93a5cf)}" +
+        /* lit: the mode has been logged. Border + colour + a real number, so the
+           state never rests on hue alone. */
+        ".spot-cb.on{opacity:1; border-color:var(--cb); box-shadow:0 0 0 1px var(--cb) inset}" +
+        ".spot-cb.on i{color:var(--cb)} .spot-cb.on b{color:var(--text,#eef3ff)}";
       document.head.appendChild(st);
     }
     // tapping the header opens the phone app (same place you'd add a sighting)
@@ -396,6 +453,7 @@
     stat.innerHTML = `<b>${today}</b> today · <b>${rode}</b> ridden · <b>${
       new Set(all.map(s => (s.route || "").toLowerCase())).size}</b> routes` +
       (near && elsewhere ? ` · <b>${elsewhere}</b> elsewhere` : "");
+    renderCollection(all);
 
     const miOf = {}; shown.forEach(p => { miOf[p.s.id] = p.mi; });
     /* Anything passing right now goes to the top and stays there — it is the one

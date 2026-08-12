@@ -22,6 +22,14 @@ window.TB_CONFIG = {
   feedProxy: "",          // https://tb-feeds.yourname.workers.dev
   licence:   "",          // TB-XXXXX-XXXXX-XXXXX-XXXXX
 
+  /* ---- the guided tour's mascot ----------------------------------------
+     Shown on the first-run walkthrough (tour-guide.js). Leave empty and a
+     built-in placeholder is drawn instead; point it at artwork in brand/ to
+     use your own. Rendered at 58x69, SVG or PNG. A missing file falls back to
+     the placeholder rather than showing a broken image.
+     Per-step artwork is set in tour-guide.js's STEPS (a `mascot:` on a step). */
+  mascot:    "",          // brand/mascot.svg
+
   /* ---- API keys --------------------------------------------------------
      PUBLIC. This file is served to every visitor and is in git history for
      good, so treat anything put here as published. That is an acceptable trade
