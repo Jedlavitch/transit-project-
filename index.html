@@ -73,11 +73,17 @@
   /* Display face: uppercase, tight-tracked, far above the 24px floor. */
   h1{font-family:var(--display); font-size:clamp(2.1rem,5.4vw,3.5rem); line-height:1.02;
     margin:0 0 16px; font-weight:800; letter-spacing:-.03em; text-transform:uppercase}
-  /* The three route colours in the order the mark draws them. The guide rations
-     these to 14% of a page between them, and a headline is the one place they
-     earn the room. */
-  h1 .grad{background:linear-gradient(90deg,var(--brand-pink),var(--brand-teal) 52%,var(--brand-blue));
-    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+  /* One route colour per mode, not a gradient across all three. Pink and teal
+     are near-complementary, so ANY interpolation between them passes through a
+     low-chroma middle — in sRGB the midpoint is rgb(127,142,158), 14% saturation,
+     and "buses" rendered grey. oklab raises it but cannot remove it.
+     Colouring the words instead is also what the guide actually asks for:
+     "assign a color per line or per mode and stay consistent". Trains pink,
+     buses teal, planes blue — and the same three, in the same roles, are what
+     the mark draws. */
+  h1 .r1{color:var(--brand-pink)}
+  h1 .r2{color:var(--brand-teal)}
+  h1 .r3{color:var(--brand-blue)}
   .lede{font-size:clamp(1rem,2vw,1.22rem); line-height:1.55; color:var(--muted); margin:0 0 26px}
   .cta-row{display:flex; gap:11px; flex-wrap:wrap; align-items:center}
   .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 22px; border-radius:12px;
@@ -177,9 +183,10 @@
     transition:transform .18s ease, border-color .18s ease}
   .city-soon:hover{transform:rotate(0deg); border-color:var(--brand-pink)}
   .city-soon .lines{flex:none; min-width:42px; display:flex; justify-content:center}
-  .city-soon .tag{display:block; font-family:var(--mono); font-size:9.5px; font-weight:600;
-    letter-spacing:.1em; text-transform:uppercase; color:var(--brand-pink); margin-bottom:3px}
-  .city-soon .nm{font-weight:800; font-size:15px; color:var(--text)}
+  /* Pink, and kept on one line. It is the only tile in this grid that is a
+     message rather than a destination, and the colour is what says so before
+     the words do. */
+  .city-soon .nm{font-weight:800; font-size:15px; color:var(--brand-pink); white-space:nowrap}
   .city-soon .ds{font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.35}
   @media (prefers-reduced-motion:reduce){
     .city-soon, .city-soon:hover{transform:none}
@@ -235,6 +242,24 @@
     display:flex; gap:16px; flex-wrap:wrap; align-items:center}
   footer a{color:var(--muted)} footer a:hover{color:var(--text)}
   footer .sp{margin-left:auto}
+
+  /* ---- made in DC -------------------------------------------------------
+     Its own row under the legal text: flex-basis 100% breaks the line without
+     needing a second footer element. Both marks are drawn here rather than set
+     as emoji — an emoji heart and flag render as somebody else's artwork, at
+     somebody else's colours, differently on every platform, which is the one
+     thing a brand line cannot afford. */
+  .madein{flex-basis:100%; display:flex; align-items:center; gap:7px;
+    padding-top:14px; margin-top:2px; border-top:1px solid var(--line);
+    font-size:12.5px; color:var(--muted)}
+  .madein .heart{width:12px; height:11px; flex:none; fill:var(--brand-pink);
+    position:relative; top:.5px}
+  /* The flag keeps the District's own red rather than the brand pink: it is a
+     civic mark, and a recoloured one reads as a mistake. The paper-white field
+     and the rounded corner are what tie it to everything else here. */
+  .madein .dcflag{width:20px; height:auto; flex:none; border-radius:2px;
+    box-shadow:0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
+    position:relative; top:.5px}
 </style>
 </head>
 <body>
@@ -257,7 +282,8 @@
   </header>
 
   <div class="hero">
-    <h1>Your city's <span class="grad">trains, buses and planes</span>, live on any screen.</h1>
+    <h1>Your city's <span class="r1">trains</span>, <span class="r2">buses</span> and
+      <span class="r3">planes</span>, live on any screen.</h1>
     <p class="lede">A self-contained departure board for your wall. It runs entirely in the
       browser and talks straight to public transit feeds — no server, no subscription, nothing
       to expire. Pin it to a tablet, a TV, a Raspberry Pi, or an old Facebook Portal.</p>
@@ -484,6 +510,28 @@
     <span>Live data from WMATA, SEPTA, MTA, NJ Transit, MBTA, BART, GVB, SBB, Amtrak and adsb.lol.</span>
     <span class="sp">Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners and are used to identify their services.</span>
     <span class="sp"><a href="PRIVACY.md">Privacy</a></span>
+
+    <!-- Three red stars over two red bars, the District's flag as it actually
+         is. Ratio 19:10, stars and bars inset from the edge the way the real
+         one insets them. aria-hidden because the sentence beside it already
+         says "in Washington, DC" — a screen reader does not need it twice. -->
+    <span class="madein">
+      <span>Made with</span>
+      <svg class="heart" viewBox="0 0 12 11" aria-hidden="true" focusable="false">
+        <path d="M6,10.2C6,10.2 1,7.1 1,3.9C1,2.3 2.3,1 3.9,1C4.9,1 5.7,1.5 6,2.2C6.3,1.5 7.1,1 8.1,1C9.7,1 11,2.3 11,3.9C11,7.1 6,10.2 6,10.2Z"/>
+      </svg>
+      <span>in Washington, DC</span>
+      <svg class="dcflag" viewBox="0 0 19 10" aria-hidden="true" focusable="false">
+        <rect width="19" height="10" fill="#FFFCF5"/>
+        <g fill="#CF142B">
+          <path transform="translate(5.4,2.6)" d="M0,-1.5 0.34,-0.46 1.43,-0.46 0.55,0.18 0.88,1.21 0,0.57 -0.88,1.21 -0.55,0.18 -1.43,-0.46 -0.34,-0.46Z"/>
+          <path transform="translate(9.5,2.6)" d="M0,-1.5 0.34,-0.46 1.43,-0.46 0.55,0.18 0.88,1.21 0,0.57 -0.88,1.21 -0.55,0.18 -1.43,-0.46 -0.34,-0.46Z"/>
+          <path transform="translate(13.6,2.6)" d="M0,-1.5 0.34,-0.46 1.43,-0.46 0.55,0.18 0.88,1.21 0,0.57 -0.88,1.21 -0.55,0.18 -1.43,-0.46 -0.34,-0.46Z"/>
+          <rect x="1.5" y="5.1" width="16" height="1.5"/>
+          <rect x="1.5" y="7.4" width="16" height="1.5"/>
+        </g>
+      </svg>
+    </span>
   </footer>
 </div>
 
@@ -550,8 +598,7 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
         '</svg>' +
       '</div>' +
       '<div>' +
-        '<span class="tag">More coming soon</span>' +
-        '<div class="nm">New cities on the way</div>' +
+        '<div class="nm">More coming soon!</div>' +
         '<div class="ds">A licence covers every city added later, at no extra cost.</div>' +
       '</div>';
     g.appendChild(s);

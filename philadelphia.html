@@ -248,7 +248,12 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
       radial-gradient(800px 500px at 8% -6%, rgba(181,140,255,.09) 0%, transparent 60%),
       radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
   }
-  header .title .t-grad{background:linear-gradient(90deg,var(--brand-pink),var(--brand-teal) 48%,var(--brand-blue));
+  header .title .t-grad{/* Order matters: pink and teal are near-complementary, so a blend between
+     them passes through rgb(127,142,158) — 14% saturation, i.e. grey text in
+     the middle of the wordmark. Putting blue between them keeps every
+     transition saturated (pink->blue 41%, blue->teal 82%) and still uses all
+     three route colours. */
+  background:linear-gradient(90deg,var(--brand-pink),var(--brand-blue) 50%,var(--brand-teal));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   :root[data-theme="day"] header .title .t-grad{filter:brightness(.72) saturate(1.2)}
   .stat{background:
