@@ -2,12 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#010409" />
 <title>Sky — Nearest Flight</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="theme.css?v=15" />
 <script src="license.js" defer></script>
 <script src="gate.js?v=1" defer></script>
 <script src="delays.js?v=2"></script>
@@ -380,9 +385,9 @@
   </div>
   <div id="alertBanner"><span class="ic"></span><span><span class="t"></span><div class="s"></div></span></div>
   <header>
-    <span class="tag" id="tag">✈ Nearest flight</span>
+    <span class="tag" id="tag">Nearest flight</span>
     <span class="clock" id="clock">—</span>
-    <button id="logBtn" title="Spotter's log">📓</button>
+    <button id="logBtn" title="Spotter's log">Log</button>
     <button id="setBtn" title="Customize">⚙</button>
     <button id="fsBtn" title="Full screen (F)"></button>
     <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city on one live map" onclick="window.location.href=this.href; return false;">tour ›</a>
@@ -423,38 +428,38 @@
         <button id="goveeScan">Scan</button>
       </div>
       <div class="seg" id="goveeSeg">
-        <button data-govee="on"><span class="ic">💡</span>On</button>
-        <button data-govee="off"><span class="ic">🚫</span>Off</button>
+        <button data-govee="on">On</button>
+        <button data-govee="off">Off</button>
       </div>
       <div id="goveeMsg"></div>
       <div class="lbl">Show the nearest…</div>
       <div class="seg" id="modeSeg">
-        <button data-mode="planes"><span class="ic">✈</span>Plane</button>
-        <button data-mode="trains"><span class="ic">🚆</span>Train</button>
-        <button data-mode="buses"><span class="ic">🚌</span>Bus</button>
-        <button data-mode="iss"><span class="ic">🛰</span>ISS</button>
+        <button data-mode="planes">Plane</button>
+        <button data-mode="trains">Train</button>
+        <button data-mode="buses">Bus</button>
+        <button data-mode="iss">ISS</button>
       </div>
       <div class="lbl">Theme</div>
       <div class="seg" id="themeSeg">
-        <button data-theme="dark"><span class="ic">🌘</span>Dark</button>
+        <button data-theme="dark">Dark</button>
         <button data-theme="black"><span class="ic">⬛</span>Black</button>
-        <button data-theme="day"><span class="ic">☀️</span>Day</button>
+        <button data-theme="day">Day</button>
       </div>
       <div class="lbl">Sky colors</div>
       <div class="seg" id="skySeg">
-        <button data-sky="on"><span class="ic">🌇</span>On</button>
-        <button data-sky="off"><span class="ic">🚫</span>Off</button>
+        <button data-sky="on">On</button>
+        <button data-sky="off">Off</button>
       </div>
       <div class="lbl">Operator colors</div>
       <div class="seg" id="brandSeg">
-        <button data-brand="on"><span class="ic">🎨</span>On</button>
-        <button data-brand="off"><span class="ic">🚫</span>Off</button>
+        <button data-brand="on">On</button>
+        <button data-brand="off">Off</button>
       </div>
       <div class="lbl">Photos</div>
       <div class="seg" id="photoSeg">
-        <button data-photo="slow"><span class="ic">🖼</span>Slow</button>
-        <button data-photo="med"><span class="ic">🔀</span>Cycle</button>
-        <button data-photo="off"><span class="ic">📌</span>Hold</button>
+        <button data-photo="slow">Slow</button>
+        <button data-photo="med">Cycle</button>
+        <button data-photo="off">Hold</button>
       </div>
       <div class="lbl">Color</div>
       <div class="swatches" id="swatches"></div>
@@ -474,7 +479,7 @@
 
   <div id="logPanel">
     <div class="panel">
-      <h3>📓 Spotter's log</h3>
+      <h3>Spotter's log</h3>
       <div id="logBody"></div>
       <div class="actions">
         <button class="reset" id="logReset">Reset log</button>
@@ -550,7 +555,7 @@ const CITY_CONFIG = {
      back rather than pretending; see the note in produceTrain/produceBus. */
   zurich: { defaultLoc:{ lat:47.3779, lon:8.5403, label:"Zürich Hauptbahnhof" },
     lsLoc:"transitboardzurich.loc", lsManual:"transitboardzurich.locManual", board:"zurich.html",
-    busSchedule:null, busTag:"🚌 Nearest bus", busRange:"",
+    busSchedule:null, busTag:"Nearest bus", busRange:"",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
     localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
     transitSource:"ch", mainStation:"Zürich HB",
@@ -562,7 +567,7 @@ const CITY_CONFIG = {
      back rather than pretending; see the note in produceTrain/produceBus. */
   cologne: { defaultLoc:{ lat:50.943, lon:6.9588, label:"Köln Hauptbahnhof" },
     lsLoc:"transitboardcologne.loc", lsManual:"transitboardcologne.locManual", board:"cologne.html",
-    busSchedule:null, busTag:"🚌 Nearest bus", busRange:"",
+    busSchedule:null, busTag:"Nearest bus", busRange:"",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
     localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
     transitSource:"", mainStation:"Köln Hbf",
@@ -574,7 +579,7 @@ const CITY_CONFIG = {
      back rather than pretending; see the note in produceTrain/produceBus. */
   stuttgart: { defaultLoc:{ lat:48.7838, lon:9.1817, label:"Stuttgart Hauptbahnhof" },
     lsLoc:"transitboardstuttgart.loc", lsManual:"transitboardstuttgart.locManual", board:"stuttgart.html",
-    busSchedule:null, busTag:"🚌 Nearest bus", busRange:"",
+    busSchedule:null, busTag:"Nearest bus", busRange:"",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
     localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
     transitSource:"", mainStation:"Stuttgart Hauptbahnhof",
@@ -591,7 +596,7 @@ const CITY_CONFIG = {
   // they can't share one field the way Philly's incidentally can.
   dc: { defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
     lsLoc:"transitboard.loc", lsManual:"transitboard.locManual", board:"dc.html",
-    busSchedule:"rideon-schedule.json", busTag:"🚌 Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
+    busSchedule:"rideon-schedule.json", busTag:"Nearest Ride On bus", busRange:"Ride On routes 23 & 29",
     lsMarcUrl:"transitboard.marcUrl", lsSeptaUrl:null, lsBusUrl:null,
     lsWmataKey:"transitboard.wmataKey",          // unlocks Metrorail and Metrobus as fallbacks
     metroPhotoQuery:"WMATA Metrorail train Washington DC",
@@ -606,14 +611,14 @@ const CITY_CONFIG = {
   // that produceLiveBus() expects, so pointing this at it would fetch the wrong API.
   nj: { defaultLoc:{ lat:40.7346, lon:-74.1643, label:"Newark Penn Station, NJ" },
     lsLoc:"transitboardnj.loc", lsManual:"transitboardnj.locManual", board:"newjersey.html",
-    busSchedule:"njt-state-bus-schedule.json", busTag:"🚌 Nearest NJ Transit bus",
+    busSchedule:"njt-state-bus-schedule.json", busTag:"Nearest NJ Transit bus",
     busRange:"NJ Transit bus (bundled trunk routes)",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"NJ Transit", localBusSystem:"NJ Transit",
     busPhotoQuery:"NJ Transit bus New Jersey", cityLabel:"New Jersey" },
   philly: { defaultLoc:{ lat:39.9812, lon:-75.1563, label:"Temple University, Philadelphia" },
     lsLoc:"transitboardphl.loc", lsManual:"transitboardphl.locManual", board:"philadelphia.html",
-    busSchedule:"septa-bus-schedule.json", busTag:"🚌 Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16",
+    busSchedule:"septa-bus-schedule.json", busTag:"Nearest SEPTA bus", busRange:"SEPTA Bus routes 3, 4 & 16",
     lsMarcUrl:null, lsSeptaUrl:"transitboardphl.septaUrl", lsBusUrl:"transitboardphl.septaUrl",
     localRailSystem:"SEPTA", localBusSystem:"SEPTA", busPhotoQuery:"SEPTA bus Philadelphia",
     cityLabel:"Philadelphia" },
@@ -625,7 +630,7 @@ const CITY_CONFIG = {
   // separate lsBusUrl field.
   nyc: { defaultLoc:{ lat:40.7506, lon:-73.9935, label:"Penn Station, New York, NY" },
     lsLoc:"transitboardnyc.loc", lsManual:"transitboardnyc.locManual", board:"nyc.html",
-    busSchedule:"mta-bus-schedule.json", busTag:"🚌 Nearest MTA bus", busRange:"MTA Bus M42/M15/M34/M34A",
+    busSchedule:"mta-bus-schedule.json", busTag:"Nearest MTA bus", busRange:"MTA Bus M42/M15/M34/M34A",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:"transitboardnyc.busUrl",
     localRailSystem:"Subway/LIRR/MNR", localBusSystem:"MTA Bus", busPhotoQuery:"MTA bus New York City",
     cityLabel:"New York", nycRail:true },
@@ -634,7 +639,7 @@ const CITY_CONFIG = {
   // boston.html's own map uses the MBTA v3 API directly).
   boston: { defaultLoc:{ lat:42.3519, lon:-71.0552, label:"South Station, Boston, MA" },
     lsLoc:"transitboardboston.loc", lsManual:"transitboardboston.locManual", board:"boston.html",
-    busSchedule:"mbta-bus-schedule.json", busTag:"🚌 Nearest MBTA bus", busRange:"Silver Line + Route 1",
+    busSchedule:"mbta-bus-schedule.json", busTag:"Nearest MBTA bus", busRange:"Silver Line + Route 1",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"MBTA", localBusSystem:"MBTA", busPhotoQuery:"MBTA Silver Line bus Boston",
     cityLabel:"Boston" },
@@ -643,7 +648,7 @@ const CITY_CONFIG = {
   // Amtrak-only, i.e. empty in Europe. Nearest flight = Schiphol traffic.
   amsterdam: { defaultLoc:{ lat:52.3791, lon:4.9003, label:"Amsterdam Centraal" },
     lsLoc:"transitboardamsterdam.loc", lsManual:"transitboardamsterdam.locManual", board:"amsterdam.html",
-    busSchedule:"ams-tram-schedule.json", busTag:"🚋 Nearest tram", busRange:"GVB trams",
+    busSchedule:"ams-tram-schedule.json", busTag:"Nearest tram", busRange:"GVB trams",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"NS", localBusSystem:"GVB", busPhotoQuery:"GVB tram Amsterdam",
     cityLabel:"Amsterdam" },
@@ -651,13 +656,13 @@ const CITY_CONFIG = {
   // cable car. Both bundles carry tz:"America/Los_Angeles".
   la: { defaultLoc:{ lat:34.0562, lon:-118.2365, label:"Union Station, Los Angeles" },
     lsLoc:"transitboardla.loc", lsManual:"transitboardla.locManual", board:"losangeles.html",
-    busSchedule:"la-rail-schedule.json", busTag:"🚇 Nearest Metro Rail", busRange:"Metro A/B/C/D/E/K",
+    busSchedule:"la-rail-schedule.json", busTag:"Nearest Metro Rail", busRange:"Metro A/B/C/D/E/K",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"Metrolink", localBusSystem:"LA Metro", busPhotoQuery:"LA Metro Rail train Los Angeles",
     cityLabel:"Los Angeles" },
   sf: { defaultLoc:{ lat:37.7844, lon:-122.4078, label:"Powell St, San Francisco" },
     lsLoc:"transitboardsf.loc", lsManual:"transitboardsf.locManual", board:"sanfrancisco.html",
-    busSchedule:"sf-cablecar-schedule.json", busTag:"🚋 Nearest cable car", busRange:"Powell-Mason · Powell-Hyde · California",
+    busSchedule:"sf-cablecar-schedule.json", busTag:"Nearest cable car", busRange:"Powell-Mason · Powell-Hyde · California",
     lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null,
     localRailSystem:"BART/Caltrain", localBusSystem:"cable car", busPhotoQuery:"San Francisco cable car",
     cityLabel:"San Francisco" },
@@ -1321,7 +1326,7 @@ function showPhoto(i){
 
 /* ===== subject producers: each returns a normalized subject or null ===== */
 let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses","iss"].includes(m)?m:"planes"; })();
-const TAGS  = { planes:"✈ Nearest flight", trains:"🚆 Nearest train", buses:CITY_CFG.busTag, iss:"🛰 Nearest spacecraft" };
+const TAGS  = { planes:"Nearest flight", trains:"Nearest train", buses:CITY_CFG.busTag, iss:"Nearest spacecraft" };
 const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.localRailSystem} trains`, buses:CITY_CFG.busRange, iss:"International Space Station · low Earth orbit" };
 /* SEPTA's live feeds occasionally send phantom vehicles with nonsense
    sentinel lateness (e.g. late:998) instead of omitting the field --
@@ -1792,7 +1797,7 @@ async function produceMetroTrain(){
     oCity:null, dCity:null, subline:"Metrorail",
     posLL:w.ll, oLL:null, dLL:null,
     altText:"", oCode:"", dCode:"",
-    sysTag:"🚇 Nearest Metro train", sysRange:"Metrorail — shown when no Amtrak or MARC is near",
+    sysTag:"Nearest Metro train", sysRange:"Metrorail — shown when no Amtrak or MARC is near",
     statusHtml:`<span class="phase">in service</span><span class="badge na">Metrorail</span>`,
     color:LINE_COL[line]||"#8ab4ff",
     photoQuery:CITY_CFG.metroPhotoQuery||"WMATA Metrorail train",
@@ -2035,7 +2040,7 @@ async function produceMetroBus(){
     oCity:null, dCity:v.TripHeadsign||null, subline:"Metrobus",
     posLL:w.ll, oLL:null, dLL:null,
     altText:"", oCode:"", dCode:"",
-    sysTag:"🚌 Nearest Metrobus", sysRange:"Metrobus — shown when no Ride On bus is near",
+    sysTag:"Nearest Metrobus", sysRange:"Metrobus — shown when no Ride On bus is near",
     lateMin: w.dev,
     statusHtml:`<span class="phase">in service</span>`
       + adherenceChip(w.dev)
@@ -2230,11 +2235,11 @@ function scanAlerts(ac){
       +(typeof a.alt_baro==="number"?` · ${a.alt_baro.toLocaleString()} ft`:"");
     const sq=(a.squawk||"").trim(), em=(a.emergency||"").trim().toLowerCase();
     const emerg=SQUAWK_EMERG[sq] || (em && em!=="none" ? em.toUpperCase() : null);
-    if(emerg){ pushAlert("em:"+a.hex, true, "🚨", `${emerg} — squawk ${sq||"?"}`, `${who} · ${where}`); continue; }
+    if(emerg){ pushAlert("em:"+a.hex, true, "EMG", `${emerg} — squawk ${sq||"?"}`, `${who} · ${where}`); continue; }
     const ty=(a.t||"").toUpperCase();
-    if(RARE_TYPES[ty]){ pushAlert("rare:"+a.hex, false, "✈", `${RARE_TYPES[ty]} in range`, `${who} · ${where}`); continue; }
-    if((a.dbFlags||0)&1){ pushAlert("mil:"+a.hex, false, "🎖", "Military aircraft in range", `${who} · ${where}`); continue; }
-    if(a.category==="A7" && nm<=5) pushAlert("heli:"+a.hex, false, "🚁", "Helicopter close by", `${who} · ${where}`);
+    if(RARE_TYPES[ty]){ pushAlert("rare:"+a.hex, false, "RARE", `${RARE_TYPES[ty]} in range`, `${who} · ${where}`); continue; }
+    if((a.dbFlags||0)&1){ pushAlert("mil:"+a.hex, false, "MIL", "Military aircraft in range", `${who} · ${where}`); continue; }
+    if(a.category==="A7" && nm<=5) pushAlert("heli:"+a.hex, false, "HELI", "Helicopter close by", `${who} · ${where}`);
   }
 }
 /* Off-mode watcher: the sweep above only runs while in planes mode, so once a
@@ -2251,7 +2256,7 @@ async function backgroundWatch(){
   try{
     if(mode!=="iss"){
       const s=await produceISS();
-      if(s && s.elev>10) pushAlert("iss", false, "🛰", "The ISS is above your horizon",
+      if(s && s.elev>10) pushAlert("iss", false, "ISS", "The ISS is above your horizon",
         `look ${s.dir}, ${Math.round(s.elev)}° up · ${Math.round(s.nm).toLocaleString()} mi away`, 45);
     }
   }catch(e){}
@@ -2289,10 +2294,10 @@ function renderLogPanel(){
   const row=(l,r)=>`<div class="row"><span>${l}</span><span>${r}</span></div>`;
   const rows=[];
   rows.push(`<div class="sect">Totals</div>`);
-  rows.push(row("✈ Aircraft", `${P.n} seen · ${Object.keys(P.types).length} types · ${Object.keys(P.airlines).length} airlines`));
-  rows.push(row("🚆 Trains", `${T.n} seen · ${Object.keys(T.systems).length} systems`));
-  rows.push(row("🚌 Buses", `${B.n} seen · ${Object.keys(B.routes).length} routes`));
-  if(skyLog.iss.n) rows.push(row("🛰 ISS", `${skyLog.iss.n} sightings`));
+  rows.push(row("Aircraft", `${P.n} seen · ${Object.keys(P.types).length} types · ${Object.keys(P.airlines).length} airlines`));
+  rows.push(row("Trains", `${T.n} seen · ${Object.keys(T.systems).length} systems`));
+  rows.push(row("Buses", `${B.n} seen · ${Object.keys(B.routes).length} routes`));
+  if(skyLog.iss.n) rows.push(row("ISS", `${skyLog.iss.n} sightings`));
   const rare=Object.entries(P.types).sort((a,b)=>a[1].n-b[1].n || (b[1].last||0)-(a[1].last||0)).slice(0,5);
   if(rare.length){
     rows.push(`<div class="sect">Rarest catches</div>`);

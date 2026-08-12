@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="9 8 84 76" role="img" aria-label="Transit Project">
+  <title>Transit Project</title>
+  <!-- No station dots: below 40px they close up. The guide says to drop them
+       at favicon size rather than ship a mark that turns to mush. -->
+  <g fill="none" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18,26 H50 L74,50" stroke="#FF3D77"/>
+    <path d="M26,74 L50,50 L50,20" stroke="#00E0C6"/>
+    <path d="M18,50 H38 L58,70 H80" stroke="#2F7BFF"/>
+  </g>
+</svg>

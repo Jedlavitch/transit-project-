@@ -2,13 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#000000" />
 <title>Departure Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="theme.css?v=15" />
 <script src="license.js" defer></script>
 <script src="gate.js?v=1" defer></script>
 <script src="wake.js?v=1"></script>
@@ -1575,7 +1580,13 @@ function resolveStyle(pref){
   if (CITY === "philly") return "septa";       // its real board is this one
   return EURO_CITIES.has(CITY) ? "euro" : "usa";
 }
-let STYLE = resolveStyle(localStorage.getItem(LS_STYLE) || "auto");
+/* ?style= overrides the saved setting without writing to it, which is what a
+   kiosk wants: point a screen at one URL and it comes up in that style on every
+   boot, whatever that machine happens to have in localStorage. Also the only way
+   to ask for a style from outside the page — a headless capture has no saved
+   settings to read. */
+const STYLE_PARAM = new URLSearchParams(location.search).get("style");
+let STYLE = resolveStyle(STYLE_PARAM || localStorage.getItem(LS_STYLE) || "auto");
 
 const TIME_COL = `calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px)`;
 const STYLE_COLS = {

@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <title>Transit Spotter</title>
 <link rel="manifest" href="spot-manifest.json" />
@@ -10,7 +15,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Spotter" />
 <link rel="apple-touch-icon" href="spot-icon-180.png" />
-<link rel="stylesheet" href="theme.css?v=14" />
+<link rel="stylesheet" href="theme.css?v=15" />
 <script src="config.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
@@ -31,7 +36,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   html,body{margin:0; min-height:100%}
   body{background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased;
     padding:0 0 96px; overscroll-behavior-y:contain}
-  :root{--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
+  :root{--mono:"IBM Plex Mono",ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
 
   header{position:sticky; top:0; z-index:50; padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;
     background:linear-gradient(180deg,var(--panel2),var(--bg)); border-bottom:1px solid var(--line)}
@@ -57,7 +62,6 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .modes{display:grid; grid-template-columns:repeat(3,1fr); gap:9px}
   .mode{padding:14px 6px; border-radius:12px; border:1px solid var(--line); background:var(--panel);
     color:var(--text); font-size:13px; font-weight:700; cursor:pointer; text-align:center; line-height:1.5}
-  .mode .g{display:block; font-size:24px}
   .mode.on{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; background:var(--panel)}
 
   /* one-tap "near you now" suggestions */
@@ -147,7 +151,8 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     padding:calc(env(safe-area-inset-top) + 8vh) 22px calc(env(safe-area-inset-bottom) + 32px)}
   #gate.show{display:block}
   #gate .gbox{max-width:420px; margin:0 auto; text-align:center}
-  #gate .glogo{font-size:54px; line-height:1}
+  #gate .glogo{line-height:0}
+  #gate .glogo img{display:inline-block; width:56px; height:56px}
   #gate .gtitle{font-size:30px; font-weight:800; margin:14px 0 8px; letter-spacing:.2px;
     background:linear-gradient(90deg,var(--text),var(--blue-bright,#7cc0ff));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
@@ -220,7 +225,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 
 <div id="gate">
   <div class="gbox">
-    <div class="glogo">🚉</div>
+    <div class="glogo"><img src="brand/mark-on-dark.svg" alt="Transit Project" width="56" height="56"></div>
     <h1 class="gtitle">Transit Spotter</h1>
     <p class="gsub">Log the trains, buses and planes you see.<br>Sign in and your log follows you to any device.</p>
 
@@ -257,10 +262,10 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 <header>
   <div class="hrow">
     <h1>Transit Spotter <small id="hsub">loading…</small><small id="who"></small></h1>
-    <button class="iconbtn" id="boardBtn" title="Open the board">🚇</button>
-    <button class="iconbtn" id="nightBtn" title="Sky view — nearest flight overhead">🌙</button>
-    <button class="iconbtn" id="flipBtn" title="Departure board — split-flap display">🚉</button>
-    <button class="iconbtn" id="profileBtn" title="Your account — sign-in, licence key and saved settings">👤</button>
+    <button class="iconbtn" id="boardBtn" title="Open the board">Board</button>
+    <button class="iconbtn" id="nightBtn" title="Sky view — nearest flight overhead">Sky</button>
+    <button class="iconbtn" id="flipBtn" title="Departure board — split-flap display">Flip</button>
+    <button class="iconbtn" id="profileBtn" title="Your account — sign-in, licence key and saved settings">Acct</button>
     <button class="iconbtn" id="setBtn" title="Settings">⚙︎</button>
   </div>
 </header>
@@ -268,9 +273,9 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 <main>
   <div class="sect">What did you spot?</div>
   <div class="modes" id="modes">
-    <button class="mode on" data-mode="plane"><span class="g">✈️</span>Plane</button>
-    <button class="mode" data-mode="train"><span class="g">🚆</span>Train</button>
-    <button class="mode" data-mode="bus"><span class="g">🚌</span>Bus</button>
+    <button class="mode on" data-mode="plane">Plane</button>
+    <button class="mode" data-mode="train">Train</button>
+    <button class="mode" data-mode="bus">Bus</button>
   </div>
 
   <div class="sect" id="nearLbl">Near you right now</div>
@@ -308,9 +313,9 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
       <input type="search" id="q" placeholder="Search route, vehicle, place, note…" autocomplete="off" />
       <div class="fchips" id="fchips">
         <button class="fchip on" data-f="all">All</button>
-        <button class="fchip" data-f="plane">✈️</button>
-        <button class="fchip" data-f="train">🚆</button>
-        <button class="fchip" data-f="bus">🚌</button>
+        <button class="fchip" data-f="plane">Air</button>
+        <button class="fchip" data-f="train">Rail</button>
+        <button class="fchip" data-f="bus">Bus</button>
         <button class="fchip" data-f="rode">Rode</button>
         <button class="fchip" data-f="new">New</button>
       </div>
@@ -445,7 +450,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
    ============================================================================ */
 const $ = s => document.querySelector(s);
 const LS = { spots:"tb.spots", handle:"tb.spotter", feed:"tb.spotFeedUrl", sheet:"tb.sheetUrl" };
-const MODE_GLYPH = { plane:"✈️", train:"🚆", bus:"🚌" };
+const MODE_GLYPH = { plane:"AIR", train:"RAIL", bus:"BUS" };
 let mode = "plane", loc = null, near = [];
 
 /* ---------- storage ---------- */

@@ -6,6 +6,11 @@
 <script src="license.js" defer></script>
 <script src="gate.js?v=1" defer></script>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#010409" />
 <title>Grand Tour — Live Transit</title>
@@ -19,7 +24,7 @@
      glides that vehicle across the map by dead-reckoning from its own speed +
      heading, and overlays all the detail it can find. The page re-tints to a
      per-mode gradient palette on every stop, keeps the screen awake (wake
-     lock), can 📌 STAY pinned on one vehicle with live re-tracking, and has
+     lock), can STAY pinned on one vehicle with live re-tracking, and has
      ⚙ settings for pace + city/mode filters and a ⏮ back button. Standalone
      from the boards + night.html on purpose (its own full-map layout), but it
      pulls the SAME public sources: adsb.lol (planes), Amtrak (amtraker),
@@ -101,7 +106,7 @@
     border-radius:11px; border:1px solid var(--faint); background:rgba(8,14,24,.7); color:var(--muted);
     cursor:pointer; font-size:16px; text-decoration:none; font-family:inherit}
   .ctrls button:hover, .ctrls a:hover{color:var(--accent-ink); border-color:var(--accent-dim)}
-  /* an engaged toggle (📌 stay) fills with the live mode gradient */
+  /* an engaged toggle (Stay) fills with the live mode gradient */
   .ctrls button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));
     border-color:var(--accent); color:#04101f}
   /* everything accent-tinted morphs smoothly when the mode palette changes */
@@ -191,7 +196,7 @@
     background:linear-gradient(90deg,var(--accent),var(--accent2),var(--city));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent}
 
-  /* ---- tour log (📜): what this session has already shown ---- */
+  /* ---- tour log: what this session has already shown ---- */
   #log{position:fixed; z-index:7; top:0; right:0; bottom:0; width:min(92vw,400px);
     background:rgba(6,11,20,.97); border-left:1px solid var(--faint);
     box-shadow:-20px 0 60px rgba(0,0,0,.6); display:flex; flex-direction:column;
@@ -281,8 +286,8 @@
         <svg viewBox="0 0 40 40"><circle id="ringC" cx="20" cy="20" r="18.5"></circle></svg>
       </button>
       <span class="cdiv"></span>
-      <button id="stayBtn" title="Stay with this vehicle (S)">📌</button>
-      <button id="logBtn" title="Tour log — everything this session has shown (L)">📜</button>
+      <button id="stayBtn" title="Stay with this vehicle (S)">Stay</button>
+      <button id="logBtn" title="Tour log — everything this session has shown (L)">Log</button>
       <button id="setBtn" title="Tour settings">⚙</button>
       <button id="fsBtn" title="Full screen (F)">⛶</button>
       <a id="boardBtn" href="dc.html" title="Back to the board">‹</a>
@@ -297,7 +302,7 @@
     <div class="checks" id="cityChecks"></div>
     <div class="set-lbl">Modes</div>
     <div class="checks" id="modeChecks"></div>
-    <div class="note">📌 stays with the current vehicle (its position keeps updating live) ·
+    <div class="note">Stay holds the current vehicle (its position keeps updating live) ·
       the screen is kept awake while the tour runs · unchecking everything shows everything.</div>
   </div>
 
@@ -315,7 +320,7 @@
 
   <div id="card">
     <div class="txt">
-      <div class="kicker"><span class="mode-ic" id="modeIc">✈</span><span id="feedLbl">—</span><span id="liveTag"></span></div>
+      <div class="kicker"><span class="mode-ic" id="modeIc">AIR</span><span id="feedLbl">—</span><span id="liveTag"></span></div>
       <div class="city"><span id="city">—</span><span class="citytime" id="cityTime"></span></div>
       <div class="title" id="title"></div>
       <div class="sub" id="sub"></div>
@@ -380,7 +385,7 @@ const CITIES = [
 const STOPS = [];
 CITIES.forEach(c=> c.feeds.forEach(f=> STOPS.push({ city:c.label, cityKey:c.key, loc:c.loc, tz:c.tz, ...f })));
 
-const MODE_IC = { plane:"✈", train:"🚆", bus:"🚌", tram:"🚋" };
+const MODE_IC = { plane:"AIR", train:"RAIL", bus:"BUS", tram:"TRAM" };
 /* per-mode color palettes: present() pours these into --accent/--accent2/
    --accent-dim so the whole page (marker glow, trail, route, ring, chips,
    gradients) re-tints to match what's on screen */
@@ -588,7 +593,7 @@ async function wikiPhoto(query){
 }
 
 /* ===================== PLANE subject =====================================
-   `pin` (from 📌 stay mode) re-finds the SAME aircraft by hex instead of
+   `pin` (from Stay mode) re-finds the SAME aircraft by hex instead of
    picking the nearest — null once it lands / leaves the search radius. */
 
 /* Keep an aircraft on screen through a tracking gap -- see the boards' copy of
@@ -1000,7 +1005,7 @@ function present(s){
     if(s.dCity) L.marker([s.dLL.lat,s.dLL.lon],{icon:L.divIcon({className:"endpt-label",html:escapeHtml(s.dCity)}),interactive:false}).addTo(routeLayer);
   }
   veh=L.marker([s.pos.lat,s.pos.lon],{icon:vehIcon(s.kind, s.heading||0),zIndexOffset:1000}).addTo(routeLayer);
-  veh.on("click", toggleStay);   // tapping the vehicle = 📌 stay with it
+  veh.on("click", toggleStay);   // tapping the vehicle = stay with it
   trail=L.polyline([[s.pos.lat,s.pos.lon]],{color:getAccent(),weight:3,opacity:.45}).addTo(routeLayer);
   // The drift loop's edge-of-view panTo would CANCEL this flyTo mid-animation
   // (Leaflet aborts a running fly on any new map movement), stranding the map
@@ -1054,7 +1059,7 @@ function chipHtml(c){
   return `<span class="c ${cls}">${arrow}${escapeHtml(c.t)}</span>`;
 }
 function fillCard(s){
-  $("#modeIc").textContent = MODE_IC[s.kind]||"✈";
+  $("#modeIc").textContent = MODE_IC[s.kind]||"AIR";
   $("#feedLbl").textContent = s.feedLbl;   // the big .city line right below already names the city
   $("#liveTag").className = s.live?"live":"sched"; $("#liveTag").textContent = s.live?"LIVE":"SCHED";
   $("#city").textContent = s.city;
@@ -1090,14 +1095,14 @@ function fillCard(s){
 /* ===================== weather where the vehicle is ====================== */
 /* open-meteo: free, no key, CORS-open — the same "works straight from the
    browser" test every other feed on these boards has to pass. */
-const WMO={0:["Clear","☀"],1:["Mainly clear","🌤"],2:["Partly cloudy","⛅"],3:["Overcast","☁"],
-  45:["Fog","🌫"],48:["Freezing fog","🌫"],51:["Light drizzle","🌦"],53:["Drizzle","🌦"],
-  55:["Heavy drizzle","🌦"],56:["Freezing drizzle","🌧"],57:["Freezing drizzle","🌧"],
-  61:["Light rain","🌧"],63:["Rain","🌧"],65:["Heavy rain","🌧"],66:["Freezing rain","🌧"],
-  67:["Freezing rain","🌧"],71:["Light snow","🌨"],73:["Snow","🌨"],75:["Heavy snow","🌨"],
-  77:["Snow grains","🌨"],80:["Rain showers","🌦"],81:["Rain showers","🌦"],82:["Heavy showers","⛈"],
-  85:["Snow showers","🌨"],86:["Snow showers","🌨"],95:["Thunderstorm","⛈"],
-  96:["Thunderstorm, hail","⛈"],99:["Thunderstorm, hail","⛈"]};
+const WMO={0:"Clear",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+  45:"Fog",48:"Freezing fog",51:"Light drizzle",53:"Drizzle",
+  55:"Heavy drizzle",56:"Freezing drizzle",57:"Freezing drizzle",
+  61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",
+  67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",
+  77:"Snow grains",80:"Rain showers",81:"Rain showers",82:"Heavy showers",
+  85:"Snow showers",86:"Snow showers",95:"Thunderstorm",
+  96:"Thunderstorm, hail",99:"Thunderstorm, hail"};
 const wxCache=new Map();
 let wxTok=0;
 async function loadWeather(s){
@@ -1118,10 +1123,10 @@ async function loadWeather(s){
     }catch(e){ return; }                      // weather is a nicety; never break the card over it
   }
   if(tok!==wxTok) return;                     // a newer stop took over while we waited
-  const c=w.c, d=WMO[c.weather_code]||["—","•"];
+  const c=w.c, d=WMO[c.weather_code]||"—";
   const wind=Math.round(c.wind_speed_10m||0);
-  box.innerHTML=`<span class="ic">${d[1]}</span><span class="t">${Math.round(c.temperature_2m)}°F</span>`+
-    `<span class="sep">·</span><span>${escapeHtml(d[0])}</span>`+
+  box.innerHTML=`<span class="t">${Math.round(c.temperature_2m)}°F</span>`+
+    `<span class="sep">·</span><span>${escapeHtml(d)}</span>`+
     (wind>1?`<span class="sep">·</span><span>${wind} mph wind</span>`:"")+
     `<span class="sep">·</span><span>at the ${s.kind==="plane"?"aircraft":"vehicle"}</span>`;
   box.classList.add("show");
@@ -1269,7 +1274,7 @@ function goBack(){
   holdTimer=setTimeout(advanceNext, holdMs);
 }
 
-/* ---- 📌 stay mode: hold the tour on this vehicle, keep its data LIVE ----
+/* ---- stay mode: hold the tour on this vehicle, keep its data LIVE ----
    Unlike pause (which freezes the countdown and lets dead reckoning run
    open-loop), stay re-fetches the same vehicle every 20 s, correcting
    position/heading/speed and refreshing the chips. When the vehicle stops
@@ -1317,7 +1322,7 @@ function buildSettings(){
     l.classList.toggle("on",cityPref[k]!==false);
     savePrefs(); buildOrderKeepPos(); renderQueue();
   });
-  const MODES=[["plane","✈ Planes"],["train","🚆 Trains"],["bus","🚌 Buses"],["tram","🚋 Trams"]];
+  const MODES=["plane","train","bus","tram"];
   const mc=$("#modeChecks");
   mc.innerHTML=MODES.map(([k,lbl])=>`<label data-k="${k}" class="${modePref[k]!==false?"on":""}">${lbl}</label>`).join("");
   mc.querySelectorAll("label").forEach(l=> l.onclick=()=>{

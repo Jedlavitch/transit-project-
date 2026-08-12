@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Transit Project — live trains, buses and planes on any screen</title>
 <meta name="description" content="A live transit and flight board for your wall. Trains, buses and aircraft overhead, in real time, across the US and Europe. Runs in any browser." />
@@ -23,8 +28,8 @@
 <meta name="twitter:title" content="Transit Project — live trains, buses and planes on any screen" />
 <meta name="twitter:description" content="A live departure board for your wall. Real trains, buses and aircraft overhead, across the US and Europe." />
 <meta name="twitter:image" content="https://transitproject.online/shots/board-dc.jpg" />
-<link rel="stylesheet" href="theme.css" />
-<script src="cityswitch.js?v=2"></script>
+<link rel="stylesheet" href="theme.css?v=15" />
+<script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=1"></script>
 <script src="delays.js?v=2"></script>
 <script src="license.js" defer></script>
@@ -52,26 +57,38 @@
 
   /* ---- header ---- */
   header{display:flex; align-items:center; gap:16px; padding:18px 0; flex-wrap:wrap}
-  .brand{font-size:19px; font-weight:800; letter-spacing:.2px; color:var(--text); display:flex; align-items:center; gap:9px}
+  /* The mark at its 40px floor, carrying the guide's clear space (that margin
+     lives in .brandmark in theme.css), wordmark in the display face beside it. */
+  .brand{display:flex; align-items:center; gap:2px; color:var(--text)}
+  .brand .wordmark{font-family:var(--display); font-weight:800; text-transform:uppercase;
+    letter-spacing:-.02em; font-size:24px; line-height:1; white-space:nowrap}
   header nav{margin-left:auto; display:flex; gap:6px; flex-wrap:wrap}
-  header nav a{padding:7px 13px; border-radius:9px; color:var(--muted); font-weight:700; font-size:13.5px}
+  header nav a{padding:7px 13px; border-radius:9px; color:var(--muted); font-weight:600; font-size:13.5px}
   header nav a:hover{color:var(--text); background:var(--panel2)}
-  header nav a.hi{background:var(--accent); color:#04101f}
-  header nav a.hi:hover{background:var(--accent); filter:brightness(1.08)}
+  header nav a.hi{background:var(--brand-pink); color:#fff}
+  header nav a.hi:hover{background:var(--brand-pink); filter:brightness(1.08)}
 
   /* ---- hero ---- */
   .hero{padding:44px 0 30px; max-width:760px}
-  h1{font-size:clamp(2.1rem,5.4vw,3.5rem); line-height:1.08; margin:0 0 16px; font-weight:800; letter-spacing:-.02em}
-  h1 .grad{background:linear-gradient(90deg,var(--accent),var(--amtrak) 52%,#b58cff);
+  /* Display face: uppercase, tight-tracked, far above the 24px floor. */
+  h1{font-family:var(--display); font-size:clamp(2.1rem,5.4vw,3.5rem); line-height:1.02;
+    margin:0 0 16px; font-weight:800; letter-spacing:-.03em; text-transform:uppercase}
+  /* The three route colours in the order the mark draws them. The guide rations
+     these to 14% of a page between them, and a headline is the one place they
+     earn the room. */
+  h1 .grad{background:linear-gradient(90deg,var(--brand-pink),var(--brand-teal) 52%,var(--brand-blue));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   .lede{font-size:clamp(1rem,2vw,1.22rem); line-height:1.55; color:var(--muted); margin:0 0 26px}
   .cta-row{display:flex; gap:11px; flex-wrap:wrap; align-items:center}
   .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 22px; border-radius:12px;
     font-weight:800; font-size:15px; border:1px solid transparent; cursor:pointer; font-family:inherit}
-  .btn.primary{background:var(--accent); color:#04101f}
+  /* Pink on white text, not pink text: the guide passes pink for UI elements
+     and large type but calls it unsafe for small copy, and a 15px button label
+     is small copy. Putting the colour behind white keeps it well clear. */
+  .btn.primary{background:var(--brand-pink); color:#fff}
   .btn.primary:hover{filter:brightness(1.08)}
   .btn.ghost{background:var(--panel); color:var(--text); border-color:var(--line)}
-  .btn.ghost:hover{border-color:var(--accent)}
+  .btn.ghost:hover{border-color:var(--brand-blue)}
   .note{font-size:12.5px; color:var(--muted); margin-top:14px}
   #keyBox{margin-top:18px; max-width:460px}
   .keyrow{display:flex; gap:9px; flex-wrap:wrap}
@@ -95,7 +112,10 @@
   .lr{display:flex; align-items:center; gap:11px; padding:12px 16px; border-right:1px solid var(--line);
     border-top:1px solid var(--line); min-width:0}
   .lr:nth-child(-n+3){border-top:none}
-  .lr .em{font-size:19px; flex:none}
+  /* Mode code, not an emoji — the same utility-face chip the city cards use. */
+  .lr .em{font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.07em;
+    flex:none; padding:4px 6px; border-radius:6px; color:var(--text);
+    background:color-mix(in srgb, var(--accent) 18%, transparent)}
   .lr .txt{min-width:0}
   .lr .t1{font-size:13.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .lr .t2{font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -128,9 +148,42 @@
     transition:border-color .16s ease, transform .16s ease}
   .city::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--sys)}
   .city:hover{border-color:var(--sys); transform:translateY(-2px)}
-  .city .ico{font-size:23px; flex:none}
+  /* City codes in the utility face, on the card's own accent. The guide gives
+     mono to "route numbers" and this is the same job — and unlike the emoji it
+     replaced, DC / PHL / BOS is information rather than decoration. */
+  .city .ico{font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.06em;
+    flex:none; min-width:42px; padding:5px 7px; border-radius:7px; text-align:center;
+    background:color-mix(in srgb, var(--sys,var(--accent)) 20%, transparent);
+    color:var(--text)}
   .city .nm{font-weight:800; font-size:15px; color:var(--text)}
   .city .ds{font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.35}
+
+  /* ---- "more coming soon" ----------------------------------------------
+     Sits in the grid as the tile after the last real city, so the run of
+     cities visibly continues rather than stopping dead. A sticker, not a card:
+     dashed edge and a slight tilt, and no href — nothing here is clickable and
+     it should not invite the try. The tilt straightens on hover so it reads as
+     stuck on rather than misaligned.
+
+     Its icon slot carries the three brand lines instead of a city code, which
+     is the one place on this page the mark's own geometry appears small. Drawn
+     rather than scaled from the logo: at this size the full mark is under the
+     guide's 40px floor, so it is three plain strokes with no station dots —
+     the same concession favicon.svg makes. */
+  .city-soon{display:flex; align-items:center; gap:13px; padding:15px 16px; border-radius:14px;
+    background:color-mix(in srgb, var(--brand-pink) 7%, var(--panel));
+    border:1.5px dashed color-mix(in srgb, var(--brand-pink) 45%, var(--line));
+    transform:rotate(-1.6deg); transform-origin:60% 50%;
+    transition:transform .18s ease, border-color .18s ease}
+  .city-soon:hover{transform:rotate(0deg); border-color:var(--brand-pink)}
+  .city-soon .lines{flex:none; min-width:42px; display:flex; justify-content:center}
+  .city-soon .tag{display:block; font-family:var(--mono); font-size:9.5px; font-weight:600;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--brand-pink); margin-bottom:3px}
+  .city-soon .nm{font-weight:800; font-size:15px; color:var(--text)}
+  .city-soon .ds{font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.35}
+  @media (prefers-reduced-motion:reduce){
+    .city-soon, .city-soon:hover{transform:none}
+  }
 
   /* ---- views ---- */
   .views{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px}
@@ -188,7 +241,10 @@
 
 <div class="wrap">
   <header>
-    <div class="brand">🚇 Transit Project</div>
+    <a class="brand" href="index.html" aria-label="Transit Project — home">
+      <img class="brandmark" src="brand/mark-on-dark.svg" alt="" width="40" height="40">
+      <span class="wordmark">Transit Project</span>
+    </a>
     <nav>
       <a href="#start">How it works</a>
       <a href="#faq">FAQ</a>
@@ -424,6 +480,7 @@
   </section>
 
   <footer>
+    <img class="brandmark" src="brand/mark-on-dark.svg" alt="Transit Project" width="40" height="40">
     <span>Live data from WMATA, SEPTA, MTA, NJ Transit, MBTA, BART, GVB, SBB, Amtrak and adsb.lol.</span>
     <span class="sp">Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners and are used to identify their services.</span>
     <span class="sp"><a href="PRIVACY.md">Privacy</a></span>
@@ -435,23 +492,23 @@
    hand for now -- two copies of a twelve-line array is not worth a fetch and a
    loading state on the page whose whole job is to be instant. */
 var CITIES = [
-  {id:"dc",        file:"dc.html",            icon:"🏛", name:"Washington DC", desc:"Metro · Metrobus · MARC · Ride On", sys:"#4ea1ff"},
-  {id:"philly",    file:"philadelphia.html",  icon:"🔔", name:"Philadelphia",  desc:"SEPTA rail · subway · bus · PATCO", sys:"#3ad0c8"},
-  {id:"nyc",       file:"nyc.html",           icon:"🗽", name:"New York",      desc:"Subway · LIRR · Metro-North · PATH", sys:"#ffd166"},
-  {id:"nj",        file:"newjersey.html",     icon:"🌊", name:"New Jersey",    desc:"NJ Transit rail · light rail · bus", sys:"#ff9d5c"},
-  {id:"boston",    file:"boston.html",        icon:"🦞", name:"Boston",        desc:"MBTA subway · commuter rail · bus", sys:"#33d17a"},
-  {id:"la",        file:"losangeles.html",    icon:"🌴", name:"Los Angeles",   desc:"Metro rail · Metrolink", sys:"#b58cff"},
-  {id:"sf",        file:"sanfrancisco.html",  icon:"🌉", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
-  {id:"amsterdam", file:"amsterdam.html",     icon:"🌷", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"},
-  {id:"cologne",   file:"cologne.html",       icon:"⛪", name:"Cologne",       desc:"KVB Stadtbahn · S-Bahn · DB rail", sys:"#e8a33d"},
-  {id:"stuttgart", file:"stuttgart.html",     icon:"🚗", name:"Stuttgart",     desc:"SSB Stadtbahn · S-Bahn · DB rail", sys:"#e05a5a"},
-  {id:"zurich",    file:"zurich.html",        icon:"🏔", name:"Zurich",        desc:"Tram · S-Bahn · SBB rail", sys:"#5ad1a0"}
+  {id:"dc",        file:"dc.html",            icon:"DC", name:"Washington DC", desc:"Metro · Metrobus · MARC · Ride On", sys:"#4ea1ff"},
+  {id:"philly",    file:"philadelphia.html",  icon:"PHL", name:"Philadelphia",  desc:"SEPTA rail · subway · bus · PATCO", sys:"#3ad0c8"},
+  {id:"nyc",       file:"nyc.html",           icon:"NYC", name:"New York",      desc:"Subway · LIRR · Metro-North · PATH", sys:"#ffd166"},
+  {id:"nj",        file:"newjersey.html",     icon:"NJ", name:"New Jersey",    desc:"NJ Transit rail · light rail · bus", sys:"#ff9d5c"},
+  {id:"boston",    file:"boston.html",        icon:"BOS", name:"Boston",        desc:"MBTA subway · commuter rail · bus", sys:"#33d17a"},
+  {id:"la",        file:"losangeles.html",    icon:"LA", name:"Los Angeles",   desc:"Metro rail · Metrolink", sys:"#b58cff"},
+  {id:"sf",        file:"sanfrancisco.html",  icon:"SF", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
+  {id:"amsterdam", file:"amsterdam.html",     icon:"AMS", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"},
+  {id:"cologne",   file:"cologne.html",       icon:"CGN", name:"Cologne",       desc:"KVB Stadtbahn · S-Bahn · DB rail", sys:"#e8a33d"},
+  {id:"stuttgart", file:"stuttgart.html",     icon:"STR", name:"Stuttgart",     desc:"SSB Stadtbahn · S-Bahn · DB rail", sys:"#e05a5a"},
+  {id:"zurich",    file:"zurich.html",        icon:"ZRH", name:"Zurich",        desc:"Tram · S-Bahn · SBB rail", sys:"#5ad1a0"}
 ];
 var VIEWS = [
-  {icon:"🌙", name:"Sky view",       desc:"The nearest aircraft overhead, full screen, with the room lights to match", file:"night.html?city=dc", sys:"#b58cff"},
-  {icon:"🚉", name:"Departure board",desc:"A split-flap board, the way a station concourse does it",                    file:"flipboard.html?city=dc", sys:"#ffd166"},
-  {icon:"🌍", name:"Grand Tour",     desc:"Every city's vehicles moving on one map at once",                            file:"tour.html", sys:"#3ad0c8"},
-  {icon:"📍", name:"Spotter",        desc:"Log what you see from the platform — a phone app, no sign-up needed",               file:"spot.html", sys:"#33d17a"}
+  {icon:"SKY", name:"Sky view",       desc:"The nearest aircraft overhead, full screen, with the room lights to match", file:"night.html?city=dc", sys:"#b58cff"},
+  {icon:"BRD", name:"Departure board",desc:"A split-flap board, the way a station concourse does it",                    file:"flipboard.html?city=dc", sys:"#ffd166"},
+  {icon:"TOUR", name:"Grand Tour",     desc:"Every city's vehicles moving on one map at once",                            file:"tour.html", sys:"#3ad0c8"},
+  {icon:"SPOT", name:"Spotter",        desc:"Log what you see from the platform — a phone app, no sign-up needed",               file:"spot.html", sys:"#33d17a"}
 ];
 
 /* The headings count the array rather than restating it. I wrote "twelve"
@@ -476,6 +533,29 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
     a.addEventListener("click", function(){ try{ localStorage.setItem("tb.lastCity", c.id); }catch(e){} });
     g.appendChild(a);
   });
+  /* The sticker closes the grid. Built here rather than sitting in the markup
+     because the cities are appended by this loop, and anything already inside
+     #cityGrid would end up in front of them. aria-hidden on the drawing and no
+     link: a screen reader gets the sentence, not a decorative squiggle. */
+  (function(){
+    var s=el("div","city-soon");
+    s.innerHTML =
+      '<div class="lines">' +
+        '<svg width="26" height="24" viewBox="9 8 84 76" aria-hidden="true" focusable="false">' +
+          '<g fill="none" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M18,26 H50 L74,50" stroke="var(--brand-pink)"/>' +
+            '<path d="M26,74 L50,50 L50,20" stroke="var(--brand-teal)"/>' +
+            '<path d="M18,50 H38 L58,70 H80" stroke="var(--brand-blue)"/>' +
+          '</g>' +
+        '</svg>' +
+      '</div>' +
+      '<div>' +
+        '<span class="tag">More coming soon</span>' +
+        '<div class="nm">New cities on the way</div>' +
+        '<div class="ds">A licence covers every city added later, at no extra cost.</div>' +
+      '</div>';
+    g.appendChild(s);
+  })();
   var word=countWord(CITIES.length);
   document.getElementById("cityCount").textContent = word.charAt(0).toUpperCase()+word.slice(1)+" cities";
   document.getElementById("cityCountBuy").textContent = "All "+word+" city boards";
@@ -653,7 +733,7 @@ setTimeout(paintTrialAnswer, 1500);
     ps.forEach(function(p){
       var a=p.a, call=(a.flight||"").trim() || a.r || "Aircraft";
       var alt=typeof a.alt_baro==="number" ? Math.round(a.alt_baro).toLocaleString()+" ft" : "";
-      rows.appendChild(row("✈️", call,
+      rows.appendChild(row("AIR", call,
         [a.desc||a.t, alt].filter(Boolean).join(" · ") || "overhead",
         p.d.toFixed(1)+" nm"));
     });
@@ -664,7 +744,7 @@ setTimeout(paintTrialAnswer, 1500);
       var late=null;
       if(stop && window.amtrakLateInfo) late=amtrakLateInfo(stop);
       var val=late && late.mins>0 ? late.text : "on time";
-      rows.appendChild(row("🚄", (t.routeName||"Amtrak")+" #"+(t.trainNum||"?"),
+      rows.appendChild(row("RAIL", (t.routeName||"Amtrak")+" #"+(t.trainNum||"?"),
         "→ "+(t.destName||t.destCode||"?"), val, late ? late.cls : null));
     });
 

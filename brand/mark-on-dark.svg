@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="9 8 84 76" role="img" aria-label="Transit Project">
+  <title>Transit Project</title>
+  <g fill="none" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18,26 H50 L74,50" stroke="#FF3D77"/>
+    <path d="M26,74 L50,50 L50,20" stroke="#00E0C6"/>
+    <path d="M18,50 H38 L58,70 H80" stroke="#2F7BFF"/>
+  </g>
+  <g fill="#12101A" stroke="#FFFFFF" stroke-width="4">
+    <circle cx="50" cy="20" r="6.5"/>
+    <circle cx="74" cy="50" r="6.5"/>
+    <circle cx="80" cy="70" r="6.5"/>
+  </g>
+</svg>

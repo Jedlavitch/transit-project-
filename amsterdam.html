@@ -2,15 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#081020" />
 <title>Amsterdam Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=14" />
+<link rel="stylesheet" href="theme.css?v=15" />
 <script src="license.js" defer></script>
 <script src="gate.js?v=1" defer></script>
-<script src="cityswitch.js?v=2"></script>
+<script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=1"></script>
 <script src="delays.js?v=2"></script>
 <script src="transitous.js?v=2"></script>
@@ -18,7 +23,7 @@
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <script src="admin.js?v=5" defer></script>
-<script src="spotlog.js?v=10" defer></script>
+<script src="spotlog.js?v=11" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardamsterdam.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -163,7 +168,7 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
      Appended overrides: later rules win at equal specificity, so the original
      rules above stay untouched. */
   :root{
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --grid: rgba(96,130,200,.07);
   }
   :root[data-theme="black"]{ --grid: rgba(96,130,200,.05); }
@@ -243,7 +248,7 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
       radial-gradient(800px 500px at 8% -6%, rgba(181,140,255,.09) 0%, transparent 60%),
       radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%);
   }
-  header .title .t-grad{background:linear-gradient(90deg,#4ea1ff,#3ad0c8 48%,#b58cff);
+  header .title .t-grad{background:linear-gradient(90deg,var(--brand-pink),var(--brand-teal) 48%,var(--brand-blue));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
   :root[data-theme="day"] header .title .t-grad{filter:brightness(.72) saturate(1.2)}
   .stat{background:
@@ -342,7 +347,12 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
     letter-spacing:.04em; text-shadow:0 1px 5px #000,0 0 2px #000; pointer-events:none}
   .hub-label b{color:var(--accent-ink); margin-left:3px}
   .airport-mark{white-space:nowrap; pointer-events:auto}
-  .airport-mark .ap{color:var(--plane-ink); font-size:15px; filter:drop-shadow(0 0 5px var(--plane))}
+  /* An airport is marked with a station dot — the brand mark's own signature
+     element — rather than a plane emoji. The code label beside it says which
+     airport; this only has to say "something is here". */
+  .airport-mark .ap{display:block; width:11px; height:11px; border-radius:50%;
+    background:var(--bg); border:3px solid var(--plane);
+    filter:drop-shadow(0 0 5px var(--plane))}
   .airport-mark .apc{color:var(--plane-ink); font:800 10px/1 var(--mono); margin-left:3px;
     text-shadow:0 1px 5px #000,0 0 2px #000}
 
@@ -500,7 +510,8 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
 <body>
 <div id="app">
   <header>
-    <div class="title">🚲 <span class="t-grad">Amsterdam Live Transit</span> <small id="loclabel">locating…</small></div>
+    <a class="homelink" href="index.html" title="Transit Project — all cities" aria-label="Transit Project — all cities"><img class="brandmark--sm" src="brand/mark-small.svg" alt="" width="28" height="28"></a>
+    <div class="title"><span class="t-grad">Amsterdam Live Transit</span> <small id="loclabel">locating…</small></div>
     <nav class="city-picker">
       <select aria-label="Switch city" title="Switch city" autocomplete="off"
         onchange="switchCity(this.value)">
@@ -538,15 +549,15 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
   <div id="statStrip"><button id="statsToggle" type="button">▴</button>
     <div class="stat" style="--sys:#4ea1ff; --sys2:#b58cff"><div class="s-label"><span class="s-glyph">⊕</span>Tracking</div>
       <div class="s-value" id="stTotal">—</div><div class="s-sub" id="stTotalSub">vehicles live on map</div></div>
-    <div class="stat" style="--sys:#ffd166; --sys2:#ff9d5c"><div class="s-label"><span class="s-glyph">✈</span>Air</div>
+    <div class="stat" style="--sys:#ffd166; --sys2:#ff9d5c"><div class="s-label">Air</div>
       <div class="s-value" id="stAir">—</div><div class="s-sub" id="stAirSub">—</div></div>
-    <div class="stat" style="--sys:#3ad0c8; --sys2:#4ea1ff"><div class="s-label"><span class="s-glyph">🚆</span>Rail</div>
+    <div class="stat" style="--sys:#3ad0c8; --sys2:#4ea1ff"><div class="s-label">Rail</div>
       <div class="s-value" id="stG1">—</div><div class="s-sub" id="stG1Sub">—</div></div>
-    <div class="stat" style="--sys:#ff8ac2; --sys2:#ffb86b"><div class="s-label"><span class="s-glyph">🚋</span>Surface</div>
+    <div class="stat" style="--sys:#ff8ac2; --sys2:#ffb86b"><div class="s-label">Surface</div>
       <div class="s-value" id="stG2">—</div><div class="s-sub" id="stG2Sub">—</div></div>
     <div class="stat" style="--sys:#33d17a; --sys2:#a3e635"><div class="s-label"><span class="s-glyph">◷</span>Next depart</div>
       <div class="s-value" id="stNext">—</div><div class="s-sub" id="stNextSub">—</div></div>
-    <div class="stat" style="--sys:#ff9f43; --sys2:#ffd166"><div class="s-label"><span class="s-glyph">⛁</span>Data</div>
+    <div class="stat" style="--sys:#ff9f43; --sys2:#ffd166"><div class="s-label">Data</div>
       <div class="s-value ticking" id="stData">—</div><div class="s-sub" id="stDataSub">data age</div></div>
   </div>
 
@@ -554,7 +565,7 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
     <div class="col">
       <div id="map"><button id="mapFsBtn" type="button" title="Map only — full screen (M)"></button></div>
       <div class="legend">
-        <span>✈️ aircraft</span>
+        <span>aircraft</span>
         <span><span style="color:#00A03C">▦</span><span style="color:#F49B00">▦</span><span style="color:#00A1E1">▦</span><span style="color:#E2001A">▦</span><span style="color:#FFD500">▦</span> Metro 50–54</span>
         <span style="color:#3FA9E0">▦ GVB tram</span>
         <span style="color:#FFC917">▦ NS trains</span>
@@ -567,32 +578,32 @@ var r=g("tb.rows")||g("transitboardamsterdam.rows");if(r&&r!=="normal")d.setAttr
     <div class="col">
       <div class="cards">
         <div class="card" id="metroCard" style="--sys:#E2001A; --sys2:#ff6b6b">
-          <h2><span class="icon">🚇</span> <span class="t">GVB Metro</span> <span class="count" id="metroCount"></span></h2>
+          <h2><span class="t">GVB Metro</span> <span class="count" id="metroCount"></span></h2>
           <div class="statline" id="metroStat"></div>
           <div class="list" id="metroList"><div class="empty">Metrodienstregeling laden…</div></div>
         </div>
         <div class="card" id="tramCard" style="--sys:#3FA9E0; --sys2:#8fd4ff">
-          <h2><span class="icon">🚋</span> <span class="t">GVB Tram</span> <span class="count" id="tramCount"></span></h2>
+          <h2><span class="t">GVB Tram</span> <span class="count" id="tramCount"></span></h2>
           <div class="statline" id="tramStat"></div>
           <div class="list" id="tramList"><div class="empty">Tramdienstregeling laden…</div></div>
         </div>
         <div class="card" id="railCard" style="--sys:#FFC917; --sys2:#ffe27a">
-          <h2><span class="icon">🚆</span> <span class="t">NS — Intercity &amp; Sprinter</span> <span class="count" id="railCount"></span></h2>
+          <h2><span class="t">NS — Intercity &amp; Sprinter</span> <span class="count" id="railCount"></span></h2>
           <div class="statline" id="railStat"></div>
           <div class="list" id="railList"><div class="empty">NS-dienstregeling laden…</div></div>
         </div>
         <div class="card" id="intlCard" style="--sys:#1D4E9E; --sys2:#6f9bff">
-          <h2><span class="icon">🌍</span> <span class="t">International — Eurostar · ICE · Nightjet</span> <span class="count" id="intlCount"></span></h2>
+          <h2><span class="t">International — Eurostar · ICE · Nightjet</span> <span class="count" id="intlCount"></span></h2>
           <div class="statline" id="intlStat"></div>
           <div class="list" id="intlList"><div class="empty">Internationale treinen laden…</div></div>
         </div>
         <div class="card" id="ferryCard" style="--sys:#00A5A0; --sys2:#4fe0da">
-          <h2><span class="icon">⛴️</span> <span class="t">Pontjes — IJ ferries</span> <span class="count" id="ferryCount"></span></h2>
+          <h2><span class="t">Pontjes — IJ ferries</span> <span class="count" id="ferryCount"></span></h2>
           <div class="statline" id="ferryStat"></div>
           <div class="list" id="ferryList"><div class="empty">Veerdiensten laden…</div></div>
         </div>
         <div class="card" id="planeCard" style="--sys:var(--plane); --sys2:#ff9d5c">
-          <h2><span class="icon">✈️</span> <span class="t">Planes overhead</span> <span class="count" id="planeCount"></span></h2>
+          <h2><span class="t">Planes overhead</span> <span class="count" id="planeCount"></span></h2>
           <div class="statline" id="planeStat"></div>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>
@@ -1090,7 +1101,7 @@ function stopFollow(){
 function showFollowBanner(label){
   let b=document.getElementById("followBanner");
   if(!b){ b=document.createElement("div"); b.id="followBanner"; document.getElementById("map").appendChild(b); }
-  b.innerHTML=`<span class="fb-dot"></span><span class="fb-txt">Following <b></b></span><button class="fb-stop" onclick="stopFollow()">✕ Stop</button>`;
+  b.innerHTML=`<span class="fb-dot"></span><span class="fb-txt">Following <b></b></span><button class="fb-stop" onclick="stopFollow()">Stop</button>`;
   b.querySelector(".fb-txt b").textContent=label;
   b.style.display="flex";
 }
@@ -2641,7 +2652,7 @@ function ensureAlertCard(){
   const cards=document.querySelector(".cards"); if(!cards) return null;
   card=document.createElement("div"); card.className="card"; card.id="alertCard";
   card.style.setProperty("--sys","var(--late)");
-  card.innerHTML=`<h2><span class="icon">⚠️</span> Storingen <span class="count" id="alertCount"></span></h2>
+  card.innerHTML=`<h2>Storingen <span class="count" id="alertCount"></span></h2>
     <div class="statline" id="alertStat"></div>
     <div class="list" id="alertList"></div>`;
   cards.insertBefore(card, cards.firstChild);   // worst news first: top-left of the grid
@@ -2908,7 +2919,7 @@ function drawBigStops(){
   if(here) BIGSTOP_AIRPORTS.forEach(a=>{
     if(bigStopMi(here,a)>70) return;                    // only airports near this board
     L.marker([a.lat,a.lon],{interactive:true, icon:L.divIcon({className:"airport-mark",
-      html:`<span class="ap">✈</span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
+      html:`<span class="ap" role="img" aria-label="airport"></span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
       iconSize:[0,0], iconAnchor:[8,8]})}).bindTooltip(`<b>${a.c}</b> — ${a.n}`,{sticky:true}).addTo(layer);
   });
 }

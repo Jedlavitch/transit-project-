@@ -46,7 +46,7 @@ function switchCity(url, forceShell) {
   }
 }
 
-/* "You" — the account/licence page, in every board's header.
+/* "Account" — the account/licence page, in every board's header.
 
    Injected here rather than pasted into sixteen headers by hand: this file is
    already on every page that has a `nav.view-links`, so one edit reaches all of
@@ -66,7 +66,10 @@ function switchCity(url, forceShell) {
     a.id = "profileBtn";
     a.href = url;
     a.title = "Your account — sign-in, licence key and saved settings";
-    a.textContent = "You";
+    /* "Account", not "You". Every other link in this bar names the thing it
+       opens — Sky, Tour, Board, Station — and "You" named the visitor instead,
+       which made it the one label in the row that does not say where it goes. */
+    a.textContent = "Account";
     a.onclick = function (e) { e.preventDefault(); switchCity(url); return false; };
     nav.appendChild(a);
   }

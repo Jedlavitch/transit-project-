@@ -8,6 +8,74 @@
    view's night palette, the departure board's split-flap look).
    ============================================================ */
 
+/* The three brand faces. An @import rather than a <link> in twenty-two heads:
+   every page already loads this file, so this is the one place that has to
+   know. All three are free on Google Fonts — nothing here needs a licence. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+/* ---- BRAND ---------------------------------------------------------------
+   From the brand guide, verbatim. These are the identity — they do not change
+   between themes and nothing should reassign them.
+
+   WHAT THESE ARE NOT: the route colours are not available for transit data.
+   Every board paints real agency livery — WMATA Red Line red, the MTA bullets,
+   SEPTA — and those colours already mean a specific line to whoever is reading
+   the board. The guide's own rule settles it: "never let a color mean two
+   different things on the same screen." So brand colour dresses the chrome
+   (headers, buttons, links, focus, the mark) and agency colour keeps the data.
+   Note --brand-teal in particular: the guide says it fails on anything pale,
+   so it belongs on ink surfaces only and never on body text. */
+:root{
+  --brand-pink:#FF3D77;
+  --brand-teal:#00E0C6;
+  --brand-blue:#2F7BFF;
+  --brand-ink:#12101A;
+  --brand-paper:#FFFCF5;
+  --brand-rule:#E7E1D4;
+  --brand-muted:#6E6A78;
+
+  /* Display is uppercase, tight-tracked, never below 24px. --mono was already
+     referenced throughout this file with an inline fallback and never actually
+     defined; defining it here is what finally puts live digits on a fixed-width
+     face, which is the guide's one hard typographic rule. */
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+/* ---- the mark ------------------------------------------------------------
+   Clear space is "the width of one station dot on all four sides". The dot is
+   13 units on the 100-unit grid, so that margin is 13% of the rendered size —
+   expressed here rather than left to each page to remember, so nothing crowds
+   the mark by accident. The min-width is the guide's 40px floor, below which
+   the station dots close up; anything smaller has to use favicon.svg, which is
+   drawn without them. */
+.brandmark{
+  display:block; flex:none;
+  width:var(--mark-size,40px); height:var(--mark-size,40px);
+  min-width:40px; min-height:40px;
+  margin:calc(var(--mark-size,40px) * .13);
+}
+/* The small mark — mark-small.svg, which is drawn WITHOUT station dots. The
+   40px floor exists because the dots close up below it; with no dots there is
+   nothing left to close up, so this one is allowed to go small. Use it, and
+   only it, under 40px rendered. Note "rendered": the city boards carry
+   zoom:0.8 on #app, so a 40px mark in a board header actually paints at 32. */
+.brandmark--sm{
+  display:block; flex:none;
+  width:var(--mark-size,28px); height:var(--mark-size,28px);
+  min-width:0; min-height:0;
+  margin:calc(var(--mark-size,28px) * .13);
+}
+.homelink{display:flex; align-items:center; flex:none; opacity:.92}
+.homelink:hover{opacity:1}
+.brandlock{display:flex; align-items:center; gap:2px}
+.brandlock .wordmark{
+  font-family:var(--display); font-weight:800; text-transform:uppercase;
+  letter-spacing:-.02em; font-size:clamp(24px,2.2vw,30px); line-height:1;
+  color:var(--text); white-space:nowrap;
+}
+
 :root{
   /* Core palette — richer blues than the old near-black navy */
   --bg:#081020; --panel:#111d36; --panel2:#0c1628; --line:#22345a; --bg-glow:#152a52;
@@ -122,7 +190,10 @@
 
 /* One typeface everywhere: the native system UI font (San Francisco on
    Apple devices, Segoe on Windows), same stack the boards always used */
-body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+/* Body face for everything. The stack still ends in the old system fonts, so a
+   board on a screen that never reaches Google Fonts renders exactly as it did
+   before rather than falling back to Times. */
+body{ font-family:var(--body); }
 
 /* City switcher — dropdown in each board's header (replaced the segmented
    tab row once the city list outgrew it). The <select> carries the kiosk

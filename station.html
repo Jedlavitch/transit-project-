@@ -2,6 +2,11 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8" />
+<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
+     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Station display — NYC subway</title>
 <!--
@@ -27,7 +32,7 @@
   Data is the live MTA GTFS-Realtime feed, decoded in the browser by
   mta-live.js. No key, no Worker: MTA serves those feeds CORS-open.
 -->
-<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="theme.css?v=15" />
 <!-- The same licence pair every city board loads, so this page is treated no
      differently: full screen asks TBGate for permission below, and an
      unlicensed visitor gets the demo countdown and then the key box.
@@ -469,14 +474,14 @@ function render(){
    is not decoration — it is where service information goes. Both sources are
    already proven elsewhere in this project and neither needs a key: open-meteo
    (tour.html) and MTA's camsys all-alerts JSON (nyc.html's ticker). */
-const WMO = {0:["Clear","☀"],1:["Mainly clear","🌤"],2:["Partly cloudy","⛅"],3:["Overcast","☁"],
-  45:["Fog","🌫"],48:["Freezing fog","🌫"],51:["Light drizzle","🌦"],53:["Drizzle","🌦"],
-  55:["Heavy drizzle","🌦"],56:["Freezing drizzle","🌧"],57:["Freezing drizzle","🌧"],
-  61:["Light rain","🌧"],63:["Rain","🌧"],65:["Heavy rain","🌧"],66:["Freezing rain","🌧"],
-  67:["Freezing rain","🌧"],71:["Light snow","🌨"],73:["Snow","🌨"],75:["Heavy snow","🌨"],
-  77:["Snow grains","🌨"],80:["Rain showers","🌦"],81:["Rain showers","🌦"],82:["Heavy showers","⛈"],
-  85:["Snow showers","🌨"],86:["Snow showers","🌨"],95:["Thunderstorm","⛈"],
-  96:["Thunderstorm, hail","⛈"],99:["Thunderstorm, hail","⛈"]};
+const WMO = {0:"Clear",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",
+  45:"Fog",48:"Freezing fog",51:"Light drizzle",53:"Drizzle",
+  55:"Heavy drizzle",56:"Freezing drizzle",57:"Freezing drizzle",
+  61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",
+  67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",
+  77:"Snow grains",80:"Rain showers",81:"Rain showers",82:"Heavy showers",
+  85:"Snow showers",86:"Snow showers",95:"Thunderstorm",
+  96:"Thunderstorm, hail",99:"Thunderstorm, hail"};
 
 async function refreshWeather(){
   const s = state.stations[state.stopId];
@@ -487,8 +492,11 @@ async function refreshWeather(){
       `&temperature_unit=fahrenheit`);
     const j = await r.json();
     if(!j || !j.current) return;
-    const d = WMO[j.current.weather_code] || ["",""];
-    $("#cWx").textContent = `${d[1]} ${Math.round(j.current.temperature_2m)}°F`;
+    const d = WMO[j.current.weather_code] || "";
+    /* The words, not the pictograph. WMO already carries a description for
+       every code, it was simply going unused — and "Light rain" survives a
+       monochrome platform display, which a colour emoji does not. */
+    $("#cWx").textContent = `${d} ${Math.round(j.current.temperature_2m)}°F`.trim();
   }catch(e){ /* weather is a nicety; a platform sign without it is still a sign */ }
 }
 

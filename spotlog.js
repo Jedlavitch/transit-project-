@@ -15,7 +15,11 @@
   "use strict";
   const LS = { spots: "tb.spots", feed: "tb.spotFeedUrl", hide: "tb.spotCardHidden",
                scope: "tb.spotScope", sheet: "tb.sheetUrl", blob: "tb.spotBlob" };
-  const GLYPH = { plane: "✈️", train: "🚆", bus: "🚌" };
+  /* Mode codes rather than emoji, in the brand's utility face. The badge already
+     carries COLOR for the mode, so this is the second half of the same signal —
+     and three letters survive a monochrome screen and a screen reader, which an
+     emoji on a coloured plate does not. */
+  const GLYPH = { plane: "AIR", train: "RAIL", bus: "BUS" };
   const COLOR = { plane: "#ffd166", train: "#3ad0c8", bus: "#6aa9ff" };
   const NEAR_MI = 60;          // "around here" — generous enough to cover a metro area
   let remote = [];
@@ -210,7 +214,7 @@
     card.id = "spotCard";
     card.style.setProperty("--sys", "#b39dff");   // tactical header tick (dc.html); harmless elsewhere
     card.innerHTML =
-      `<h2><span class="icon">📓</span> Spotted <span class="count" id="spotCount"></span>
+      `<h2>Spotted <span class="count" id="spotCount"></span>
          <button type="button" id="spotScopeBtn" title="Show sightings from everywhere, or just around here"></button>
          <button type="button" id="spotFeedBtn" data-admin title="Shared feed — see sightings logged on your phone">⇄</button></h2>
        <div class="statline" id="spotStat"></div>
