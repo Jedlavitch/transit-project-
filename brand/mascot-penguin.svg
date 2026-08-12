@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="tb-mascot" viewBox="0 0 64 76" role="img" aria-label="Penguin">
+  <title>Penguin</title>
+  <ellipse cx="32" cy="70" rx="17" ry="4.6" fill="#12101A" opacity=".10"/>
+  <path d="M20 62 q-6 5 -1 7 h10 q3 -3 -2 -7 z" fill="#FF3D77"/>
+  <path d="M44 62 q6 5 1 7 h-10 q-3 -3 2 -7 z" fill="#FF3D77"/>
+  <path d="M32 6 c14 0 21 12 21 27 v14 c0 11 -9 19 -21 19 s-21 -8 -21 -19 v-14 c0 -15 7 -27 21 -27 z" fill="#12101A"/>
+  <path d="M32 22 c8 0 13 8 13 19 v6 c0 8 -5 14 -13 14 s-13 -6 -13 -14 v-6 c0 -11 5 -19 13 -19 z" fill="#FFFCF5"/>
+  <path d="M11 34 c-4 6 -4 16 -1 22 c2 4 5 3 5 -1 v-20 c0 -3 -3 -4 -4 -1 z" fill="#12101A"/>
+  <path d="M53 34 c4 6 4 16 1 22 c-2 4 -5 3 -5 -1 v-20 c0 -3 3 -4 4 -1 z" fill="#12101A"/>
+  <circle cx="26" cy="25" r="4.6" fill="#FFFCF5"/>
+  <circle class="tb-eye" cx="26" cy="25" r="2.3" fill="#12101A"/>
+  <circle cx="40" cy="25" r="4.6" fill="#FFFCF5"/>
+  <circle class="tb-eye" cx="40" cy="25" r="2.3" fill="#12101A"/>
+  <path d="M32 30 l5 5 l-5 4 l-5 -4 z" fill="#FF3D77"/>
+  <path d="M17 44 h30" stroke="#2F7BFF" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M45 44 l7 9" stroke="#2F7BFF" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <circle cx="24" cy="44" r="2.4" fill="#FFFCF5"/>
+  <circle cx="38" cy="44" r="2.4" fill="#FFFCF5"/>
+</svg>

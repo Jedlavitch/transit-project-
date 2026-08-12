@@ -175,6 +175,127 @@ FILES = {
     "instagram-profile.svg":  instagram(),
 }
 
+# ---- the walkthrough's cast ------------------------------------------------
+# mascot.js expects three files by name and falls back to an inline placeholder
+# when they are missing, which is where the tour has been living. These are
+# those three.
+#
+# CONSTRAINTS THAT ACTUALLY DECIDED THE DRAWINGS
+#   * viewBox 0 0 64 76, rendered at 58 wide — matching the placeholder, so any
+#     of them can stand in for another without the card reflowing.
+#   * They sit on the tour card, which is PAPER. So every one of them is
+#     mostly INK: a paper-coloured animal on a paper card is a rumour. Paper is
+#     used only for the parts that need to read against the body — belly,
+#     muzzle, eyes.
+#   * Told apart by SILHOUETTE, not colour, because at 58px on a bright screen
+#     the outline is all anyone gets: the penguin is a round upright, the camel
+#     has two humps, the llama has tall ears and no humps.
+#   * Each wears a scarf drawn as a route line with a station dot on it — the
+#     mark's own vocabulary, which is what stops them being three cartoons that
+#     happen to sit next to a logo. One route colour each, so the cast spans the
+#     palette the way the mark does. The llama's is the teal one and its scarf
+#     lies across an ink neck, because the guide bars teal from pale ground.
+#   * class="tb-eye" on every pupil: mascot.js animates blinks through it.
+
+def _ground():
+    return f'  <ellipse cx="32" cy="70" rx="17" ry="4.6" fill="{INK}" opacity=".10"/>'
+
+
+def _eye(cx, cy, r=2.3):
+    return (f'  <circle cx="{cx}" cy="{cy}" r="{r + 2.3}" fill="{PAPER}"/>\n'
+            f'  <circle class="tb-eye" cx="{cx}" cy="{cy}" r="{r}" fill="{INK}"/>')
+
+
+def _leg(x, top, bottom, w=4.6):
+    return (f'  <rect x="{x}" y="{top}" width="{w}" height="{bottom - top}" '
+            f'rx="{w / 2}" fill="{INK}"/>')
+
+
+def _wrap(name, inner):
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" class="tb-mascot" viewBox="0 0 64 76" role="img" aria-label="{name}">
+  <title>{name}</title>
+{inner}
+</svg>
+"""
+
+
+def mascot_penguin():
+    """Round upright. Same drawing as mascot.js's inline fallback, so the first
+    of the cast looks identical whether the file loaded or not."""
+    inner = "\n".join([
+        _ground(),
+        f'  <path d="M20 62 q-6 5 -1 7 h10 q3 -3 -2 -7 z" fill="{PINK}"/>',
+        f'  <path d="M44 62 q6 5 1 7 h-10 q-3 -3 2 -7 z" fill="{PINK}"/>',
+        f'  <path d="M32 6 c14 0 21 12 21 27 v14 c0 11 -9 19 -21 19 s-21 -8 -21 -19 v-14 c0 -15 7 -27 21 -27 z" fill="{INK}"/>',
+        f'  <path d="M32 22 c8 0 13 8 13 19 v6 c0 8 -5 14 -13 14 s-13 -6 -13 -14 v-6 c0 -11 5 -19 13 -19 z" fill="{PAPER}"/>',
+        f'  <path d="M11 34 c-4 6 -4 16 -1 22 c2 4 5 3 5 -1 v-20 c0 -3 -3 -4 -4 -1 z" fill="{INK}"/>',
+        f'  <path d="M53 34 c4 6 4 16 1 22 c-2 4 -5 3 -5 -1 v-20 c0 -3 3 -4 4 -1 z" fill="{INK}"/>',
+        _eye(26, 25), _eye(40, 25),
+        f'  <path d="M32 30 l5 5 l-5 4 l-5 -4 z" fill="{PINK}"/>',
+        f'  <path d="M17 44 h30" stroke="{BLUE}" stroke-width="6" stroke-linecap="round" fill="none"/>',
+        f'  <path d="M45 44 l7 9" stroke="{BLUE}" stroke-width="5" stroke-linecap="round" fill="none"/>',
+        f'  <circle cx="24" cy="44" r="2.4" fill="{PAPER}"/>',
+        f'  <circle cx="38" cy="44" r="2.4" fill="{PAPER}"/>',
+    ])
+    return _wrap("Penguin", inner)
+
+
+def mascot_camel():
+    """Two humps, and they have to READ as two.
+
+    First attempt put r=8.5 and r=9.5 humps 13 apart on a tall body: they
+    overlapped into one mound and the camel came out as a second llama. The
+    fix is geometric — centres 14 apart with radii summing to 14, so the
+    circles meet exactly and leave a notch — plus a flatter body, so the humps
+    stand proud of the back instead of being swallowed by it."""
+    inner = "\n".join([
+        _ground(),
+        _leg(17, 53, 68), _leg(24, 55, 68), _leg(34, 53, 68), _leg(41, 55, 68),
+        f'  <ellipse cx="28" cy="51" rx="16" ry="8.5" fill="{INK}"/>',
+        f'  <circle cx="21" cy="41" r="6.5" fill="{INK}"/>',        # rear hump
+        f'  <circle cx="35" cy="40" r="7.5" fill="{INK}"/>',        # front hump
+        f'  <path d="M12 48 q-4 4 -2 8" stroke="{INK}" stroke-width="3" stroke-linecap="round" fill="none"/>',
+        # Neck carried forward, the way a camel holds it — the llama's goes straight up.
+        f'  <path d="M42 47 Q47 34 50 22" stroke="{INK}" stroke-width="8.5" stroke-linecap="round" fill="none"/>',
+        f'  <ellipse cx="51" cy="19" rx="6.6" ry="5.2" fill="{INK}"/>',
+        f'  <path d="M46 15 l0 -4 l4 3 z" fill="{INK}"/>',          # short ear: camels have little ones
+        f'  <ellipse cx="56" cy="21" rx="4" ry="3.1" fill="{PAPER}"/>',
+        _eye(50, 17, 1.8),
+        f'  <ellipse cx="29" cy="55" rx="8" ry="4" fill="{PAPER}" opacity=".9"/>',
+        f'  <path d="M44 32 l8 -2" stroke="{PINK}" stroke-width="5.4" stroke-linecap="round" fill="none"/>',
+        f'  <circle cx="48" cy="31" r="2.2" fill="{PAPER}"/>',
+    ])
+    return _wrap("Camel", inner)
+
+
+def mascot_llama():
+    """No humps, tall ears, neck straight up — the opposite tells to the camel."""
+    inner = "\n".join([
+        _ground(),
+        _leg(18, 54, 68), _leg(25, 56, 68), _leg(34, 54, 68), _leg(41, 56, 68),
+        f'  <ellipse cx="29" cy="49" rx="15.5" ry="10" fill="{INK}"/>',
+        f'  <path d="M14 45 q-4 -3 -3 -7" stroke="{INK}" stroke-width="3" stroke-linecap="round" fill="none"/>',
+        f'  <path d="M39 46 L45 20" stroke="{INK}" stroke-width="9.5" stroke-linecap="round" fill="none"/>',
+        f'  <ellipse cx="46" cy="17" rx="6.2" ry="5.2" fill="{INK}"/>',
+        # The tell. Joined to the skull rather than floating: the first version
+        # had a separate pink chip hanging in the air above the ear.
+        f'  <path d="M41 14 l0.5 -10 l4.5 9 z" fill="{INK}"/>',
+        f'  <path d="M49 14 l2.5 -9.5 l3 9 z" fill="{INK}"/>',
+        f'  <ellipse cx="51" cy="20" rx="3.6" ry="2.9" fill="{PAPER}"/>',
+        _eye(45, 15, 1.8),
+        f'  <ellipse cx="30" cy="54" rx="8" ry="4.2" fill="{PAPER}" opacity=".9"/>',
+        f'  <path d="M38 32 l7 -2" stroke="{TEAL}" stroke-width="5.4" stroke-linecap="round" fill="none"/>',
+        f'  <circle cx="42" cy="31" r="2.2" fill="{PAPER}"/>',
+    ])
+    return _wrap("Llama", inner)
+
+
+MASCOTS = {
+    "mascot-penguin.svg": mascot_penguin(),
+    "mascot-camel.svg":   mascot_camel(),
+    "mascot-llama.svg":   mascot_llama(),
+}
+
 # PNG exports the guide lists. 28px is deliberately absent: the guide shows it
 # as "too small", so there is no file that invites anyone to use one.
 PNG_SIZES = {
@@ -185,7 +306,7 @@ PNG_SIZES = {
 
 
 def write_svgs():
-    for name, body in FILES.items():
+    for name, body in {**FILES, **MASCOTS}.items():
         with open(os.path.join(HERE, name), "w", encoding="utf-8") as fh:
             fh.write(body)
         print(f"  {name}")

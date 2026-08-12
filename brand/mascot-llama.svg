@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="tb-mascot" viewBox="0 0 64 76" role="img" aria-label="Llama">
+  <title>Llama</title>
+  <ellipse cx="32" cy="70" rx="17" ry="4.6" fill="#12101A" opacity=".10"/>
+  <rect x="18" y="54" width="4.6" height="14" rx="2.3" fill="#12101A"/>
+  <rect x="25" y="56" width="4.6" height="12" rx="2.3" fill="#12101A"/>
+  <rect x="34" y="54" width="4.6" height="14" rx="2.3" fill="#12101A"/>
+  <rect x="41" y="56" width="4.6" height="12" rx="2.3" fill="#12101A"/>
+  <ellipse cx="29" cy="49" rx="15.5" ry="10" fill="#12101A"/>
+  <path d="M14 45 q-4 -3 -3 -7" stroke="#12101A" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M39 46 L45 20" stroke="#12101A" stroke-width="9.5" stroke-linecap="round" fill="none"/>
+  <ellipse cx="46" cy="17" rx="6.2" ry="5.2" fill="#12101A"/>
+  <path d="M41 14 l0.5 -10 l4.5 9 z" fill="#12101A"/>
+  <path d="M49 14 l2.5 -9.5 l3 9 z" fill="#12101A"/>
+  <ellipse cx="51" cy="20" rx="3.6" ry="2.9" fill="#FFFCF5"/>
+  <circle cx="45" cy="15" r="4.1" fill="#FFFCF5"/>
+  <circle class="tb-eye" cx="45" cy="15" r="1.8" fill="#12101A"/>
+  <ellipse cx="30" cy="54" rx="8" ry="4.2" fill="#FFFCF5" opacity=".9"/>
+  <path d="M38 32 l7 -2" stroke="#00E0C6" stroke-width="5.4" stroke-linecap="round" fill="none"/>
+  <circle cx="42" cy="31" r="2.2" fill="#FFFCF5"/>
+</svg>
