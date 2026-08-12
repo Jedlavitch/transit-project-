@@ -46,6 +46,14 @@
   }
   /* top bar */
   header{display:flex; align-items:center; gap:14px; padding:3.2vmin 4vw 0}
+  /* The mark. It scales with the page like everything else here, but never
+     below the guide's 40px floor — this page has no zoom on an ancestor, so
+     the rendered size is the CSS size. The margin is the guide's clear space:
+     one station dot, 13% of the mark. */
+  #markLink{display:flex; align-items:center; flex:none; border:0; padding:0; background:none}
+  #markLink:hover{border:0}
+  #brandMark{display:block; width:clamp(40px,5.2vmin,72px); height:clamp(40px,5.2vmin,72px);
+    margin:calc(clamp(40px,5.2vmin,72px) * .13)}
   header .tag{font-size:clamp(.8rem,2.1vw,1.5rem); color:var(--amber-dim); font-weight:700;
     text-transform:uppercase; letter-spacing:.35em;
     background:linear-gradient(90deg,var(--amber),#3ad0c8); -webkit-background-clip:text;
@@ -385,10 +393,12 @@
   </div>
   <div id="alertBanner"><span class="ic"></span><span><span class="t"></span><div class="s"></div></span></div>
   <header>
+    <a id="markLink" href="index.html" title="Transit Project" aria-label="Transit Project"
+       onclick="window.location.href='index.html'; return false;"><img id="brandMark" src="brand/mark-on-dark.svg" alt="" width="48" height="48"></a>
     <span class="tag" id="tag">Nearest flight</span>
     <span class="clock" id="clock">—</span>
     <button id="logBtn" title="Spotter's log">Log</button>
-    <button id="setBtn" title="Customize">⚙</button>
+    <button id="setBtn" title="Customize">⚙︎</button>
     <button id="fsBtn" title="Full screen (F)"></button>
     <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city on one live map" onclick="window.location.href=this.href; return false;">tour ›</a>
     <!-- href is a fallback only: it is rewritten from CITY_CFG.board in boot(). It used to be
@@ -2769,6 +2779,24 @@ const brandOn = () => localStorage.getItem("nightmode.brand")==="1";
    blue still reads as United blue, unreadable text does not read as anything.
    Colours that are already light (Spirit yellow, Vueling yellow) are left alone
    and take dark ink instead. */
+/* Swap the mark's dot centres to match whatever the screen has become.
+
+   This is the one page where that is not a styling nicety. In brand mode the
+   whole background turns into an airline's colour, and those run from Alaska's
+   near-black to Southwest's yellow — the ring around each station dot is drawn
+   in the background colour, so the wrong variant leaves three coloured blobs
+   with a hole punched through them, or a white halo on a pale wall of yellow.
+   The guide's rule is exactly this ("swap dot centers to match the background"),
+   and the page already computes which way a background leans for its text. */
+function setMarkForBackground(bgRgb){
+  const img=document.getElementById("brandMark");
+  if(!img) return;
+  const [r,g,b]=bgRgb.map(v=>{v/=255; return v<=.03928 ? v/12.92 : ((v+.055)/1.055)**2.4;});
+  const light=(.2126*r+.7152*g+.0722*b) > 0.4;
+  const want = light ? "brand/mark-on-light.svg" : "brand/mark-on-dark.svg";
+  if(!img.src.endsWith(want)) img.src=want;
+}
+
 function brandPaint(hex){
   const lum=rgb=>{const [r,g,b]=rgb.map(v=>{v/=255; return v<=.03928? v/12.92 : ((v+.055)/1.055)**2.4;});
     return .2126*r+.7152*g+.0722*b;};
@@ -2814,6 +2842,7 @@ function applyBrand(s){
     // back to the user's own accent, and the sky comes back with it
     applyPalette(localStorage.getItem("nightmode.accent") || "#7db8ff");
     document.body.classList.remove("brandmode");
+    setMarkForBackground(theme==="day" ? [255,255,255] : [10,10,12]);
     updateSunSky();
     return;
   }
@@ -2835,6 +2864,7 @@ function applyBrand(s){
   R.style.setProperty("--muted", rgbStr(mix(.52)));
   R.style.setProperty("--faint", rgbStr(mix(.78)));
   R.style.setProperty("--glow", rgbStr(mix(.45)));
+  setMarkForBackground(bg);
   document.body.classList.add("brandmode");
   updateSunSky();
   const mt=document.querySelector('meta[name="theme-color"]');
