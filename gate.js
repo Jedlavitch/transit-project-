@@ -87,6 +87,13 @@
         "cursor:pointer;display:flex;gap:7px;align-items:center}" +
       "#tbTrial b{color:var(--text,#eef3ff);font-variant-numeric:tabular-nums}" +
       "#tbTrial:hover{border-color:var(--accent,#4ea1ff)}" +
+      /* It is a <button> now, so strip the platform chrome the rule above
+         assumed was absent, and give it a focus ring loud enough to find from
+         a sofa — a remote user cannot see a cursor, so the selection outline is
+         the only thing telling them where they are. */
+      "#tbTrial{-webkit-appearance:none;appearance:none}" +
+      "#tbTrial:focus-visible{outline:3px solid var(--accent,#4ea1ff);outline-offset:3px;" +
+        "border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff)}" +
       /* The pairing panel needs room for a QR beside its instructions; the box
          widens only while it is showing. */
       "#tbGate .box.wide{max-width:680px}" +
@@ -222,13 +229,27 @@
   function startTrial() {
     styles();
     startedAt = Date.now();
-    chip = document.createElement("div");
+    /* A BUTTON, not a div.
+
+       This was a div with a click handler, which meant a television could not
+       reach it at all: a remote sends arrows, OK and digits, and a div is not
+       in the tab order and does not answer Enter. So a board opened straight on
+       a TV — not through the launcher — had no way to the unlock panel for the
+       whole fifteen minutes until the wall came up on its own. The one device
+       the pairing feature exists for was the one that had to wait it out.
+
+       A real button is focusable, is reachable by the remote, and answers OK
+       without a line of extra code. */
+    chip = document.createElement("button");
     chip.id = "tbTrial";
-    chip.title = "Demo mode — click to enter a licence key";
-    chip.innerHTML = '<span>Demo</span><b id="tbTrialLeft"></b>';
+    chip.type = "button";
+    chip.title = "Demo — unlock this screen from your phone";
+    chip.setAttribute("aria-label", "Demo mode. Unlock this screen from your phone.");
+    chip.innerHTML = '<span>Unlock</span><b id="tbTrialLeft"></b>';
     chip.addEventListener("click", function () {
       showWall("Unlock this board",
-        "Paste the key from your purchase email to unlock every city, full screen and sky view on this device.");
+        "Scan the code with your phone and your licence moves across — nothing to type here. " +
+        "You can paste a key instead if you would rather.");
     });
     document.body.appendChild(chip);
 
