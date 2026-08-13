@@ -316,10 +316,31 @@ body.map-full #map{ position:fixed !important; inset:0; z-index:800; border-radi
    beats each board's own plain `#app{height:100dvh}` rule regardless of order. */
 :root{ --ui-zoom:1; --safe-pad:0px; }
 body{ padding:var(--safe-pad); }
+/* Base case (no @supports needed): a browser with no zoom support at all --
+   older WebKit; `zoom` only landed in Safari 15.4, March 2022 -- just gets
+   the plain viewport. Deliberately NOT the calc() below: that calc only
+   makes sense paired with the zoom that's supposed to scale it back down. */
 body #app{
-  zoom:var(--ui-zoom);
-  height:calc((100dvh - var(--safe-pad) * 2) / var(--ui-zoom));
-  width:calc((100vw - var(--safe-pad) * 2) / var(--ui-zoom));
+  height:100dvh;
+  width:100vw;
+}
+/* #app's own height/width must be divided by the zoom: it's sized in CSS
+   pixels (100dvh), and zoom multiplies what those pixels occupy, so without
+   this a zoom>1 overflows and a zoom<1 leaves dead space. Guarded by
+   @supports: without it, on a browser that silently drops `zoom` as an
+   unknown property, #app would still get WIDENED by this calc (autoDisplay()
+   computes --ui-zoom well under 1 specifically on tablet-width screens,
+   since that's exactly when the board needs to shrink below the 1600x900
+   design) with nothing left to scale it back down -- real, severe overflow,
+   up to ~2x the viewport, and only on the narrower screens that needed the
+   zoom in the first place. Desktop (--ui-zoom effectively 1) never showed
+   this, which is why it went unnoticed until a real tablet reported it. */
+@supports (zoom: 1){
+  body #app{
+    zoom:var(--ui-zoom);
+    height:calc((100dvh - var(--safe-pad) * 2) / var(--ui-zoom));
+    width:calc((100vw - var(--safe-pad) * 2) / var(--ui-zoom));
+  }
 }
 
 /* Reclaim vertical space inside a card: the stop + direction labels were using
