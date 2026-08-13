@@ -114,8 +114,23 @@ def _nm_between(lat1, lon1, lat2, lon2):
     return math.hypot(d_lat, d_lon)
 
 
+def _upstream_url(q_lat, q_lon, q_radius):
+    """Providers disagree on the path, so UPSTREAM alone is not enough to switch.
+
+    adsb.lol   /v2/point/<lat>/<lon>/<radius>
+    adsb.fi    /api/v2/lat/<lat>/lon/<lon>/dist/<radius>
+
+    Sending adsb.lol's shape to adsb.fi returns 400, so an outage on one and a
+    one-line swap to the other would have produced a proxy that answers
+    "upstream 400" forever. Detected from the host rather than configured, so
+    flipping UPSTREAM really is the only thing anyone has to do."""
+    if "adsb.fi" in UPSTREAM:
+        return "%s/lat/%s/lon/%s/dist/%s" % (UPSTREAM, q_lat, q_lon, q_radius)
+    return "%s/point/%s/%s/%s" % (UPSTREAM, q_lat, q_lon, q_radius)
+
+
 def _fetch_upstream(q_lat, q_lon, q_radius):
-    url = "%s/point/%s/%s/%s" % (UPSTREAM, q_lat, q_lon, q_radius)
+    url = _upstream_url(q_lat, q_lon, q_radius)
     req = urllib.request.Request(url, headers={
         "accept": "application/json",
         # Identify honestly. A feed run by volunteers deserves to know who is
