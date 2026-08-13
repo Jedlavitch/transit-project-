@@ -124,6 +124,32 @@
     });
   }
 
+  /* ---- everything from the feed is hostile until proven otherwise ---------
+     The default share backend is a public jsonblob: whoever holds the code can
+     rewrite it, and the boards render whatever comes back. esc() already stops
+     markup, but nothing stopped a 200,000-character route name from destroying
+     the card, or a nested object from being rendered as [object Object], or ten
+     thousand rows from freezing a wall display. Cap the count, coerce the
+     types, cap the lengths. Cheap, and it turns "trusted feed" into "untrusted
+     input handled properly". */
+  const MAX_REMOTE = 200, MAX_TEXT = 120;
+  const str = (v, n) => (typeof v === "string" ? v : v == null ? "" : String(v)).slice(0, n || MAX_TEXT);
+  const num = v => (typeof v === "number" && isFinite(v)) ? v : null;
+  function sanitizeRemote(list) {
+    return list.slice(0, MAX_REMOTE).filter(x => x && typeof x === "object").map(s => ({
+      id:      str(s.id, 40),
+      ts:      num(s.ts),
+      mode:    ["plane", "train", "bus"].indexOf(s.mode) >= 0 ? s.mode : "",
+      route:   str(s.route),
+      vehicle: str(s.vehicle),
+      place:   str(s.place),
+      note:    str(s.note),
+      by:      str(s.by, 40),
+      ridden:  !!s.ridden,
+      lat:     num(s.lat), lon: num(s.lon),
+    }));
+  }
+
   /* ---- which logged vehicles are passing RIGHT NOW? ------------------------
      The board has already fetched every vehicle near its own location (its live
      feeds are all queried around `state.loc`, so this automatically follows the
@@ -505,8 +531,14 @@
                                 : hot[s.id] === "route" ? " spot-route" : "");
       // badge carries the MODE (glyph + colour); the route is the row's title, so
       // the two don't restate each other and long line names aren't truncated
-      const badge = `<div class="badge" style="background:${COLOR[s.mode] || "#6aa9ff"}">${
-        GLYPH[s.mode] || "•"}</div>`;
+      /* s.mode arrives from the shared blob, which anyone holding the code can
+         write. A bare COLOR[s.mode] also answers for "constructor" and
+         "toString" — it cannot inject markup (those stringify without quotes or
+         angle brackets) but it does paint a function body into the row. Ask
+         only about keys the object actually owns. */
+      const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k) ? o[k] : null;
+      const badge = `<div class="badge" style="background:${own(COLOR, s.mode) || "#6aa9ff"}">${
+        esc(own(GLYPH, s.mode) || "•")}</div>`;
       const mi = miOf[s.id];
       const dist = mi == null ? "location not recorded"
                  : (mi < 1 ? "here" : `${Math.round(mi)} mi away`);
@@ -550,7 +582,7 @@
         if (!r.ok) throw new Error(r.status === 403 ? "feed secret rejected" : "HTTP " + r.status);
         spots = (await r.json()).spots;
       }
-      if (Array.isArray(spots)) { remote = spots; remoteErr = ""; }
+      if (Array.isArray(spots)) { remote = sanitizeRemote(spots); remoteErr = ""; }
       else throw new Error("no spots in response");
     } catch (e) {
       // keep whatever we had, but remember why — a mistyped Worker URL used to
