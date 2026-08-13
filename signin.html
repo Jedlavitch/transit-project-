@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Transit Project — Sign in a screen</title>
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="theme.css?v=15" />
+<script>/* pre-paint: same look as every board, so arriving here doesn't flash */
+(function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
+var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
+var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
+<script src="config.js?v=2"></script>
+<script src="account.js?v=2"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0; min-height:100%}
+  body{background:
+      radial-gradient(800px 600px at 105% -8%, rgba(78,161,255,.14) 0%, transparent 58%),
+      radial-gradient(1000px 700px at 50% 120%, var(--blue-deep,#0a1a3d) 0%, transparent 60%),
+      var(--bg);
+    color:var(--text); -webkit-font-smoothing:antialiased; padding:28px 18px 60px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  .wrap{max-width:460px; margin:0 auto}
+  h1{font-size:24px; margin:0 0 6px; line-height:1.25;
+    background:linear-gradient(90deg,var(--text) 20%,#4ea1ff 70%,#b58cff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    width:fit-content}
+  :root[data-theme="day"] h1{filter:brightness(.7) saturate(1.25)}
+  .sub{color:var(--muted); font-size:13.5px; line-height:1.6; margin:0 0 18px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:16px; padding:22px; margin-bottom:14px}
+  .codeplate{text-align:center; padding:16px 12px; border-radius:12px;
+    background:var(--row-bg,#0d1830); border:1px solid var(--row-line,#22345a); margin:0 0 16px}
+  .codeplate .lbl{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+  .codeplate .val{font:800 34px/1.2 ui-monospace,Menlo,Consolas,monospace; letter-spacing:.16em;
+    color:var(--accent,#4ea1ff); margin-top:6px}
+  .codeplate .what{font-size:12.5px; color:var(--muted); margin-top:10px}
+  .codeplate .what b{color:var(--text)}
+  /* The anti-phishing line. A device flow's one real weakness is somebody talked
+     into approving a code they cannot see, so the check is stated as a condition
+     to be met rather than buried as reassurance. Wording matters here more than
+     it looks -- see PAIRING.md. */
+  .verify{display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.6;
+    color:var(--muted); background:rgba(255,204,51,.07); border:1px solid rgba(255,204,51,.28);
+    border-radius:11px; padding:12px 13px; margin:0 0 16px}
+  .verify b{color:var(--text)}
+  .verify .ico{flex:0 0 auto; font-size:15px; line-height:1.35}
+  label{display:block; font-size:12.5px; color:var(--muted); margin:0 0 7px}
+  input{width:100%; padding:14px 13px; border-radius:11px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font:700 17px ui-monospace,Menlo,Consolas,monospace;
+    letter-spacing:.08em; text-transform:uppercase}
+  input:focus{outline:none; border-color:var(--accent,#4ea1ff)}
+  /* Thumb-sized: this is a phone page, used one-handed. */
+  .cta{display:block; width:100%; text-align:center; margin-top:14px; padding:16px; border-radius:12px;
+    border:none; background:var(--accent); color:#04101f; font-weight:800; font-size:16px; cursor:pointer;
+    font-family:inherit}
+  .cta[disabled]{opacity:.55; cursor:default}
+  .ghost{display:block; width:100%; text-align:center; margin-top:10px; padding:13px; border-radius:12px;
+    border:1px solid var(--line); background:transparent; color:var(--text); font-weight:700; font-size:14px;
+    cursor:pointer; text-decoration:none; font-family:inherit}
+  .danger{border-color:rgba(255,90,90,.45); color:#ff7a7a}
+  .msg{font-size:13.5px; line-height:1.6; min-height:19px; margin-top:12px}
+  .msg.bad{color:var(--late-ink,#ff5a5a)}
+  .msg.good{color:var(--good-ink,#33d17a); font-weight:700}
+  .who{font-size:12.5px; color:var(--muted); margin:0 0 4px}
+  .who b{color:var(--text)}
+  .done{text-align:center; padding:8px 0 4px}
+  .done .tick{font-size:44px; line-height:1}
+  .done h2{font-size:19px; margin:10px 0 6px}
+  .done p{color:var(--muted); font-size:13.5px; line-height:1.6; margin:0}
+  .back{color:var(--accent-ink,#4ea1ff); font-size:13px; text-decoration:none; display:inline-block; margin-bottom:16px}
+  .note{font-size:12.5px; color:var(--muted); line-height:1.65; margin:14px 0 0}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<!-- =========================================================================
+     The phone's half of QR sign-in. The other screen showed a code; this page
+     turns a tap on an already-signed-in phone into a session over there.
+
+     WHY THERE IS NOTHING TO TYPE HERE (except the code itself). The equivalent
+     licence page, pair.html, will take a licence key if the phone has not got
+     one saved -- a key is a bearer token and typing it is how it arrives. An
+     account is not like that: approving requires a live session, so if this
+     phone is signed out the answer is to sign in first, using the same four
+     doors as everywhere else, and then approve. That is why the signed-out
+     state below is a link to the app rather than a password box.
+     ========================================================================= -->
+<div class="wrap">
+  <a class="back" href="index.html">‹ transitproject.online</a>
+
+  <h1 id="title">Sign in a screen</h1>
+  <p class="sub" id="sub">Hand a session from this phone to the screen showing the code.</p>
+
+  <!-- ── no account server configured ──────────────────────────────────── -->
+  <div class="panel hide" id="stateOff">
+    <p class="sub" style="margin:0">Accounts aren't set up on this site yet, so there's nothing to sign in to.
+      The steps are in <code>ACCOUNTS.md</code>.</p>
+  </div>
+
+  <!-- ── ask for the code (no ?c= in the URL) ──────────────────────────── -->
+  <div class="panel hide" id="stateCode">
+    <label for="codeInput">The six characters on that screen</label>
+    <input id="codeInput" inputmode="latin" autocapitalize="characters" autocomplete="off"
+           spellcheck="false" maxlength="8" placeholder="A1B2C3" />
+    <button class="cta" id="codeGo" type="button">Continue</button>
+    <div class="msg" id="codeMsg"></div>
+  </div>
+
+  <!-- ── signed out on this phone ──────────────────────────────────────── -->
+  <div class="panel hide" id="stateOut">
+    <div class="codeplate">
+      <div class="lbl">Code</div>
+      <div class="val" id="outCode">— — —</div>
+    </div>
+    <p class="sub" style="margin:0 0 4px">You're not signed in on <b>this</b> phone, so there's no
+      account to hand over yet.</p>
+    <p class="note" style="margin-top:0">Sign in here first — email and password, Google, Apple, or a
+      six-digit code — then come back to this link and approve.</p>
+    <a class="cta" id="outSignIn" href="spot.html">Sign in on this phone</a>
+    <a class="ghost" id="outRetry" href="#">I've signed in — check again</a>
+  </div>
+
+  <!-- ── the decision ──────────────────────────────────────────────────── -->
+  <div class="panel hide" id="stateAsk">
+    <div class="codeplate">
+      <div class="lbl">Code</div>
+      <div class="val" id="askCode">— — —</div>
+      <div class="what" id="askWhat"></div>
+    </div>
+
+    <div class="verify">
+      <span class="ico">⚠︎</span>
+      <span>Approving gives that screen full access to your account and your sightings
+        log, for about a year. Only continue if that code is
+        <b>on a screen in front of you right now</b>.</span>
+    </div>
+
+    <p class="who">Signing in as <b id="askWho">—</b></p>
+    <button class="cta" id="askGo" type="button">Sign in that screen</button>
+    <button class="ghost danger" id="askNo" type="button">That wasn't me — reject it</button>
+    <div class="msg" id="askMsg"></div>
+  </div>
+
+  <!-- ── done ──────────────────────────────────────────────────────────── -->
+  <div class="panel hide" id="stateDone">
+    <div class="done">
+      <div class="tick" id="doneTick">✓</div>
+      <h2 id="doneTitle">That screen is signed in</h2>
+      <p id="doneText">It should catch up within a few seconds. You can close this page.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const show = id => {
+  ["stateOff","stateCode","stateOut","stateAsk","stateDone"].forEach(s =>
+    $(s).classList.toggle("hide", s !== id));
+};
+const say = (el, text, kind) => {
+  const n = $(el);
+  n.textContent = text || "";
+  n.className = "msg" + (kind ? " " + kind : "");
+};
+const pretty = c => c.slice(0, 3) + " " + c.slice(3);
+
+/* Same folding the Worker does, so what is shown matches what is sent: O/I/L are
+   the characters eyes substitute for 0/1, and the alphabet excludes them. */
+function normCode(s) {
+  const up = String(s || "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
+  return up.split("").filter(c => "0123456789ABCDEFGHJKMNPQRSTVWXYZ".indexOf(c) >= 0).join("").slice(0, 6);
+}
+
+let CODE = "";
+
+function codeFromUrl() {
+  const q = new URLSearchParams(location.search);
+  return normCode(q.get("c") || q.get("code") || "");
+}
+
+/* Fall back to the typed-code panel without throwing away a code we already
+   have. Somebody who scanned correctly and then hit a flaky connection should be
+   able to press Continue again, not re-read six characters off another screen. */
+function askForCode(message) {
+  if (CODE) $("codeInput").value = CODE;
+  show("stateCode");
+  if (message) say("codeMsg", message, "bad");
+  setTimeout(() => $("codeInput").focus(), 60);
+}
+
+async function begin() {
+  if (!window.TBAccount || !TBAccount.configured()) { show("stateOff"); return; }
+
+  CODE = codeFromUrl();
+  if (!CODE) { askForCode(""); return; }
+  await route();
+}
+
+async function route() {
+  /* Ask before offering anybody a button, so a dead code is met with "ask that
+     screen for a new one" rather than a failure after the tap. */
+  let info;
+  try { info = await TBAccount.pairCheck(CODE); }
+  catch (e) {
+    askForCode("Couldn't reach the account server. Check your connection and try again.");
+    return;
+  }
+
+  if (!info.found) {
+    show("stateDone");
+    $("doneTick").textContent = "⏱";
+    $("doneTitle").textContent = "That code has expired";
+    $("doneText").textContent = "Codes last ten minutes. Ask that screen for a new one and scan again.";
+    return;
+  }
+  if (info.done) {
+    show("stateDone");
+    $("doneTitle").textContent = "That code has already been used";
+    $("doneText").textContent = "If it wasn't you, change your password from Your account — that signs "
+      + "every other device out.";
+    return;
+  }
+
+  if (!TBAccount.signedIn()) {
+    $("outCode").textContent = pretty(CODE);
+    /* Carry the code through the sign-in trip, so coming back is one tap rather
+       than finding this link again. */
+    $("outSignIn").href = "spot.html?then=" + encodeURIComponent("signin.html?c=" + CODE);
+    show("stateOut");
+    return;
+  }
+
+  $("askCode").textContent = pretty(CODE);
+  /* The label is written by whoever started the pairing, so it is set as TEXT and
+     never as HTML -- it is a string from a stranger's browser, not our copy. */
+  $("askWhat").textContent = info.label ? "Asking to sign in: " + info.label : "";
+  $("askWho").textContent = TBAccount.email() || "your account";
+  /* Reset the buttons every time this state is entered. Arriving here a second
+     time -- via "check again", or a code typed after one attempt -- would
+     otherwise find them still disabled from the last go and silently ignore a
+     tap. */
+  $("askGo").disabled = false; $("askGo").textContent = "Sign in that screen";
+  $("askNo").disabled = false;
+  say("askMsg", "");
+  show("stateAsk");
+}
+
+$("codeGo").onclick = async () => {
+  const c = normCode($("codeInput").value);
+  if (c.length !== 6) return say("codeMsg", "That's six characters, like A1B2C3.", "bad");
+  CODE = c;
+  say("codeMsg", "Checking…");
+  await route();
+};
+$("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") $("codeGo").click(); });
+$("outRetry").onclick = e => { e.preventDefault(); route(); };
+
+$("askGo").onclick = async () => {
+  const btn = $("askGo");
+  btn.disabled = true; btn.textContent = "Signing it in…";
+  say("askMsg", "");
+  try {
+    await TBAccount.pairApprove(CODE);
+    show("stateDone");
+  } catch (e) {
+    say("askMsg", e.message || "That didn't work.", "bad");
+    btn.disabled = false; btn.textContent = "Sign in that screen";
+  }
+};
+
+$("askNo").onclick = async () => {
+  const btn = $("askNo");
+  btn.disabled = true;
+  try { await TBAccount.pairDeny(CODE); } catch (_) {}
+  show("stateDone");
+  $("doneTick").textContent = "✕";
+  $("doneTitle").textContent = "Rejected";
+  $("doneText").textContent = "That code is dead and nothing was signed in. If you didn't start this, "
+    + "somebody may have asked you to approve their screen — don't.";
+};
+
+begin();
+</script>
+</body>
+</html>

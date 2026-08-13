@@ -88,6 +88,13 @@ const MAX_SPOTS = 5000;            // per account, oldest dropped beyond this
 const STATE_TTL = 600;             // 10 minutes to get through Google or Apple
 const TICKET_TTL = 90;             // the app has 90s to swap its ticket
 const MIN_PASSWORD = 8;
+const PAIR_TTL = 600;              // a QR sign-in code is worth showing for 10 min
+const PAIR_INTERVAL = 3;           // seconds the waiting screen leaves between polls
+
+/* Same alphabet as the licence keys and the TV pairing codes, so a code looks
+   like the rest of the product: no I, L, O or U. 32 divides 256, so masking the
+   low five bits is uniform -- no modulo bias. */
+const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /* PBKDF2 rounds. This is a CPU-time decision as much as a security one: the
    Workers free plan allows ~10ms of CPU per request and this is the only thing
@@ -138,6 +145,25 @@ function sameBytes(a, b) {
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;
+}
+const sameText = (a, b) => sameBytes(enc.encode(String(a)), enc.encode(String(b)));
+
+/* ---- QR sign-in codes ---------------------------------------------------- */
+
+/* Six characters, because this is read off one screen and sometimes typed into
+   another by hand. */
+function pairCode() {
+  const b = crypto.getRandomValues(new Uint8Array(6));
+  return [...b].map(x => ALPHABET[x & 31]).join("");
+}
+
+/* Accept what a human actually types: case is noise, spaces and dashes are
+   decoration, and O/I/L are the three characters people substitute for 0/1
+   without noticing -- which is exactly why the alphabet excludes them, so
+   folding them back is unambiguous rather than a guess. */
+function normCode(s) {
+  const up = String(s || "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
+  return [...up].filter(c => ALPHABET.indexOf(c) >= 0).join("").slice(0, 6);
 }
 
 /* Six digits from the CSPRNG. Math.random() would be predictable enough to
@@ -210,6 +236,20 @@ async function ensureAccount(env, id, email) {
   return !existing;
 }
 
+/* Which sign-in methods prove control of the email address ITSELF, as opposed to
+   merely proving somebody let you in. Only these may replace an existing
+   password without producing the old one -- see /auth/password/set.
+
+   "qr" is deliberately absent, and this is the list to check before adding
+   anything. A QR approval proves that whoever held a signed-in phone tapped a
+   button; it does not prove the person now holding the new session owns the
+   address. Someone talked into approving a code they did not generate has given
+   away a session, which is bad and recoverable -- they can sign out everywhere
+   by changing their password. If "qr" were on this list the intruder could
+   change that password first, and the owner would lose the account outright.
+   The difference between those two outcomes is this array. */
+const PROVES_OWNERSHIP = ["code", "google", "apple"];
+
 /* `via` records how this session came to exist, because it decides one thing
    later: whether changing the password needs the old one. See /auth/password/set. */
 async function mintSession(env, id, via) {
@@ -269,6 +309,10 @@ const methods = env => ({
   password: true,
   google: googleReady(env),
   apple: appleReady(env),
+  /* Needs nothing configured -- but reporting it is what lets an app hide the
+     button when talking to a Worker deployed before QR sign-in existed, rather
+     than offering a door that answers 404. */
+  qr: true,
 });
 
 /* ---- OAuth plumbing shared by Google and Apple -------------------------- */
@@ -648,6 +692,116 @@ export default {
                     hasPassword: !!(await env.ACCOUNTS.get("pw:" + id)) });
     }
 
+    /* ---- QR sign-in: show a code here, approve it on a phone --------------
+
+       The device authorisation flow, the same exchange license-worker.js already
+       uses to unlock a television (see PAIRING.md) -- but pointed at the account
+       rather than the licence, and with one difference that changes its
+       character completely:
+
+         THE APPROVING DEVICE MUST ALREADY BE SIGNED IN.
+
+       A television's pairing takes a licence KEY from the phone, so anybody
+       holding a key can donate it. This takes a SESSION, so /auth/pair/approve
+       requires one -- you can only ever grant access to an account you are
+       already inside. That is Steam's version of this flow rather than a
+       streaming box's, and it is why there is no field on the approval page to
+       type anything into.
+
+         waiting device            account Worker                phone
+             |                          |                           |
+             |-- POST /auth/pair/start->|                           |
+             |<-- code + secret --------|                           |
+             |   (draws code + QR)      |                           |
+             |                          |<-- GET  /auth/pair/check -|  live? what asked?
+             |                          |<-- POST /auth/pair/approve|  + Bearer session
+             |                          |    (mints a NEW session)  |
+             |-- GET /auth/pair/poll -->|                           |
+             |<-- the new session ------|                           |
+
+       TWO SEPARATE VALUES, same reasoning as the TV flow. The six characters are
+       on a screen, and a screen can be in a window or over a shoulder. Whoever
+       collects the session has to present `secret`, handed only to the device
+       that started the pairing and never displayed. Someone who reads the code
+       off a screen can reach /auth/pair/approve -- and all that does is offer
+       THEIR account to the screen in front of them, which is not an attack.
+
+       WHAT REMAINS, HONESTLY. Somebody talked into approving a code they did not
+       generate hands over a session on their own account. Every device flow has
+       this and it is not fully solvable here either. Three things blunt it:
+       /auth/pair/check reports which device is asking so the approval page can
+       name it, codes die in ten minutes, and -- see /auth/password/set -- a
+       session that arrived this way is NOT allowed to change an existing
+       password. So a tricked approval cannot be escalated into locking the real
+       owner out of their own account, which is the part that would be
+       unrecoverable. */
+    if (url.pathname === "/auth/pair/start" && req.method === "POST") {
+      if (!(await rateLimit(env, "pstart:" + ip, 30, 3600)))
+        return json({ ok: false, error: "too many attempts, try again later" }, 429);
+      const body = await req.json().catch(() => ({}));
+      /* Shown to whoever approves, so they can tell their own laptop from a
+         stranger's. Truncated because it goes on a phone screen, and treated as
+         untrusted text by the page that renders it. */
+      const label = String(body.label || "").slice(0, 60);
+
+      /* One look for a collision. At 32^6 codes over a ten-minute life the odds
+         are already negligible, and KV's eventual consistency means this can
+         miss one written a second ago -- so it improves the odds cheaply rather
+         than guaranteeing anything, and is not worth retrying harder. */
+      let code = pairCode();
+      if (await env.ACCOUNTS.get("pair:" + code)) code = pairCode();
+
+      const secret = rand(24);
+      await env.ACCOUNTS.put("pair:" + code, JSON.stringify({
+        secret, label, created: Date.now(), session: null,
+      }), { expirationTtl: PAIR_TTL });
+      return json({ ok: true, code, secret, interval: PAIR_INTERVAL, expiresIn: PAIR_TTL });
+    }
+
+    /* Is this code live, and what is asking? Called by the phone before it shows
+       anybody a button, so a dead code is met with "ask that screen for a new
+       one" rather than a failure after the tap. The label is deliberately
+       readable to whoever holds the code: naming the device being let in is the
+       defence, and withholding it would only make approval blinder. */
+    if (url.pathname === "/auth/pair/check") {
+      const code = normCode(url.searchParams.get("code"));
+      if (!code) return json({ ok: false, error: "missing code" }, 400);
+      let rec = null;
+      try { rec = JSON.parse((await env.ACCOUNTS.get("pair:" + code)) || "null"); } catch (_) {}
+      return json({ ok: true, found: !!rec, done: !!(rec && rec.session),
+                    label: (rec && rec.label) || "" });
+    }
+
+    /* The waiting device collects the result. Writes nothing while pending: a
+       screen polls every three seconds for ten minutes, and a write per poll
+       would burn the free plan's daily quota in a handful of sign-ins.
+
+       It DOES write once, on success, to delete the record. Everything else in
+       this Worker stores session tokens hashed; a pairing record briefly holds a
+       live one in the clear, which is the one place a KV dump would hand over
+       working sessions. Ten minutes of that is avoidable, so it is avoided. The
+       cost is that a poll response lost in transit means starting over rather
+       than retrying -- one more scan, against a real reduction in what a leak
+       is worth. */
+    if (url.pathname === "/auth/pair/poll") {
+      const code = normCode(url.searchParams.get("code"));
+      const secret = String(url.searchParams.get("secret") || "");
+      if (!code || !secret) return json({ ok: false, error: "missing code or secret" }, 400);
+      let rec = null;
+      try { rec = JSON.parse((await env.ACCOUNTS.get("pair:" + code)) || "null"); } catch (_) {}
+      if (!rec) return json({ ok: false, error: "expired" }, 404);
+      if (!sameText(String(rec.secret || ""), secret))
+        return json({ ok: false, error: "bad secret" }, 403);
+      if (rec.denied) {
+        await env.ACCOUNTS.delete("pair:" + code);
+        return json({ ok: true, status: "denied" });
+      }
+      if (!rec.session) return json({ ok: true, status: "pending", interval: PAIR_INTERVAL });
+      await env.ACCOUNTS.delete("pair:" + code);
+      return json({ ok: true, status: "ready", session: rec.session, email: rec.email || null,
+                    hasPassword: !!rec.hasPassword });
+    }
+
     if (url.pathname === "/health") {
       /* `mail` is kept as it was so anything already checking it still works. */
       return json({ ok: true, mail: !!env.RESEND_KEY, methods: methods(env) });
@@ -658,8 +812,65 @@ export default {
     const id = sess && sess.id;
     if (url.pathname.startsWith("/spots") || url.pathname === "/me"
         || url.pathname.startsWith("/auth/password/")
+        /* approve and deny, but NOT start/check/poll above -- the whole point is
+           that the device being let in has no session yet. */
+        || url.pathname === "/auth/pair/approve" || url.pathname === "/auth/pair/deny"
         || url.pathname === "/auth/signout" || url.pathname === "/auth/delete") {
       if (!id) return json({ ok: false, error: "not signed in" }, 401);
+    }
+
+    /* Let that screen in, on this account. Requires a session, which is the
+       entire security model: there is nothing here to type, and no way to
+       approve a sign-in to an account you are not already in. */
+    if (url.pathname === "/auth/pair/approve" && req.method === "POST") {
+      if (!(await rateLimit(env, "papprove:" + ip, 30, 3600)))
+        return json({ ok: false, error: "too many attempts, try again later" }, 429);
+      const body = await req.json().catch(() => ({}));
+      const code = normCode(body.code);
+      if (!code) return json({ ok: false, error: "missing code" }, 400);
+
+      const slot = "pair:" + code;
+      let rec = null;
+      try { rec = JSON.parse((await env.ACCOUNTS.get(slot)) || "null"); } catch (_) {}
+      if (!rec) return json({ ok: false, error: "that code has expired -- ask the other screen for a new one" }, 404);
+      if (rec.session) return json({ ok: false, error: "that code has already been used" }, 409);
+      if (rec.denied) return json({ ok: false, error: "that code was already rejected" }, 409);
+
+      const acct = await env.ACCOUNTS.get("acct:" + id);
+      const email = acct ? JSON.parse(acct).email : "";
+
+      /* A NEW session, never a copy of the approving phone's. Sharing one would
+         mean signing out on the phone silently signing out the screen, and would
+         give the screen a session whose `via` claims a sign-in it never did. */
+      const granted = await mintSession(env, id, "qr");
+
+      rec.session = granted;
+      rec.email = email;
+      rec.hasPassword = !!(await env.ACCOUNTS.get("pw:" + id));
+      /* Keep what is left of the original ten minutes rather than extending it;
+         sixty seconds is the shortest expiry KV accepts. An approved session is
+         therefore never in KV longer than the code it belongs to. */
+      const ttl = Math.max(60, PAIR_TTL - Math.floor((Date.now() - (rec.created || Date.now())) / 1000));
+      await env.ACCOUNTS.put(slot, JSON.stringify(rec), { expirationTtl: ttl });
+      return json({ ok: true, label: rec.label || "", email });
+    }
+
+    /* "That wasn't me." Worth having as its own route rather than leaving the
+       code to expire: somebody who sees a sign-in they did not start should be
+       able to kill it now, and be told it is dead. */
+    if (url.pathname === "/auth/pair/deny" && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const code = normCode(body.code);
+      if (!code) return json({ ok: false, error: "missing code" }, 400);
+      const slot = "pair:" + code;
+      let rec = null;
+      try { rec = JSON.parse((await env.ACCOUNTS.get(slot)) || "null"); } catch (_) {}
+      if (!rec) return json({ ok: true, denied: true });     // already gone: same outcome
+      if (rec.session) return json({ ok: false, error: "that code has already been used" }, 409);
+      rec.denied = true;
+      const ttl = Math.max(60, PAIR_TTL - Math.floor((Date.now() - (rec.created || Date.now())) / 1000));
+      await env.ACCOUNTS.put(slot, JSON.stringify(rec), { expirationTtl: ttl });
+      return json({ ok: true, denied: true });
     }
 
     /* ---- set, change, or remove the password ---------------------------
@@ -674,7 +885,7 @@ export default {
     if (url.pathname === "/auth/password/set" && req.method === "POST") {
       const { password, current } = await req.json().catch(() => ({}));
       const stored = await env.ACCOUNTS.get("pw:" + id);
-      const proved = sess.via === "code" || sess.via === "google" || sess.via === "apple";
+      const proved = PROVES_OWNERSHIP.indexOf(sess.via) >= 0;
 
       if (stored && !proved) {
         if (!current) return json({ ok: false, error: "enter your current password" }, 400);

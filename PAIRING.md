@@ -152,10 +152,93 @@ What it is worth:
 | `pair/index.html` | forwards `/pair` to `/pair.html`, keeping the code |
 | `gate.js`, `license.js` | offer the panel on the wall and in the chip's dialog |
 
+---
+
+# Signing in a screen from a phone
+
+The same exchange, pointed at the **account** instead of the licence — this is
+what the old "what is not built" note below used to say was missing.
+
+A screen that is awkward to type on shows a code and a QR. A phone that is
+**already signed in** scans it and taps once. The screen, which has been polling,
+receives a session of its own.
+
+## What a customer does
+
+1. On the awkward screen, open the Spotter. On the sign-in door press
+   **Sign in from my phone instead**.
+2. Scan the QR with the phone camera. (No camera? On the phone go to
+   **transitproject.online/signin** and type the six characters.)
+3. Tap **Sign in that screen**.
+
+## The one difference that matters
+
+The television flow takes a licence **key** from the phone, so anybody holding a
+key can donate one. This takes a **session**, and `/auth/pair/approve` requires
+one — so you can only ever grant access to an account you are already inside.
+That is why the approval page has nothing to type in: if the phone is signed
+out, the answer is to sign in first (password, Google, Apple, or a code) and come
+back, not to paste a credential.
+
+Everything else is deliberately identical, because the reasoning transferred
+intact: the code and the `secret` are separate values, polling writes nothing,
+approving does not extend the ten minutes, and `O`/`I`/`L` fold to `0`/`1`.
+
+## Where it is different from the licence flow on purpose
+
+- **The session handed over is a NEW one**, never a copy of the phone's. Sharing
+  one would mean signing out on the phone silently signing out the screen.
+- **The record is deleted the moment it is collected.** Everything else in the
+  account Worker stores session tokens hashed; a pairing record briefly holds a
+  live one in the clear, and that is the single place a KV dump would yield
+  working sessions. The cost is that a poll response lost in transit means
+  scanning again instead of retrying.
+- **A QR-granted session may not change an existing password.** This is the part
+  worth keeping if any of this is ever rewritten. Somebody talked into approving
+  a code they did not generate has given away a session — bad, and recoverable,
+  because the owner can change their password and sign every other device out.
+  If a QR session could change the password, the intruder would do it first and
+  the owner would lose the account outright. The list that decides this is
+  `PROVES_OWNERSHIP` in `account-worker.js`; `"qr"` is deliberately not on it.
+- **`/auth/pair/check` reports which device is asking**, so the approval page can
+  name it. Naming the screen you are letting in is the defence; withholding it
+  would only make approval blinder.
+
+## The weakness, stated plainly (again)
+
+Same as the television flow, and the same wording earns its keep: `signin.html`
+says what approving grants, and asks you to confirm the code is on a screen
+**in front of you right now**. Keep it if the page is rewritten.
+
+## The files
+
+| File | What it is |
+|---|---|
+| `account-worker.js` | `/auth/pair/start`, `/check`, `/approve`, `/deny`, `/poll` |
+| `spot.html` | the waiting screen's panel, in the sign-in door |
+| `signin.html` | the phone's approval page |
+| `signin/index.html` | forwards `/signin` to `/signin.html`, keeping the code |
+| `pair-qr.js` | the same QR encoder, loaded on demand |
+
+## Testing it without two phones
+
+Two browser tabs will not do on their own: same origin means shared
+`localStorage`, so the "phone" tab's session and `config.js`'s `acctUrl` leak
+into the "screen" tab and it appears to sign in when nothing happened. Put them
+on **different origins** — `localhost` for one and `127.0.0.1` for the other —
+and they get separate storage while still reaching the same server.
+
+That is not a hypothetical: it produced a completely convincing false pass.
+
+---
+
 ## What is not built
 
 - **No way to remove a device.** Profile shows "3 of 5" but cannot free a slot,
   so a customer who reaches five is stuck asking you. That was true before
   pairing; pairing just makes it easier to reach five.
-- **Pairing carries the licence, not the account.** The Spotter log
-  (`ACCOUNTS.md`) is a separate system and a wall display has no use for it.
+- **No list of signed-in devices, and no way to sign one out remotely.**
+  Changing the password is the blunt instrument that covers it. Sessions are
+  stored keyed by a hash of their own token with no index back to the account,
+  which is good for a KV dump and bad for building this — it would need a second
+  index per account.

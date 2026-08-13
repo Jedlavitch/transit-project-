@@ -15,6 +15,12 @@ nowhere.
 | Email + password | nothing — always on | types both |
 | Continue with Google | `GOOGLE_CLIENT_ID/SECRET` | one tap |
 | Continue with Apple | four `APPLE_*` variables | one tap |
+| Scan a QR from a signed-in phone | nothing — always on | scans, taps once |
+
+The QR route is the one to reach for on anything awkward to type on. It is
+documented with the television pairing it was modelled on, in **`PAIRING.md`** —
+including the one rule that must survive any rewrite: a session that arrived by
+QR is not allowed to change an existing password.
 
 **They are all the same account.** The account id is derived from the *verified*
 email address and nothing else, so setting a password today and using Google next
@@ -171,6 +177,8 @@ sign-in screen fills itself in with whatever you configured above.
 - Sessions last about **13 months**, then sign in again.
 - Provider sign-ins have **10 minutes** to complete, and the ticket handed back
   to the app is good for **90 seconds and one use**.
+- QR sign-in codes last **10 minutes**, can be approved once, and the waiting
+  screen polls every **3 seconds**. Approving does not extend the ten minutes.
 - **5,000 sightings per account**, oldest dropped past that.
 - KV is eventually consistent: a sync on a second device within a second or two
   of the first may see slightly stale data. It self-corrects on the next sync,
@@ -186,7 +194,11 @@ password. Without the exception, forgetting your password would mean no way back
 in at all.
 
 A session created *by* a password does not get the shortcut, so a borrowed phone
-can't be used to quietly take an account over.
+can't be used to quietly take an account over. Neither does a session that
+arrived by **QR** — approving a QR proves somebody tapped a button on a
+signed-in phone, not that the person now holding the session owns the address.
+The whole list lives in `PROVES_OWNERSHIP` in `account-worker.js`, and it is the
+thing to read before adding a fifth way in.
 
 ## Before you charge money
 

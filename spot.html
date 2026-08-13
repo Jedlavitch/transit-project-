@@ -184,6 +184,14 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     color:var(--muted); font-size:12px}
   #gate .gor::before, #gate .gor::after{content:""; flex:1; height:1px; background:var(--line)}
   #gate .ghint{color:var(--muted); font-size:12px; line-height:1.5; margin:10px 0 0; text-align:left}
+  /* A white plate, whatever theme the app is running. A QR inverted to match a
+     dark screen is one a good half of phone cameras will not read, and the one
+     thing this panel cannot afford is to be handsome and unscannable. */
+  #gate .gqrPlate{background:#fff; border-radius:14px; padding:12px; width:210px; height:210px;
+    margin:0 auto 18px; box-sizing:border-box}
+  #gate .gqrPlate svg{display:block; width:100%; height:100%}
+  #gate .gqrCode{font-family:var(--mono); font-size:30px; font-weight:800; letter-spacing:.14em;
+    margin:10px 0 0}
   /* signed-in identity in the header, so the state is visible without digging */
   #who{display:none; font-size:11px; color:var(--muted); font-family:var(--mono)}
   #who.show{display:block}
@@ -269,6 +277,22 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
            regression for all of them. -->
       <p class="ghint" id="gPwHint" hidden>No password? Leave it empty and we'll email you a six-digit code.</p>
       <button class="gbtn" id="gSend">Email me a code</button>
+      <button class="glink" id="gQrLink">Sign in from my phone instead</button>
+    </div>
+
+    <!-- ── QR sign-in ──────────────────────────────────────────────────────
+         This screen shows a code; a phone that is ALREADY signed in scans it and
+         taps once. Nothing is typed here, which is the whole point on a laptop,
+         a tablet, or anything with a remote instead of a keyboard. -->
+    <div id="gQr" hidden>
+      <div class="gqrPlate" id="gQrPlate"></div>
+      <p class="gsent" id="gQrLead">Scan this with your phone’s camera.</p>
+      <p class="gsub" style="margin:10px 0 0">No camera? On a phone that’s already signed in,
+        go to <b id="gQrHost">transitproject.online/signin</b> and enter:</p>
+      <div class="gqrCode" id="gQrCode">••• •••</div>
+      <p class="gsent" id="gQrMsg">Getting a code…</p>
+      <button class="gbtn" id="gQrRetry" hidden>Get a new code</button>
+      <button class="glink" id="gQrBack">Use an email address instead</button>
     </div>
 
     <div id="gPaid" hidden>
@@ -1497,18 +1521,31 @@ function gateStep(n){
   document.getElementById("gStep1").hidden = n!==1;
   document.getElementById("gStep2").hidden = n!==2;
   document.getElementById("gPaid").hidden  = n!==3;
+  document.getElementById("gQr").hidden    = n!==4;
   const skip=document.getElementById("gSkip");
   if(skip) skip.hidden = hardGated();     // no way past on a paid build
+  if(n!==4) qrStop();                     // leaving the panel stops its timers
   gateError("");
 }
 /* Where should the door be right now? */
 function gateRoute(){
-  if(needsSignIn()) return gateStep(gateToken?2:1);
+  if(needsSignIn()) return gateStep(qrMode ? 4 : (gateToken?2:1));
   if(needsLicence()){
     document.getElementById("gPaidWho").textContent =
       (window.TBAccount && TBAccount.email()) || "this device";
     return gateStep(3);
   }
+  /* Sent here by signin.html to sign in first, because approving a QR needs a
+     session and this phone had none. Now it does, so put them back where they
+     were rather than making them find that link again.
+
+     Only a bare relative page name is honoured. Anything carrying a scheme, a
+     host, or a leading slash is refused -- a redirect target read out of the
+     query string is an open redirect the moment it is trusted, and this one
+     fires on a page that has just minted a session. */
+  const then = (new URLSearchParams(location.search).get("then") || "");
+  if (/^[A-Za-z0-9_.\-]+\.html(\?[^#]*)?$/.test(then)) { location.replace(then); return; }
+
   hideGate(); whoLabel(); render();
 }
 function whoLabel(){
@@ -1529,6 +1566,9 @@ async function gatePaint(){
   document.getElementById("gProv").hidden = !(gateMethods.google || gateMethods.apple);
   document.getElementById("gPwField").hidden = !gateMethods.password;
   document.getElementById("gPwHint").hidden = !(gateMethods.password && gateMethods.code);
+  /* Hidden against a Worker deployed before QR sign-in existed, where the link
+     would only lead to a 404. */
+  gQ("gQrLink").hidden = !gateMethods.qr;
   gateBtnLabel();
 }
 const gatePwOffered = () => !document.getElementById("gPwField").hidden;
@@ -1572,8 +1612,127 @@ async function gateVerify(){
   }catch(e){ gateError(e.message||"That didn't work."); }
   finally{ btn.disabled=false; btn.textContent="Sign in"; }
 }
+/* ---------- QR sign-in: this screen waits, a phone approves ----------------
+   The other half of PAIRING.md's television flow, pointed at the account. This
+   screen has no session and cannot get one by itself; it shows a code and waits
+   for a phone that is already signed in to vouch for it. Nothing typed here. */
+let qrMode=false, qrLive=null, qrTimer=null, qrClock=null, qrBusy=false;
+const gQ = id => document.getElementById(id);
+
+/* Where the phone is sent. Normally this screen's own address, so a Spotter
+   served off a Pi on the LAN sends the phone to that Pi; only file:// and
+   loopback fall back to the public site. That fallback still works, because the
+   two devices never talk to each other -- everything goes through the Worker. */
+function qrBase(){
+  const host=location.hostname||"";
+  const loopback=/^(localhost|127(\.\d+){3}|0\.0\.0\.0|\[?::1\]?)$/i.test(host);
+  if(location.protocol==="file:" || loopback || !host) return "https://transitproject.online/";
+  return location.href.replace(/[?#].*$/,"").replace(/[^/]*$/,"");
+}
+function qrStop(){
+  if(qrTimer){ clearInterval(qrTimer); qrTimer=null; }
+  if(qrClock){ clearInterval(qrClock); qrClock=null; }
+  qrLive=null;
+  qrBusy=false;
+}
+const qrSay = t => { gQ("gQrMsg").textContent=t; };
+
+/* 16KB of QR encoder, fetched only when somebody actually asks for this panel. */
+function loadQrEncoder(){
+  return new Promise(res=>{
+    if(window.TBQR) return res(true);
+    const s=document.createElement("script");
+    s.src="pair-qr.js?v=1";
+    s.onload=()=>res(!!window.TBQR);
+    s.onerror=()=>res(false);
+    document.head.appendChild(s);
+  });
+}
+
+async function qrOpen(){
+  qrMode=true; qrStop(); gateStep(4);
+  const base=qrBase();
+  gQ("gQrHost").textContent=base.replace(/^https?:\/\//,"")+"signin";
+  gQ("gQrCode").textContent="••• •••";
+  gQ("gQrRetry").hidden=true;
+  gQ("gQrPlate").innerHTML=""; gQ("gQrPlate").hidden=false;
+  gQ("gQrLead").textContent="Scan this with your phone’s camera.";
+  qrSay("Getting a code…");
+
+  let d;
+  try{ d=await TBAccount.pairStart(TBAccount.deviceLabel()); }
+  catch(e){
+    qrSay(e.message||"Couldn’t reach the account server.");
+    gQ("gQrRetry").hidden=false;
+    return;
+  }
+  qrLive={code:d.code, secret:d.secret, until:Date.now()+(d.expiresIn||600)*1000};
+  gQ("gQrCode").textContent=d.code.slice(0,3)+" "+d.code.slice(3);
+
+  const link=base+"signin.html?c="+d.code;
+  if(await loadQrEncoder()){
+    /* Level Q rather than the default M: this gets photographed off a lit screen
+       at an angle, often with a reflection across part of it. */
+    try{ gQ("gQrPlate").innerHTML=window.TBQR.svg(link,{ecc:"Q",quiet:2}); }
+    catch(_){ gQ("gQrPlate").hidden=true; }
+  } else {
+    // The typed code is a complete route on its own, so losing the picture is a
+    // degradation rather than a failure.
+    gQ("gQrPlate").hidden=true;
+    gQ("gQrLead").textContent="Enter this code on a phone that’s already signed in.";
+  }
+
+  qrSay("Waiting for your phone…");
+  qrTimer=setInterval(qrTick,(d.interval||3)*1000);
+  qrClock=setInterval(()=>{
+    if(!qrLive) return;
+    if(qrLive.until-Date.now()<=0){
+      qrStop(); qrSay("That code has expired.");
+      gQ("gQrRetry").hidden=false;
+    }
+  },1000);
+}
+
+/* setInterval does not wait for an async callback, so without the busy flag a
+   slow poll gets overtaken by the next one. That is not theoretical: the
+   successful poll deletes the pairing record, so the tick behind it found
+   nothing, took the 404 branch, and announced "that code has expired" over the
+   top of a sign-in that had just worked. */
+async function qrTick(){
+  if(!qrLive || qrBusy) return;
+  qrBusy=true;
+  try{ await qrPollOnce(); } finally{ qrBusy=false; }
+}
+
+async function qrPollOnce(){
+  let d;
+  try{ d=await TBAccount.pairPoll(qrLive.code,qrLive.secret); }
+  catch(e){
+    /* A dead code is final; anything else is more likely a blip on a phone's
+       connection than a real answer, and riding it out beats giving up. */
+    if(e.status===404){
+      qrStop(); qrSay("That code has expired."); gQ("gQrRetry").hidden=false;
+    }
+    return;
+  }
+  if(d.status==="ready"){
+    qrStop(); qrMode=false;
+    whoLabel(); renderAccount();
+    toast("Signed in — your log is synced");
+    gateRoute();                       // may still owe us a licence
+    return;
+  }
+  if(d.status==="denied"){
+    qrStop(); qrSay("That sign-in was rejected on the phone.");
+    gQ("gQrRetry").hidden=false;
+  }
+}
+
 async function initGate(){
   document.getElementById("gSend").onclick=gateSubmit;
+  gQ("gQrLink").onclick=qrOpen;
+  gQ("gQrRetry").onclick=qrOpen;
+  gQ("gQrBack").onclick=()=>{ qrMode=false; qrStop(); gateStep(1); };
   document.getElementById("gVerify").onclick=gateVerify;
   document.getElementById("gBack").onclick=()=>{ gateToken=null; gateStep(1); };
   document.getElementById("gSkip").onclick=()=>{ hideGate(); toast("Using this device only — sign in any time from ⚙︎"); };

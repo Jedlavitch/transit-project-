@@ -62,6 +62,19 @@
     return d;
   }
 
+  /* Pull the log down after signing in -- but never at the cost of the sign-in
+     itself.
+
+     Every door adopts the session first and syncs second, so by the time this
+     runs the person IS signed in. Letting a failure here escape would surface as
+     "that didn't work" on a screen that had in fact just succeeded, and on the
+     QR flow it did exactly that: a slow /spots call raced the next poll and the
+     screen said "that code has expired" while holding a working session. The
+     sync retries on its own, so swallowing it costs nothing. */
+  async function syncQuietly() {
+    try { await TBAccount.sync(); } catch (_) {}
+  }
+
   /* Same merge rule as the Worker's, so a device that syncs and a device that
      doesn't end up agreeing rather than diverging. */
   function merge(a, b) {
@@ -134,7 +147,7 @@
     /* Step 2 — hand back the code from the email. */
     async verify(token, code) {
       const d = adopt(await api("/auth/verify", { method: "POST", body: JSON.stringify({ token, code }) }));
-      await TBAccount.sync();      // first sign-in pulls anything already stored
+      await syncQuietly();         // first sign-in pulls anything already stored
       return d;
     },
 
@@ -144,7 +157,7 @@
       const d = adopt(await api("/auth/password", {
         method: "POST", body: JSON.stringify({ email: addr, password }),
       }));
-      await TBAccount.sync();
+      await syncQuietly();
       return d;
     },
 
@@ -187,11 +200,65 @@
         const d = adopt(await api("/auth/ticket", {
           method: "POST", body: JSON.stringify({ ticket: r.ticket }),
         }));
-        await TBAccount.sync();
+        await syncQuietly();
         return { ok: true, email: d.email };
       } catch (e) {
         return { ok: false, error: e.message || "that sign-in could not be completed" };
       }
+    },
+
+    /* ── QR sign-in ───────────────────────────────────────────────────────
+       Two halves, and a given device only ever plays one of them.
+
+       The device that wants in: pairStart() for a code, draw it, then pairPoll()
+       every few seconds until it comes back ready -- at which point the session
+       is adopted here and the caller is simply signed in.
+
+       The phone that already has a session: pairCheck() to find out whether the
+       code is alive and what is asking, then pairApprove() or pairDeny(). Both
+       of those need a session, and that is the point of the whole design -- see
+       the note above /auth/pair/start in account-worker.js. */
+    async pairStart(label) {
+      if (!configured()) throw new Error("no account server configured");
+      return api("/auth/pair/start", {
+        method: "POST", body: JSON.stringify({ label: label || "" }),
+      });
+    },
+
+    /* Resolves to {status:"pending"|"ready"|"denied"}. On "ready" the session is
+       already stored, so the caller just repaints. */
+    async pairPoll(code, secret) {
+      const d = await api("/auth/pair/poll?code=" + encodeURIComponent(code)
+                          + "&secret=" + encodeURIComponent(secret));
+      if (d.status === "ready") {
+        adopt(d);
+        await syncQuietly();
+      }
+      return d;
+    },
+
+    pairCheck(code) { return api("/auth/pair/check?code=" + encodeURIComponent(code)); },
+    pairApprove(code) {
+      return api("/auth/pair/approve", { method: "POST", body: JSON.stringify({ code }) });
+    },
+    pairDeny(code) {
+      return api("/auth/pair/deny", { method: "POST", body: JSON.stringify({ code }) });
+    },
+
+    /* Something the person approving can recognise as their own screen. Kept
+       vague on purpose -- it is shown to whoever holds the code, so it should
+       say "a Mac", not which Mac. */
+    deviceLabel() {
+      const ua = navigator.userAgent || "";
+      let what = "a browser";
+      if (/iPhone/.test(ua)) what = "an iPhone";
+      else if (/iPad/.test(ua)) what = "an iPad";
+      else if (/Android/.test(ua)) what = "an Android phone";
+      else if (/Macintosh|Mac OS X/.test(ua)) what = "a Mac";
+      else if (/Windows/.test(ua)) what = "Windows";
+      else if (/CrOS/.test(ua)) what = "a Chromebook";
+      else if (/Linux/.test(ua)) what = "Linux";
+      return "Transit Spotter on " + what;
     },
 
     async signOut() {
