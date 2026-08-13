@@ -77,10 +77,13 @@ I can't create a Stripe account or handle payment setup on your behalf.
    into a chat.**
 
 **Redeploy this Worker whenever `license-worker.js` changes.** It is the one
-piece that does not ship with a `git push`, so it falls behind quietly. It
-currently owes you the pairing routes (`PAIRING.md`) and the `/health` check
-that tests the Stripe key rather than noticing one is present. Paste, Deploy,
-then run the `/pair/start` check at the top of `PAIRING.md`.
+piece that does not ship with a `git push`, so it falls behind quietly — it had
+done exactly that, by one commit, before anyone noticed.
+
+Up to date as of **12 August 2026, version `4ce15fb3`**: pairing routes
+(`PAIRING.md`) and the `/health` check that tests the Stripe key rather than
+noticing one is present. `/health` now reports `stripeCheck.mode: "live"`.
+After any future paste, run the `/pair/start` check in `PAIRING.md`.
 
 ---
 
