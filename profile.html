@@ -15,8 +15,8 @@
 var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
 var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
 <script src="config.js?v=2"></script>
-<script src="license.js"></script>
-<script src="account.js"></script>
+<script src="license.js?v=2"></script>
+<script src="account.js?v=2"></script>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0; min-height:100%}
@@ -105,11 +105,25 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 
     <!-- configured, signed out -->
     <div id="acctIn" class="hide">
-      <p class="note" style="margin-top:0">Sign in to carry your Spotter log between devices.
-        There is no password — we email you a six-digit code.</p>
+      <p class="note" style="margin-top:0">Sign in to carry your Spotter log between devices.</p>
       <div id="stepEmail">
+        <!-- Each provider appears only if the Worker actually holds its client
+             id, so a button never leads somewhere that cannot answer. -->
+        <div class="btns hide" id="provRow" style="margin-top:0">
+          <button class="btn hide" id="googleBtn" type="button">Continue with Google</button>
+          <button class="btn hide" id="appleBtn" type="button">Continue with Apple</button>
+        </div>
         <label for="emailInput">Email address</label>
         <input id="emailInput" type="email" autocomplete="email" spellcheck="false" placeholder="you@example.com" />
+        <div id="pwWrap" class="hide">
+          <label for="pwInput">Password</label>
+          <input id="pwInput" type="password" autocomplete="current-password" placeholder="••••••••" />
+        </div>
+        <!-- One button for both: a filled password signs you in with it, an
+             empty one sends a code. Every customer from before passwords
+             existed has no password, so a form that demanded one would have
+             locked all of them out of their own habit. -->
+        <p class="note hide" id="pwNote">No password? Leave it empty and we'll email you a six-digit code instead.</p>
         <div class="btns"><button class="btn primary" id="sendCodeBtn" type="button">Email me a code</button></div>
       </div>
       <div id="stepCode" class="hide">
@@ -128,9 +142,25 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <div id="acctUser" class="hide">
       <div class="row"><span class="k">Signed in as</span><span class="v mono" id="acctEmail">—</span></div>
       <div class="row"><span class="k">Status</span><span class="v"><span class="pill ok">Signed in</span></span></div>
+      <div class="row"><span class="k">Password</span><span class="v" id="pwState">—</span></div>
       <div class="btns">
         <button class="btn" id="syncBtn" type="button">Sync now</button>
+        <button class="btn" id="pwEditBtn" type="button">Set a password</button>
         <button class="btn" id="signOutBtn" type="button">Sign out</button>
+      </div>
+      <div id="pwEdit" class="hide">
+        <label for="pwNew">New password</label>
+        <input id="pwNew" type="password" autocomplete="new-password" placeholder="at least 8 characters" />
+        <div id="pwCurWrap" class="hide">
+          <label for="pwCur">Current password</label>
+          <input id="pwCur" type="password" autocomplete="current-password" placeholder="••••••••" />
+          <p class="note">If you signed in with a code, Google or Apple, leave this empty — you have
+            already proved you own the address, which is the stronger claim of the two.</p>
+        </div>
+        <div class="btns">
+          <button class="btn primary" id="pwSaveBtn" type="button">Save password</button>
+          <button class="btn danger hide" id="pwRemoveBtn" type="button">Remove password</button>
+        </div>
       </div>
       <p class="note">Signing out leaves your sightings on this device alone — it is not "delete my data".</p>
       <div class="msg" id="acctMsg2"></div>
@@ -217,19 +247,67 @@ function say(el, text, kind){ const e=$(el); if(!e) return; e.textContent=text||
 
 /* ── Account ──────────────────────────────────────────────────────────────
    account.js is dormant with no Worker URL, so the three states are: not
-   configured at all, configured-and-signed-out, and signed in. */
+   configured at all, configured-and-signed-out, and signed in. Which ways in
+   to offer inside that second state is the Worker's business, not ours — see
+   methods(). */
 let authToken = "";
-function paintAccount(){
+let acctMethods = { code: true, password: false, google: false, apple: false };
+
+async function paintAccount(){
   const A = window.TBAccount;
   const configured = !!(A && A.configured());
   $("#acctOff").classList.toggle("hide", configured);
   $("#acctIn").classList.toggle("hide", !configured || A.signedIn());
   $("#acctUser").classList.toggle("hide", !configured || !A.signedIn());
-  if (configured && A.signedIn()) $("#acctEmail").textContent = A.email() || "(unknown)";
+  if (!configured) return;
+
+  acctMethods = await A.methods();
+  $("#googleBtn").classList.toggle("hide", !acctMethods.google);
+  $("#appleBtn").classList.toggle("hide", !acctMethods.apple);
+  $("#provRow").classList.toggle("hide", !(acctMethods.google || acctMethods.apple));
+  $("#pwWrap").classList.toggle("hide", !acctMethods.password);
+  $("#pwNote").classList.toggle("hide", !(acctMethods.password && acctMethods.code));
+  labelSubmit();
+
+  if (A.signedIn()) {
+    $("#acctEmail").textContent = A.email() || "(unknown)";
+    const has = A.hasPassword();
+    $("#pwState").innerHTML = has
+      ? '<span class="pill ok">Set</span>'
+      : '<span class="pill off">Not set</span>';
+    $("#pwEditBtn").textContent = has ? "Change password" : "Set a password";
+    $("#pwEditBtn").classList.toggle("hide", !acctMethods.password);
+    $("#pwCurWrap").classList.toggle("hide", !has);
+    $("#pwRemoveBtn").classList.toggle("hide", !has);
+  }
 }
+
+/* Keep the button honest about which door the current input will use. */
+function labelSubmit(){
+  const pw = acctMethods.password ? $("#pwInput").value : "";
+  $("#sendCodeBtn").textContent = (pw || !acctMethods.code) ? "Sign in" : "Email me a code";
+}
+$("#pwInput").addEventListener("input", labelSubmit);
+$("#googleBtn").onclick = () => TBAccount.oauthGo("google");
+$("#appleBtn").onclick = () => TBAccount.oauthGo("apple");
+
 $("#sendCodeBtn").onclick = async () => {
   const addr = $("#emailInput").value.trim();
   if (!addr || addr.indexOf("@") < 1) return say("#acctMsg", "That doesn't look like an email address.", "bad");
+  const pw = acctMethods.password ? $("#pwInput").value : "";
+
+  if (pw) {
+    say("#acctMsg", "Signing in…");
+    try {
+      await TBAccount.signInPassword(addr, pw);
+      $("#pwInput").value = "";
+      await paintAccount(); paintSpots();
+      say("#acctMsg", "");
+    } catch (e) { say("#acctMsg", e.message, "bad"); }
+    return;
+  }
+  if (!acctMethods.code) return say("#acctMsg", "Enter your password.", "bad");
+
   say("#acctMsg", "Sending…");
   try {
     authToken = await TBAccount.start(addr);
@@ -238,6 +316,33 @@ $("#sendCodeBtn").onclick = async () => {
     $("#codeInput").focus();
     say("#acctMsg", "Code sent to " + addr + ".", "good");
   } catch (e) { say("#acctMsg", "Couldn't send a code: " + e.message, "bad"); }
+};
+
+/* ── the password itself ────────────────────────────────────────────────── */
+$("#pwEditBtn").onclick = () => {
+  const open = $("#pwEdit").classList.toggle("hide");
+  if (!open) $("#pwNew").focus();
+};
+$("#pwSaveBtn").onclick = async () => {
+  const next = $("#pwNew").value;
+  if (!next) return say("#acctMsg2", "Type the new password, or use Remove password.", "bad");
+  say("#acctMsg2", "Saving…");
+  try {
+    await TBAccount.setPassword(next, $("#pwCur").value || undefined);
+    $("#pwNew").value = ""; $("#pwCur").value = "";
+    $("#pwEdit").classList.add("hide");
+    await paintAccount();
+    say("#acctMsg2", "Password saved. You can sign in with it on any device.", "good");
+  } catch (e) { say("#acctMsg2", e.message, "bad"); }
+};
+$("#pwRemoveBtn").onclick = async () => {
+  say("#acctMsg2", "Removing…");
+  try {
+    await TBAccount.setPassword("");
+    $("#pwEdit").classList.add("hide");
+    await paintAccount();
+    say("#acctMsg2", "Password removed — sign in with a code or a provider.", "good");
+  } catch (e) { say("#acctMsg2", e.message, "bad"); }
 };
 $("#backToEmailBtn").onclick = () => {
   $("#stepCode").classList.add("hide"); $("#stepEmail").classList.remove("hide"); say("#acctMsg","");
@@ -422,8 +527,20 @@ $("#forgetBtn").onclick = () => {
 
 /* license.js verifies on its own schedule; give it a moment to settle before
    reading TBLicense.licensed, or a cold load paints "Evaluation" then flips. */
-paintAccount(); paintSpots(); paintPrefs(); paintDevice(); paintLicence();
+paintSpots(); paintPrefs(); paintDevice(); paintLicence();
 setTimeout(paintLicence, 1200);
+
+/* If this load is the browser coming back from Google or Apple, finish the
+   sign-in before the first paint, so the page never shows a signed-out panel to
+   somebody who has just signed in. */
+(async function startAccount(){
+  const back = window.TBAccount ? await TBAccount.completeReturn() : null;
+  await paintAccount();
+  if (back) {
+    if (back.ok) { paintSpots(); say("#acctMsg2", "Signed in as " + (back.email || "your account") + ".", "good"); }
+    else say("#acctMsg", back.error, "bad");
+  }
+})();
 </script>
 </body>
 </html>

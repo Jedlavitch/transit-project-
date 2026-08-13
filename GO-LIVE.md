@@ -98,9 +98,10 @@ session. Fine once step 1 is done; painful before, since the code lands in spam.
 `PRIVACY.md` is written. Fill in every `[BRACKET]`, have someone qualified review
 it, and link it from `buy.html` and the app settings.
 
-One gap it names: **there is no account-deletion endpoint yet.** A
-right-to-erasure request means editing KV by hand. Ask me to build `/account/delete`
-before you have real volume.
+The account-deletion gap this used to name is closed: `POST /auth/delete` erases
+the account, its sightings and its password hash, authorised by being signed in.
+**Your account → Delete** reaches it. A right-to-erasure request no longer means
+editing KV by hand.
 
 ---
 
@@ -111,6 +112,35 @@ Buy your own product with a real card. All the way through: pay → land on
 your log. Refund yourself afterwards in Stripe.
 
 Every payment system has a step that only breaks with real money.
+
+---
+
+## 8. Google and Apple sign-in — **optional, you**
+
+Nothing above depends on this, and nothing breaks without it: each button stays
+hidden until its own variables exist, and email-and-password and the emailed code
+work regardless. Full instructions with the reasoning are in `ACCOUNTS.md` §4–5;
+the short version:
+
+1. **Set `ALLOWED_ORIGINS` first** on the `tbaccounts` worker, e.g.
+   `https://transitproject.online`. This is the list of places a finished
+   sign-in may be handed back to, and it is the one setting here you cannot
+   afford to get loose — without it you would have built an open redirector that
+   gives sessions away.
+2. **Google** (free): Cloud Console → Credentials → OAuth client ID → Web
+   application → redirect URI
+   `https://tbaccounts.<you>.workers.dev/auth/google/callback`. Add
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as secrets. Publish the consent
+   screen, or only accounts you list by hand can sign in.
+3. **Apple** (needs the **paid** $99/year Apple Developer membership — there is
+   no free route): register a Services ID, create a Sign-in-with-Apple key, and
+   add `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
+   The `.p8` downloads exactly once.
+4. `GET /health` tells you what took: `{"methods":{"google":true,"apple":true,…}}`.
+
+Redeploying the worker is what turns passwords on, too. Until you do, the app
+keeps offering only the emailed code, exactly as it does today — so there is no
+window where customers see a password box the server cannot honour.
 
 ---
 

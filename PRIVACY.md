@@ -130,15 +130,27 @@ If you choose to sign in, we store:
 | Your sightings — vehicle, route, place, note, and **the location where you logged it** | To sync your log between your devices | Until you delete them, or your account |
 | A session token | To keep you signed in | About 13 months, then it expires |
 | Temporary sign-in codes | To verify it is you | 15 minutes |
+| **A password, if you choose to set one** | So you can sign in without waiting for an email | Until you change or remove it, or delete your account |
 | Rate-limiting counters, tied to a hashed email or IP | To stop abuse of the sign-in system | Up to 1 hour |
+| If you sign in with Apple, a mapping from Apple's identifier for you to your address | Apple only sends the address the first time; without this you would land in a new empty account on every later sign-in | Until you delete your account |
 
 **Your location history deserves calling out.** A sighting can include the
 coordinates where you logged it. Taken together, that is a record of places you
 have been. It is only ever stored if you are signed in, only ever readable by
 your own account, and never shared.
 
-There are **no passwords** anywhere in this system. Signing in is a code sent to
-your email, so there is nothing to store, lose, or have stolen.
+**About passwords.** You do not need one — you can sign in with an emailed code,
+or with Google or Apple, and never set one at all. If you do set one, we store
+only a salted PBKDF2-SHA256 hash of it, never the password itself, and you can
+remove it again at any time from **Your account**. We would still rather you used
+a password manager and a password you use nowhere else.
+
+**If you sign in with Google or Apple**, we receive your email address and
+whether they have verified it, and nothing else. We do not receive your Google or
+Apple password, and we cannot see anything else in those accounts. Using those
+buttons does tell Google or Apple that you use this product — if you would rather
+not, sign in with an emailed code instead. Apple's **Hide My Email** works here:
+we will only ever see the relay address Apple invents for us.
 
 ---
 
@@ -149,6 +161,8 @@ your email, so there is nothing to store, lose, or have stolen.
 | **Cloudflare** | Runs our licence and account servers | Licence keys, device identifiers, purchase emails, account data, IP addresses |
 | **Stripe** | Takes payment | Your name, email and payment details — we receive only the email |
 | **Resend** | Sends sign-in code emails | Your email address |
+| **Google** | Only if you press "Continue with Google" | That you signed in to this product, and when |
+| **Apple** | Only if you press "Continue with Apple" | That you signed in to this product, and when |
 | **GitHub Pages** | Serves the site itself | Your IP address, as any web host does |
 | Transit agencies, adsb.lol, amtraker, adsbdb, CARTO, Nominatim, planespotters.net, Wikimedia | Live data, maps and photographs | See the table in §1 |
 
@@ -193,8 +207,15 @@ which sends sign-in emails.
 
 Sign-in codes and session tokens are stored hashed, and account identifiers are
 derived from a salted hash of your email rather than the address itself. Licence
-keys are cryptographically signed rather than guessable. There are no passwords
-in the system at all.
+keys are cryptographically signed rather than guessable. Passwords — which are
+optional, and which many accounts will not have — are stored only as a salted
+PBKDF2-SHA256 hash at 100,000 rounds, never in a form we could read back.
+
+Being straight about the trade: an earlier version of this system had no
+passwords at all, and that was genuinely safer. Passwords were added because
+waiting on an email to log a train you can see is a poor way to use an app. If
+that trade is not one you want, do not set a password — everything still works
+without one.
 
 That said: no service is perfectly secure, and this one is run by an individual
 rather than a security team. If we discover a breach affecting your data we will
