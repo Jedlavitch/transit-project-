@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=15" />
+<script src="settings-ui.js?v=10" defer></script>
 <script src="license.js" defer></script>
 <script src="gate.js?v=1" defer></script>
 <script src="cityswitch.js?v=3"></script>
@@ -639,18 +640,6 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     <div class="suggest-row" id="suggestRow"></div>
     <button id="addrGpsBtn" type="button" class="ghost" style="margin-top:8px; width:100%; padding:9px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--text); cursor:pointer; font-size:13px">Use my current location instead</button>
 
-    <div class="section-lbl">Aircraft feed (optional)</div>
-    <p style="font-size:12px">Planes overhead need a feed you run yourself — this board ships without one,
-      because the free public feeds do not permit commercial use and we will not
-      make that your problem. <b>AIRCRAFT-FEED.md</b> has a ready-made proxy and
-      takes a few minutes on any small server. Leave this empty and the board
-      simply runs without the aircraft card.</p>
-    <div class="addr-row">
-      <input id="adsbInput" type="text" placeholder="https://adsb.yourdomain.com" autocomplete="off" spellcheck="false" />
-      <button id="adsbSetBtn" type="button">Save</button>
-    </div>
-    <div id="adsbStatus" style="font-size:12px;margin-top:6px"></div>
-
     <div class="accent-lbl">Theme</div>
     <div class="theme-row" id="themeRow">
       <button type="button" class="theme-btn" data-theme="dark">Dark</button>
@@ -701,6 +690,19 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
+    <div class="section-lbl">Aircraft feed (optional)</div>
+    <p style="font-size:12px">Planes overhead need a feed you run yourself — this board ships without one,
+      because the free public feeds do not permit commercial use and we will not
+      make that your problem. <b>AIRCRAFT-FEED.md</b> has a ready-made proxy and
+      takes a few minutes on any small server. Leave this empty and the board
+      simply runs without the aircraft card.</p>
+    <div class="addr-row">
+      <input id="adsbInput" type="text" placeholder="https://adsb.yourdomain.com" autocomplete="off" spellcheck="false" />
+      <button id="adsbSetBtn" type="button">Save</button>
+    </div>
+    <div id="adsbStatus" style="font-size:12px;margin-top:6px"></div>
+
+    <div class="section-lbl">Live position workers (optional)</div>
     <details style="margin-top:6px">
       <summary style="cursor:pointer;color:var(--accent-ink);font-size:13px">Advanced: live NJ Transit buses</summary>
       <p style="margin-top:10px">NJ Transit is <b>scheduled</b> by default (no setup). Rail covers every
