@@ -303,6 +303,19 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
      footer, page bottom) and bright-blue highlights (clock ink, row top sheen,
      stop labels, border tints). --blue-bright/--blue-deep come from theme.css
      and flip appropriately in the Black/Day themes. */
+
+  /* NO color-mix in this shorthand. One invalid layer invalidates the WHOLE
+     `background` declaration, and background-color then reverts to its initial
+     value — transparent — so a television without color-mix painted the board
+     white and ignored --bg entirely. The accent wash is added back below, where
+     a browser that cannot do it simply never sees it. */
+  body{background:
+      radial-gradient(900px 600px at 108% 18%, rgba(78,161,255,.13) 0%, transparent 55%),
+      radial-gradient(1000px 700px at -10% 110%, rgba(58,208,200,.10) 0%, transparent 55%),
+      radial-gradient(800px 500px at 8% -6%, rgba(181,140,255,.09) 0%, transparent 60%),
+      radial-gradient(1400px 900px at 50% 125%, var(--blue-deep,#0a1a3d) 0%, transparent 62%),
+      radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%)}
+  @supports (color: color-mix(in srgb, red 10%, blue)){
   body{background:
       radial-gradient(900px 600px at 108% 18%, rgba(78,161,255,.13) 0%, transparent 55%),
       /* the dominant wash follows the accent; the teal and violet layers below
@@ -312,6 +325,7 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
       radial-gradient(800px 500px at 8% -6%, rgba(181,140,255,.09) 0%, transparent 60%),
       radial-gradient(1400px 900px at 50% 125%, var(--blue-deep,#0a1a3d) 0%, transparent 62%),
       radial-gradient(1200px 800px at 80% -10%, var(--bg-glow) 0%, var(--bg) 55%)}
+  }
   header{background:linear-gradient(180deg, var(--blue-deep,#0a1a3d), var(--bg))}
   header .clock .time{background:linear-gradient(180deg, var(--text) 30%, var(--blue-bright,#7cc0ff));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
