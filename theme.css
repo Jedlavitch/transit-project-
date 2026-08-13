@@ -369,7 +369,17 @@ body #app{
    the page -- wider than the viewport, regardless of how correctly the zoom
    math is behaving. */
 body .cards{ grid-template-columns:repeat(auto-fit, minmax(min(320px,100%), 1fr)) }
-body #statStrip{ grid-template-columns:repeat(auto-fit, minmax(min(108px,100%), 1fr)) }
+/* flex + wrap, not a grid of 1fr tracks: 1fr made every tile STRETCH to fill
+   an equal share of the row, so once main stacks and #statStrip gets the
+   full viewport width, 6 tiles spread edge-to-edge with big dead gaps after
+   each tile's actual (much narrower) content -- reported as "over-justified"
+   on a real iPad. Flex items don't stretch to fill free space by default, so
+   the 6 tiles now sit grouped together at their natural width, wrapping to a
+   second row instead of spreading if they ever don't fit one line. Matches
+   the pattern this file's own `body.stats-min #statStrip` rule already uses
+   (display:flex there too) rather than introducing a third layout. */
+body #statStrip{ display:flex; flex-wrap:wrap; justify-content:flex-start; gap:8px 20px }
+body .stat{ flex:0 1 auto; min-width:0 }
 body .stat .s-value{ font-size:clamp(16px, 2.1vw, 26px) }
 body .list{ min-width:0 }
 body .row{ grid-template-columns:auto minmax(0,1fr) auto auto; min-width:0 }
@@ -387,8 +397,37 @@ body .row{ grid-template-columns:auto minmax(0,1fr) auto auto; min-width:0 }
    that gap entirely, on top of (not instead of) the auto-fit/min-width:0
    fix above. */
 @media (max-width:1220px){
-  body main{ grid-template-columns:1fr; grid-template-rows:26dvh 1fr }
+  /* 26dvh made the map row a thin letterbox strip once it spans the FULL
+     device width instead of sharing it with a cards column -- 193px tall
+     across 1133px wide on a real iPad landscape, a ~5.9:1 ribbon, reported
+     as "squished, wrong aspect ratio, doesn't read as a proper map". clamp()
+     puts a floor under it (220px: enough to actually look like a map, not a
+     strip) and a ceiling (420px: so a tall portrait screen doesn't let the
+     map swallow the cards below it), with 34dvh doing the scaling between --
+     up from 26dvh so the floor only ever kicks in on genuinely short/wide
+     windows rather than being the map's normal height everywhere.
+     This base rule is the correct, literal on-screen size for a browser
+     where `zoom` doesn't apply at all (see @supports below) -- #app there
+     renders unzoomed, so a plain dvh/px value here already IS real screen
+     pixels. */
+  body main{ grid-template-columns:1fr; grid-template-rows:clamp(220px,34dvh,420px) 1fr }
   body #map{ min-height:0 }
+}
+@supports (zoom: 1){
+  @media (max-width:1220px){
+    /* main lives inside #app, which this browser zooms by --ui-zoom -- so a
+       plain 34dvh here would compute correctly as a LENGTH (dvh always
+       resolves against the true device viewport, zoom or not) but then
+       render zoom-SHRUNK on screen, same as everything else inside #app.
+       Caught by measuring it directly: at a real iPad's 0.7 zoom, the plain
+       34dvh above rendered as just 177px, barely more than the original
+       26dvh's 135px -- the clamp()'s 220px floor meant 220px of LOCAL
+       (pre-zoom) space, not 220 actual screen px. Dividing by --ui-zoom
+       here, exactly like #app's own width/height calc does, makes the
+       clamp()'s bounds mean real screen pixels regardless of what zoom
+       autoDisplay() picked. */
+    body main{ grid-template-rows:calc(clamp(220px,34dvh,420px) / var(--ui-zoom)) 1fr }
+  }
 }
 
 /* Reclaim vertical space inside a card: the stop + direction labels were using
