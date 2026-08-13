@@ -663,6 +663,13 @@ var r=g("tb.rows")||g("transitboardla.rows");if(r&&r!=="normal")d.setAttribute("
       <button type="button" class="theme-btn" data-zoom="1">100%</button>
       <button type="button" class="theme-btn" data-zoom="1.15">115%</button>
       <button type="button" class="theme-btn" data-zoom="1.3">130%</button>
+      <!-- Above 130% for the case auto-fit cannot see: a Chromecast, an HDMI
+           stick or a mini PC drives a television while reporting itself as an
+           ordinary desktop, so looksLikeTv() says no and the board stays at
+           desk density on a wall. These are the rungs that get it back. -->
+      <button type="button" class="theme-btn" data-zoom="1.5">150%</button>
+      <button type="button" class="theme-btn" data-zoom="1.75">175%</button>
+      <button type="button" class="theme-btn" data-zoom="2">200%</button>
     </div>
 
     <div class="accent-lbl">Edge fit <span style="text-transform:none; font-weight:600">(if a TV crops the edges)</span></div>
@@ -2462,14 +2469,43 @@ function setBoardPad(p){ localStorage.setItem("tb.safePad", String(p)); applyDis
    manual choice in Settings wins forever after -- this only fills the blank. */
 function looksLikeTv(){
   try{
+    /* ASK THE USER AGENT FIRST. The pointer test below was the only signal, and
+       it misses the commonest case: a television whose remote drives an on-screen
+       cursor reports `hover: hover` and `pointer: fine`, exactly like a laptop.
+       A TV is also not distinguishable by viewport — an LG panel on a wall and a
+       laptop on a desk both say 1920x1080 — so the media queries alone can never
+       separate "far away" from "arm's length".
+
+       Television browsers do say what they are, though. webOS (LG), Tizen
+       (Samsung), Fire TV, Chromecast, Android TV, HbbTV sets and the older
+       NetCast/Viera/BRAVIA panels all name themselves here, and that is a fact
+       about the device rather than a guess about the room. */
+    var ua = navigator.userAgent || "";
+    if (/smart-?tv|googletv|android ?tv|appletv|crkey|web0s|webos|tizen|netcast|viera|bravia|hbbtv|\baft[a-z]{1,3}\b|large screen/i.test(ua))
+      return true;
     return innerWidth>=1100 &&
       (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches);
   }catch(e){ return false; }
 }
 function autoDisplay(){
-  const fit = Math.min(innerWidth/1600, innerHeight/900);
-  const z = Math.max(0.7, Math.min(1, Math.round(fit*20)/20));   // 5% steps, 70-100%
-  return { z, pad: looksLikeTv() ? 2.5 : 0 };
+  /* A television is not short of pixels, it is short of ANGLE: the same
+     1920x1080 that sits at arm's length on a desk is being read from a sofa ten
+     feet away, so a layout that fits is still a layout nobody can read. Photos
+     of a wall-mounted 4K panel showed a full desktop-density board — correct,
+     and useless from the room it was in.
+
+     So the two cases get different design targets. A desk fits 1600x900 and may
+     only ever shrink. A television fits 1280x720 — the size the format was
+     designed around — and may only ever grow: 1.5x on a 1080p panel, 3x on a
+     4K one. Capping both at 100% was the bug; it meant the auto-fit could
+     rescue a small screen and never a distant one. */
+  const tv  = looksLikeTv();
+  const fit = tv ? Math.min(innerWidth/1280, innerHeight/720)
+                 : Math.min(innerWidth/1600, innerHeight/900);
+  const lo  = tv ? 1   : 0.7;
+  const hi  = tv ? 3   : 1;
+  const z = Math.max(lo, Math.min(hi, Math.round(fit*20)/20));   // 5% steps
+  return { z, pad: tv ? 2.5 : 0 };
 }
 function curZoom(){ const v=parseFloat(localStorage.getItem("tb.uiZoom")); return isFinite(v)&&v>0?v:autoDisplay().z; }
 function curPad(){ const v=parseFloat(localStorage.getItem("tb.safePad")); return isFinite(v)&&v>=0?v:autoDisplay().pad; }
