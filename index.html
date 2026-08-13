@@ -33,6 +33,15 @@
 <script src="config.js?v=2"></script>
 <script src="delays.js?v=2"></script>
 <script src="license.js?v=2" defer></script>
+<!-- Loaded so the page can tell whether you are signed in.
+
+     paintOwnerCtas() has been asking `window.TBAccount` this whole time and
+     always getting undefined, because this was the one page that never loaded
+     the file — so a signed-in customer with no licence on this device was
+     still shown a page selling them the product. Deferred, and dormant unless
+     config.js has written an account server URL, so on a self-hosted copy it
+     costs nothing. -->
+<script src="account.js?v=2" defer></script>
 <!--
   index.html — the front door.
 
@@ -66,6 +75,34 @@
   header nav a{padding:7px 13px; border-radius:9px; color:var(--muted); font-weight:600; font-size:13.5px}
   header nav a:hover{color:var(--text); background:var(--panel2)}
   header nav a.hi{background:var(--brand-pink); color:#fff}
+
+  /* ---- the account chip ----
+     "Your account" used to be a text link fourth of seven, styled exactly like
+     the four descriptions of the site around it. It is the only nav item that
+     is a place you go rather than a thing to read about, and people looking for
+     it were scanning past it.
+
+     So it gets the three things that make an account control findable anywhere
+     on the web: the far right of the header, a border so it reads as a control,
+     and a round avatar. Nothing clever — the point is that it is exactly where
+     the habit already says to look. */
+  header nav a.acct{display:inline-flex; align-items:center; gap:8px;
+    padding:5px 14px 5px 6px; border:1px solid var(--line); border-radius:999px;
+    color:var(--text); margin-left:2px}
+  header nav a.acct:hover{background:var(--panel2); border-color:var(--brand-pink)}
+  header nav a.acct .av{width:24px; height:24px; border-radius:50%; flex:0 0 auto;
+    display:inline-flex; align-items:center; justify-content:center; background:var(--panel2);
+    color:var(--muted); font:800 11.5px/1 var(--sys); letter-spacing:0}
+  header nav a.acct .av svg{width:15px; height:15px; display:block; fill:currentColor}
+  /* Signed in: the avatar carries the account's initial in the brand colour, so
+     the state is readable at a glance. The address itself stays in the tooltip —
+     this is the page most likely to be left up on a wall, and an email in the
+     header of a public page is a small leak that never had to happen. */
+  header nav a.acct.in .av{background:var(--brand-pink); color:#fff}
+  header nav a.acct.in{border-color:var(--brand-pink)}
+  /* Narrow phones wrap the nav to a second row; the chip keeps its shape rather
+     than stretching across it. */
+  @media (max-width:560px){ header nav a.acct{padding:5px 12px 5px 5px} }
   header nav a.hi:hover{background:var(--brand-pink); filter:brightness(1.08)}
 
   /* ---- hero ---- */
@@ -276,8 +313,12 @@
       <a href="tour.html">Grand Tour</a>
       <a href="spot.html">Spotter</a>
       <a href="tv.html">All views</a>
-      <a href="profile.html?from=index.html">Your account</a>
       <a class="hi" id="navBuy" href="buy.html">Get a license</a>
+      <a class="acct" id="navAccount" href="profile.html?from=index.html"
+         title="Your licence, devices and sign-in">
+        <span class="av" id="navAvatar" aria-hidden="true"></span>
+        <span id="navAccountLabel">Your account</span>
+      </a>
     </nav>
   </header>
 
@@ -708,6 +749,46 @@ if (document.readyState === "loading")
 else paintOwnerCtas();
 setTimeout(paintOwnerCtas, 1500);
 setTimeout(paintOwnerCtas, 4000);   // a cold licence check can take a beat
+
+/* ---- the account chip's state -------------------------------------------
+   Signed in, the avatar becomes the account's initial in the brand colour and
+   the tooltip carries the address; signed out it is a plain person glyph. The
+   label does not change, because the destination does not: profile.html is
+   where your licence, your devices and your sign-in all live, whether or not
+   you have an account yet. A control that renames itself is harder to find the
+   second time, which is the opposite of the point.
+
+   Repainted on the same schedule as paintOwnerCtas for the same reason —
+   account.js is deferred, so asking too early gets the wrong answer. */
+var PERSON_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.5-8 5.5V21h16v-1.5c0-3-3.6-5.5-8-5.5z"/>' +
+  "</svg>";
+
+function paintAccountChip(){
+  var chip = document.getElementById("navAccount"),
+      av   = document.getElementById("navAvatar");
+  if(!chip || !av) return;
+
+  var on = !!(window.TBAccount && TBAccount.signedIn && TBAccount.signedIn());
+  chip.classList.toggle("in", on);
+
+  if(!on){
+    // Also covers going back to signed-out: the avatar may be holding an initial.
+    if(!av.querySelector("svg")) av.innerHTML = PERSON_SVG;
+    chip.title = "Your licence, devices and sign-in";
+    return;
+  }
+  var mail = "";
+  try{ mail = (TBAccount.email && TBAccount.email()) || ""; }catch(e){}
+  var initial = (mail.replace(/^\s+/, "").charAt(0) || "").toUpperCase();
+  if(initial) av.textContent = initial; else av.innerHTML = PERSON_SVG;
+  chip.title = mail ? "Signed in as " + mail : "You're signed in";
+}
+if (document.readyState === "loading")
+  document.addEventListener("DOMContentLoaded", paintAccountChip);
+else paintAccountChip();
+setTimeout(paintAccountChip, 1500);
 
 
 /* ---- licence key entry ---------------------------------------------------
