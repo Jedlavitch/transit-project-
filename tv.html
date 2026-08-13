@@ -82,11 +82,17 @@
      could see anyway. */
   #cities{grid-template-columns:repeat(6,1fr)}
   @media (max-width:1500px){ #cities{grid-template-columns:repeat(4,1fr)} }
-  /* Five views in four columns is two rows, and Views only gets a third of the
-     leftover height, so both rows were squeezed until the tile names clipped.
-     Five columns puts them on one row — the same fix, and the same reasoning,
-     as the six-column change above. */
-  #views{grid-template-columns:repeat(5,1fr)}
+  /* Views must stay on ONE row. It only gets a third of the leftover height, so
+     the moment it wraps to two, both rows are squeezed until the tile names
+     clip — the tiles keep their badge and lose the words, which on a television
+     leaves you navigating by three-letter codes.
+
+     This has now happened twice: first at five views in four columns, and again
+     when Unlock made it six against five columns. So the column count tracks the
+     number of views, and the rule is worth restating for whoever adds a seventh:
+     bump this with it, or the labels quietly vanish at TV aspect ratio while
+     still looking fine on a laptop. */
+  #views{grid-template-columns:repeat(6,1fr)}
   @media (max-width:1100px){ #views{grid-template-columns:repeat(3,1fr)} }
 
   .tile{
