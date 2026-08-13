@@ -90,9 +90,13 @@
     padding:5px 14px 5px 6px; border:1px solid var(--line); border-radius:999px;
     color:var(--text); margin-left:2px}
   header nav a.acct:hover{background:var(--panel2); border-color:var(--brand-pink)}
+  /* Longhand, not a font: shorthand. --sys is a COLOUR here — the city cards set
+     it inline per accent — so naming it as a family made the whole shorthand
+     invalid and quietly dropped the weight and size with it. The family should
+     be inherited from the nav in any case. */
   header nav a.acct .av{width:24px; height:24px; border-radius:50%; flex:0 0 auto;
     display:inline-flex; align-items:center; justify-content:center; background:var(--panel2);
-    color:var(--muted); font:800 11.5px/1 var(--sys); letter-spacing:0}
+    color:var(--muted); font-weight:800; font-size:11.5px; line-height:1; letter-spacing:0}
   header nav a.acct .av svg{width:15px; height:15px; display:block; fill:currentColor}
   /* Signed in: the avatar carries the account's initial in the brand colour, so
      the state is readable at a glance. The address itself stays in the tooltip —
