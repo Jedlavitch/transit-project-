@@ -93,7 +93,8 @@ If the product isn't enabled, everything else still works — Metro trains simpl
 ## Run locally
 ```bash
 cd "Transit Claude"
-python3 -m http.server 4173
+python3 feedback-server.py 4173   # drop-in for `python3 -m http.server`; also answers the
+                                   # feedback button's POST /api/feedback (see feedback-server.py)
 # then open http://localhost:4173/          (Bethesda board)
 # or      http://localhost:4173/philadelphia.html
 # or      http://localhost:4173/nyc.html

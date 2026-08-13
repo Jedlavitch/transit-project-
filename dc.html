@@ -33,6 +33,7 @@
 <script src="mascot-buddy.js?v=6" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
+<script src="feedback.js?v=4" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
@@ -96,7 +97,10 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
      Each tile carries its own --sys/--sys2 hue pair (inline in the HTML):
      a gradient hairline across the top, a gradient-inked value, and — where
      color-mix exists — a faint tint of the tile's own color in its panel. */
-  #statStrip{display:grid; grid-template-columns:repeat(6,1fr); gap:10px; padding:10px 14px 0}
+  /* auto-fit/minmax instead of a fixed 6-column grid + breakpoint overrides:
+     tiles reflow to however many columns actually fit (wrapping to a second
+     row rather than being squeezed or clipped) at any viewport width. */
+  #statStrip{display:grid; grid-template-columns:repeat(auto-fit,minmax(108px,1fr)); gap:8px 10px; padding:10px 14px 0}
   .stat{background:
       linear-gradient(90deg,var(--sys,var(--line)),var(--sys2,var(--sys,var(--line)))) top/100% 2px no-repeat,
       linear-gradient(180deg,var(--panel),var(--panel2));
@@ -109,7 +113,7 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   .stat .s-label{display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700;
     letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-family:var(--mono); white-space:nowrap}
   .stat .s-glyph{font-size:12px; color:var(--sys,var(--muted))}
-  .stat .s-value{font-size:26px; font-weight:700; line-height:1.15; margin-top:2px;
+  .stat .s-value{font-size:clamp(16px,2.1vw,26px); font-weight:700; line-height:1.15; margin-top:2px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     background:linear-gradient(90deg,var(--sys,var(--text)),var(--sys2,var(--sys,var(--text))));
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
@@ -121,16 +125,18 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   .stat .s-sub{font-size:10.5px; color:var(--muted); font-family:var(--mono);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
 
-  main{flex:1; display:grid; grid-template-columns:0.92fr 1fr; gap:14px; padding:12px 14px 14px; min-height:0}
-  .col{display:flex; flex-direction:column; gap:12px; min-height:0}
-  .cards{display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:12px; min-height:0; flex:1}
+  main{flex:1; display:grid; grid-template-columns:0.92fr 1fr; gap:14px; padding:12px 14px 14px; min-height:0; min-width:0}
+  .col{display:flex; flex-direction:column; gap:12px; min-height:0; min-width:0}
+  /* auto-fit/minmax: however many 240px+ columns actually fit, reflowing to
+     one column at narrow widths without a hardcoded breakpoint. */
+  .cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); grid-auto-rows:1fr; gap:12px; min-height:0; min-width:0; flex:1}
   .card{
     /* each system's own gradient runs across the card's top edge */
     background:
       linear-gradient(90deg,var(--sys,var(--line)),var(--sys2,var(--sys,var(--line)))) top/100% 2px no-repeat,
       linear-gradient(180deg,var(--panel),var(--panel2));
     border:1px solid var(--line); border-radius:6px; padding:10px 12px;
-    display:flex; flex-direction:column; min-height:0; overflow:hidden;
+    display:flex; flex-direction:column; min-height:0; min-width:0; overflow:hidden;
   }
   .card.user-hidden{display:none !important}
   .card h2{margin:0 0 6px; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
@@ -158,11 +164,17 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   :root[data-theme="day"] .statline b{
     color:color-mix(in srgb, var(--sys2,var(--sys,var(--text))) 38%, #0b1424);
     filter:none}
-  .list{flex:1 1 0; overflow:hidden; display:flex; flex-direction:column; gap:var(--row-gap); padding-right:2px}
+  .list{flex:1 1 0; min-width:0; overflow:hidden; display:flex; flex-direction:column; gap:var(--row-gap); padding-right:2px}
 
+  /* min-width:0 on both the row (a flex item of .list) and its 1fr content
+     column: without it, a flex/grid item's automatic minimum size is its
+     content's min-content size, so one long unwrappable destination/route
+     string could force the row -- and everything above it up to the page --
+     wider than the viewport instead of eliding. */
   .row{
-    display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:9px;
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; gap:9px;
     padding:var(--row-pad); border-radius:4px; background:var(--row-bg); border:1px solid var(--row-line);
+    min-width:0;
   }
   .row .badge{
     min-width:34px; height:var(--badge-h); padding:0 8px; border-radius:3px; display:flex; align-items:center;
@@ -202,6 +214,7 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   footer .dot{width:8px; height:8px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good)}
   footer .dot.stale{background:var(--warn); box-shadow:0 0 8px var(--warn)}
   footer .grow{flex:1}
+  footer .sp{min-width:0; flex-shrink:1}
   /* per-feed link status readouts (dot + label + age — never color alone) */
   #feeds{display:flex; gap:13px; align-items:center}
   .feed{display:flex; gap:5px; align-items:center; letter-spacing:.06em; white-space:nowrap}
@@ -249,12 +262,10 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
 
   /* Narrower screens: stack map on top, cards fill the rest — still fits the
      screen with no page scroll (cards trim themselves to fit via fitList). */
-  @media (max-width:1000px){
+  @media (max-width:1220px){
     main{grid-template-columns:1fr; grid-template-rows:26dvh 1fr}
     #map{min-height:0}
-    .cards{grid-template-columns:1fr 1fr}
-    #statStrip{grid-template-columns:repeat(3,1fr); gap:8px; padding:8px 10px 0}
-    .stat .s-value{font-size:21px}
+    #statStrip{gap:6px 8px; padding:8px 10px 0}
   }
   @media (max-width:760px){
     #feeds{display:none}
@@ -266,9 +277,9 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
     header .clock .time{font-size:22px}
     #statStrip{display:none}
   }
-  @media (max-width:440px){
-    .cards{grid-template-columns:1fr}
-  }
+  /* No breakpoint needed below 440px: .cards' auto-fit/minmax(240px,1fr)
+     already drops to one column on its own once two 240px tracks + gap no
+     longer fit. */
 
   /* ---- minimizable stats strip: a small pull-tab hides the tiles ---- */
   #statStrip{position:relative}
@@ -2829,9 +2840,18 @@ function autoDisplay(){
   const tv  = looksLikeTv();
   const fit = tv ? Math.min(innerWidth/1280, innerHeight/720)
                  : Math.min(innerWidth/1600, innerHeight/900);
-  const lo  = tv ? 1   : 0.7;
   const hi  = tv ? 3   : 1;
-  const z = Math.max(lo, Math.min(hi, Math.round(fit*20)/20));   // 5% steps
+  /* The "don't shrink past 70%" floor is a legibility preference, not a
+     guarantee, so it must never ask for more room than the viewport actually
+     has. It used to be a flat 0.7, which forced a 1120px-wide board onto any
+     narrower screen -- fine down to ~1120px wide, but a real, reproducible
+     96/220/352px horizontal overflow at 1024/900/768 (tablet widths) since
+     those need to shrink past 70% to genuinely fit. Capping the floor at the
+     true fit ratio means it only ever floors when there's room to spare. */
+  const lo  = tv ? 1   : Math.min(0.7, fit);
+  // floor (not round) to 5% steps: rounding up, even by one step, could still
+  // ask for a couple more pixels than the viewport has at an unlucky width.
+  const z = Math.max(lo, Math.min(hi, Math.floor(fit*20)/20));
   return { z, pad: tv ? 2.5 : 0 };
 }
 function curZoom(){ const v=parseFloat(localStorage.getItem("tb.uiZoom")); return isFinite(v)&&v>0?v:autoDisplay().z; }

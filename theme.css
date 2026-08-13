@@ -225,8 +225,10 @@ body{ font-family:var(--body); }
   text-decoration:none; white-space:nowrap; }
 .view-links a:hover{ border-color:var(--accent); }
 
-@media (max-width:760px){
+@media (max-width:1220px){
   header{ flex-wrap:wrap; row-gap:8px; }
+}
+@media (max-width:760px){
   .city-tabs a, .city-tabs span{ padding:5px 10px; font-size:12px; }
   .view-links a{ padding:6px 10px; font-size:12px; }
 }
