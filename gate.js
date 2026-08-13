@@ -86,7 +86,16 @@
         "font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
         "cursor:pointer;display:flex;gap:7px;align-items:center}" +
       "#tbTrial b{color:var(--text,#eef3ff);font-variant-numeric:tabular-nums}" +
-      "#tbTrial:hover{border-color:var(--accent,#4ea1ff)}";
+      "#tbTrial:hover{border-color:var(--accent,#4ea1ff)}" +
+      /* The pairing panel needs room for a QR beside its instructions; the box
+         widens only while it is showing. */
+      "#tbGate .box.wide{max-width:680px}" +
+      "#tbGate button.pairb{width:100%;flex:none;margin:2px 0 0;" +
+        "background:var(--accent,#4ea1ff);color:#04101f;font-size:15px;padding:14px 16px}" +
+      "#tbGate .or{display:flex;align-items:center;gap:10px;margin:17px 0 4px;" +
+        "color:var(--muted,#93a5cf);font-size:11px;font-weight:700;letter-spacing:.09em;" +
+        "text-transform:uppercase}" +
+      "#tbGate .or:before,#tbGate .or:after{content:'';flex:1;height:1px;background:var(--line,#22345a)}";
     document.head.appendChild(css);
   }
 
@@ -95,28 +104,76 @@
     if (wall) return;
     wall = document.createElement("div");
     wall.id = "tbGate";
+    /* PAIRING IS OFFERED FIRST, and the key box is kept underneath rather than
+       replaced. This wall's most common reader is a television, where typing
+       twenty characters on a remote is the worst minute of owning the product
+       -- but the same wall appears on a laptop, where pasting a key is quicker
+       than fetching a phone. Neither is made to hunt for its own route.
+
+       The panel is one press away rather than shown immediately, because
+       mounting it mints a pairing code on the Worker: an unlicensed board left
+       running would otherwise spend KV writes every time the demo clock ran
+       out, with nobody in the room. */
     wall.innerHTML =
-      '<div class="box">' +
-        "<h2>" + title + "</h2>" +
-        "<p>" + body + "</p>" +
-        /* The one key format: TB, then four groups of five. license-worker.js,
-           feed-proxy-worker.js and gen-licence.py all mint and accept exactly
-           this, so the key that unlocks the interface is the same key that gets
-           live data through the proxy. */
-        '<input id="tbGateKey" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" ' +
-          'spellcheck="false" aria-label="Licence key" />' +
-        '<div class="row">' +
-          '<button class="go" id="tbGateGo">Unlock</button>' +
-          '<a class="b buy" href="buy.html">Get a licence — $19</a>' +
+      '<div class="box" id="tbGateBox">' +
+        '<div id="tbGateMain">' +
+          "<h2>" + title + "</h2>" +
+          "<p>" + body + "</p>" +
+          '<button class="pairb" id="tbGatePair">Unlock from my phone</button>' +
+          '<div class="or"><span>or paste your key</span></div>' +
+          /* The one key format: TB, then four groups of five. license-worker.js,
+             feed-proxy-worker.js and gen-licence.py all mint and accept exactly
+             this, so the key that unlocks the interface is the same key that gets
+             live data through the proxy. */
+          '<input id="tbGateKey" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" ' +
+            'spellcheck="false" aria-label="Licence key" />' +
+          '<div class="row">' +
+            '<button class="go" id="tbGateGo">Unlock</button>' +
+            '<a class="b buy" href="buy.html">Get a licence — $19</a>' +
+          "</div>" +
+          '<div class="msg" id="tbGateMsg"></div>' +
+          '<a class="home" href="index.html">‹ Back to transitproject.online</a>' +
         "</div>" +
-        '<div class="msg" id="tbGateMsg"></div>' +
-        '<a class="home" href="index.html">‹ Back to transitproject.online</a>' +
+        '<div id="tbGatePairFace" style="display:none">' +
+          "<h2>Unlock from your phone</h2>" +
+          '<div id="tbGatePairHost"></div>' +
+          '<div class="row"><button class="buy" id="tbGatePairBack">‹ Back</button></div>' +
+        "</div>" +
       "</div>";
     document.body.appendChild(wall);
 
     var input = wall.querySelector("#tbGateKey"),
         msg   = wall.querySelector("#tbGateMsg"),
         go    = wall.querySelector("#tbGateGo");
+
+    var PAIR_LABEL = "Unlock from my phone";
+    var box   = wall.querySelector("#tbGateBox"),
+        main  = wall.querySelector("#tbGateMain"),
+        face  = wall.querySelector("#tbGatePairFace"),
+        pairB = wall.querySelector("#tbGatePair");
+
+    pairB.addEventListener("click", function () {
+      var load = window.TBLicense && window.TBLicense.pairing;
+      if (!load) { say("Pairing isn't available here — paste your key instead.", "bad"); return; }
+      pairB.disabled = true; pairB.textContent = "Loading…";
+      load(function (ok) {
+        pairB.disabled = false; pairB.textContent = PAIR_LABEL;
+        if (!ok || !window.TBPair) {
+          say("Couldn't load the pairing tools — paste your key instead.", "bad");
+          return;
+        }
+        box.className = "box wide";
+        main.style.display = "none";
+        face.style.display = "";
+        window.TBPair.mount(wall.querySelector("#tbGatePairHost"), {});
+      });
+    });
+    wall.querySelector("#tbGatePairBack").addEventListener("click", function () {
+      if (window.TBPair) window.TBPair.stop();
+      box.className = "box";
+      face.style.display = "none";
+      main.style.display = "";
+    });
 
     function say(t, kind) {
       msg.textContent = t;
@@ -153,6 +210,10 @@
     // Stop the board working, not just cover it: leaving fetch loops running
     // behind a wall burns the visitor's battery and the agencies' rate limits.
     try { var i = window.setInterval(function () {}, 1e9); while (i > 0) { clearInterval(i); i--; } } catch (_) {}
+    /* That sweep is indiscriminate, and the pairing panel may be open behind
+       the chip with a live code on screen. Put its polling back, or the demo
+       expiring mid-pair leaves a code nobody is listening for. */
+    if (window.TBPair && window.TBPair.resume) window.TBPair.resume();
     showWall("Demo finished",
       "That was " + TRIAL_MIN + " minutes of the live board. A licence unlocks it permanently on " +
       "up to five devices, with full screen and sky view, for a one-off $19.");

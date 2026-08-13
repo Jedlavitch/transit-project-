@@ -76,6 +76,12 @@ I can't create a Stripe account or handle payment setup on your behalf.
    it goes into the Cloudflare dashboard only, never into this repo and never
    into a chat.**
 
+**Redeploy this Worker whenever `license-worker.js` changes.** It is the one
+piece that does not ship with a `git push`, so it falls behind quietly. It
+currently owes you the pairing routes (`PAIRING.md`) and the `/health` check
+that tests the Stripe key rather than noticing one is present. Paste, Deploy,
+then run the `/pair/start` check at the top of `PAIRING.md`.
+
 ---
 
 ## 5. Wiring it together — **me, once you send URLs**

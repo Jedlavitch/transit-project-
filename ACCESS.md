@@ -196,6 +196,13 @@ The admin passphrase is separate and still applies: Access decides *who gets in*
 `admin.js` decides *who sees the setup fields*. A customer who is legitimately
 logged in still shouldn't be editing Worker URLs.
 
+**Licensing the screen itself is a third thing again, and it no longer means
+typing a key on a remote** — the board's licence wall offers *Unlock from my
+phone*, which shows a QR the owner's phone scans to hand its licence over. See
+`PAIRING.md`. The Access login above still has to be done on the screen; that
+one is Cloudflare's and takes an emailed code, which is why the long session
+duration matters.
+
 ## Adding and removing customers
 
 Access → your application → policy → edit the email list. Removal takes effect

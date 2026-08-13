@@ -57,6 +57,23 @@
                                           buyer's email and device list for that
                                           key. The key keeps working; erasure is
                                           not the same act as revocation.
+
+   PAIRING A TELEVISION (see PAIRING.md) -- the device flow, so nobody has to
+   type a 25-character key with a TV remote:
+     POST /pair/start {device}          -> { ok:true, code, secret, interval,
+                                             expiresIn } the TV asks for a code
+     GET  /pair/check?code=C            -> { ok:true, found, done } the phone
+                                          checks the code is live before asking
+                                          anyone to approve it
+     POST /pair/claim {code, key}       -> { ok:true, devices, limit } the phone
+                                          hands its licence to that code
+     GET  /pair/poll?code=C&secret=S    -> { ok:true, status:"pending" } or
+                                          { ok:true, status:"ready", key }
+                                          the TV collects it. `secret` is held
+                                          only by the TV that started the
+                                          pairing, so reading the code off the
+                                          screen does not let a bystander
+                                          collect somebody's key.
    ============================================================================ */
 
 const CORS = {
@@ -180,6 +197,105 @@ async function issueKey(env, source, extra = {}) {
   return key;
 }
 
+/* ---------------------------------------------------------------------------
+   Registering a device against a licence.
+
+   Lifted out of /verify because pairing needs the identical rules: the same
+   five-device ceiling, the same tolerance for the legacy keys sold before the
+   formats were unified, the same refusal of a revoked one. Two copies of this
+   would drift, and the drift would show up as a television that pairs happily
+   and is then refused by the very next /verify it makes.
+
+   Returns exactly the body /verify has always returned, so its contract is
+   unchanged.
+   --------------------------------------------------------------------------- */
+async function registerDevice(env, key, device) {
+  const limit = parseInt(env.DEVICE_LIMIT || "5", 10);
+
+  /* Signed first: it needs no KV read, and a legacy lookup on a signed key
+     would simply miss and report the misleading "unknown". */
+  const signed = await checkSigned(env, key);
+  if (signed.ok) {
+    const slot = "lic:" + signed.id;
+    let rec = {};
+    try { rec = JSON.parse((await env.LICENSES.get(slot)) || "{}"); } catch (_) {}
+    if (rec.revoked) return { ok: false, error: "revoked" };
+    rec.devices = rec.devices || {};
+    if (!(device in rec.devices) && Object.keys(rec.devices).length >= limit)
+      return { ok: false, error: "device_limit", limit };
+    rec.devices[device] = Date.now();
+    rec.created = rec.created || Date.now();
+    await env.LICENSES.put(slot, JSON.stringify(rec));
+    return { ok: true, devices: Object.keys(rec.devices).length, limit,
+             expires: signed.expires, format: "signed" };
+  }
+  // An expired or revoked signature is a definite answer, not a miss --
+  // falling through would relabel it the misleading "unknown_key".
+  if (signed.error === "expired" || signed.error === "revoked")
+    return { ok: false, error: signed.error };
+
+  const raw = await env.LICENSES.get("key:" + key);
+  if (!raw) return { ok: false, error: "unknown_key" };
+  const rec = JSON.parse(raw);
+  if (rec.revoked) return { ok: false, error: "revoked" };
+  rec.devices = rec.devices || {};
+  if (!(device in rec.devices) && Object.keys(rec.devices).length >= limit)
+    return { ok: false, error: "device_limit", limit };
+  rec.devices[device] = Date.now();
+  await env.LICENSES.put("key:" + key, JSON.stringify(rec));
+  /* Legacy keys unlock the interface but the feed proxy will refuse them, so
+     say so rather than reporting a clean pass. Anyone holding one needs a
+     signed replacement before their live data works. */
+  return { ok: true, devices: Object.keys(rec.devices).length, limit,
+           format: "legacy",
+           warning: "This key predates the unified format and will not pass the feed proxy. Ask for a replacement." };
+}
+
+/* ---------------------------------------------------------------------------
+   Pairing primitives.
+   --------------------------------------------------------------------------- */
+const PAIR_TTL = 600;        // seconds a pairing code is worth showing
+const PAIR_INTERVAL = 3;     // seconds we ask the television to wait between polls
+
+/* Six characters of the same alphabet the keys use: no I, L, O or U, because
+   this one gets read off a television from across a room and typed by hand.
+   32 divides 256, so masking the low five bits is uniform -- no modulo bias. */
+function pairCode() {
+  const b = crypto.getRandomValues(new Uint8Array(6));
+  return [...b].map(x => ALPHABET[x & 31]).join("");
+}
+/* The value that proves a poller is the television that started the pairing,
+   rather than somebody who read the short code off the screen. Never shown,
+   never written down, so it can be as long as we like. */
+function pairSecret() {
+  const b = crypto.getRandomValues(new Uint8Array(24));
+  return [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+/* Accept what a human actually types. The separator is decoration, case is
+   noise, and O/I/L are the three characters people substitute for 0/1 without
+   noticing -- Crockford excluded them from the alphabet for exactly that
+   reason, so folding them back in is unambiguous rather than a guess. */
+function normCode(s) {
+  const up = String(s || "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1");
+  return [...up].filter(c => ALPHABET.indexOf(c) >= 0).join("").slice(0, 6);
+}
+/* Constant time, same reasoning as the licence signature check. */
+function sameText(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+/* KV on the free plan allows a thousand writes a day, shared with every
+   /verify the boards make. Un-throttled, /pair/start is a way for a stranger
+   to spend that quota and take licence checking down with it. */
+async function rateLimit(env, bucket, limit, ttl) {
+  const k = "rl:" + bucket + ":" + Math.floor(Date.now() / (ttl * 1000));
+  const n = Number((await env.LICENSES.get(k)) || 0) + 1;
+  await env.LICENSES.put(k, String(n), { expirationTtl: ttl });
+  return n <= limit;
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -286,44 +402,130 @@ export default {
       const key = (url.searchParams.get("key") || "").trim().toUpperCase();
       const device = (url.searchParams.get("device") || "unknown").slice(0, 64);
       if (!key) return json({ ok: false, error: "missing_key" }, 400);
-      const limit = parseInt(env.DEVICE_LIMIT || "5", 10);
+      return json(await registerDevice(env, key, device));
+    }
 
-      const signed = await checkSigned(env, key);
-      if (signed.ok) {
-        // The signature is the licence; KV only counts devices against it.
-        const slot = "lic:" + signed.id;
-        let rec = {};
-        try { rec = JSON.parse((await env.LICENSES.get(slot)) || "{}"); } catch (_) {}
-        if (rec.revoked) return json({ ok: false, error: "revoked" });
-        rec.devices = rec.devices || {};
-        if (!(device in rec.devices) && Object.keys(rec.devices).length >= limit)
-          return json({ ok: false, error: "device_limit", limit });
-        rec.devices[device] = Date.now();
-        rec.created = rec.created || Date.now();
-        await env.LICENSES.put(slot, JSON.stringify(rec));
-        return json({ ok: true, devices: Object.keys(rec.devices).length, limit,
-                      expires: signed.expires, format: "signed" });
-      }
-      // An expired or revoked signature is a definite answer, not a miss --
-      // falling through would relabel it the misleading "unknown_key".
-      if (signed.error === "expired" || signed.error === "revoked")
-        return json({ ok: false, error: signed.error });
+    /* ---- pairing: unlock a television from a phone ------------------------
 
-      const raw = await env.LICENSES.get("key:" + key);
-      if (!raw) return json({ ok: false, error: "unknown_key" });
-      const rec = JSON.parse(raw);
-      if (rec.revoked) return json({ ok: false, error: "revoked" });
-      rec.devices = rec.devices || {};
-      if (!(device in rec.devices) && Object.keys(rec.devices).length >= limit)
-        return json({ ok: false, error: "device_limit", limit });
-      rec.devices[device] = Date.now();
-      await env.LICENSES.put("key:" + key, JSON.stringify(rec));
-      /* Legacy keys unlock the interface but the feed proxy will refuse them,
-         so say so rather than reporting a clean pass. Anyone holding one needs
-         a signed replacement before their live data works. */
-      return json({ ok: true, devices: Object.keys(rec.devices).length, limit,
-                    format: "legacy",
-                    warning: "This key predates the unified format and will not pass the feed proxy. Ask for a replacement." });
+       THE PROBLEM THIS SOLVES. A licence key is TB- and twenty characters, and
+       the device most likely to need one is the device least able to accept
+       one: a television, driven by a four-way remote and an on-screen keyboard.
+       Every other route into the product costs a customer about a minute; that
+       one costs several, goes wrong repeatedly, and is the last thing somebody
+       does before deciding whether they like what they bought.
+
+       THE SHAPE. It is the device-authorisation flow, the same one a television
+       uses to sign in to any streaming service, because it is the right answer
+       and inventing a different one would only be worse:
+
+         1. the TV asks for a code, and shows it as a QR alongside the digits
+         2. the owner's phone -- which already holds the key, and has a real
+            keyboard if it does not -- opens the link and approves it
+         3. the TV, which has been polling, receives the key and unlocks
+
+       WHY TWO SEPARATE VALUES. The short code is on a screen, and a screen may
+       be in a window, a bar, a waiting room. So the code alone must not be
+       enough to collect the key: whoever polls has to present `secret`, which
+       the Worker gives only to the device that started the pairing and which
+       is never displayed. A bystander who reads the code off the screen can
+       reach /pair/claim -- and all that lets them do is give a licence away,
+       which is nobody's idea of an attack.
+
+       WHAT REMAINS, HONESTLY. Somebody who talks an owner into approving a
+       code they did not generate themselves receives that owner's key. That is
+       the standing weakness of every device flow; the defences are that the
+       phone page states plainly which screen it is about to unlock, and that a
+       code is dead ten minutes after it is made. pair.html carries that
+       wording, and it is worth keeping if the page is ever rewritten. */
+    if (url.pathname === "/pair/start" && req.method === "POST") {
+      const ip = req.headers.get("cf-connecting-ip") || "?";
+      if (!(await rateLimit(env, "pstart:" + ip, 30, 3600)))
+        return json({ ok: false, error: "rate_limited" }, 429);
+
+      const body = await req.json().catch(() => ({}));
+      /* The TELEVISION's device id, kept so /pair/claim can spend the right
+         device slot -- see the note there. */
+      const device = String(body.device || "").slice(0, 64) || "tv";
+      const label = String(body.label || "").slice(0, 40);
+
+      /* One look for a collision. At a billion codes and a ten-minute life the
+         odds are already negligible, and KV being eventually consistent means
+         this can miss a code written a second ago -- so it is a cheap
+         improvement on the odds rather than a guarantee, and is not worth
+         retrying harder than once. */
+      let code = pairCode();
+      if (await env.LICENSES.get("pair:" + code)) code = pairCode();
+
+      const secret = pairSecret();
+      await env.LICENSES.put("pair:" + code, JSON.stringify({
+        secret, device, label, created: Date.now(), key: null,
+      }), { expirationTtl: PAIR_TTL });
+      return json({ ok: true, code, secret, interval: PAIR_INTERVAL, expiresIn: PAIR_TTL });
+    }
+
+    /* Is this code live? Asked by the phone before it offers anyone a button,
+       so an expired code is met with "ask the TV for a new one" rather than a
+       failure after the fact. Says nothing else: no secret, no key, no device
+       -- only what a claim attempt would reveal anyway. */
+    if (url.pathname === "/pair/check") {
+      const code = normCode(url.searchParams.get("code"));
+      if (!code) return json({ ok: false, error: "missing_code" }, 400);
+      let rec = null;
+      try { rec = JSON.parse((await env.LICENSES.get("pair:" + code)) || "null"); } catch (_) {}
+      return json({ ok: true, found: !!rec, done: !!(rec && rec.key) });
+    }
+
+    /* The phone hands its licence to the code on the television. */
+    if (url.pathname === "/pair/claim" && req.method === "POST") {
+      const ip = req.headers.get("cf-connecting-ip") || "?";
+      if (!(await rateLimit(env, "pclaim:" + ip, 30, 3600)))
+        return json({ ok: false, error: "rate_limited" }, 429);
+
+      const body = await req.json().catch(() => ({}));
+      const code = normCode(body.code);
+      const key = String(body.key || "").trim().toUpperCase();
+      if (!code || !key) return json({ ok: false, error: "missing_code_or_key" }, 400);
+
+      const slot = "pair:" + code;
+      let rec = null;
+      try { rec = JSON.parse((await env.LICENSES.get(slot)) || "null"); } catch (_) {}
+      if (!rec) return json({ ok: false, error: "unknown_code" }, 404);
+      if (rec.key) return json({ ok: false, error: "already_used" }, 409);
+
+      /* Register the TELEVISION's device id, not the phone's. The five-device
+         ceiling is much the likeliest reason a genuine pairing fails, and it
+         has to fail HERE -- on the phone, in front of somebody who can read the
+         message and do something about it -- rather than quietly on the TV
+         after the key has already arrived. */
+      const reg = await registerDevice(env, key, rec.device || "tv");
+      if (!reg.ok) return json(reg, reg.error === "device_limit" ? 409 : 400);
+
+      rec.key = key;
+      rec.claimedAt = Date.now();
+      /* Keep whatever is left of the original ten minutes; sixty seconds is
+         the shortest expiry KV accepts. The record is not extended, so an
+         approved key is never sitting in KV longer than the code it belongs to. */
+      const ttl = Math.max(60, PAIR_TTL - Math.floor((Date.now() - (rec.created || Date.now())) / 1000));
+      await env.LICENSES.put(slot, JSON.stringify(rec), { expirationTtl: ttl });
+      return json({ ok: true, devices: reg.devices, limit: reg.limit,
+                    format: reg.format, warning: reg.warning || null });
+    }
+
+    /* The television collects the result. Deliberately writes NOTHING: a TV
+       polls every three seconds for up to ten minutes, and a write per poll
+       would empty the day's KV write quota in a handful of pairings and take
+       /verify down with it. The record expires on its own. */
+    if (url.pathname === "/pair/poll") {
+      const code = normCode(url.searchParams.get("code"));
+      const secret = String(url.searchParams.get("secret") || "");
+      if (!code || !secret) return json({ ok: false, error: "missing_code_or_secret" }, 400);
+      let rec = null;
+      try { rec = JSON.parse((await env.LICENSES.get("pair:" + code)) || "null"); } catch (_) {}
+      if (!rec) return json({ ok: false, error: "expired" }, 404);
+      if (!sameText(String(rec.secret || ""), secret))
+        return json({ ok: false, error: "bad_secret" }, 403);
+      if (!rec.key) return json({ ok: true, status: "pending", interval: PAIR_INTERVAL });
+      return json({ ok: true, status: "ready", key: rec.key });
     }
 
     /* ---- Stripe webhook: a refund takes the licence back -----------------

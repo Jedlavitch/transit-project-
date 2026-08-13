@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Transit Project — Unlock a screen</title>
+<link rel="stylesheet" href="theme.css?v=15" />
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0; min-height:100%}
+  body{background:
+      radial-gradient(800px 600px at 105% -8%, rgba(78,161,255,.14) 0%, transparent 58%),
+      radial-gradient(1000px 700px at 50% 120%, var(--blue-deep,#0a1a3d) 0%, transparent 60%),
+      var(--bg);
+    color:var(--text); -webkit-font-smoothing:antialiased; padding:28px 18px 60px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  .wrap{max-width:460px; margin:0 auto}
+  h1{font-size:24px; margin:0 0 6px; line-height:1.25;
+    background:linear-gradient(90deg,var(--text) 20%,#4ea1ff 70%,#b58cff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    width:fit-content}
+  :root[data-theme="day"] h1{filter:brightness(.7) saturate(1.25)}
+  .sub{color:var(--muted); font-size:13.5px; line-height:1.6; margin:0 0 18px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:16px; padding:22px; margin-bottom:14px}
+  .codeplate{text-align:center; padding:16px 12px; border-radius:12px;
+    background:var(--row-bg,#0d1830); border:1px solid var(--row-line,#22345a); margin:0 0 16px}
+  .codeplate .lbl{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+  .codeplate .val{font:800 34px/1.2 ui-monospace,Menlo,Consolas,monospace; letter-spacing:.16em;
+    color:var(--accent,#4ea1ff); margin-top:6px}
+  /* The anti-phishing line. A device flow's one real weakness is somebody
+     talked into approving a code they cannot see, so the check is stated as a
+     condition rather than buried as reassurance. */
+  .verify{display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.6;
+    color:var(--muted); background:rgba(255,204,51,.07); border:1px solid rgba(255,204,51,.28);
+    border-radius:11px; padding:12px 13px; margin:0 0 16px}
+  .verify b{color:var(--text)}
+  .verify .ico{flex:0 0 auto; font-size:15px; line-height:1.35}
+  label{display:block; font-size:12.5px; color:var(--muted); margin:0 0 7px}
+  input{width:100%; padding:14px 13px; border-radius:11px; border:1px solid var(--line);
+    background:var(--row-bg); color:var(--text); font:700 17px ui-monospace,Menlo,Consolas,monospace;
+    letter-spacing:.08em; text-transform:uppercase}
+  input:focus{outline:none; border-color:var(--accent,#4ea1ff)}
+  /* Thumb-sized: this is a phone page, and it is being used one-handed while
+     the other hand holds a remote. */
+  .cta{display:block; width:100%; text-align:center; margin-top:14px; padding:16px; border-radius:12px;
+    border:none; background:var(--accent); color:#04101f; font-weight:800; font-size:16px; cursor:pointer;
+    font-family:inherit}
+  .cta[disabled]{opacity:.55; cursor:default}
+  .ghost{display:block; width:100%; text-align:center; margin-top:10px; padding:13px; border-radius:12px;
+    border:1px solid var(--line); background:transparent; color:var(--text); font-weight:700; font-size:14px;
+    cursor:pointer; text-decoration:none; font-family:inherit}
+  /* A licence key is 26 characters, and at the size above that runs off the
+     right edge of a small phone — so the placeholder ends "-XX" and reads as
+     though the key were shorter than it is. */
+  @media (max-width:400px){ #keyInput{font-size:15px; letter-spacing:.02em} }
+  .msg{font-size:13.5px; line-height:1.6; min-height:19px; margin-top:12px}
+  .msg.bad{color:var(--late-ink,#ff5a5a)}
+  .msg.good{color:var(--good-ink,#33d17a); font-weight:700}
+  .keyline{font-size:12.5px; color:var(--muted); margin:0 0 4px}
+  .keyline b{color:var(--text); font-family:ui-monospace,Menlo,Consolas,monospace; letter-spacing:.04em}
+  .done{text-align:center; padding:8px 0 4px}
+  .done .tick{font-size:44px; line-height:1}
+  .done h2{font-size:19px; margin:10px 0 6px}
+  .done p{color:var(--muted); font-size:13.5px; line-height:1.6; margin:0}
+  .back{color:var(--accent-ink,#4ea1ff); font-size:13px; text-decoration:none; display:inline-block; margin-bottom:16px}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">‹ transitproject.online</a>
+
+  <h1 id="title">Unlock a screen</h1>
+  <p class="sub" id="sub">Your licence lives on this phone. Hand it to the television showing this code.</p>
+
+  <!-- ============ step 1: which code ============ -->
+  <div class="panel" id="askCode">
+    <label for="codeInput">Enter the code shown on your screen</label>
+    <input id="codeInput" placeholder="ABC 123" autocomplete="off" spellcheck="false"
+           inputmode="text" autocapitalize="characters" maxlength="9" />
+    <button class="cta" id="codeGo">Continue</button>
+    <div class="msg" id="codeMsg"></div>
+  </div>
+
+  <!-- ============ step 2: approve ============ -->
+  <div class="panel hide" id="approve">
+    <div class="codeplate">
+      <div class="lbl">Code on the screen</div>
+      <div class="val" id="codeShow">— —</div>
+    </div>
+
+    <div class="verify">
+      <span class="ico">⚠︎</span>
+      <span>Only continue if that code is <b>on a screen in front of you right now</b>.
+        Unlocking sends your licence to whichever screen asked for it, and uses one
+        of your five devices.</span>
+    </div>
+
+    <div id="haveKey" class="hide">
+      <p class="keyline">Using the licence on this phone: <b id="keyMask">—</b></p>
+      <button class="cta" id="unlockBtn">Unlock that screen</button>
+    </div>
+
+    <div id="needKey" class="hide">
+      <label for="keyInput">Paste your licence key — it’s in your purchase email</label>
+      <input id="keyInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false" />
+      <button class="cta" id="unlockBtn2">Unlock that screen</button>
+      <a class="ghost" href="buy.html">I don’t have a licence yet — $19</a>
+    </div>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <!-- ============ done ============ -->
+  <div class="panel hide" id="done">
+    <div class="done">
+      <div class="tick">✓</div>
+      <h2 id="doneTitle">That screen is unlocked</h2>
+      <p id="doneText">It should come to life in a second or two. You can put your phone away.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   The phone's half of pairing. The television has a code; this page attaches a
+   licence to it, and the television — which is polling — picks it up.
+
+   The key never travels through the television's screen, a URL or a QR: it goes
+   from here to the Worker, and the Worker hands it only to the device holding
+   the pairing secret. See the pairing block in license-worker.js.
+   ============================================================================ */
+(function () {
+  "use strict";
+  var DEFAULT_WORKER = "https://tblicense.jacklemonade2.workers.dev";
+  var LS_KEY = "tb.license", LS_URL = "tb.workerUrl";
+
+  function $(id) { return document.getElementById(id); }
+  function get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+  function set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  function show(id, on) { $(id).classList[on ? "remove" : "add"]("hide"); }
+
+  var worker = String(get(LS_URL) || DEFAULT_WORKER).trim().replace(/\/+$/, "");
+
+  /* Same folding the Worker does, so what you see here is what it will accept:
+     case and separators are noise, and O/I/L are the characters people read off
+     a screen in place of 0/1. */
+  var ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  function normCode(s) {
+    var up = String(s || "").toUpperCase().replace(/O/g, "0").replace(/[IL]/g, "1"), out = "";
+    for (var i = 0; i < up.length && out.length < 6; i++)
+      if (ALPHABET.indexOf(up.charAt(i)) >= 0) out += up.charAt(i);
+    return out;
+  }
+  function pretty(c) { return c.slice(0, 3) + " " + c.slice(3); }
+  function maskKey(k) {
+    k = String(k || "");
+    return k.length > 9 ? k.slice(0, 6) + "…" + k.slice(-5) : k;
+  }
+
+  function say(el, text, kind) {
+    var m = $(el);
+    m.textContent = text;
+    m.className = "msg" + (kind ? " " + kind : "");
+  }
+
+  function api(method, path, body) {
+    return new Promise(function (resolve) {
+      var x = new XMLHttpRequest();
+      x.open(method, worker + path, true);
+      x.timeout = 15000;
+      if (body) x.setRequestHeader("Content-Type", "application/json");
+      x.onreadystatechange = function () {
+        if (x.readyState !== 4) return;
+        var data = null;
+        try { data = JSON.parse(x.responseText); } catch (_) {}
+        resolve(x.status ? (data || { ok: false, error: "bad_response" })
+                         : { ok: false, error: "offline" });
+      };
+      x.ontimeout = x.onerror = function () { resolve({ ok: false, error: "offline" }); };
+      x.send(body ? JSON.stringify(body) : null);
+    });
+  }
+
+  /* ---------------- step 1 ---------------- */
+  var params = new URLSearchParams(location.search);
+  var code = normCode(params.get("c") || params.get("code") || location.hash.replace(/^#/, ""));
+
+  $("codeInput").addEventListener("input", function () {
+    var v = normCode(this.value);
+    this.value = v.length > 3 ? pretty(v) : v;
+  });
+  $("codeGo").onclick = function () {
+    var c = normCode($("codeInput").value);
+    if (c.length !== 6) { say("codeMsg", "That code is six characters — check the screen again.", "bad"); return; }
+    openCode(c);
+  };
+  $("codeInput").addEventListener("keydown", function (e) { if (e.key === "Enter") $("codeGo").click(); });
+
+  function openCode(c) {
+    code = c;
+    say("codeMsg", "Checking…");
+    api("GET", "/pair/check?code=" + encodeURIComponent(c)).then(function (d) {
+      if (!d.ok || !d.found) {
+        show("askCode", true); show("approve", false);
+        say("codeMsg", d.error === "offline"
+          ? "Couldn’t reach the licence server. Check your connection and try again."
+          : "That code isn’t active. Codes last ten minutes — ask the screen for a new one.", "bad");
+        return;
+      }
+      if (d.done) {
+        show("askCode", false); show("approve", false); show("done", true);
+        $("doneTitle").textContent = "Already unlocked";
+        $("doneText").textContent = "That code has been used. If the screen is still asking, "
+          + "have it show a new code and scan that one.";
+        return;
+      }
+      say("codeMsg", "");
+      show("askCode", false);
+      show("approve", true);
+      $("codeShow").textContent = pretty(c);
+      var k = (get(LS_KEY) || "").trim().toUpperCase();
+      if (k) { show("haveKey", true); $("keyMask").textContent = maskKey(k); }
+      else { show("needKey", true); }
+    });
+  }
+
+  /* ---------------- step 2 ---------------- */
+  function unlock(btn, key) {
+    key = String(key || "").trim().toUpperCase();
+    if (!key) { say("msg", "Paste your licence key first.", "bad"); return; }
+    btn.disabled = true;
+    say("msg", "Unlocking…");
+    api("POST", "/pair/claim", { code: code, key: key }).then(function (d) {
+      btn.disabled = false;
+      if (d.ok) {
+        // Worth keeping: this phone can now unlock the next screen in one tap.
+        set(LS_KEY, key);
+        show("approve", false); show("done", true);
+        if (d.warning) $("doneText").textContent = d.warning;
+        return;
+      }
+      say("msg", explain(d), "bad");
+    });
+  }
+  $("unlockBtn").onclick = function () { unlock(this, get(LS_KEY)); };
+  $("unlockBtn2").onclick = function () { unlock(this, $("keyInput").value); };
+
+  function explain(d) {
+    switch (d.error) {
+      case "device_limit":
+        return "That licence is already on its limit of " + (d.limit || 5) + " devices. "
+             + "Open Profile on a device you no longer use and clear its saved settings, then try again.";
+      case "unknown_key":   return "That key wasn’t recognised. Check it against your purchase email.";
+      case "expired":       return "That licence has expired.";
+      case "revoked":       return "That licence is no longer active.";
+      case "unknown_code":  return "That code isn’t active any more. Ask the screen for a new one.";
+      case "already_used":  return "That code has already been used. Ask the screen for a new one.";
+      case "rate_limited":  return "Too many attempts. Wait a few minutes and try again.";
+      case "offline":       return "Couldn’t reach the licence server. Check your connection.";
+      default:              return "That didn’t work" + (d.error ? " (" + d.error + ")" : "") + ". Ask the screen for a new code.";
+    }
+  }
+
+  /* ---------------- boot ---------------- */
+  if (code.length === 6) { show("askCode", false); openCode(code); }
+  else { $("sub").textContent = "Type the code your screen is showing, and this phone will unlock it."; }
+})();
+</script>
+</body>
+</html>

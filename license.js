@@ -74,6 +74,34 @@
     }
   }
 
+  /* ---------------- pairing, fetched only when wanted ----------------------
+     The QR encoder and the pairing panel are a few kilobytes that a licensed
+     kiosk never needs, so they are loaded the moment somebody actually asks to
+     pair rather than on every board load. Both callers -- this file's dialog
+     and gate.js's wall -- come through here, so the decision lives in one
+     place and the two cannot drift.
+
+     Order does not matter: pair-tv.js only looks for TBQR when it draws. */
+  let pairWaiting = null;
+  function loadPairing(cb) {
+    if (window.TBPair) { cb(true); return; }
+    if (pairWaiting) { pairWaiting.push(cb); return; }
+    pairWaiting = [cb];
+    let left = 2, failed = false;
+    const settle = () => {
+      const ok = !failed && !!window.TBPair, list = pairWaiting;
+      pairWaiting = null;
+      list.forEach(f => { try { f(ok); } catch (_) {} });
+    };
+    ["pair-qr.js?v=1", "pair-tv.js?v=1"].forEach(src => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = () => { if (--left === 0) settle(); };
+      s.onerror = () => { failed = true; if (--left === 0) settle(); };
+      document.head.appendChild(s);
+    });
+  }
+
   /* ---------------- UI: chip + dialog (self-contained styles) ---------------- */
   const css = `
   #tbLicChip{position:fixed; right:14px; bottom:42px; z-index:600; display:flex; align-items:center; gap:6px;
@@ -96,7 +124,12 @@
   #tbLicBox button{flex:1; padding:10px; border-radius:8px; border:none; background:var(--accent,#4ea1ff);
     color:#04101f; font-weight:800; font-size:13px; cursor:pointer}
   #tbLicBox button.ghost{background:transparent; color:var(--text,#eef3ff); border:1px solid var(--line,#22345a)}
-  #tbLicMsg{font-size:12px; min-height:15px; margin-top:8px}`;
+  #tbLicMsg{font-size:12px; min-height:15px; margin-top:8px}
+  #tbLicBox button.pair{width:100%; flex:none; margin-top:12px; padding:13px; font-size:14px}
+  #tbLicBox .or{display:flex; align-items:center; gap:10px; margin:15px 0 2px;
+    color:var(--muted,#93a5cf); font:600 10.5px/1 inherit; letter-spacing:.09em; text-transform:uppercase}
+  #tbLicBox .or:before,#tbLicBox .or:after{content:""; flex:1; height:1px; background:var(--line,#22345a)}
+  #tbLicBox.wide{width:min(620px,94vw)}`;
 
   let chip = null, overlay = null;
 
@@ -117,20 +150,53 @@
     overlay = document.createElement("div");
     overlay.id = "tbLicOverlay";
     overlay.innerHTML = `<div id="tbLicBox">
-      <h3>License this board</h3>
-      <p>You're running the free evaluation. A license removes this notice on up to 5
-         of your devices and supports development.</p>
-      <input id="tbLicInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false"
-             value="${state.key || ""}" />
-      <div id="tbLicMsg"></div>
-      <div class="btns">
-        <button id="tbLicBuy">Buy a license</button>
-        <button class="ghost" id="tbLicApply">Activate key</button>
-        <button class="ghost" id="tbLicClose">Close</button>
+      <div id="tbLicMain">
+        <h3>License this board</h3>
+        <p>You're running the free evaluation. A license removes this notice on up to 5
+           of your devices and supports development.</p>
+        <button class="pair" id="tbLicPair">Unlock from my phone</button>
+        <div class="or"><span>or paste your key</span></div>
+        <input id="tbLicInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false"
+               value="${state.key || ""}" />
+        <div id="tbLicMsg"></div>
+        <div class="btns">
+          <button id="tbLicBuy">Buy a license</button>
+          <button class="ghost" id="tbLicApply">Activate key</button>
+          <button class="ghost" id="tbLicClose">Close</button>
+        </div>
+      </div>
+      <div id="tbLicPairFace" style="display:none">
+        <h3>Unlock from your phone</h3>
+        <div id="tbLicPairHost"></div>
+        <div class="btns"><button class="ghost" id="tbLicPairBack">‹ Back</button></div>
       </div></div>`;
     overlay.addEventListener("click", e => { if (e.target === overlay) closeDialog(); });
     document.body.appendChild(overlay);
     const msg = overlay.querySelector("#tbLicMsg");
+
+    const box = overlay.querySelector("#tbLicBox");
+    overlay.querySelector("#tbLicPair").onclick = () => {
+      const btn = overlay.querySelector("#tbLicPair");
+      btn.disabled = true; btn.textContent = "Loading…";
+      loadPairing(ok => {
+        btn.disabled = false; btn.textContent = "Unlock from my phone";
+        if (!ok) {
+          msg.style.color = "var(--late,#ff5a5a)";
+          msg.textContent = "Couldn't load the pairing tools — paste the key instead.";
+          return;
+        }
+        box.classList.add("wide");
+        overlay.querySelector("#tbLicMain").style.display = "none";
+        overlay.querySelector("#tbLicPairFace").style.display = "";
+        window.TBPair.mount(overlay.querySelector("#tbLicPairHost"), { compact: true });
+      });
+    };
+    overlay.querySelector("#tbLicPairBack").onclick = () => {
+      if (window.TBPair) window.TBPair.stop();
+      box.classList.remove("wide");
+      overlay.querySelector("#tbLicPairFace").style.display = "none";
+      overlay.querySelector("#tbLicMain").style.display = "";
+    };
     overlay.querySelector("#tbLicBuy").onclick = () => { window.location.href = cfg.buyUrl; };
     overlay.querySelector("#tbLicApply").onclick = async () => {
       const k = overlay.querySelector("#tbLicInput").value;
@@ -143,7 +209,10 @@
     };
     overlay.querySelector("#tbLicClose").onclick = closeDialog;
   }
-  function closeDialog() { if (overlay) { overlay.remove(); overlay = null; } }
+  function closeDialog() {
+    if (window.TBPair) window.TBPair.stop();     // stop polling with the panel gone
+    if (overlay) { overlay.remove(); overlay = null; }
+  }
 
   function init() {
     try {
@@ -161,6 +230,9 @@
     get licensed() { return state.licensed; },
     enterKey: k => verify(true, k),
     open: openDialog,
+    // gate.js's wall offers the same pairing panel, and loads it through here
+    // so there is one copy of "fetch the QR encoder only when it is wanted".
+    pairing: loadPairing,
     // Already resolved above (localStorage override, else the shipped default).
     // profile.html reads these rather than keeping a second copy of the URL and
     // its own device-id logic, which would drift out of step with this file.
