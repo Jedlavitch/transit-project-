@@ -464,39 +464,39 @@ body #app{
    invisible on Black's OLED floor.
    ============================================================================ */
 :root{
-  --bg-glow:#152a52;  --bg-glow:color-mix(in srgb, var(--accent) 30%, #152a52);
-  --line:#22345a;     --line:color-mix(in srgb, var(--accent) 20%, #22345a);
-  --row-line:#1c2c4e; --row-line:color-mix(in srgb, var(--accent) 14%, #1c2c4e);
+  --bg-glow:#152a52;
+  --line:#22345a;
+  --row-line:#1c2c4e;
   /* The page itself. Kept well under the point where light text stops being
      comfortable — the panels are mixed LESS than the page so cards still lift
      off the background instead of dissolving into it. */
-  --bg:#081020;       --bg:color-mix(in srgb, var(--accent) 13%, #081020);
-  --panel:#111d36;    --panel:color-mix(in srgb, var(--accent) 9%, #111d36);
-  --panel2:#0c1628;   --panel2:color-mix(in srgb, var(--accent) 9%, #0c1628);
-  --row-bg:#0d1830;   --row-bg:color-mix(in srgb, var(--accent) 7%, #0d1830);
+  --bg:#081020;
+  --panel:#111d36;
+  --panel2:#0c1628;
+  --row-bg:#0d1830;
 }
 :root[data-theme="black"]{
-  --bg-glow:#0a0f1a;  --bg-glow:color-mix(in srgb, var(--accent) 16%, #0a0f1a);
-  --line:#1a2338;     --line:color-mix(in srgb, var(--accent) 18%, #1a2338);
-  --row-line:#141c2e; --row-line:color-mix(in srgb, var(--accent) 12%, #141c2e);
+  --bg-glow:#0a0f1a;
+  --line:#1a2338;
+  --row-line:#141c2e;
   /* Black exists to be black on an OLED panel in a dark room. It gets a hint of
      the colour and no more — tinting this to match the others would defeat the
      only reason to pick it. */
-  --bg:#000000;       --bg:color-mix(in srgb, var(--accent) 5%, #000000);
-  --panel:#060910;    --panel:color-mix(in srgb, var(--accent) 7%, #060910);
-  --panel2:#000000;   --panel2:color-mix(in srgb, var(--accent) 4%, #000000);
-  --row-bg:#04070d;   --row-bg:color-mix(in srgb, var(--accent) 5%, #04070d);
+  --bg:#000000;
+  --panel:#060910;
+  --panel2:#000000;
+  --row-bg:#04070d;
 }
 :root[data-theme="day"]{
-  --bg-glow:#d7e3fa;  --bg-glow:color-mix(in srgb, var(--accent) 24%, #d7e3fa);
-  --line:#d0dcf2;     --line:color-mix(in srgb, var(--accent) 26%, #d0dcf2);
-  --row-line:#dde6f7; --row-line:color-mix(in srgb, var(--accent) 18%, #dde6f7);
+  --bg-glow:#d7e3fa;
+  --line:#d0dcf2;
+  --row-line:#dde6f7;
   /* Light surfaces show a tint far more readily than dark ones, and dark text
      on them loses contrast faster, so these ratios are lower than they look. */
-  --bg:#e9eefb;       --bg:color-mix(in srgb, var(--accent) 15%, #e9eefb);
-  --panel:#ffffff;    --panel:color-mix(in srgb, var(--accent) 6%, #ffffff);
-  --panel2:#f1f5fd;   --panel2:color-mix(in srgb, var(--accent) 9%, #f1f5fd);
-  --row-bg:#ffffff;   --row-bg:color-mix(in srgb, var(--accent) 5%, #ffffff);
+  --bg:#e9eefb;
+  --panel:#ffffff;
+  --panel2:#f1f5fd;
+  --row-bg:#ffffff;
 }
 
 /* Selection and the scrollbars a touchscreen kiosk actually shows. */
@@ -513,3 +513,49 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 .row .dest .airline-logo{ height:calc(var(--dest-fs,13px) + 3px); width:auto; max-width:64px;
   object-fit:contain; background:#fff; border-radius:3px; padding:1px 2px;
   margin-right:6px; vertical-align:-2px; }
+
+/* ---- the accent tint, only where it can actually be applied ----------------
+   These lived inline in the blocks above as `--bg:#081020; --bg:color-mix(...)`
+   — literal first, modern value second — on the theory that a browser without
+   color-mix would keep the literal. That reasoning is right for ordinary
+   properties and wrong for custom ones, which was the bug.
+
+   A custom property accepts almost any token sequence, so a browser that cannot
+   evaluate color-mix still stores the declaration quite happily, and it simply
+   wins the cascade. Nothing fails until `var(--bg)` is substituted into
+   `background`, where it is invalid at computed-value time and the property
+   falls back to its INITIAL value — transparent. A television on Chrome 68
+   therefore painted the page white while keeping the near-white --text, and the
+   home page headline became white on white.
+
+   @supports is the gate that actually holds: a browser that cannot do color-mix
+   never sees these, and keeps the literals above. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root{
+    --bg-glow:color-mix(in srgb, var(--accent) 30%, #152a52);
+    --line:color-mix(in srgb, var(--accent) 20%, #22345a);
+    --row-line:color-mix(in srgb, var(--accent) 14%, #1c2c4e);
+    --bg:color-mix(in srgb, var(--accent) 13%, #081020);
+    --panel:color-mix(in srgb, var(--accent) 9%, #111d36);
+    --panel2:color-mix(in srgb, var(--accent) 9%, #0c1628);
+    --row-bg:color-mix(in srgb, var(--accent) 7%, #0d1830);
+  }
+  :root[data-theme="black"]{
+    --bg-glow:color-mix(in srgb, var(--accent) 16%, #0a0f1a);
+    --line:color-mix(in srgb, var(--accent) 18%, #1a2338);
+    --row-line:color-mix(in srgb, var(--accent) 12%, #141c2e);
+    --bg:color-mix(in srgb, var(--accent) 5%, #000000);
+    --panel:color-mix(in srgb, var(--accent) 7%, #060910);
+    --panel2:color-mix(in srgb, var(--accent) 4%, #000000);
+    --row-bg:color-mix(in srgb, var(--accent) 5%, #04070d);
+  }
+  :root[data-theme="day"]{
+    --bg-glow:color-mix(in srgb, var(--accent) 24%, #d7e3fa);
+    --line:color-mix(in srgb, var(--accent) 26%, #d0dcf2);
+    --row-line:color-mix(in srgb, var(--accent) 18%, #dde6f7);
+    --bg:color-mix(in srgb, var(--accent) 15%, #e9eefb);
+    --panel:color-mix(in srgb, var(--accent) 6%, #ffffff);
+    --panel2:color-mix(in srgb, var(--accent) 9%, #f1f5fd);
+    --row-bg:color-mix(in srgb, var(--accent) 5%, #ffffff);
+  }
+}
