@@ -24,7 +24,7 @@
      network anyway, so caching the library would only buy a blank grey box. -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="account.js" defer></script>
+<script src="account.js?v=2" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script>/* pre-paint: same shared look as the boards (tb.theme / tb.accent) */
@@ -78,9 +78,14 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .hint{font-size:12px; color:var(--muted); line-height:1.6}
 
   label.fld{display:block; margin-top:11px}
+  /* Needed, and not obviously: the rule above outranks the browser's own
+     [hidden]{display:none}, so without this a hidden field stays on screen.
+     The password field on the front door is hidden until the server says it
+     accepts passwords, and it appeared regardless until this line existed. */
+  label.fld[hidden]{display:none}
   label.fld em{display:block; font-size:11px; color:var(--muted); font-style:normal;
     font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px}
-  input[type=text], input[type=email], input[type=search], textarea{width:100%; padding:13px 12px; border-radius:11px; border:1px solid var(--line);
+  input[type=text], input[type=email], input[type=password], input[type=search], textarea{width:100%; padding:13px 12px; border-radius:11px; border:1px solid var(--line);
     background:var(--row-bg); color:var(--text); font-size:16px; font-family:inherit}
   textarea{min-height:62px; resize:vertical}
   input:focus, textarea:focus{outline:none; border-color:var(--accent)}
@@ -167,6 +172,18 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   #gate .gsent{color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 4px}
   #gate .gsent b{color:var(--text)}
   #gate .gerr{color:var(--late,#ff6b5a); font-size:13px; line-height:1.55; margin:14px 0 0}
+  /* Google and Apple go above the form because they are one tap and the form is
+     not. Kept quieter than the primary button so the screen still has a single
+     obvious action rather than three shouting at once. */
+  #gate .gprov{display:flex; align-items:center; justify-content:center; gap:10px;
+    width:100%; margin-top:10px; padding:14px; border-radius:13px; cursor:pointer;
+    background:var(--panel,#0d1728); color:var(--text); border:1px solid var(--line);
+    font:inherit; font-size:15px; font-weight:700}
+  #gate .gprov svg{width:18px; height:18px; flex:none}
+  #gate .gor{display:flex; align-items:center; gap:12px; margin:20px 0 2px;
+    color:var(--muted); font-size:12px}
+  #gate .gor::before, #gate .gor::after{content:""; flex:1; height:1px; background:var(--line)}
+  #gate .ghint{color:var(--muted); font-size:12px; line-height:1.5; margin:10px 0 0; text-align:left}
   /* signed-in identity in the header, so the state is visible without digging */
   #who{display:none; font-size:11px; color:var(--muted); font-family:var(--mono)}
   #who.show{display:block}
@@ -230,8 +247,27 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <p class="gsub">Log the trains, buses and planes you see.<br>Sign in and your log follows you to any device.</p>
 
     <div id="gStep1">
+      <!-- Each button appears only if the Worker has that provider's client id.
+           Offering a door with nothing behind it is worse than not offering it. -->
+      <div id="gProv" hidden>
+        <button class="gprov" id="gGoogle" hidden>
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5h-1.9V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.3l6.2 5.2C40.9 35.7 44 30.3 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+          Continue with Google</button>
+        <button class="gprov" id="gApple" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M17.05 12.54c.02 2.5 2.2 3.33 2.23 3.34-.02.06-.35 1.2-1.16 2.37-.7 1.02-1.42 2.03-2.57 2.05-1.12.02-1.48-.66-2.77-.66-1.28 0-1.68.64-2.75.68-1.1.04-1.94-1.1-2.65-2.11-1.5-2.17-2.64-6.13-1.1-8.81.76-1.33 2.12-2.17 3.6-2.19 1.09-.02 2.11.73 2.77.73.66 0 1.9-.9 3.2-.77.55.02 2.1.2 3.09 1.51-.08.05-1.84 1.08-1.82 3.21M14.9 4.62c.6-.72 1-1.72.89-2.72-.88.04-1.95.59-2.57 1.31-.56.64-1.04 1.66-.91 2.64.98.08 1.99-.5 2.59-1.23"/></svg>
+          Continue with Apple</button>
+        <div class="gor">or</div>
+      </div>
       <label class="fld"><em>Email</em>
         <input type="email" id="gEmail" inputmode="email" autocomplete="email" placeholder="you@example.com" /></label>
+      <label class="fld" id="gPwField" hidden><em>Password</em>
+        <input type="password" id="gPw" autocomplete="current-password" placeholder="••••••••" /></label>
+      <!-- One form, one button, no mode switch: filling the password signs you
+           in with it, leaving it empty sends a code. Which matters because every
+           customer who signed up before passwords existed has no password, and
+           making them hunt for a "use a code instead" link would be a
+           regression for all of them. -->
+      <p class="ghint" id="gPwHint" hidden>No password? Leave it empty and we'll email you a six-digit code.</p>
       <button class="gbtn" id="gSend">Email me a code</button>
     </div>
 
@@ -965,18 +1001,35 @@ const BLOB_API="https://jsonblob.com/api/jsonBlob";
 const blobId = () => (localStorage.getItem("tb.spotBlob")||"").trim();
 const ALERT_TOPIC="tb.spotTopic";
 const alertTopic = () => { try{ return (localStorage.getItem(ALERT_TOPIC)||"").trim(); }catch(_){ return ""; } };
+/* WHAT LEAVES THE DEVICE, AND HOW PRECISE IT IS
+   jsonblob is public and unauthenticated: whoever holds the share code can read
+   this and overwrite it. The code is a bearer secret, and the log behind it is a
+   record of where somebody stood and when.
+
+   The local log keeps 4 decimal places, which is about 11 metres — that is a
+   doorstep. Nothing downstream needs it: the boards scope sightings to 60 miles
+   and the watcher alerts within 15 nautical miles. So the copy that is published
+   is rounded to 2 places, about 1.1 km. Same feature, neighbourhood instead of
+   address. */
+const PUBLISH_DP = 2;
+const coarse = v => (typeof v === "number" && isFinite(v)) ? +v.toFixed(PUBLISH_DP) : null;
+
 async function publishLog(){
   /* The alert settings ride along with the log in the same blob, so the
      background watcher needs exactly one thing configured -- the share code --
      and picks up your topic and location from your own app. */
-  const payload={spots:loadSpots().slice(0,200)};
+  const payload={spots:loadSpots().slice(0,200).map(s=>{
+    const o=Object.assign({},s);
+    o.lat=coarse(s.lat); o.lon=coarse(s.lon);
+    return o;
+  })};
   const topic=alertTopic();
   // `loc` is declared further down, so reading it from here throws if publishing
   // ever happens before boot finishes. Publishing without a location is fine --
   // the watcher just waits for one -- so never let that kill the publish.
   let at=null; try{ at=loc; }catch(_){}
-  if(topic) payload.push={topic, lat:at?+at.lat.toFixed(4):null,
-                          lon:at?+at.lon.toFixed(4):null, radiusNm:15};
+  if(topic) payload.push={topic, lat:at?coarse(+at.lat):null,
+                          lon:at?coarse(+at.lon):null, radiusNm:15};
   const body=JSON.stringify(payload);
   const id=blobId();
   if(id){
@@ -1308,27 +1361,59 @@ function toCsv(){
 
 
 /* ---------- account sign-in ----------
-   Two steps, because the code arrives by email and people read email on a
-   different device from the one they're signing in on. */
-let acctToken=null;
-function renderAccount(){
+   The same four doors the front gate offers, for anyone who skipped it and came
+   looking in the settings sheet later. The code flow keeps its two steps,
+   because the code arrives by email and people read email on a different device
+   from the one they're signing in on. */
+let acctToken=null, acctPwOpen=false;
+async function renderAccount(){
   const box=$("#acctBox"); if(!box || !window.TBAccount) return;
   if(!TBAccount.configured()){
     box.innerHTML=`<p class="hint">Add a server URL above and save to enable accounts.</p>`; return;
   }
+  const m = await TBAccount.methods();
+
   if(TBAccount.signedIn()){
+    const has = TBAccount.hasPassword();
     box.innerHTML=`<p class="hint">Signed in as <b>${esc(TBAccount.email()||"your account")}</b>.
       Your log syncs to any device you sign in on.</p>
       <div class="btns"><button class="ghost" id="acctSync">Sync now</button>
-      <button class="ghost" id="acctOut">Sign out</button></div>`;
+      <button class="ghost" id="acctOut">Sign out</button></div>
+      <div class="btns" style="margin-top:8px">
+        <button class="ghost" id="acctPwBtn">${has?"Change password":"Set a password"}</button>
+        ${has?`<button class="ghost" id="acctPwOff">Remove password</button>`:""}</div>
+      ${acctPwOpen?`
+      <label class="fld"><em>New password</em>
+        <input type="password" id="acctPwNew" autocomplete="new-password" placeholder="at least 8 characters" /></label>
+      ${has?`<label class="fld"><em>Current password</em>
+        <input type="password" id="acctPwCur" autocomplete="current-password" placeholder="••••••••" /></label>
+      <p class="hint">If you signed in with a code, Google or Apple, leave this empty —
+        you have already proved you own the address.</p>`:""}
+      <div class="btns"><button id="acctPwSave">Save password</button>
+        <button class="ghost" id="acctPwCancel">Cancel</button></div>`:""}`;
+
     $("#acctSync").onclick=async()=>{ try{ const r=await TBAccount.sync(); render();
       toast(`Synced ${r?r.count:0} sightings`); }catch(e){ toast(e.message); } };
-    $("#acctOut").onclick=async()=>{ await TBAccount.signOut(); renderAccount(); whoLabel();
+    $("#acctOut").onclick=async()=>{ await TBAccount.signOut(); acctPwOpen=false; renderAccount(); whoLabel();
       $("#sheet").classList.remove("show");
       if(gateNeeded()){ gateStep(1); showGate(); }
       toast("Signed out — your log stays on this phone"); };
+    $("#acctPwBtn").onclick=()=>{ acctPwOpen=!acctPwOpen; renderAccount(); };
+    if($("#acctPwOff")) $("#acctPwOff").onclick=async()=>{
+      try{ await TBAccount.setPassword(""); acctPwOpen=false; renderAccount();
+           toast("Password removed — sign in with a code or a provider"); }
+      catch(e){ toast(e.message); }
+    };
+    if($("#acctPwSave")) $("#acctPwSave").onclick=async()=>{
+      const cur = $("#acctPwCur") ? $("#acctPwCur").value : undefined;
+      try{ await TBAccount.setPassword($("#acctPwNew").value, cur);
+           acctPwOpen=false; renderAccount(); toast("Password saved"); }
+      catch(e){ toast(e.message); }
+    };
+    if($("#acctPwCancel")) $("#acctPwCancel").onclick=()=>{ acctPwOpen=false; renderAccount(); };
     return;
   }
+
   if(acctToken){
     box.innerHTML=`<label class="fld"><em>Six-digit code from your email</em>
       <input type="text" id="acctCode" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" /></label>
@@ -1342,13 +1427,32 @@ function renderAccount(){
     $("#acctCancel").onclick=()=>{ acctToken=null; renderAccount(); };
     return;
   }
-  box.innerHTML=`<label class="fld"><em>Email</em>
-    <input type="text" id="acctEmail" inputmode="email" autocomplete="email" placeholder="you@example.com" /></label>
-    <div class="btns"><button id="acctSend">Email me a code</button></div>`;
+
+  box.innerHTML=`${(m.google||m.apple)?`<div class="btns" style="margin-bottom:10px">
+      ${m.google?`<button class="ghost" id="acctGoogle">Continue with Google</button>`:""}
+      ${m.apple?`<button class="ghost" id="acctApple">Continue with Apple</button>`:""}</div>`:""}
+    <label class="fld"><em>Email</em>
+      <input type="text" id="acctEmail" inputmode="email" autocomplete="email" placeholder="you@example.com" /></label>
+    ${m.password?`<label class="fld"><em>Password</em>
+      <input type="password" id="acctPw" autocomplete="current-password" placeholder="••••••••" /></label>`:""}
+    ${(m.password&&m.code)?`<p class="hint">Leave the password empty and we'll email you a six-digit code.</p>`:""}
+    <div class="btns"><button id="acctSend">Sign in</button></div>`;
+
+  if($("#acctGoogle")) $("#acctGoogle").onclick=()=>TBAccount.oauthGo("google");
+  if($("#acctApple")) $("#acctApple").onclick=()=>TBAccount.oauthGo("apple");
   $("#acctSend").onclick=async()=>{
-    try{ acctToken=await TBAccount.start($("#acctEmail").value); renderAccount();
-         toast("Code sent — check your email"); }
-    catch(e){ toast(e.message); }
+    const pw = $("#acctPw") ? $("#acctPw").value : "";
+    try{
+      if(pw){
+        await TBAccount.signInPassword($("#acctEmail").value, pw);
+        renderAccount(); render(); whoLabel(); toast("Signed in — log synced");
+      } else if(!m.code){
+        toast("Enter your password.");
+      } else {
+        acctToken=await TBAccount.start($("#acctEmail").value); renderAccount();
+        toast("Code sent — check your email");
+      }
+    }catch(e){ toast(e.message); }
   };
 }
 
@@ -1413,16 +1517,49 @@ function whoLabel(){
   el.textContent = on ? TBAccount.email() : "";
   el.classList.toggle("show", !!on);
 }
-async function gateSend(){
-  const btn=document.getElementById("gSend"), addr=document.getElementById("gEmail").value.trim();
-  gateError(""); btn.disabled=true; btn.textContent="Sending…";
+/* Show only the doors this server actually has open, and keep the primary
+   button honest about which one the current input will use. */
+let gateMethods={code:true, password:false, google:false, apple:false};
+async function gatePaint(){
+  if(!window.TBAccount) return;
+  gateMethods = await TBAccount.methods();
+  const g=document.getElementById("gGoogle"), a=document.getElementById("gApple");
+  g.hidden = !gateMethods.google;
+  a.hidden = !gateMethods.apple;
+  document.getElementById("gProv").hidden = !(gateMethods.google || gateMethods.apple);
+  document.getElementById("gPwField").hidden = !gateMethods.password;
+  document.getElementById("gPwHint").hidden = !(gateMethods.password && gateMethods.code);
+  gateBtnLabel();
+}
+const gatePwOffered = () => !document.getElementById("gPwField").hidden;
+function gateBtnLabel(){
+  const pw = gatePwOffered() ? document.getElementById("gPw").value : "";
+  document.getElementById("gSend").textContent =
+    (pw || !gateMethods.code) ? "Sign in" : "Email me a code";
+}
+async function gateSubmit(){
+  const btn=document.getElementById("gSend");
+  const addr=document.getElementById("gEmail").value.trim();
+  const pw = gatePwOffered() ? document.getElementById("gPw").value : "";
+  gateError(""); btn.disabled=true;
+  btn.textContent = pw ? "Signing in…" : "Sending…";
   try{
-    gateToken=await TBAccount.start(addr);
-    document.getElementById("gWho").textContent=addr;
-    gateStep(2);
-    setTimeout(()=>document.getElementById("gCode").focus(),50);
-  }catch(e){ gateError(e.message||"Couldn't send the code."); }
-  finally{ btn.disabled=false; btn.textContent="Email me a code"; }
+    if(pw){
+      await TBAccount.signInPassword(addr, pw);
+      document.getElementById("gPw").value="";
+      whoLabel();
+      toast("Signed in — your log is synced");
+      gateRoute();                     // may still owe us a licence
+    } else if(!gateMethods.code){
+      gateError("Enter your password.");
+    } else {
+      gateToken=await TBAccount.start(addr);
+      document.getElementById("gWho").textContent=addr;
+      gateStep(2);
+      setTimeout(()=>document.getElementById("gCode").focus(),50);
+    }
+  }catch(e){ gateError(e.message||"That didn't work."); }
+  finally{ btn.disabled=false; gateBtnLabel(); }
 }
 async function gateVerify(){
   const btn=document.getElementById("gVerify");
@@ -1435,12 +1572,16 @@ async function gateVerify(){
   }catch(e){ gateError(e.message||"That didn't work."); }
   finally{ btn.disabled=false; btn.textContent="Sign in"; }
 }
-function initGate(){
-  document.getElementById("gSend").onclick=gateSend;
+async function initGate(){
+  document.getElementById("gSend").onclick=gateSubmit;
   document.getElementById("gVerify").onclick=gateVerify;
   document.getElementById("gBack").onclick=()=>{ gateToken=null; gateStep(1); };
   document.getElementById("gSkip").onclick=()=>{ hideGate(); toast("Using this device only — sign in any time from ⚙︎"); };
-  document.getElementById("gEmail").addEventListener("keydown",e=>{ if(e.key==="Enter") gateSend(); });
+  document.getElementById("gEmail").addEventListener("keydown",e=>{ if(e.key==="Enter") gateSubmit(); });
+  document.getElementById("gPw").addEventListener("keydown",e=>{ if(e.key==="Enter") gateSubmit(); });
+  document.getElementById("gPw").addEventListener("input", gateBtnLabel);
+  document.getElementById("gGoogle").onclick=()=>TBAccount.oauthGo("google");
+  document.getElementById("gApple").onclick=()=>TBAccount.oauthGo("apple");
   document.getElementById("gCode").addEventListener("keydown",e=>{ if(e.key==="Enter") gateVerify(); });
   document.getElementById("gKeyGo").onclick=async()=>{
     const btn=document.getElementById("gKeyGo"); gateError(""); btn.disabled=true; btn.textContent="Checking…";
@@ -1459,7 +1600,17 @@ function initGate(){
     gateToken=null; whoLabel(); gateRoute();
   };
   whoLabel();
+
+  /* If this page load is the browser arriving back from Google or Apple, finish
+     that BEFORE deciding whether the door needs showing — otherwise somebody
+     who has just signed in gets the sign-in screen flashed in their face. */
+  const back = window.TBAccount ? await TBAccount.completeReturn() : null;
+  if(back && back.ok){ whoLabel(); toast("Signed in — your log is synced"); }
+
+  await gatePaint();
   if(gateNeeded()){ showGate(); gateRoute(); } else gateStep(1);
+  /* Last, because gateStep() clears the error line on its way past. */
+  if(back && !back.ok) gateError(back.error);
 }
 
 /* ---------- settings sheet ---------- */
