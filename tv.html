@@ -334,10 +334,20 @@ var CITIES = [
 
 /* Views that follow whichever city you used last. `perCity:false` = shared page. */
 var VIEWS = [
+  /* First, so it is one press down from the cities rather than the far corner of
+     the grid. See the note by `action` below for why it is a tile at all. */
+  {icon:"QR", name:"Unlock this screen", desc:"Scan with your phone — nothing to type",
+   action:"pair", perCity:false, sys:"#ff6b9d"},
   {icon:"SKY", name:"Sky",   desc:"Nearest flight overhead, full screen", file:"night.html",      perCity:true,  sys:"#b58cff"},
   {icon:"BRD", name:"Board", desc:"Split-flap departure board",           file:"flipboard.html",  perCity:true,  sys:"#ffd166"},
   {icon:"TOUR", name:"Tour",  desc:"Every city's vehicles on one map",     file:"tour.html",       perCity:false, sys:"#3ad0c8"},
   {icon:"SPOT", name:"Spot",  desc:"Log what you see — phone app",         file:"spot.html",       perCity:false, sys:"#33d17a"},
+  /* `action` rather than a file: a tile that does something instead of going
+     somewhere. It is a tile at all because a television remote has arrows and
+     OK and no letter keys — the U shortcut and the button beside Cast serve a
+     keyboard and a mouse, and neither of those is what is in the room. Tiles
+     are the only thing arrow navigation reaches, so anything that has to be
+     reachable from a sofa has to be one. */
   {icon:"ACCT", name:"Account", desc:"Sign-in, licence key, saved settings", file:"profile.html",    perCity:false, sys:"#4ea1ff"}
 ];
 
@@ -363,13 +373,22 @@ function tile(o){
     '<span class="desc">' + o.desc + '</span>' +
     '<span class="bar"></span>';
   a.addEventListener("mouseenter", function(){ focusIndex(tiles.indexOf(a)); });
-  a.addEventListener("click", function(e){ e.preventDefault(); open(o.href, o.city); });
+  /* A tile can either go somewhere or do something. The keyboard's Enter branch
+     reads data-action off the element for the same reason, so both routes into a
+     tile agree. */
+  if (o.action) a.setAttribute("data-action", o.action);
+  a.addEventListener("click", function(e){
+    e.preventDefault();
+    if (o.action === "pair") { openPair(); return; }
+    open(o.href, o.city);
+  });
   return a;
 }
 
 function targetCity(){ return lastCity || CITIES[0].id; }
 
 function buildViewHref(v){
+  if (v.action) return "#";              // a tile that does something, not one that goes somewhere
   return v.perCity ? v.file + "?city=" + targetCity() : v.file;
 }
 
@@ -387,7 +406,7 @@ VIEWS.forEach(function(v, i){
      same number, and the key only ever reaching one of them. Numbering now
      continues from the city count. */
   var el = tile({href:buildViewHref(v), icon:v.icon, name:v.name, desc:v.desc, sys:v.sys,
-                 num:CITIES.length + i + 1, city:""});
+                 num:CITIES.length + i + 1, city:"", action:v.action});
   el.dataset.view = i;
   viewWrap.appendChild(el); tiles.push(el);
 });
@@ -399,16 +418,40 @@ if (lastCity){
   if (li >= 0) idx = li;
 }
 
-function focusIndex(n){
+/* An unlicensed screen has one job before it can usefully do anything else, so
+   the selection starts on it — nought presses instead of hunting the grid with
+   a remote. A licensed screen is left alone on whichever board it opened last,
+   which is the thing it is actually for. */
+if (!screenLicensed()){
+  var ui = tiles.map(function(t){ return t.getAttribute("data-action"); }).indexOf("pair");
+  if (ui >= 0) idx = ui;
+}
+
+function focusIndex(n, block){
   if (n < 0 || n >= tiles.length) return;
   tiles[idx].classList.remove("on");
   idx = n;
   tiles[idx].classList.add("on");
+  /* preventScroll, then scroll deliberately. Focus alone would jump the tile to
+     the middle of the screen on every arrow press; focus with preventScroll and
+     nothing else never scrolls at all, which is how the selection could sit
+     below the fold with the page showing the top and nothing visibly chosen —
+     exactly what happens on an unlicensed screen, where the selection starts on
+     a tile eleven cities down. "nearest" scrolls only when it has to, so on a
+     television where the whole grid already fits this does nothing. */
   tiles[idx].focus({preventScroll:true});
+  /* "nearest" while arrowing around: it moves as little as it can, so the grid
+     does not lurch under every press. The opening selection asks for "center"
+     instead — nearest leaves a tile flush with the bottom edge, and there is a
+     fixed footer sitting over exactly that strip. */
+  if (tiles[idx].scrollIntoView) tiles[idx].scrollIntoView({block: block || "nearest", inline:"nearest"});
 }
 tiles.forEach(function(t){ t.tabIndex = -1; });
+/* Through focusIndex rather than focusing directly, so the opening selection
+   gets scrolled into view like every later one. Setting it by hand here is what
+   left an unlicensed screen selecting a tile the viewer could not see. */
 tiles[idx].classList.add("on");
-tiles[idx].focus({preventScroll:true});
+(function(){ var start = idx; idx = 0; focusIndex(start, "center"); })();
 
 function open(href, city){
   if (city){ try { localStorage.setItem(LAST_KEY, city); } catch (e) {} }
@@ -456,6 +499,8 @@ document.addEventListener("keydown", function(e){
   else if (k === "ArrowUp"){ move(0,-1); e.preventDefault(); }
   else if (k === "Enter" || k === " "){
     var t = tiles[idx];
+    // OK on a tile that does something rather than goes somewhere.
+    if (t.getAttribute("data-action") === "pair") { openPair(); e.preventDefault(); return; }
     open(t.getAttribute("href"), CITIES[idx] ? CITIES[idx].id : "");
     e.preventDefault();
   }
@@ -656,7 +701,10 @@ function closePair(){
   if (window.TBPair) window.TBPair.stop();     // stop polling with the panel gone
   document.getElementById("pairPanel").classList.remove("show");
   paintPairBtn();
-  try { document.getElementById("pairBtn").focus(); }catch(_){}
+  /* Back to the tile the remote was sitting on, so arrows carry on working.
+     Focusing the header button instead would strand a remote outside the grid
+     with no way back into it. */
+  try { tiles[idx].focus({preventScroll:true}); }catch(_){}
 }
 
 function closeCastHelp(){
