@@ -100,9 +100,14 @@ jobs:
         run: |
           set -euo pipefail
           TITLE="Automated job failing: $WF"
+          # Nothing has ever failed => the "automation" label was never created
+          # => this lookup errors and, under pipefail, fails the whole run. That
+          # turned every SUCCESSFUL deploy into a "job failed" email. No open
+          # issue and no label both mean the same thing here: nothing to close.
           NUM=$(gh issue list --state open --label automation --limit 50 \
                   --json number,title \
-                  --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+                  --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty" \
+                  2>/dev/null || true)
           if [ -n "$NUM" ]; then
             gh issue close "$NUM" --comment "Recovered — $WF succeeded. $RUN_URL"
             echo "Closed issue #$NUM"
