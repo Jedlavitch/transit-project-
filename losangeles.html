@@ -2509,6 +2509,27 @@ function looksLikeTv(){
       (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches);
   }catch(e){ return false; }
 }
+/* Prefer the SMALLEST of every width/height signal the browser offers, not
+   just innerWidth: Safari's visual and layout viewports can genuinely
+   differ (dynamic toolbar showing/hiding, pinch-zoom state), and this fit
+   calculation would rather under-estimate available room -- a slightly
+   smaller board -- than over-estimate it and compute a zoom that doesn't
+   actually fit. Belt-and-suspenders alongside the auto-fit/minmax card and
+   stat-strip grids in theme.css, which don't depend on this number being
+   right at all -- they can't overflow their container regardless of what
+   zoom this computes. */
+function viewportW(){
+  var vv = window.visualViewport;
+  var vals = [innerWidth, document.documentElement.clientWidth];
+  if (vv && vv.width) vals.push(vv.width);
+  return Math.min.apply(null, vals);
+}
+function viewportH(){
+  var vv = window.visualViewport;
+  var vals = [innerHeight, document.documentElement.clientHeight];
+  if (vv && vv.height) vals.push(vv.height);
+  return Math.min.apply(null, vals);
+}
 function autoDisplay(){
   /* A television is not short of pixels, it is short of ANGLE: the same
      1920x1080 that sits at arm's length on a desk is being read from a sofa ten
@@ -2522,11 +2543,20 @@ function autoDisplay(){
      4K one. Capping both at 100% was the bug; it meant the auto-fit could
      rescue a small screen and never a distant one. */
   const tv  = looksLikeTv();
-  const fit = tv ? Math.min(innerWidth/1280, innerHeight/720)
-                 : Math.min(innerWidth/1600, innerHeight/900);
-  const lo  = tv ? 1   : 0.7;
+  const fit = tv ? Math.min(viewportW()/1280, viewportH()/720)
+                 : Math.min(viewportW()/1600, viewportH()/900);
   const hi  = tv ? 3   : 1;
-  const z = Math.max(lo, Math.min(hi, Math.round(fit*20)/20));   // 5% steps
+  /* The "don't shrink past 70%" floor is a legibility preference, not a
+     guarantee, so it must never ask for more room than the viewport actually
+     has. It used to be a flat 0.7, which forced a 1120px-wide board onto any
+     narrower screen -- fine down to ~1120px wide, but a real, reproducible
+     96/220/352px horizontal overflow at 1024/900/768 (tablet widths) since
+     those need to shrink past 70% to genuinely fit. Capping the floor at the
+     true fit ratio means it only ever floors when there's room to spare. */
+  const lo  = tv ? 1   : Math.min(0.7, fit);
+  // floor (not round) to 5% steps: rounding up, even by one step, could still
+  // ask for a couple more pixels than the viewport has at an unlucky width.
+  const z = Math.max(lo, Math.min(hi, Math.floor(fit*20)/20));
   return { z, pad: tv ? 2.5 : 0 };
 }
 function curZoom(){ const v=parseFloat(localStorage.getItem("tb.uiZoom")); return isFinite(v)&&v>0?v:autoDisplay().z; }

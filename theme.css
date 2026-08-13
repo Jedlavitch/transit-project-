@@ -343,6 +343,54 @@ body #app{
   }
 }
 
+/* ---- Structural grid fit -- every board, independent of the zoom above ------
+   dc.html got auto-fit/minmax card and stat-strip grids (plus a min-width:0
+   safety net on .row/.list) after a real overflow was found and fixed there;
+   every OTHER board (philadelphia.html, nyc.html, boston.html, ...) still had
+   the original fixed `grid-template-columns:1fr 1fr` this replaces, and a
+   real iPad reported the exact same class of bug on philadelphia.html days
+   later: the right .cards column clipped off the edge at iPad-mini-landscape
+   width. Centralizing the fix here, at higher specificity than each board's
+   own `.cards`/`#statStrip`/`.row` rule (an extra `body` qualifier beats a
+   bare class selector regardless of source order -- same technique as
+   `body #app` above), means one edit covers every board instead of hunting
+   down and hand-patching N near-identical copies of the same CSS, and
+   nothing shipped after this can silently regress back to a fixed-width grid.
+
+   This is deliberately NOT dependent on --ui-zoom/`zoom` at all: auto-fit
+   sizes columns from the container's own available width, so the grid
+   cannot be wider than its container in ANY engine -- with or without zoom
+   support, with or without JS having run yet. `minmax(min(320px,100%),1fr)`
+   (not a bare 320px) means even the minimum track size itself can never
+   exceed the container's own width, so this can't overflow even on a
+   viewport narrower than 320px. min-width:0 on .row/.list matters for the
+   same reason dc.html needed it: without it, one long unwrappable
+   destination/route string can force a row -- and everything above it up to
+   the page -- wider than the viewport, regardless of how correctly the zoom
+   math is behaving. */
+body .cards{ grid-template-columns:repeat(auto-fit, minmax(min(320px,100%), 1fr)) }
+body #statStrip{ grid-template-columns:repeat(auto-fit, minmax(min(108px,100%), 1fr)) }
+body .stat .s-value{ font-size:clamp(16px, 2.1vw, 26px) }
+body .list{ min-width:0 }
+body .row{ grid-template-columns:auto minmax(0,1fr) auto auto; min-width:0 }
+
+/* dc.html stacks main (map on top, cards full-width below) at <=1220px real
+   viewport width; every other board still stacked at the older <=1000px --
+   this is the actual, confirmed root cause of the iPad-mini-landscape (real
+   width 1133px) bug report on philadelphia.html: at 1133px, dc.html was
+   already stacked (cards get the whole width), but philadelphia.html was
+   still in side-by-side "map | 2-column-cards" mode -- exactly what the
+   report described ("map + two panel columns") -- squeezing .cards into
+   under half the viewport, which is what made a long, unwrapped row (the
+   min-width:0 gap above) so much more likely to overflow there than on a
+   board with the roomier breakpoint. Aligning every board to 1220px removes
+   that gap entirely, on top of (not instead of) the auto-fit/min-width:0
+   fix above. */
+@media (max-width:1220px){
+  body main{ grid-template-columns:1fr; grid-template-rows:26dvh 1fr }
+  body #map{ min-height:0 }
+}
+
 /* Reclaim vertical space inside a card: the stop + direction labels were using
    ~45px of a ~95px list on a small screen, leaving no room for the departures
    they label. Higher specificity than each board's own rule, so one edit covers
