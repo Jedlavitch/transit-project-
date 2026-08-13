@@ -813,6 +813,39 @@ async function lookupRoute(callsign){
    stated DESTINATION, the legs are swapped. The 30-degree margin keeps it from
    flipping on aircraft that are merely off-course, holding, or on a dogleg.
    Same sample: agreement rose from 22/34 to 27/34. */
+/* ---- is this route physically possible from here? ------------------------
+   adsbdb keys on CALLSIGN, and airlines reuse flight numbers hard, so the route
+   it returns is often for a completely different leg flown by the same number
+   on another day — a Seattle-to-Portland pair arriving on an aircraft over
+   Maryland. orientRoute() cannot catch that: it only decides which way round a
+   route runs, and reversing Seattle/Portland is still Seattle/Portland.
+
+   So gate on geometry, the way the city boards already do. An aircraft en route
+   sits near the great circle between its two ends, which means
+   dist(here,origin) + dist(here,destination) should be close to the leg itself.
+   Well outside that ellipse and the route belongs to some other flight.
+
+   Second test for low altitude: under 10,000ft an aircraft is climbing out of
+   or descending into somewhere nearby, so one end of a real route has to be
+   local. A cruise-altitude overflight legitimately has neither end near us,
+   which is why the test only applies down low.
+
+   Measured on the boards when this was written: of 29 aircraft with a route,
+   19 were impossible. Showing them was worse than showing nothing, because a
+   named city reads as fact. */
+function routePlausibleNight(route, pos, alt, loc){
+  if(!route || !route.origin || !route.destination || !pos) return false;
+  const O=route.origin, D=route.destination;
+  if(typeof O.latitude!=="number" || typeof D.latitude!=="number") return false;
+  const oLL={lat:O.latitude, lon:O.longitude}, dLL={lat:D.latitude, lon:D.longitude};
+  const leg=haversineNm(oLL,dLL);
+  const detour=haversineNm(pos,oLL)+haversineNm(pos,dLL);
+  if(detour > leg*1.12 + 40) return false;
+  if(typeof alt==="number" && alt<10000 && loc &&
+     Math.min(haversineNm(loc,oLL), haversineNm(loc,dLL)) > 60) return false;
+  return true;
+}
+
 function orientRoute(route, pos, track){
   if(!route || !route.origin || !route.destination) return route;
   if(typeof track!=="number" || !pos) return route;
@@ -1420,6 +1453,9 @@ async function producePlane(){
     let route=await lookupRoute((x.a.flight||"").trim());
     // point it the way the aircraft is actually flying before anything uses it
     route=orientRoute(route, {lat:x.a.lat, lon:x.a.lon}, x.a.track);
+    /* Drop a route the aircraft could not possibly be flying. Better to show
+       the tail number than to name two cities it has nothing to do with. */
+    if(route && !routePlausibleNight(route, {lat:x.a.lat, lon:x.a.lon}, x.a.alt_baro, loc)) route=null;
     if(route && route.origin && route.destination){ pick={...x, route}; break; }
   }
   if(!pick) pick={...air[0], route:null};
