@@ -31,33 +31,39 @@ the next screen in the house is a single tap.
 
 ---
 
-## What you have to do
+## Deploying it
 
-**Redeploy `license-worker.js`.** The pairing routes live in it, and until the
-Worker is redeployed the button appears and reports that it cannot reach the
+**The Worker is done — deployed 12 August 2026 as version `4ce15fb3`** (it was
+`9b2203cc`, which is the rollback point if one is ever needed: Workers → Deployments
+→ that version → Rollback). No new secrets and no new bindings; it uses the
+`LICENSES` KV namespace that was already there.
+
+That redeploy also shipped the commit `/health` had been waiting on, so it now
+tests the Stripe key rather than noticing one is set. It currently reports
+`"mode":"live"` and `"ok":true`, which is what you want to see.
+
+**The site half is live too**, as of the same day: `pair.html`, `pair-tv.js`,
+`pair-qr.js` and `/pair/` all serve, the boards ask for `license.js?v=2` and
+`gate.js?v=2`, and `gate.js` carries the button. Both halves are up, so the
+feature works end to end.
+
+Deploy the Worker **before** pushing the site when a change spans both. In that
+order the new routes simply sit unused and nothing already live changes; the
+other way round, every board offers a button that reports it cannot reach the
 licence server.
 
-Cloudflare → your `tb-license` Worker → **Edit Code** → paste the current
-`license-worker.js` → **Deploy**. No new secrets, no new bindings; it uses the
-`LICENSES` KV namespace that is already bound.
-
-Check it took:
+Re-check the Worker any time with:
 
 ```bash
 curl -s -X POST https://tblicense.jacklemonade2.workers.dev/pair/start -H 'content-type: application/json' -d '{"device":"test"}'
 ```
 
 You want `{"ok":true,"code":"…","secret":"…","interval":3,"expiresIn":600}`. A
-`not_found` means the paste did not land.
+`not_found` means something has been redeployed over it.
 
-> **The deployed Worker was already behind the repo** before this change —
-> `/health` was answering without the `stripeCheck` field that
-> `Make /health test the Stripe key instead of noticing one exists` added. So
-> this redeploy ships that commit too. Worth a look at `/health` afterwards:
-> it will start telling you whether the Stripe key actually works.
-
-Nothing else changes. The site files are static, so they go live with the next
-push like everything else.
+> **Redeploy this Worker whenever `license-worker.js` changes.** It is the one
+> piece that does not travel with a `git push`, which is exactly how it came to
+> be a commit behind without anyone noticing.
 
 ---
 
