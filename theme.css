@@ -435,7 +435,7 @@ body .row{ grid-template-columns:auto minmax(0,1fr) auto auto; min-width:0 }
      where `zoom` doesn't apply at all (see @supports below) -- #app there
      renders unzoomed, so a plain dvh/px value here already IS real screen
      pixels. */
-  body main{ grid-template-columns:1fr; grid-template-rows:clamp(220px,34dvh,420px) 1fr }
+  body main{ grid-template-columns:1fr; grid-template-rows:clamp(260px,38dvh,460px) 1fr }
   body #map{ min-height:0 }
 }
 @supports (zoom: 1){
@@ -451,8 +451,115 @@ body .row{ grid-template-columns:auto minmax(0,1fr) auto auto; min-width:0 }
        here, exactly like #app's own width/height calc does, makes the
        clamp()'s bounds mean real screen pixels regardless of what zoom
        autoDisplay() picked. */
-    body main{ grid-template-rows:calc(clamp(220px,34dvh,420px) / var(--ui-zoom)) 1fr }
+    body main{ grid-template-rows:calc(clamp(260px,38dvh,460px) / var(--ui-zoom)) 1fr }
   }
+}
+
+/* ============================================================================
+   PREMIUM REDESIGN PASS -- three problems the fit-only fixes above didn't touch.
+
+   1. VEHICLE TIMES CLIPPING. `.row`'s time column is an "auto" grid track,
+      which should already protect it -- but nothing stopped the time text
+      from WRAPPING onto two lines under pressure, and a wrapped time reads as
+      badly as a clipped one. `.dest`'s minmax(0,1fr) column is the one meant
+      to give under pressure (it already ellipses); the time column should
+      never even try to.
+   2. COLLAPSED CARDS LEAVE DEAD SPACE. `.cards` was a CSS Grid with
+      `grid-auto-rows:1fr` -- rows size to their TALLEST member, so collapsing
+      one card in a row of four leaves a hole under it up to that row's
+      height, and cards in OTHER rows cannot flow up into it. That is a
+      structural property of row-based grid, not a tuning problem. A CSS
+      multi-column flow instead: browser-native (no JS masonry engine to
+      maintain), and it re-packs on ANY content change -- collapse a card and
+      the remaining cards flow up on their own, the same mechanism browsers
+      use to paginate print.
+   3. CRAMPED, FLAT LOOK. Wider cards, roomier gaps, taller map, one corner
+      radius, and the brand gradient (pink/blue/teal, from this file's own
+      BRAND block) on chrome only -- agency colour still owns the data, per
+      the "never let a colour mean two things" rule written at the top.
+   ============================================================================ */
+
+/* ---- 1. time column: reserved width, guaranteed one line ------------------ */
+body .row .live,
+body .row .live-eta,
+body .row .live-tag,
+body .row .sched{ white-space:nowrap }
+body .row .times{ min-width:max-content }
+
+/* ---- 2. cards: multi-column masonry instead of a row-based grid ----------- */
+/* The scroll/height boundary lives on the CARDS COLUMN (main > .col:last-child
+   -- every board's markup is the same two <div class="col">s, map then cards),
+   NOT on .cards itself. Putting flex:1 + overflow-y:auto directly on .cards
+   was tried first: multi-column's own height algorithm fought the flex-imposed
+   cross-size no matter how the flex/min-height properties were set -- .cards
+   kept sizing to its full natural content height (measured 826px against a
+   ~744px flex share) and column-fill then added a genuinely off-screen 4th
+   column to satisfy that self-inflated height. That column was invisible
+   (clipped by #app's overflow:hidden) rather than causing a document scrollbar,
+   so it took walking every card's getBoundingClientRect() to catch -- a
+   scrollWidth check never would have. Letting .cards be a plain,
+   unconstrained-height block sidesteps the fight: with no height target to
+   balance against, column-width alone decides the column count from available
+   WIDTH, and the already-height-constrained .col clips and scrolls the result. */
+main > .col:last-child{
+  overflow-y:auto; overflow-x:hidden; min-height:0;
+  scrollbar-width:thin; scrollbar-color:var(--line) transparent;
+}
+body .cards{
+  /* column-width is a SUGGESTED width, not a hard one -- a container narrower
+     than 330px still gets exactly one column sized to fit, never an overflow,
+     so this needs no min()/percentage fallback. (It must not HAVE one either:
+     `min(330px,100%)` is not a resolvable column-width value, and the whole
+     declaration was silently dropped, computing back to `auto` -- confirmed
+     via getComputedStyle before this fix.)
+     flex:0 0 auto, not the 1 each board's own rule sets: .cards must not be a
+     flex-grow item, or its height goes straight back to being fought over. */
+  display:block; column-width:330px; column-gap:16px;
+  min-width:0; flex:0 0 auto;
+}
+body .card{
+  /* min/max, not a fixed height: a fixed height made a 2-alert Service Alerts
+     card and a 12-departure Trains card exactly as tall as each other, which
+     just moves the dead space inside the card -- the same "looks
+     unintentional" complaint this section exists to fix. Natural height lets a
+     card size to what it actually has; the floor keeps a sparse card reading
+     as an intentional tile, the ceiling stops a data-heavy one dominating the
+     column, and .list's own overflow-y:auto takes over past the ceiling. */
+  display:flex; flex-direction:column; width:100%;
+  break-inside:avoid; margin:0 0 16px;
+  min-height:150px; max-height:360px;
+  border-radius:10px;
+}
+body .card.mini{ min-height:0; max-height:none; margin-bottom:12px }
+/* Same zoom-vs-#app issue as the map row above: the plain values are already
+   correct where `zoom` does not apply, but where it does, both the column
+   width and the card bounds must be divided by --ui-zoom to keep meaning real
+   screen pixels -- 330px of local space is only ~167px of real width at a
+   narrow iPad's 0.465 zoom, which would undo the whole point of this pass. */
+@supports (zoom: 1){
+  body .cards{ column-width:calc(330px / var(--ui-zoom)) }
+  body .card{
+    min-height:calc(150px / var(--ui-zoom));
+    max-height:calc(360px / var(--ui-zoom));
+  }
+}
+body #map{ border-radius:10px }
+body .stat{ border-radius:8px }
+
+/* ---- 3. spacing rhythm + brand touches ------------------------------------ */
+body main{ gap:18px; padding:16px }
+body #statStrip{ gap:10px 22px; padding:12px 16px 0 }
+body .card{ padding:14px 16px }
+/* The wordmark's own pink -> blue -> teal blend as a thin identity seam under
+   the command bar. Brand chrome deliberately, not the user-customisable
+   --accent that dresses everything functional. */
+body header{
+  box-shadow:none;
+  border-bottom:2px solid transparent;
+  border-image:linear-gradient(90deg,var(--brand-pink),var(--brand-blue) 50%,var(--brand-teal)) 1;
+}
+@supports (color: color-mix(in srgb, red 10%, blue)){
+  body #map{ border-color:color-mix(in srgb, var(--brand-teal) 22%, var(--line)) }
 }
 
 /* Reclaim vertical space inside a card: the stop + direction labels were using
