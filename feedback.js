@@ -94,8 +94,18 @@
      center on anything wide enough to clear that reach and only nudges right on
      narrower screens -- 490px was chosen as that reach (374) plus this
      button's own ~96px half-width plus a clear margin, so it holds true
-     center already by ~1000px wide and never overlaps narrower than that. */
-  #tbFbBtn{position:fixed; left:max(490px,50%); bottom:12px; transform:translateX(-50%); z-index:610;
+     center already by ~1000px wide and never overlaps narrower than that.
+
+     That fixed 490px nudge, on its own, overran the OTHER edge on phones: with
+     no ceiling, left:max(490px,50%) stays 490px no matter how narrow the
+     viewport gets, so under ~522px wide (490px + this button's own half-width)
+     the button was pushed off the right edge of the screen entirely --
+     confirmed at 390px wide, where left computed to 473px against a 390px
+     viewport. The inner min(...,calc(100% - 24px)) caps the nudge at 24px of
+     clearance from the true right edge, which only bites below ~980px+24px
+     wide and is already a no-op at every width the mascot-collision math above
+     was measured against. */
+  #tbFbBtn{position:fixed; left:min(max(490px,50%), calc(100% - 24px)); bottom:12px; transform:translateX(-50%); z-index:610;
     display:flex; align-items:center; gap:6px;
     padding:8px 12px; border-radius:8px; background:var(--panel,#111d36); color:var(--muted,#93a5cf);
     border:1px solid var(--line,#22345a); font:600 11px/1 var(--body,-apple-system,sans-serif);
@@ -103,6 +113,23 @@
   #tbFbBtn:hover{border-color:var(--accent,#4ea1ff); color:var(--text,#eef3ff); opacity:1}
   #tbFbBtn .flag{color:var(--accent,#4ea1ff)}
   @media (max-width:480px){ #tbFbBtn .full{display:none} }
+
+  /* A second, separate collision from the one above: gate.js's #tbTrial
+     "Unlock HH:MM" chip is right:12px/bottom:12px with z-index 2147483000
+     (always on top of everything) and grows wide enough with its countdown
+     text (~115px measured) to reach this button's horizontally-centered
+     position -- confirmed overlapping, chip fully covering the button, across
+     roughly 400-713px wide (below 713px the button's right edge, pinned at
+     490px center + its own ~96px half-width once the full label shows, runs
+     into the chip's left edge; the exact number moves a little with the
+     countdown's digit widths, so 760px keeps real margin over the measured
+     713px). This range was never visible before the off-screen fix above,
+     because the button was off-canvas at the narrow end of it anyway -- it is
+     not new, just newly exposed. Same fix the file-level comment already
+     documents for every OTHER bottom chip: stack by bottom-offset rather than
+     fight sideways for the same row. 54px clears #tbTrial's 12px+30px-tall
+     row with room to spare. */
+  @media (max-width:760px){ #tbFbBtn{ bottom:54px } }
   #tbFbOverlay{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
     background:var(--scrim,rgba(5,10,22,.86)); padding:16px}
   #tbFbBox{background:var(--panel,#111d36); border:1px solid var(--line,#22345a); border-radius:12px;
