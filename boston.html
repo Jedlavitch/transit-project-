@@ -710,6 +710,14 @@ var r=g("tb.rows")||g("transitboardboston.rows");if(r&&r!=="normal")d.setAttribu
       <button type="button" class="theme-btn" data-zoom="1.75">175%</button>
       <button type="button" class="theme-btn" data-zoom="2">200%</button>
     </div>
+    <!-- What the auto-fit actually decided, and why.
+
+         Without this the owner of a wall display has no way to tell a screen
+         that was detected as a television and sized up from one that was not
+         and left at desk density -- they look identical from the sofa, and the
+         difference is the whole point. It also gives support a single line to
+         ask for instead of a guessing game about which panel reports what. -->
+    <div id="zoomAuto" style="font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.5"></div>
 
     <div class="accent-lbl">Edge fit <span style="text-transform:none; font-weight:600">(if a TV crops the edges)</span></div>
     <div class="theme-row" id="padRow">
@@ -2514,6 +2522,7 @@ function applyDisplay(zoom, padPct){
   d.style.setProperty("--safe-pad", padPct>0 ? `min(${padPct}vw, ${padPct}vh)` : "0px");
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.zoom)-zoom)<0.001));
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.pad)-padPct)<0.001));
+  paintZoomAuto(zoom);
   setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); } if(typeof fitAll==="function") fitAll(); }, 120);
 }
 function setBoardZoom(z){ localStorage.setItem("tb.uiZoom", String(z)); applyDisplay(z, curPad()); }
@@ -2567,6 +2576,24 @@ function viewportH(){
   if (vv && vv.height) vals.push(vv.height);
   return Math.min.apply(null, vals);
 }
+/* Report what the auto-fit decided. Shown under Display size so somebody
+   setting up a wall display can see, in one line, whether this screen was
+   recognised as a television and scaled up -- or quietly left at desk density
+   because the user agent did not say "TV" and nothing else can tell a panel on
+   a wall from a monitor on a desk. */
+function paintZoomAuto(active){
+  const el=document.getElementById("zoomAuto"); if(!el) return;
+  let saved=null; try{ saved=localStorage.getItem("tb.uiZoom"); }catch(e){}
+  const auto=autoDisplay(), tv=looksLikeTv();
+  const pct=n=>Math.round(n*100)+"%";
+  el.innerHTML =
+    (saved!=null
+      ? "Set by hand: <b>"+pct(parseFloat(saved))+"</b>. Auto would pick "+pct(auto.z)+"."
+      : "Auto: <b>"+pct(auto.z)+"</b>, and in use.") +
+    "<br>" + innerWidth+"\u00d7"+innerHeight + " \u00b7 " +
+    (tv ? "recognised as a television" : "not recognised as a television \u2014 if this IS one, pick 150% or 175% above");
+}
+
 function autoDisplay(){
   /* A television is not short of pixels, it is short of ANGLE: the same
      1920x1080 that sits at arm's length on a desk is being read from a sofa ten
