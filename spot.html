@@ -135,7 +135,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     border-radius:12px; font-size:14px; font-weight:700; transition:transform .3s ease;
     box-shadow:0 10px 30px rgba(0,0,0,.5); max-width:88vw; text-align:center}
   #toast.up{transform:translate(-50%,0)}
-  .sheet{position:fixed; inset:0; z-index:200; background:var(--scrim); display:none;
+  .sheet{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:200; background:var(--scrim); display:none;
     align-items:flex-end; justify-content:center}
   .sheet.show{display:flex}
   .sheet .box{background:var(--panel); border:1px solid var(--line); border-radius:16px 16px 0 0;
@@ -151,7 +151,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 
 
   /* ---- front door ---- */
-  #gate{position:fixed; inset:0; z-index:500; display:none; overflow:auto;
+  #gate{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:500; display:none; overflow:auto;
     background:
       radial-gradient(800px 600px at 50% -10%, rgba(78,161,255,.18), transparent 60%),
       radial-gradient(600px 500px at 50% 110%, var(--blue-deep,#0a1a3d), transparent 60%),

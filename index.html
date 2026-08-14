@@ -206,7 +206,7 @@ var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accen
   .city{display:flex; align-items:center; gap:13px; padding:15px 16px; border-radius:14px;
     border:1px solid var(--line); background:var(--panel); position:relative; overflow:hidden;
     transition:border-color .16s ease, transform .16s ease}
-  .city::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--sys)}
+  .city::before{content:""; position:absolute; top:0;right:auto;bottom:0;left:0;inset:0 auto 0 0; width:3px; background:var(--sys)}
   .city:hover{border-color:var(--sys); transform:translateY(-2px)}
   /* City codes in the utility face, on the card's own accent. The guide gives
      mono to "route numbers" and this is the same job — and unlike the emoji it

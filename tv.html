@@ -51,7 +51,7 @@
     display:flex; flex-direction:column; gap:2.2vh;
   }
   body::before{
-    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    content:""; position:fixed; top:0;right:0;bottom:0;left:0;inset:0; pointer-events:none; z-index:0;
     background:
       radial-gradient(90vw 60vh at 12% 0%, rgba(78,161,255,.16), transparent 60%),
       radial-gradient(70vw 55vh at 95% 105%, rgba(181,140,255,.14), transparent 60%);
@@ -189,7 +189,7 @@
   /* Licensed already: still here, still reachable, just not shouting. */
   #pairBtn.done{border-color:rgba(51,209,122,.5); color:#d6ffe7}
   #pairPanel{
-    position:fixed; inset:0; z-index:75; display:none;
+    position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:75; display:none;
     align-items:center; justify-content:center; background:rgba(4,9,18,.9);
   }
   #pairPanel.show{display:flex}
@@ -218,7 +218,7 @@
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
   #castHelp{
-    position:fixed; inset:0; z-index:70; display:none;
+    position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:70; display:none;
     align-items:center; justify-content:center; background:rgba(4,9,18,.86);
   }
   #castHelp.show{display:flex}
@@ -521,11 +521,31 @@ document.addEventListener("keydown", function(e){
     if (n < tiles.length) { focusIndex(n); var t2 = tiles[n]; open(t2.getAttribute("href"), CITIES[n] ? CITIES[n].id : ""); }
   }
   else if (k === "f" || k === "F"){
+    /* Prefixed aliases, the same pattern dc/station/flipboard/night already use —
+       this was the one fullscreen path that got missed. Chrome 68-70 exposes only
+       the webkit forms, so `document.fullscreenElement` was undefined, the else-if
+       found no `requestFullscreen`, and the handler simply exited: F did nothing
+       and said nothing, because the explanatory hint lives inside the promise's
+       .catch(). The footer goes on advertising "F full screen" the whole time.
+
+       The `p && p.catch` guard is load-bearing: webkitRequestFullscreen returns
+       undefined on old Blink, so calling .catch() on it would throw inside the
+       keydown handler and turn a silent no-op into a broken one. */
     var el = document.documentElement;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (el.requestFullscreen) el.requestFullscreen().catch(function(){
-      document.getElementById("hint").textContent = "full screen blocked here — try the TV's own zoom";
-    });
+    var say = function(){ document.getElementById("hint").textContent =
+      "full screen blocked here — try the TV's own zoom"; };
+    var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) {
+      var ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) ex.call(document);
+    } else {
+      var req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!req) say();
+      else {
+        try { var p = req.call(el); if (p && p.catch) p.catch(say); }
+        catch (e) { say(); }
+      }
+    }
   }
 });
 

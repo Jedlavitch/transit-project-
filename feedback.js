@@ -103,7 +103,7 @@
   #tbFbBtn:hover{border-color:var(--accent,#4ea1ff); color:var(--text,#eef3ff); opacity:1}
   #tbFbBtn .flag{color:var(--accent,#4ea1ff)}
   @media (max-width:480px){ #tbFbBtn .full{display:none} }
-  #tbFbOverlay{position:fixed; inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
+  #tbFbOverlay{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
     background:var(--scrim,rgba(5,10,22,.86)); padding:16px}
   #tbFbBox{background:var(--panel,#111d36); border:1px solid var(--line,#22345a); border-radius:12px;
     padding:22px; width:min(440px,94vw); max-height:88vh; overflow:auto; color:var(--text,#eef3ff);

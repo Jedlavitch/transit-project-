@@ -126,7 +126,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   footer .grow{flex:1}
 
   /* Setup overlay */
-  #setup{position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(6px);
+  #setup{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; background:var(--scrim); backdrop-filter:blur(6px);
     display:none; align-items:center; justify-content:center; z-index:9999; padding:20px}
   #setup.show{display:flex}
   #setup .box{background:var(--panel); border:1px solid var(--line); border-radius:18px;
@@ -159,7 +159,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   #setup .card-toggle{flex:1; min-width:120px; display:flex; align-items:center; gap:7px; padding:8px 10px;
     border-radius:10px; border:1px solid var(--line); background:var(--row-bg); font-size:12.5px; cursor:pointer}
   #setup .card-toggle input{margin:0; cursor:pointer}
-  #setup .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
+  #setup .sw.custom input{position:absolute; top:-6px;right:-6px;bottom:-6px;left:-6px;inset:-6px; opacity:0; cursor:pointer}
 
   @media (max-width:1000px){
     main{grid-template-columns:1fr; grid-template-rows:26dvh 1fr}
@@ -185,7 +185,7 @@ var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribu
   }
   :root[data-theme="black"]{ --grid: rgba(96,130,200,.05); }
   :root[data-theme="day"]{ --grid: rgba(19,32,62,.05); }
-  body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  body::before{content:""; position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:0; pointer-events:none;
     background:
       linear-gradient(var(--grid) 1px, transparent 1px) 0 0/100% 56px,
       linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/56px 100%;}

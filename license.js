@@ -110,7 +110,7 @@
     letter-spacing:.08em; text-transform:uppercase; cursor:pointer; opacity:.9}
   #tbLicChip:hover{border-color:var(--accent,#4ea1ff); color:var(--text,#eef3ff)}
   #tbLicChip .diamond{color:var(--warn,#ffcc33)}
-  #tbLicOverlay{position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
+  #tbLicOverlay{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
     background:var(--scrim,rgba(5,10,22,.86))}
   #tbLicBox{background:var(--panel,#111d36); border:1px solid var(--line,#22345a); border-radius:12px;
     padding:22px; width:min(400px,92vw); color:var(--text,#eef3ff);

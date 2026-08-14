@@ -174,14 +174,14 @@
   #fsHint.show{transform:translate(-50%,0)}
 
   /* ---- animated night sky background ---- */
-  #sky{position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none}
+  #sky{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:-1; overflow:hidden; pointer-events:none}
   /* Real sunrise/sunset: a horizon-to-zenith gradient recolored from the sun's
      actual elevation at this location (see sunElevationDeg/updateSunSky), sitting
      UNDER the existing glow blobs + stars so twilight/dawn/dusk tint the whole
      sky instead of replacing it. opacity is driven per-frame by JS; only opacity
      transitions (gradients themselves can't be CSS-transitioned) but updates are
      60s apart so the color step is always small enough to look smooth. */
-  #sunSky{position:absolute; inset:0; transition:opacity 4s ease}
+  #sunSky{position:absolute; top:0;right:0;bottom:0;left:0;inset:0; transition:opacity 4s ease}
   #sky .glow{position:absolute; border-radius:50%; filter:blur(70px); opacity:.28;
     animation:drift 30s ease-in-out infinite alternate}
   #sky .g1{width:60vmax;height:60vmax; left:-18vmax; top:-24vmax; background:radial-gradient(circle,var(--glow),transparent 65%)}
@@ -211,12 +211,17 @@
   #alertBanner.red .t{color:#ff8577; animation:emergPulse 1.1s ease-in-out infinite}
 
   /* ---- spotter's log overlay ---- */
-  #logPanel, #fleetPanel{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
+  #logPanel, #fleetPanel{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
     display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
   #logPanel.show, #fleetPanel.show{display:flex}
   #logPanel .panel, #fleetPanel .panel{background:var(--panel2); border:1px solid var(--faint); border-radius:18px;
     padding:26px; max-width:520px; width:100%; box-shadow:0 20px 80px rgba(0,0,0,.6);
-    max-height:86dvh; overflow:auto}
+    /* vh first: nothing else bounds .panel, so on an engine without dvh this
+       declaration was simply dropped and the fleet panel grew past the viewport
+       inside a fixed, centre-aligned overlay — heading off the top, buttons off
+       the bottom, and overflow:auto never engaging because the box was never
+       constrained. */
+    max-height:86vh; max-height:86dvh; overflow:auto}
   #logPanel h3, #fleetPanel h3{color:var(--amber); font-size:20px}
   #logPanel .sect{color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase;
     letter-spacing:.15em; margin:18px 0 6px}
@@ -277,7 +282,7 @@
   .mini-endpt{width:9px; height:9px; border-radius:50%; background:var(--muted); border:2px solid var(--panel2)}
 
   /* ---- settings panel ---- */
-  #settings{position:fixed; inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
+  #settings{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; background:rgba(1,4,9,.72); backdrop-filter:blur(8px);
     display:none; align-items:center; justify-content:center; z-index:50; padding:20px}
   #settings.show{display:flex}
   #settings .panel{background:var(--panel2); border:1px solid var(--faint); border-radius:18px;
@@ -310,7 +315,7 @@
   .sw.active{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.25)}
   .sw.custom{background:conic-gradient(#ff5a5a,#ffd23f,#5ad17a,#4aa8ff,#b388ff,#ff5a5a);
     position:relative; overflow:hidden}
-  .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
+  .sw.custom input{position:absolute; top:-6px;right:-6px;bottom:-6px;left:-6px;inset:-6px; opacity:0; cursor:pointer}
   #settings .done{margin-top:24px; width:100%; padding:13px; border-radius:12px; border:none;
     background:var(--amber); color:var(--btn-text); font-weight:800; font-size:15px; cursor:pointer; font-family:inherit}
 

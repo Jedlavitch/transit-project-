@@ -67,7 +67,7 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
     -webkit-font-smoothing:antialiased; overflow:hidden;
   }
   /* faint ops-room plotting grid behind everything (recessive, hairline) */
-  body::before{content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  body::before{content:""; position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:0; pointer-events:none;
     background:
       linear-gradient(var(--grid) 1px, transparent 1px) 0 0/100% 56px,
       linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/56px 100%;}
@@ -238,7 +238,7 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   .feed b{color:var(--text); font-weight:600}
 
   /* Setup overlay */
-  #setup{position:fixed; inset:0; background:var(--scrim); backdrop-filter:blur(6px);
+  #setup{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; background:var(--scrim); backdrop-filter:blur(6px);
     display:none; align-items:center; justify-content:center; z-index:9999; padding:20px}
   #setup.show{display:flex}
   #setup .box{background:var(--panel); border:1px solid var(--line); border-radius:18px;
@@ -271,7 +271,7 @@ var r=g("tb.rows")||g("transitboard.rows");if(r&&r!=="normal")d.setAttribute("da
   #setup .card-toggle{flex:1; min-width:120px; display:flex; align-items:center; gap:7px; padding:8px 10px;
     border-radius:10px; border:1px solid var(--line); background:var(--row-bg); font-size:12.5px; cursor:pointer}
   #setup .card-toggle input{margin:0; cursor:pointer}
-  #setup .sw.custom input{position:absolute; inset:-6px; opacity:0; cursor:pointer}
+  #setup .sw.custom input{position:absolute; top:-6px;right:-6px;bottom:-6px;left:-6px;inset:-6px; opacity:0; cursor:pointer}
 
   /* Narrower screens: stack map on top, cards fill the rest — still fits the
      screen with no page scroll (cards trim themselves to fit via fitList). */
@@ -1406,7 +1406,12 @@ async function fetchRail(){
   const stations=await ensureStations();
   state.nearRail=pickNearRail(stations);
   // include paired platform codes (StationTogether) so predictions are complete
-  const codes=[...new Set(state.nearRail.flatMap(s=>[s.Code, s.Together].filter(Boolean)))].join(",");
+  /* reduce/concat, not flatMap: flatMap is Chrome 69 and these boards run on
+     televisions as old as 68, where it is undefined and this line throws —
+     taking the whole rail fetch with it, so the card sits empty for ever and
+     reads to a viewer as an agency outage. Same output: one level of flatten. */
+  const codes=[...new Set(state.nearRail.reduce(function(a,s){
+    return a.concat([s.Code, s.Together].filter(Boolean)); },[]))].join(",");
   const data=await getJSON(wmata(`StationPrediction.svc/json/GetPrediction/${codes}`));
   renderRail(data.Trains||[]);
 }

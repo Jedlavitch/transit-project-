@@ -35,7 +35,7 @@ function switchCity(url, forceShell) {
     var f = document.createElement("iframe");
     f.id = "cityShell";
     f.allow = "fullscreen"; f.allowFullscreen = true;
-    f.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483000;background:#081020";
+    f.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100vw;height:100vh;border:0;z-index:2147483000;background:#081020";
     f.src = url;
     f.onload = function () { try { document.title = f.contentDocument.title; f.contentWindow.focus(); } catch (e) {} };
     document.body.appendChild(f);

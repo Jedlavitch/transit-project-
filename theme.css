@@ -300,7 +300,7 @@ body{ font-family:var(--body); }
   background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:10px;
   cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.35); }
 #mapFsBtn:hover{ border-color:var(--accent); }
-body.map-full #map{ position:fixed !important; inset:0; z-index:800; border-radius:0; border:none; }
+body.map-full #map{ position:fixed !important; top:0;right:0;bottom:0;left:0;inset:0; z-index:800; border-radius:0; border:none; }
 
 /* ---- Display size + edge fit (Settings → Display) ----------------------------
    For kiosk screens you can't adjust: TVs overscan (they crop a few percent off

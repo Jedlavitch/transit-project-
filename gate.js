@@ -59,7 +59,7 @@
     var css = document.createElement("style");
     css.id = "tbGateCss";
     css.textContent =
-      "#tbGate{position:fixed;inset:0;z-index:2147483600;background:var(--bg,#081020);" +
+      "#tbGate{position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:2147483600;background:var(--bg,#081020);" +
         "color:var(--text,#eef3ff);display:flex;align-items:center;justify-content:center;" +
         "padding:24px;overflow:auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif}" +
       "#tbGate .box{max-width:440px;width:100%;background:var(--panel,#111d36);" +

@@ -93,7 +93,7 @@
   /* Dim only, never blur. The board is live the whole time the tour is running
      and the point of most steps is to look at it — blurring the thing you are
      being shown defeats the tour. */
-  '.tg-scrim{position:fixed; inset:0; z-index:100000; background:rgba(10,8,16,.58);' +
+  '.tg-scrim{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:100000; background:rgba(10,8,16,.58);' +
     'opacity:0; transition:opacity .25s ease}' +
   '.tg-scrim.in{opacity:1}' +
   /* The spotlight is one element with an enormous spread shadow, so the "hole"

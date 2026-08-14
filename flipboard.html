@@ -333,7 +333,7 @@
   #fsHint.show{transform:translate(-50%,0)}
 
   /* ---- settings panel ---- */
-  #settings{position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(6px);
+  #settings{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(6px);
     display:none; align-items:center; justify-content:center; z-index:90; padding:20px}
   #settings.show{display:flex}
   #settings .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px;
@@ -812,7 +812,11 @@ async function collectRailRows(count){
   try{
     const stations=await ensureWmataStations(key);
     const near=stations.map(s=>({s, mi:haversineMi(loc,{lat:s.Lat,lon:s.Lon})})).sort((a,b)=>a.mi-b.mi).slice(0,3);
-    const codes=[...new Set(near.flatMap(({s})=>[s.Code, s.StationTogether1, s.StationTogether2].filter(Boolean)))].join(",");
+    /* reduce/concat, not flatMap (Chrome 69). On an older television this threw
+       and the split-flap board's Metrorail section rendered zero rows while every
+       other section flipped normally — silent, because the caller returns []. */
+    const codes=[...new Set(near.reduce(function(a,x){
+      return a.concat([x.s.Code, x.s.StationTogether1, x.s.StationTogether2].filter(Boolean)); },[]))].join(",");
     if(!codes) return [];
     const data=await getJSON(`https://api.wmata.com/StationPrediction.svc/json/GetPrediction/${codes}?api_key=${encodeURIComponent(key)}`, 12000);
     const trains=(data.Trains||[]).filter(t=>t.Line && t.Line!=="--" && t.Min!=="---");

@@ -51,14 +51,14 @@
   html,body{height:100%}
   body{background:var(--bg); color:var(--accent-ink); font-family:Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased; overflow:hidden; height:100dvh; letter-spacing:.3px}
-  #map{position:fixed; inset:0; z-index:0; background:#040810}
+  #map{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:0; background:#040810}
   .leaflet-container{background:#040810; font-family:inherit}
   /* the map is a show, not a tool: no attribution clutter, kill focus outlines */
   .leaflet-control-attribution{display:none}
   #map:focus{outline:none}
 
   /* dim vignette so overlays stay readable over bright map areas */
-  #vignette{position:fixed; inset:0; z-index:1; pointer-events:none;
+  #vignette{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:1; pointer-events:none;
     background:radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(2,5,11,.72) 100%)}
 
   /* ---- vehicle marker: a heading-rotated glyph with a pulsing halo ---- */
@@ -127,7 +127,7 @@
 
   /* countdown ring around the "skip" button, drains until the next shuffle */
   .ring{position:relative}
-  .ring svg{position:absolute; inset:-1px; transform:rotate(-90deg); pointer-events:none}
+  .ring svg{position:absolute; top:-1px;right:-1px;bottom:-1px;left:-1px;inset:-1px; transform:rotate(-90deg); pointer-events:none}
   .ring circle{fill:none; stroke:var(--accent); stroke-width:2.5; opacity:.85}
 
   /* ---- the info overlay (bottom-left glass card) ---- */
