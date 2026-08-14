@@ -29,6 +29,19 @@
 <meta name="twitter:description" content="A live departure board for your wall. Real trains, buses and aircraft overhead, across the US and Europe." />
 <meta name="twitter:image" content="https://transitproject.online/shots/board-dc.jpg" />
 <link rel="stylesheet" href="theme.css?v=16" />
+<script>/* pre-paint: honour the look chosen on the boards.
+
+   Every other page in the product reads this; index.html was the only one that
+   did not, so a house running Day theme met a dark front door and then walked
+   into a light product. Pre-paint and inline, like the boards, because doing it
+   after first paint is a visible flash of the wrong scheme — on a wall display,
+   in a bright room, that flash is the thing you notice.
+
+   Accent as well: the picker writes it globally and every other page respects
+   it. "dark" is the default, so it is the one value worth not writing. */
+(function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
+var t=g("tb.theme")||g("transitboard.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
+var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="delays.js?v=2"></script>
