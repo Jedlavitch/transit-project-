@@ -321,6 +321,11 @@ body{ padding:var(--safe-pad); }
    the plain viewport. Deliberately NOT the calc() below: that calc only
    makes sense paired with the zoom that's supposed to scale it back down. */
 body #app{
+  /* vh first, dvh second. No var() in either, so an engine without dvh drops
+     the second at parse time and keeps the first — the ordinary-property
+     fallback, which genuinely works here (it does NOT work for custom
+     properties or for any value containing var(); see the @supports below). */
+  height:100vh;
   height:100dvh;
   width:100vw;
 }
@@ -335,11 +340,31 @@ body #app{
    up to ~2x the viewport, and only on the narrower screens that needed the
    zoom in the first place. Desktop (--ui-zoom effectively 1) never showed
    this, which is why it went unnoticed until a real tablet reported it. */
+/* vh in the base calc, dvh only where dvh exists.
+
+   THIS IS THE SAME TRAP AS THE COLOUR VARIABLES, in a different property. The
+   calc() contains var(), so the declaration is NOT syntax-checked at parse
+   time — it is stored as a pending-substitution value and validated only after
+   substitution. So the usual "an old engine drops the bad declaration and keeps
+   the good one above it" does not apply: this rule is kept, it outranks every
+   board's own `#app{height:100vh}` at specificity (0,1,1) versus (0,1,0), and
+   THEN fails at computed-value time when 100dvh turns out to be meaningless.
+   `height` is not inherited, so it falls back to its initial value — auto. The
+   board stops filling the screen and its bottom becomes unreachable, on all 14
+   pages that have an #app.
+
+   Chromium has always had `zoom`, so this block is live on exactly the
+   televisions that lack dvh (which needs Chrome 108). */
 @supports (zoom: 1){
   body #app{
     zoom:var(--ui-zoom);
-    height:calc((100dvh - var(--safe-pad) * 2) / var(--ui-zoom));
+    height:calc((100vh - var(--safe-pad) * 2) / var(--ui-zoom));
     width:calc((100vw - var(--safe-pad) * 2) / var(--ui-zoom));
+  }
+}
+@supports (zoom: 1) and (height: 100dvh){
+  body #app{
+    height:calc((100dvh - var(--safe-pad) * 2) / var(--ui-zoom));
   }
 }
 
@@ -519,9 +544,10 @@ body .row{ grid-template-columns:auto minmax(0,1fr) auto auto; min-width:0 }
      finger on a real phone does not. */
   html{ overflow:auto; }
   html body{ overflow:auto; -webkit-overflow-scrolling:touch; }
-  body #app{ zoom:1; height:auto; min-height:100dvh; width:auto; overflow:visible; }
+  /* vh fallback first; no var() here, so the parse-time drop does work. */
+  body #app{ zoom:1; height:auto; min-height:100vh; min-height:100dvh; width:auto; overflow:visible; }
   #app main{ display:flex; flex-direction:column; padding:10px; gap:10px; min-height:0; }
-  #app #map{ flex:0 0 auto; height:34dvh; min-height:230px; }
+  #app #map{ flex:0 0 auto; height:34vh; height:34dvh; min-height:230px; }
   #app .cards{ display:flex; flex-direction:column; gap:10px; overflow:visible; }
   #app .card{ flex:0 0 auto; min-height:0; }
   body .list{ flex:0 0 auto; height:auto; max-height:300px; }

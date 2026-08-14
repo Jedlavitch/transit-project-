@@ -17,6 +17,9 @@
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
      page's own inline code had already begun fetching. -->
+<!-- First, and not deferred: the code that calls Promise.allSettled is inline
+     in the page and runs while parsing, so a deferred shim arrives too late. -->
+<script src="polyfills.js?v=1"></script>
 <script src="feed-backoff.js?v=1"></script>
 <script src="license.js?v=2" defer></script>
 <!-- Restarts a board that has been up for days, but only once it has just
@@ -295,9 +298,19 @@ var r=g("tb.rows")||g("transitboardphl.rows");if(r&&r!=="normal")d.setAttribute(
      winding it down far enough turned every hue to mud. color-mix keeps the
      hue and guarantees the darkness instead -- 38% is the ratio at which the
      worst hue (amber) clears 4.5 against the pale backdrop. */
+  /* FALLBACK FIRST, for engines without color-mix (Chrome <111 — including
+     the televisions this product is for). The note above explains why a
+     filter was rejected as the primary mechanism: it turns every hue muddy.
+     Muddy is still the right answer here, because the alternative is what
+     actually happened — the raw inline hue landing on a white day card at
+     roughly 1.5:1 for amber and green, i.e. live counts nobody can read.
+     A rejected look beats an unreadable one. */
+  :root[data-theme="day"] .statline b{ filter:brightness(.42) saturate(1.35) }
+  @supports (color: color-mix(in srgb, red 50%, blue)){
   :root[data-theme="day"] .statline b{
     color:color-mix(in srgb, var(--sys2,var(--sys,var(--text))) 38%, #0b1424);
     filter:none}
+  }
 
   /* ============ blue depth pass ============
      A wider blue range on top of the gradient pass: deep-navy floors (header,
@@ -1182,7 +1195,7 @@ async function ensureStations(){
   // cache full station list for 24h
   try{
     const cached=JSON.parse(localStorage.getItem(LS.stns)||"null");
-    if(cached && (Date.now()-cached.t < 864e5) && cached.list?.length) return cached.list;
+    if(cached && (Date.now()-cached.t < 864e5) && cached.list && cached.list.length) return cached.list;
   }catch(e){}
   const data=await getJSON(wmata("Rail.svc/json/jStations"));
   const list=(data.Stations||[]).map(s=>({
@@ -2047,7 +2060,7 @@ async function fetchRailRoutes(){
   if(!state.wmataKey || !state.routeLayer) return;
   try{
     const cached=JSON.parse(localStorage.getItem("transitboardphl.railroutes2")||"null");
-    if(cached && Date.now()-cached.t < 864e5 && cached.lines?.length>=5){ drawRailRoutes(cached.lines); return; }
+    if(cached && Date.now()-cached.t < 864e5 && cached.lines && cached.lines.length>=5){ drawRailRoutes(cached.lines); return; }
   }catch(e){}
   let stations;
   try{ stations=await ensureStations(); }catch(e){ return; }

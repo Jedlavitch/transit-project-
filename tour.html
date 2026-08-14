@@ -747,7 +747,8 @@ async function amtrakSubject(stop, pin){
   }
   const oLL=st[t.origCode]?{lat:st[t.origCode][0],lon:st[t.origCode][1]}:null;
   const dLL=st[t.destCode]?{lat:st[t.destCode][0],lon:st[t.destCode][1]}:null;
-  const hdg=toDeg(t.heading) ?? (dLL?bearingDeg({lat:t.lat,lon:t.lon},dLL):null);
+  const _hd=toDeg(t.heading);
+  const hdg=_hd!=null?_hd:(dLL?bearingDeg({lat:t.lat,lon:t.lon},dLL):null);
   const ns=(t.stations||[]).find(s=>s.status!=="Departed");
   /* Amtrak's own track geometry gives the nicest line, but the bundle stores ONE
      shape per route NAME while a route can run wildly different variants — the

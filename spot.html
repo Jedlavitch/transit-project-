@@ -16,6 +16,9 @@
 <meta name="apple-mobile-web-app-title" content="Spotter" />
 <link rel="apple-touch-icon" href="spot-icon-180.png" />
 <link rel="stylesheet" href="theme.css?v=16" />
+<!-- First, and not deferred: the inline script below calls Promise.allSettled
+     while the page is parsing, so a deferred shim would arrive too late. -->
+<script src="polyfills.js?v=1"></script>
 <script src="config.js?v=2"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
@@ -1012,7 +1015,7 @@ async function toSheet(s){
       body:JSON.stringify({
         when:new Date(s.ts).toISOString(), mode:s.mode, route:s.route,
         vehicle:s.vehicle||"", place:s.place||"", ridden:s.ridden?"yes":"no",
-        note:s.note||"", lat:s.lat??"", lon:s.lon??"", source:s.source||"",
+        note:s.note||"", lat:(s.lat!=null?s.lat:""), lon:(s.lon!=null?s.lon:""), source:s.source||"",
         first:s.first?"yes":"no", by:s.by||"", id:s.id })});
   }catch(e){ /* never block logging on the mirror */ }
 }
@@ -1379,7 +1382,7 @@ function download(name, text, type){
 function toCsv(){
   const rows=[["when","mode","route","vehicle","place","ridden","note","lat","lon"]];
   loadSpots().forEach(s=>rows.push([new Date(s.ts).toISOString(), s.mode, s.route, s.vehicle||"",
-    s.place||"", s.ridden?"yes":"no", s.note||"", s.lat??"", s.lon??""]));
+    s.place||"", s.ridden?"yes":"no", s.note||"", (s.lat!=null?s.lat:""), (s.lon!=null?s.lon:"")]));
   return rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
 }
 

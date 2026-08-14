@@ -42,6 +42,9 @@
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
      page's own inline code had already begun fetching. -->
+<!-- First, and not deferred: the code that calls Promise.allSettled is inline
+     in the page and runs while parsing, so a deferred shim arrives too late. -->
+<script src="polyfills.js?v=1"></script>
 <script src="feed-backoff.js?v=1"></script>
 <script src="license.js?v=2" defer></script>
 <!-- Restarts a board that has been up for days, but only once it has just
