@@ -1982,17 +1982,33 @@ function drawTransitStops(stops){
    what makes the movement continuous between the 45-second departure refreshes.
 */
 const VEHICLE_TICK_MS = 5000;      // how often positions are recomputed (no network)
-const VEHICLE_PER_FAMILY = 6;      // trips looked up per family per refresh
-const VEHICLE_LOOKUP_CAP = 30;     // ...and no more than this many in total
+const VEHICLE_PER_FAMILY = 10;     // trips looked up per family per refresh
+const VEHICLE_LOOKUP_CAP = 45;     // ...and no more than this many in total
 const VEHICLE_CONCURRENCY = 4;     // the public endpoint rate-limits; stay under it
+const VEHICLE_PAINT_MS = 400;      // fastest the map repaints while lookups stream in
+
+/* Why 10/45 and not "all of them": a cold Zurich board can locate 76 distinct
+   trips, and every one costs a /trip call against a free public endpoint that
+   answers 429 under load -- and a 429 there blanks the whole map, not just the
+   surplus. 45 draws about 59% of what is running instead of 39%, at the same
+   concurrency of 4, which is the number measured to hold the error rate at
+   zero. Raise these together with a look at the 429 rate, never blind: the
+   concurrency limit is the safety mechanism, the caps are just the budget. */
 
 /* Run `job` over `items` a few at a time. The transitous endpoint answers 429
    when a cold board asks for two dozen trips at once, which cost every vehicle
    on the map for that refresh. */
-async function mapLimited(items, limit, job){
+async function mapLimited(items, limit, job, onEach){
   const out=new Array(items.length); let i=0;
   await Promise.all(Array.from({length:Math.min(limit,items.length)}, async ()=>{
-    while(i<items.length){ const k=i++; out[k]=await job(items[k]); }
+    while(i<items.length){
+      const k=i++; out[k]=await job(items[k]);
+      /* Optional, and deliberately fed the whole array rather than the one
+         result: callers paint from the set so far, and the holes for jobs
+         still in flight are simply absent (filter(Boolean) already handles
+         them). Existing three-argument callers are unaffected. */
+      if(onEach) try{ onEach(out); }catch(e){}
+    }
   }));
   return out;
 }
@@ -2059,37 +2075,60 @@ async function refreshTransitVehicles(){
     queues.forEach(q=>{ if(i<q.length && picks.length<VEHICLE_LOOKUP_CAP) picks.push(q[i]); });
     if(picks.length===before) break;      // every queue exhausted
   }
+  /* Paint from whatever has resolved so far. Pulled out of the await below
+     so it can run repeatedly while the lookups are still streaming in: the
+     lookups are gated to VEHICLE_CONCURRENCY against a rate-limited public
+     endpoint, so a cold board needs ~9s to finish all of them, and waiting
+     for the last one left the map completely empty for that whole time even
+     though most vehicles were known within the first second. Every step here
+     rebuilds from `rows` rather than appending, so calling it with a growing
+     set is idempotent -- drawFamilyRoutes clears its layer and updateFleet
+     glides markers that already exist rather than duplicating them. */
+  const paint = rows => {
+    /* Two different questions, so two different sets. A route LINE is a fact
+       about the network and stays drawn whether or not something is on it
+       right now -- the lake boat runs every half hour, and blanking its line
+       between sailings would be odd when every other board draws lines from
+       the timetable. A VEHICLE marker is a claim that something is out there,
+       so it is held to the stricter test below. */
+    const now=Date.now(), moving={}, lines={};
+    FAMILY_CARDS.forEach(([key])=>{ moving[key]=[]; lines[key]=[]; });
+    rows.filter(Boolean).forEach(({key,dep,trip})=>{
+      if(!lines[key]) return;
+      lines[key].push({dep, trip});
+      if(now>trip.end) return;                     // the run has finished
+      /* International services are kept from the moment they set off,
+         wherever that was: half the interest in the 15:43 to Brussels is
+         watching it come in from Frankfurt first. The rest are only drawn
+         while underway, since parking a tram on its origin terminus would be
+         inventing a position. */
+      if(key!=="intl" && now<trip.start) return;
+      moving[key].push({dep, trip});
+    });
+    FAMILY_CARDS.forEach(([key])=>{
+      state._trips[key]=moving[key];
+      drawFamilyRoutes(key, lines[key]);
+    });
+    tickTransitVehicles();
+  };
+
+  /* Throttled, because each paint clears and rebuilds every route layer --
+     doing that once per resolved trip would be ~45 full rebuilds in a burst.
+     At 400ms the map visibly fills in while staying smooth. */
+  let lastPaint=0;
   const detailed=await mapLimited(picks, VEHICLE_CONCURRENCY,
     async p=>{
       const trip=await TBTransitous.tripDetail(p.dep.tripId).catch(()=>null);
       return trip ? {key:p.key, dep:p.dep, trip} : null;
+    },
+    rows=>{
+      const t=Date.now();
+      if(t-lastPaint < VEHICLE_PAINT_MS) return;
+      lastPaint=t;
+      paint(rows);
     });
 
-  /* Two different questions, so two different sets. A route LINE is a fact
-     about the network and stays drawn whether or not something is on it right
-     now -- the lake boat runs every half hour, and blanking its line between
-     sailings would be odd when every other board draws lines from the
-     timetable. A VEHICLE marker is a claim that something is out there, so it
-     is held to the stricter test below. */
-  const now=Date.now(), moving={}, lines={};
-  FAMILY_CARDS.forEach(([key])=>{ moving[key]=[]; lines[key]=[]; });
-  detailed.filter(Boolean).forEach(({key,dep,trip})=>{
-    if(!lines[key]) return;
-    lines[key].push({dep, trip});
-    if(now>trip.end) return;                       // the run has finished
-    /* International services are kept from the moment they set off, wherever
-       that was: half the interest in the 15:43 to Brussels is watching it
-       come in from Frankfurt first. The rest are only drawn while underway,
-       since parking a tram on its origin terminus would be inventing a
-       position. */
-    if(key!=="intl" && now<trip.start) return;
-    moving[key].push({dep, trip});
-  });
-  FAMILY_CARDS.forEach(([key])=>{
-    state._trips[key]=moving[key];
-    drawFamilyRoutes(key, lines[key]);
-  });
-  tickTransitVehicles();
+  paint(detailed);   // final, authoritative pass once everything has landed
 }
 
 /* One line per route, not per vehicle: six trams on the 11 would otherwise
