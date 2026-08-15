@@ -678,10 +678,22 @@
          and were being sliced through the middle exactly like rows were.
          Clip against whichever edge comes first, the card's or the rail's. */
       var bottom = Math.min(box.bottom, railBottom),
+          list = card.querySelector(".list"),
+          /* A row is clipped by the LIST's box, not the card's, and in Atlas
+             those are not the same edge -- the card carries padding under its
+             list, so there is a band that is inside the card and already cut.
+             Measured on Today's Best: a 66px row ending 7px past its 59px list
+             but 1px inside the card, so the card-edge test kept it and the
+             board showed a row sliced through its bottom line. The kid loop
+             below still measures against the card, which is right: those sit
+             outside the list and the card's own edge is what cuts them. */
+          rowBottom = list
+            ? Math.min(bottom, list.getBoundingClientRect().bottom)
+            : bottom,
           rows = card.querySelectorAll(".list > *, .list .row");
       for (var r = 0; r < rows.length; r++) {
         /* 1px of slack: sub-pixel layout should not hide a row that fits. */
-        if (rows[r].getBoundingClientRect().bottom > bottom + 1) hide(rows[r]);
+        if (rows[r].getBoundingClientRect().bottom > rowBottom + 1) hide(rows[r]);
         else if (rows[r].hasAttribute(TAG)) show(rows[r]);
       }
       /* Anything the card holds that is neither its heading nor its list is a

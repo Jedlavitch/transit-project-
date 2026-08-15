@@ -1006,21 +1006,31 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
    is the opposite of what tapping the collapse control asked for. */
 :root[data-style="atlas"] body .card.mini{ min-height:0 }
 
-/* Departures first.
-   The rail seats about eleven lines. Seven cards splitting it evenly left
-   Metrorail -- the reason anyone mounts this board -- showing ONE departure
-   while Spotted and Today's Best each held a slot of their own. So the three
-   cards that are context rather than departures are capped at the one-line
-   floor, and every pixel that frees goes to the cards with times in them.
+/* Departures only. Spotted and Today's Best are not on this board.
+   Capping them at one line was the first answer and it did not survive being
+   measured: their rows are 66px against the 59px of list a card gets on a full
+   rail, so both rendered a heading over nothing -- confirmed on Philadelphia
+   and on DC, every other card showing a real departure and these two blank.
+   They were not merely unhelpful, they were spending about 250px of rail to
+   say nothing, which is what was starving the cards with times in them.
 
-   By id, deliberately. The obvious alternative -- cap whatever has no .times
+   Removed rather than shrunk, because there is no size at which they earn a
+   slot here: this is the wall-display style, and neither is a departure. Both
+   keep working everywhere else -- the Classic board, the Spotter app, their own
+   pages -- and the rail's whole height now goes to trains, buses and planes.
+
+   Alerts stay. A service alert changes whether the departures above it are
+   worth reading, so it is departure information even though it has no time in
+   it, and at one line it fits.
+
+   By id, deliberately. The obvious alternative -- drop whatever has no .times
    in it -- reads well but does not survive contact with the markup: Today's
    Best carries a .times too, and MARC has no .live, so no content test
-   separates these three from the departure boards. A board without these ids
-   simply caps nothing, which is the right way to fail. */
-:root[data-style="atlas"] body #alertCard,
+   separates these from the departure boards. A board without these ids simply
+   keeps everything, which is the right way to fail. */
 :root[data-style="atlas"] body #spotCard,
-:root[data-style="atlas"] body #leaderCard{ max-height:8em }
+:root[data-style="atlas"] body #leaderCard{ display:none }
+:root[data-style="atlas"] body #alertCard{ max-height:8em }
 
 /* At television zoom, departures-only.
    Scaling the board up for a TV divides the rail's height in CSS pixels by
@@ -1031,10 +1041,11 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
    and Today's Best each still held a line. Across a room, one departure is
    not a departure board. So above 1.4x they leave entirely and the whole
    rail goes to the times. The .atlas-tight class is set from the zoom
-   setting in settings-ui.js. */
-:root[data-style="atlas"].atlas-tight body #alertCard,
-:root[data-style="atlas"].atlas-tight body #spotCard,
-:root[data-style="atlas"].atlas-tight body #leaderCard{ display:none }
+   setting in settings-ui.js.
+
+   Only Alerts is named here now -- Spotted and Today's Best are off this
+   style at every zoom, see the block above. */
+:root[data-style="atlas"].atlas-tight body #alertCard{ display:none }
 /* overflow:hidden, NOT overflow-y:auto. A scrollable list is wrong twice over
    on this board.
 
@@ -1114,7 +1125,26 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body .list .row .sub{ font-size:calc(var(--sub-fs) * 1.2) }
 :root[data-style="atlas"] body .list .row .sched{ font-size:11.5px }
 :root[data-style="atlas"] body .list .row .live-tag{ font-size:12px }
-:root[data-style="atlas"] body .list .stop-label{ font-size:12px; letter-spacing:.2em; margin:14px 0 5px; opacity:1 }
+/* The grouping labels do not get a line on this board, at any rail height.
+   "◼ FRANKLIN SQUARE · 1.8 MI" and "→ LINDENWOLD" sit INSIDE the list, above
+   the departures they group, and an Atlas row is 1.42x/1.72x the normal size --
+   so on a card with room for one row, the label took it and the departure was
+   trimmed off below. Measured on the Philadelphia board with a roomy rail:
+   SEPTA Subway and PATCO each rendered their heading, their stop label, and
+   ZERO trains, while Amtrak and Regional Rail -- which have no labels -- filled
+   the same space with three and six departures.
+
+   The tight-rail block in fit-cards.js already hid these for exactly this
+   reason, but only once the rail was cramped enough to trigger it. That is
+   backwards: a ROOMIER rail spends more pixels per label, not fewer, so the
+   bug got worse on the bigger screens this design is for. It belongs here, on
+   the style itself, with no height condition on it.
+
+   Nothing is really lost. Every row names its own destination, the card
+   heading names the system, and the map underneath is showing the stop. A
+   header that costs the only departure is not carrying its weight. */
+:root[data-style="atlas"] body .list .stop-label,
+:root[data-style="atlas"] body .list .dir-label{ display:none }
 :root[data-style="atlas"] body .list .empty{ font-size:14px; padding:10px 0; text-align:left }
 :root[data-style="atlas"] body .alert-row{ background:none; border:0; border-left:3px solid var(--sev,var(--accent)) }
 
@@ -1147,6 +1177,17 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
   font-size:calc(var(--live-fs) * 1.72); line-height:1.02; letter-spacing:-.02em;
   text-shadow:var(--atlas-ink-shadow);
 }
+/* A plane row gets the same two lines every other row gets, and no third.
+   It is the only row type carrying THREE -- aircraft, then operator/year/speed,
+   then tail number, bearing, heading and squawk -- which at Atlas's row sizes
+   made it 72px against the 59px of list a card on a full rail actually has. It
+   did not overflow, it vanished: the fitter trimmed the only aircraft and the
+   card rendered a heading over nothing, on every board, whenever the rail was
+   not cramped enough for fit-cards.js's tight block to hide this line already.
+   Cutting the third line takes the row to 57px and the planes come back.
+   The line was ellipsised to "N825AW · 1.5 nm SW · hdg …" at this column width
+   regardless, and all of it is still on the map marker underneath. */
+:root[data-style="atlas"] body .list .row .route{ display:none }
 
 /* ---- 7. colour never becomes text ---------------------------------------
    Cancels the gradient text-clips back to solid colour. Half of a clipped
