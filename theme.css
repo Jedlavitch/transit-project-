@@ -1237,3 +1237,34 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 @media (max-width:1220px){
   body .list .stop-label{ display:none }
 }
+
+
+/* ============================================================================
+   ATLAS: departures slide on from the left
+   Additive to the Atlas rail already in this file -- that work sets the row's
+   layout (flex, ruled countdown column) and hides the repeated stop label;
+   this only animates the row's arrival, so the two do not overlap. There are
+   no other @keyframes in this stylesheet, so nothing competes for the row.
+
+   The stagger reads --tbi, stamped by atlasrows.js, which counts ROWS ONLY.
+   CSS nth-child cannot do it: it counts every child of .list, and the stop and
+   direction labels are children too -- hidden in Atlas but still holding
+   positions -- so the delays skipped a step wherever a label sat between two
+   departures. The 0 fallback means a board that loads without the script still
+   animates, just without the wave, rather than not animating at all. Capped at
+   eight in the script because past that the last row waits almost a second and
+   a wall display should be settled before anyone looks up.
+   ============================================================================ */
+@keyframes tbAtlasSlide{
+  from{ transform:translateX(-14%); opacity:0 }
+  to  { transform:none;             opacity:1 }
+}
+:root[data-style="atlas"] body .list .row{
+  animation:tbAtlasSlide .42s cubic-bezier(.22,.61,.36,1) both;
+  animation-delay:calc(var(--tbi,0) * .06s);
+}
+/* A kiosk re-renders its list every few seconds; without this the wave would
+   replay forever in someone's peripheral vision. */
+@media (prefers-reduced-motion:reduce){
+  :root[data-style="atlas"] body .list .row{ animation:none }
+}
