@@ -2,6 +2,14 @@
    feedback.js — "Report a bug / Give feedback" button + modal, shared by every
    city board (loaded the same way as license.js/spotlog.js).
 
+   WHERE THE BUTTON LIVES: in the ⚙ settings panel's footer row, beside the
+   panel's own actions. It used to float over the board itself, pinned near
+   bottom-centre — the only strip of the bottom edge not already claimed by the
+   mascot, the licence chip, the trial countdown and the two health chips — and
+   holding that strip took two screenfuls of collision-avoidance CSS that still
+   left the button sitting on top of the map. Inside the panel it collides with
+   nothing, so all of that is gone.
+
    STORAGE, HONESTLY STATED — two paths, chosen automatically by hostname:
 
    LOCAL DEV (localhost/127.0.0.1/file:): POSTs JSON to /api/feedback, answered
@@ -79,58 +87,30 @@
   }
 
   const css = `
-  /* Bottom-center, deliberately: both bottom corners already carry a stack of
-     conditional kiosk-status chips (mascot buddy, license eval, trial/worker/
-     schedule health warnings — see gate.js/license.js/mascot-buddy.js/
-     worker-health.js/schedule-health.js/licence-proxy.js/config.js), all
-     fixed at left:8-14px or right:12-14px, several already stacked on top of
-     each other by bottom offset. Center is the one bottom strip none of them
-     claims at rest -- but mascot-buddy.js's speech bubble (#tbBuddy .bub)
-     isn't just its 12px anchor: when talking it grows up to 300px wide,
-     reaching to real-device x=374 on any viewport >= 652px (its own
-     min(46vw,300px) cap), which DOES cross true center on tablet-width
-     screens (confirmed colliding at 768px via a getBoundingClientRect
-     intersection check, not just eyeballed). The left rule below holds true
-     center on anything wide enough to clear that reach and only nudges right on
-     narrower screens -- 490px was chosen as that reach (374) plus this
-     button's own ~96px half-width plus a clear margin, so it holds true
-     center already by ~1000px wide and never overlaps narrower than that.
+  /* Scoped to #setup and keyed off the id TWICE on purpose. The boards style
+     every button in the panel with \`#setup button{flex:1; background:
+     var(--accent); font-weight:800; border:none}\` — specificity (1,0,1) —
+     which would stretch a bug report to a third of the footer and paint it in
+     the same loud accent as "Save & start". \`#setup #tbFbBtn\` is (2,0,0) and
+     beats that on its own, so none of this needs !important. */
+  #setup #tbFbBtn{flex:0 0 auto; margin-right:auto;
+    display:inline-flex; align-items:center; gap:6px;
+    padding:11px 12px; border-radius:10px; background:transparent; color:var(--muted,#93a5cf);
+    border:1px solid var(--line,#22345a); font:600 12px/1 var(--body,-apple-system,sans-serif);
+    letter-spacing:.02em; cursor:pointer}
+  #setup #tbFbBtn:hover{border-color:var(--accent,#4ea1ff); color:var(--text,#eef3ff)}
+  #setup #tbFbBtn .flag{color:var(--accent,#4ea1ff)}
+  /* The panel drops to a single narrow column at 620px; shrink to the flag
+     alone rather than let the label wrap and shove the panel's own actions
+     onto a second line. */
+  @media (max-width:620px){ #setup #tbFbBtn .full{display:none} }
 
-     That fixed 490px nudge, on its own, overran the OTHER edge on phones: with
-     no ceiling, left:max(490px,50%) stays 490px no matter how narrow the
-     viewport gets, so under ~522px wide (490px + this button's own half-width)
-     the button was pushed off the right edge of the screen entirely --
-     confirmed at 390px wide, where left computed to 473px against a 390px
-     viewport. The inner min(...,calc(100% - 24px)) caps the nudge at 24px of
-     clearance from the true right edge, which only bites below ~980px+24px
-     wide and is already a no-op at every width the mascot-collision math above
-     was measured against. */
-  #tbFbBtn{position:fixed; left:min(max(490px,50%), calc(100% - 24px)); bottom:12px; transform:translateX(-50%); z-index:610;
-    display:flex; align-items:center; gap:6px;
-    padding:8px 12px; border-radius:8px; background:var(--panel,#111d36); color:var(--muted,#93a5cf);
-    border:1px solid var(--line,#22345a); font:600 11px/1 var(--body,-apple-system,sans-serif);
-    letter-spacing:.02em; cursor:pointer; opacity:.9}
-  #tbFbBtn:hover{border-color:var(--accent,#4ea1ff); color:var(--text,#eef3ff); opacity:1}
-  #tbFbBtn .flag{color:var(--accent,#4ea1ff)}
-  @media (max-width:480px){ #tbFbBtn .full{display:none} }
-
-  /* A second, separate collision from the one above: gate.js's #tbTrial
-     "Unlock HH:MM" chip is right:12px/bottom:12px with z-index 2147483000
-     (always on top of everything) and grows wide enough with its countdown
-     text (~115px measured) to reach this button's horizontally-centered
-     position -- confirmed overlapping, chip fully covering the button, across
-     roughly 400-713px wide (below 713px the button's right edge, pinned at
-     490px center + its own ~96px half-width once the full label shows, runs
-     into the chip's left edge; the exact number moves a little with the
-     countdown's digit widths, so 760px keeps real margin over the measured
-     713px). This range was never visible before the off-screen fix above,
-     because the button was off-canvas at the narrow end of it anyway -- it is
-     not new, just newly exposed. Same fix the file-level comment already
-     documents for every OTHER bottom chip: stack by bottom-offset rather than
-     fight sideways for the same row. 54px clears #tbTrial's 12px+30px-tall
-     row with room to spare. */
-  @media (max-width:760px){ #tbFbBtn{ bottom:54px } }
-  #tbFbOverlay{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
+  /* Above #setup's own z-index:9999 (identical on all twelve boards). The
+     panel is hidden while this dialog is up — see openDialog — so this only
+     matters if some other path ever opens the dialog with the panel showing,
+     which is cheap insurance rather than a live requirement. Still well under
+     gate.js's 2147483600 lock screen, which must stay on top of everything. */
+  #tbFbOverlay{position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:10050; display:flex; align-items:center; justify-content:center;
     background:var(--scrim,rgba(5,10,22,.86)); padding:16px}
   #tbFbBox{background:var(--panel,#111d36); border:1px solid var(--line,#22345a); border-radius:12px;
     padding:22px; width:min(440px,94vw); max-height:88vh; overflow:auto; color:var(--text,#eef3ff);
@@ -149,8 +129,44 @@
 
   let overlay = null;
 
+  /* The dialog is opened FROM the settings panel now, so the panel steps aside
+     while the dialog is up and comes back when it closes. Two real reasons,
+     not just tidiness:
+
+     1. Two scrims stack. --scrim is rgba(5,10,22,.86); the panel's and this
+        one together land at ~.98 — effectively black, with the panel behind it
+        a barely-visible ghost.
+     2. settings-ui.js binds Escape on `document` in the CAPTURE phase, and it
+        registers first (both files are `defer`, its tag is the earlier one),
+        so it would close the panel out from under this dialog on the same
+        keypress that closes the dialog. Its handler is guarded by
+        `panel.classList.contains("show")` — with the panel already hidden that
+        guard is false, so Escape reaches only this dialog no matter which
+        listener ran first. Order-independent, which a stopPropagation race
+        would not have been.
+
+     Toggling `.show` directly is exactly what the boards' own openSetup/
+     closeSetup do (`#setup.show{display:flex}`), minus openSetup's focus grab
+     on the API-key field — which would otherwise steal focus from the textarea
+     the moment the dialog closed. */
+  let reopenSetup = false;
+
+  function hideSetupPanel() {
+    const p = document.getElementById("setup");
+    reopenSetup = !!(p && p.classList.contains("show"));
+    if (reopenSetup) p.classList.remove("show");
+  }
+
+  function restoreSetupPanel() {
+    if (!reopenSetup) return;
+    reopenSetup = false;
+    const p = document.getElementById("setup");
+    if (p) p.classList.add("show");
+  }
+
   function openDialog() {
     if (overlay) return;
+    hideSetupPanel();
     overlay = document.createElement("div");
     overlay.id = "tbFbOverlay";
     overlay.innerHTML = `<div id="tbFbBox">
@@ -203,22 +219,59 @@
   function closeDialog() {
     document.removeEventListener("keydown", onKey);
     if (overlay) { overlay.remove(); overlay = null; }
+    restoreSetupPanel();
   }
 
-  function render() {
-    if (!document.body) return;
-    const btn = document.createElement("div");
-    btn.id = "tbFbBtn";
-    btn.innerHTML = `<span class="flag">⚑</span><span class="full">Report a bug / Give feedback</span>`;
-    btn.onclick = openDialog;
-    document.body.appendChild(btn);
+  /* The panel's footer row. It is a direct child of `#setup .box` until the
+     board's own groupSettings() moves it wholesale into `.set-foot`, the first
+     time the panel is opened — the button rides along inside it, so mounting
+     once is enough whichever side of that move this runs on.
+
+     Deliberately not a bare `#setup .btns`: newjersey.html has a second one
+     nested in a <details> (the "Save" for its NJT worker login) that comes
+     first in document order and is not the footer. Both selectors below are
+     anchored to the footer specifically.
+
+     The footer is also why this goes here rather than into the panel body as
+     its own section: it is sticky and shown on every tab, whereas a body
+     section gets filed under exactly one tab by settings-ui.js — which buckets
+     groups by heading text, and its Feeds-&-keys pattern matches /feed/, so
+     "Feedback" would have landed next to the API keys. */
+  function footRow() {
+    return document.querySelector("#setup .set-foot .btns") ||
+           document.querySelector("#setup .box > .btns");
+  }
+
+  let btn = null;
+
+  function mount() {
+    if (btn && btn.isConnected) return true;
+    const row = footRow();
+    if (!row) return false;
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "tbFbBtn";
+      btn.title = "Report a bug / give feedback";
+      btn.innerHTML = `<span class="flag">⚑</span><span class="full">Report a bug / give feedback</span>`;
+      btn.onclick = openDialog;
+    }
+    row.insertBefore(btn, row.firstChild);
+    return true;
   }
 
   function init() {
     try {
       const style = document.createElement("style"); style.textContent = css;
       document.head.appendChild(style);
-      render();
+      if (mount()) return;
+      /* No footer found yet — a board whose panel markup arrives later. Retry
+         on the next interaction instead of polling. If a page genuinely has no
+         settings panel there is nowhere for this to live and it stays absent,
+         which is the honest outcome; reviving the floating chip as a fallback
+         would just reinstate the thing this replaced. */
+      const retry = function () { if (mount()) document.removeEventListener("click", retry, true); };
+      document.addEventListener("click", retry, true);
     } catch (_) {}
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
