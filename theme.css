@@ -1022,7 +1022,13 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
    eye scans a ruled column instead of a ragged right edge. Safe on all 12:
    .times is always the LAST child appended, so re-ordering it is purely visual. */
 :root[data-style="atlas"] body .list .row .times{
-  order:-1; flex:0 0 auto; width:7.4em; min-width:7.4em;
+  /* 9.2em, not 7.4: the countdown is set at 1.72x here, and "in 27 min" needs
+     135px where 7.4em gave 118 — measured on the live DC board, overflowing on
+     nearly every row so the time ran into the line badge beside it. A FIXED
+     width is the point (max-content would size each row to its own text and
+     lose the single ruled vertical this design is built on), so it just has to
+     be wide enough for the longest string any board produces. */
+  order:-1; flex:0 0 auto; width:9.2em; min-width:9.2em;
   align-items:flex-start; text-align:left;
 }
 /* the unclassed middle div — the only handle on it. min-width:0 is what keeps
@@ -1090,115 +1096,3 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body.map-full #mapFsBtn{ left:26px; bottom:26px }
 
 }   /* end @media (min-width:1221px) */
-
-/* ============================================================================
-   COMMAND BAR REDESIGN
-   The header was one flat flex row of eight peers: mark, wordmark, city
-   select, five view links, three buttons, clock. Everything carried the same
-   visual weight, so nothing read as primary, and at tablet widths it wrapped
-   into a ragged second row.
-
-   Regrouped into four bands with real hierarchy -- identity, context,
-   navigation, controls+status -- using only CSS, because the markup is
-   duplicated across eleven boards and the stencil and this has to reach all
-   of them from one place. `body header` beats each board's own `header`
-   rule at specificity (0,1,1) vs (0,0,1) regardless of source order, which
-   is the same technique the grid fixes above use.
-
-   NOT touched: #settingsBtn. settings-ui.js gives it an accent fill and a
-   label with !important, deliberately, so the one control that opens
-   everything does not read as the least important. It stays the single
-   primary action; everything else here is quieter than it was.
-   ============================================================================ */
-
-body header{
-  gap:12px; padding:9px 16px;
-  box-shadow:none;
-  border-bottom:2px solid transparent;
-  border-image:linear-gradient(90deg,var(--brand-pink),var(--brand-blue) 50%,var(--brand-teal)) 1;
-}
-
-/* ---- 1. identity ---------------------------------------------------------
-   The location was inline after the wordmark, which made the title a long
-   ragged string and cost ~180px of the row. Stacked under it instead: same
-   information, half the width, and it now reads as a subtitle rather than as
-   a second title. */
-body header .title{ font-size:17px; letter-spacing:.2px; line-height:1.15; min-width:0 }
-body header .title small,
-body header .title #tbLocBtn{
-  display:block; margin:2px 0 0; font-size:11px; font-weight:500;
-  color:var(--muted); letter-spacing:.02em; white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; max-width:26ch;
-}
-/* locpicker.js swaps the <small> for a <button> so the location is operable
-   from a keyboard and a TV remote. It therefore has to be caught by the same
-   rules -- matching only `small` silently returned the location to an inline
-   string and cost the header 12px of height. flex, not the block above, so
-   the caret stays on the baseline next to the text. */
-body header .title #tbLocBtn{ display:flex; align-items:center; gap:4px; max-width:30ch }
-
-/* ---- 2. context: the city switcher --------------------------------------
-   Given a hairline to its left so the bar reads as identity | everything
-   else, rather than as one undifferentiated run of controls. */
-body header .city-picker{ position:relative; padding-left:12px; flex:none }
-body header .city-picker::before{
-  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
-  width:1px; height:24px; background:var(--line);
-}
-body header .city-picker select{ font-weight:600; border-radius:9px; padding:7px 30px 7px 11px }
-
-/* ---- 3. navigation: one segmented group ---------------------------------
-   Five separate bordered pills competed with the three real buttons beside
-   them. One tray with quiet items inside reads as a single navigation
-   control, and drops the border count from five to one. */
-body header .view-links{
-  display:flex; gap:2px; padding:3px; flex:none;
-  background:var(--panel2); border:1px solid var(--line); border-radius:11px;
-}
-body header .view-links a{
-  background:transparent; border:0; border-radius:8px;
-  padding:6px 11px; font-size:12.5px; font-weight:600; color:var(--muted);
-  line-height:1; transition:background .15s ease, color .15s ease;
-}
-body header .view-links a:hover,
-body header .view-links a:focus-visible{ background:var(--panel); color:var(--text) }
-
-/* ---- 4. controls + status ------------------------------------------------
-   fs and minimise-all become equal squares so they read as a matched pair of
-   icon actions; the clock stops competing with the wordmark (28px -> 21px,
-   which is still the largest mono figure on the bar). */
-body header #fsBtn,
-body header #minAllBtn{
-  width:34px; height:34px; padding:0; border-radius:9px;
-  display:inline-flex; align-items:center; justify-content:center;
-  font-size:14px; line-height:1; flex:none;
-}
-body header #minAllBtn{ margin-right:2px }
-body header .clock{ margin-left:auto; text-align:right; flex:none }
-body header .clock .time{ font-size:21px; letter-spacing:.01em }
-body header .clock .meta{ font-size:10.5px; margin-top:2px }
-
-/* ---- 5. graceful degradation --------------------------------------------
-   Shed information in order of importance instead of wrapping: the coordinate
-   readout goes first, then the location subtitle, then the nav tray tightens.
-   The board itself already stacks at 1220, so these thresholds sit inside
-   that and keep the bar on one line down to iPad portrait. */
-@media (max-width:1200px){
-  body header{ gap:10px; padding:8px 12px }
-  body header .clock .meta{ display:none }
-  body header .clock .time{ font-size:19px }
-}
-@media (max-width:1000px){
-  body header .title small,
-  body header .title #tbLocBtn{ display:none }
-  body header .view-links a{ padding:6px 9px; font-size:12px }
-}
-@media (max-width:820px){
-  body header{ gap:8px }
-  body header .title{ font-size:15px }
-  body header .city-picker{ padding-left:8px }
-  body header .city-picker::before{ display:none }
-  body header .view-links{ padding:2px }
-  body header .view-links a{ padding:5px 7px; font-size:11.5px }
-  body header #fsBtn, body header #minAllBtn{ width:30px; height:30px }
-}
