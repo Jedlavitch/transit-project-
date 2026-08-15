@@ -1243,39 +1243,3 @@ body header .clock .meta{ font-size:10.5px; margin-top:2px }
   body header .view-links a{ padding:5px 7px; font-size:11.5px }
   body header #fsBtn, body header #minAllBtn{ width:30px; height:30px }
 }
-
-/* ============================================================================
-   ATLAS: drop the repeated stop label, and slide departures in
-   Atlas is the wall-display style, and on a board sitting in one place every
-   system's nearest stop is the same stop -- "SOUTH STATION · 0.0 MI" printed
-   once under Subway, once under Commuter Rail, once under Silver Line, saying
-   nothing new each time and costing a line of the card every time. The default
-   style keeps it: there the cards are read close up and the label is what tells
-   you which platform a departure belongs to.
-   ============================================================================ */
-:root[data-style="atlas"] .list .stop-label{ display:none }
-
-/* One departure arriving at a time, sliding on from the left. The stagger is
-   indexed by atlasrows.js so rows come in as a wave rather than together; it
-   is capped at eight because past that the last row would wait almost a second
-   and a wall display should be settled before anyone looks up. */
-@keyframes tbAtlasSlide{
-  from{ transform:translateX(-14%); opacity:0 }
-  to  { transform:none;             opacity:1 }
-}
-:root[data-style="atlas"] .list .row{
-  animation:tbAtlasSlide .42s cubic-bezier(.22,.61,.36,1) both;
-}
-/* --tbi is stamped by atlasrows.js and counts ROWS ONLY. nth-child cannot do
-   this: it counts every child of .list, and the stop/direction labels are
-   children too -- hidden in Atlas but still holding positions -- so the wave
-   skipped steps wherever a label sat between two departures. The 0 fallback
-   means a board that somehow loads without the script still animates, just
-   without the stagger, rather than not animating at all. */
-:root[data-style="atlas"] .list .row{ animation-delay:calc(var(--tbi,0) * .06s) }
-
-/* A kiosk that re-renders its list every few seconds would otherwise replay
-   the whole wave forever in someone's peripheral vision. */
-@media (prefers-reduced-motion:reduce){
-  :root[data-style="atlas"] .list .row{ animation:none }
-}

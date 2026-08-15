@@ -713,3 +713,97 @@
   setInterval(schedule, 10000);          /* backstop for silent re-layouts */
   schedule();
 })();
+
+/* ------------------------------------------------------------------ *
+ * Left/right switch tabs, for a TV remote.
+ *
+ * Up/down walk the panel's controls one at a time (see the D-pad handler in
+ * each board). That made Settings reachable, but only barely: the 150% size
+ * rung -- the whole reason a remote user opens this panel on an undetected
+ * television -- measured 46 presses away. The panel already buckets itself
+ * into four tabs, so the rail is the shortcut that was sitting there unused.
+ *
+ * Clicking the tab button rather than calling paint() directly: click() is
+ * the same path a mouse takes, so it clears the search box and repaints in
+ * one step, and it cannot drift out of sync with what the rail does on its
+ * own. Focus then lands on the tab itself, so up/down carries straight on
+ * into that tab's controls -- and because the off-tab groups are display:none,
+ * the up/down walk skips them for free.
+ *
+ * Wrapping at the ends is deliberate here, the opposite of the vertical walk:
+ * four tabs in a ring are predictable, where wrapping a long list of controls
+ * would just lose the viewer.
+ * ------------------------------------------------------------------ */
+(function () {
+  function openRail() {
+    /* Ask which rail is VISIBLE rather than which panel has a .show class:
+       the two panel dialects (#setup on the city boards, #settings on
+       flipboard/night) express "open" differently, and a rail with no client
+       rects is inside a closed one either way. */
+    var rails = document.querySelectorAll(".tbset-tabs");
+    for (var i = 0; i < rails.length; i++)
+      if (rails[i].getClientRects().length) return rails[i];
+    return null;
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    /* A focused field keeps left/right -- unlike up/down, these DO move the
+       caret, and stealing them would make the address box uneditable. */
+    var tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    var rail = openRail();
+    if (!rail) return;
+    var tabs = rail.querySelectorAll(".tbset-tab");
+    if (tabs.length < 2) return;
+    var at = -1, i;
+    for (i = 0; i < tabs.length; i++)
+      if (tabs[i].getAttribute("aria-selected") === "true") at = i;
+    /* at === -1 when a search is running, which deselects every tab; landing
+       on the first one is the sane way back out of that state. */
+    var next = at < 0 ? 0 : at + (e.key === "ArrowRight" ? 1 : -1);
+    if (next < 0) next = tabs.length - 1;
+    if (next >= tabs.length) next = 0;
+    tabs[next].click();
+    tabs[next].focus();
+    e.preventDefault();
+  }, true);
+})();
+
+/* ------------------------------------------------------------------ *
+ * Display size goes first in its tab.
+ *
+ * Left/right reaching the right TAB was only half the problem. On the Display
+ * tab the 150% rung still measured 48 focus stops down, and 27 of those are
+ * the accent-colour swatches -- a palette that is one glance and one click
+ * with a mouse, and a minute of clicking Down with a remote.
+ *
+ * Display size is the one control a television owner MUST reach: it is the
+ * documented fix for a panel the board cannot auto-detect. So it moves to the
+ * top of its tab, ahead of the palette.
+ *
+ * Unconditionally, not just on a detected TV, and that is the whole point --
+ * a television the board CANNOT recognise is sitting at zoom 1 looking exactly
+ * like a desktop, and it is precisely that viewer who needs this control. Any
+ * "only on a TV" gate would skip the only case that matters.
+ * ------------------------------------------------------------------ */
+(function () {
+  var done = false;
+  function hoist() {
+    if (done) return;
+    var body = document.querySelector("#setup .set-body");
+    if (!body) return;
+    var groups = body.querySelectorAll(".set-group");
+    for (var i = 0; i < groups.length; i++) {
+      var h = groups[i].querySelector(".section-lbl,.accent-lbl,.lbl,.suggest-lbl");
+      if (h && /^\s*display size/i.test(h.textContent || "")) {
+        body.insertBefore(groups[i], body.firstChild);
+        done = true;                 /* the panel is built once and reused */
+        return;
+      }
+    }
+  }
+  /* The boards build their settings groups lazily, the first time the panel is
+     opened, so there is nothing to reorder until someone opens it. */
+  document.addEventListener("click", function () { setTimeout(hoist, 0); }, true);
+})();
