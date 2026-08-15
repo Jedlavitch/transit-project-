@@ -40,7 +40,7 @@
 <script src="feedback.js?v=4" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
-<script src="interesting.js?v=1" defer></script>
+<script src="interesting.js?v=2" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardnyc.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -2990,7 +2990,7 @@ function applyDisplay(zoom, padPct){
   const d=document.documentElement;
   d.style.setProperty("--ui-zoom", String(zoom));
   // percentage of the SHORTER side, so the inset looks even on any aspect ratio
-  d.style.setProperty("--safe-pad", padPct>0 ? `min(${padPct}vw, ${padPct}vh)` : "0px");
+  d.style.setProperty("--safe-pad", padPct>0 ? padPct+"vmin" : "0px");
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.zoom)-zoom)<0.001));
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.pad)-padPct)<0.001));
   paintZoomAuto(zoom);
