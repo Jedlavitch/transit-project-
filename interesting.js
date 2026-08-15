@@ -115,6 +115,96 @@
   }
   var CITY = whoAmI();
 
+  /* ---- letting people get rid of it ---------------------------------------
+     Every card that ships in a board's HTML has a "Show on board" checkbox in
+     Settings, built from that board's own CARD_DEFS list. A card injected by a
+     script is not in that list, so it arrives on the screen with no way to
+     remove it — which is not a decision this file gets to make for somebody
+     else's kiosk.
+
+     So it registers itself. CARD_DEFS is a top-level const, but an array is
+     mutable, and pushing an entry means the checkbox, the saved state and
+     applyCardVis()'s existing .user-hidden handling all work with no changes to
+     any board. This runs at SCRIPT level rather than in boot(), because the
+     boards call buildCardToggles() from their own DOMContentLoaded handler,
+     which is registered before ours and therefore runs first — pushing in
+     boot() would miss the list on the very load that matters. */
+  var HIDE_ID = "leaderCard";
+
+  function registerCardToggle() {
+    try {
+      /* eslint-disable-next-line no-undef */
+      if (typeof CARD_DEFS !== "undefined" && Array.isArray(CARD_DEFS) &&
+          !CARD_DEFS.some(function (d) { return d && d.id === HIDE_ID; })) {
+        /* eslint-disable-next-line no-undef */
+        CARD_DEFS.push({ id: HIDE_ID, label: "Today's best" });
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+  var REGISTERED = CITY ? registerCardToggle() : false;
+
+  /* The board's own hidden-cards set when there is one — its key is namespaced
+     per board (transitboard.hiddenCards, transitboardphl.hiddenCards, …) and
+     loadHiddenCards() already knows which. The private key is the fallback for
+     a board that has no CARD_DEFS at all. */
+  function hiddenNow() {
+    try {
+      /* eslint-disable-next-line no-undef */
+      if (REGISTERED && typeof loadHiddenCards === "function") return loadHiddenCards().has(HIDE_ID);
+    } catch (_) {}
+    try { return localStorage.getItem(LS.hide) === "1"; } catch (_) { return false; }
+  }
+
+  function setHidden(on) {
+    var done = false;
+    try {
+      /* eslint-disable-next-line no-undef */
+      if (REGISTERED && typeof loadHiddenCards === "function") {
+        /* eslint-disable-next-line no-undef */
+        var h = loadHiddenCards();
+        if (on) h.add(HIDE_ID); else h.delete(HIDE_ID);
+        /* Write through the same namespaced key the board reads. Derived from
+           its own loader rather than guessed, so a city added later cannot
+           end up writing to the wrong board's settings. */
+        var key = boardHiddenKey();
+        /* Array.from, not slice.call: loadHiddenCards() returns a Set, which is
+           iterable but NOT array-like, so slice.call() on it yields [] — which
+           wrote an empty hidden-list and left the card stubbornly on screen. */
+        if (key) { localStorage.setItem(key, JSON.stringify(Array.from(h))); done = true; }
+        /* eslint-disable-next-line no-undef */
+        if (typeof applyCardVis === "function") applyCardVis();
+        /* eslint-disable-next-line no-undef */
+        if (typeof buildCardToggles === "function") buildCardToggles();
+      }
+    } catch (_) {}
+    if (!done) {
+      try { localStorage.setItem(LS.hide, on ? "1" : "0"); } catch (_) {}
+      var el = document.getElementById(HIDE_ID);
+      if (el) el.classList.toggle("user-hidden", on);
+    }
+  }
+
+  function boardHiddenKey() {
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (/^transitboard[a-z]*\.hiddenCards$/.test(k)) return k;
+      }
+    } catch (_) {}
+    /* Nothing saved yet on this board, so derive the namespace from another key
+       it definitely owns (every board writes its own .loc or .theme eventually);
+       failing that, fall back to the private flag by returning "". */
+    try {
+      for (var j = 0; j < localStorage.length; j++) {
+        var m = /^(transitboard[a-z]*)\./.exec(localStorage.key(j));
+        if (m) return m[1] + ".hiddenCards";
+      }
+    } catch (_) {}
+    return "";
+  }
+
   /* ---- storage ------------------------------------------------------------
      Every read is defensive. A kiosk that has been running for months will hit
      a full quota or a half-written value eventually, and a leaderboard is not
@@ -774,10 +864,13 @@
     card.id = "leaderCard";
     card.style.setProperty("--sys", "#ffd166");
     card.innerHTML =
-      '<h2>Today\'s best <span class="count" id="leaderCount"></span></h2>' +
+      '<h2><span class="t">Today\'s best</span> <span class="count" id="leaderCount"></span>' +
+      '<button type="button" id="leaderHideBtn" title="Hide this box — bring it back in Settings, Show on board">×</button>' +
+      "</h2>" +
       '<div class="statline" id="leaderStat"></div>' +
       '<div class="list" id="leaderList"></div>';
     cards.appendChild(card);
+    if (hiddenNow()) card.classList.add("user-hidden");
 
     if (!document.getElementById("leaderCss")) {
       var st = document.createElement("style");
@@ -791,13 +884,28 @@
         "#leaderCard .pts{font-family:var(--mono,monospace);font-size:13px;font-weight:700;" +
           "color:var(--accent,#ffd166)}" +
         "#leaderCard .row.top{border-color:var(--accent,#ffd166);" +
-          "box-shadow:0 0 0 1px var(--accent,#ffd166) inset}";
+          "box-shadow:0 0 0 1px var(--accent,#ffd166) inset}" +
+        /* Sits with the board's own header controls rather than shouting: the
+           point is that it CAN be dismissed, not that it wants to be. */
+        "#leaderCard #leaderHideBtn{font:inherit;font-size:15px;line-height:1;cursor:pointer;" +
+          "margin-left:6px;padding:1px 5px;border-radius:5px;border:1px solid transparent;" +
+          "background:transparent;color:var(--muted,#8fa3bf);opacity:.6}" +
+        "#leaderCard #leaderHideBtn:hover{opacity:1;border-color:var(--row-line,#1c2c4e)}";
       document.head.appendChild(st);
     }
     var h2 = card.querySelector("h2");
     h2.style.cursor = "pointer";
     h2.title = "Open the full leaderboard";
-    h2.onclick = function (e) { if (!e.target.closest("button")) window.location.href = "leaderboard.html?city=" + encodeURIComponent(CITY ? CITY.id : ""); };
+    /* Any control in the header acts on the card; only bare header space opens
+       the page. Whitelisting one button by id is what broke the Spotted card's
+       minimise button when a second button was added to it. */
+    h2.onclick = function (e) {
+      if (e.target.closest("button")) return;
+      window.location.href = "leaderboard.html?city=" + encodeURIComponent(CITY ? CITY.id : "") +
+        "&from=" + encodeURIComponent(CITY ? CITY.file : "");
+    };
+    var hideBtn = card.querySelector("#leaderHideBtn");
+    if (hideBtn) hideBtn.onclick = function (e) { e.stopPropagation(); setHidden(true); };
     return card;
   }
 
@@ -809,9 +917,13 @@
 
   function render() {
     if (!CITY) return;
-    try { if (localStorage.getItem(LS.hide) === "1") return; } catch (_) {}
+    /* Hidden means hidden: don't build the card at all if it has never existed,
+       and don't spend a render on it if it has. The checkbox in Settings brings
+       it straight back because applyCardVis() only toggles a class. */
+    if (hiddenNow() && !document.getElementById(HIDE_ID)) return;
     var card = ensureCard();
     if (!card) return;
+    if (card.classList.contains("user-hidden")) return;
     var box = read(LS.leaders, null), list = (box && box.cities && box.cities[CITY.id]) || [];
     var listEl = card.querySelector("#leaderList");
     var countEl = card.querySelector("#leaderCount");

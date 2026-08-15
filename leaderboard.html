@@ -18,7 +18,7 @@
 <meta property="og:image" content="shots/leaderboard-latest.png" />
 <meta name="twitter:card" content="summary_large_image" />
 
-<link rel="stylesheet" href="theme.css?v=23" />
+<link rel="stylesheet" href="theme.css?v=24" />
 <script>/* pre-paint: same look as the boards, so arriving here doesn't flash */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -127,8 +127,12 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 <div class="wrap">
   <a class="back" href="dc.html" id="backLink">← Back to the board</a>
   <h1>Today's most interesting</h1>
-  <p class="lede">Every board scores what it shows — an emergency squawk, a 747, a train ninety minutes
-    late, or simply something this board has never had come past before. The strangest thing wins the day.</p>
+  <p class="lede">Every board scores what it shows, and it scores the <em>aeroplane</em> first: what type
+    it is, and whose colours it is wearing. A 747, a widebody where widebodies are rare, an airline this
+    board has never had over it before. Trains are scored the same way. The strangest thing wins the day.
+    <br><span style="opacity:.8">No feed broadcasts livery — ADS-B carries a type, a registration and a
+    callsign, and nothing about paint. So the closest honest signal is how rarely this board sees that
+    operator, and the photograph below is where you actually see the scheme.</span></p>
 
   <div class="tabs" id="tabs"></div>
 
@@ -498,6 +502,15 @@ async function loadPhotos() {
   drawCard();
 }
 
+/* The photo is content, not decoration — it is the only place the livery can be
+   seen — so it gets a real description rather than an empty alt. */
+function win_alt() {
+  const w = scopeList(scope)[0];
+  if (!w) return "";
+  return (heroPhoto && heroPhoto.exact ? "Photograph of " : "Representative photograph of ") +
+    [w.title, w.sub].filter(Boolean).join(", ");
+}
+
 function paintHeroPhoto() {
   const box = $("#heroPhoto");
   if (!box) return;
@@ -507,7 +520,7 @@ function paintHeroPhoto() {
     : "Representative photo" + (heroPhoto.cred ? " · " + esc(heroPhoto.cred) : "") + " · Wikimedia Commons";
   box.innerHTML =
     `<a href="${esc(heroPhoto.link || "#")}" target="_blank" rel="noopener noreferrer">
-       <img src="${esc(heroPhoto.src)}" alt="" loading="lazy" />
+       <img src="${esc(heroPhoto.src)}" alt="${esc(win_alt())}" />
      </a><div class="cred">${cred}</div>`;
 }
 

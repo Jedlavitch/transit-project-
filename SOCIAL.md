@@ -18,28 +18,57 @@ Nothing here runs until you set it up, and every step is reversible.
 
 ## 1. What counts as interesting
 
-Two halves, and the second is the one that makes this worth reading.
+**The aeroplane itself comes first** — what type it is, and whose colours it is
+in. Speed and altitude score, but barely: they say what a flight is *doing*, not
+what it *is*, and this is a leaderboard about the aircraft.
 
-**Universal** — things that are notable anywhere, scored from the first day:
-an emergency squawk, an A380, a 747, a C-17, an aircraft built in 1968, a train
-ninety minutes late, one of Amtrak's long-distance trains, 124 mph.
+Two halves, and the second is what makes it worth reading a month from now.
+
+**Universal** — notable anywhere, scored from the first day: an emergency
+squawk, an A380, a 747, a C-17, a DC-3, an aircraft built in 1968, a widebody, a
+train ninety minutes late, one of Amtrak's long-distance trains.
 
 **Learned** — each board keeps a private thirty-day tally of what it has
 actually seen, so "rare" means rare *here*. A tram type that is ordinary in
 Cologne and an airline that turns up twice a month in Boston are both scored
-against that board's own history, not a list someone wrote in advance.
+against that board's own history, not a list someone wrote in advance. Type
+carries the heaviest learned weight of anything.
 
 The learned half is damped while a board is new. On day one everything is a
 first sighting, and a leaderboard that says so is worthless — it reaches full
 weight after about a week of watching. So this gets better the longer you leave
 your screens on, which is the point.
 
-**Aircraft scope.** By default only scheduled airline flights are scored: things
-with a flight number, a city pair and an operator people recognise. Switch it to
-*anything that flies* on the leaderboard page and helicopters, private jets,
-survey aircraft and military traffic come back in — genuinely the rarer
-sightings, and what an actual spotter wants. Buses are never scored; the ask was
-planes and trains.
+### About livery
+
+**Nothing broadcasts it.** ADS-B carries a type code, a registration and a
+callsign. There is no paint field, no free API that maps a registration to a
+special scheme, and the boards will not pretend otherwise — a "retro livery
+detected!" badge would be invented, and inventing it is exactly what makes a
+daily account worth ignoring.
+
+What is real, and is what the scorer uses:
+
+* **Operator rarity.** An airline this board seldom sees is a colour scheme
+  seldom seen over this city. That is the same sighting, and the reason text
+  says it in those words: *"Finnair colours over this board, for the first time"*.
+* **The photograph.** Every winner is shown with a picture — the exact airframe
+  where planespotters.net has one for that hex, a representative photo of the
+  type otherwise, labelled as such either way. That is where the paint is
+  actually visible, which is why the card leads with it rather than with text.
+
+### Aircraft scope
+
+By default only **scheduled airline flights** are scored: things with a flight
+number, a city pair and an operator people recognise. Left to itself the scorer
+kept handing the day to a county police helicopter, which is genuinely the odd
+thing overhead and a poor post.
+
+Switch to *anything that flies* on the leaderboard page and the helicopters,
+private jets, survey aircraft and military traffic come back — the rarer
+sightings, and what an actual spotter wants. One control, no code change.
+
+Buses are never scored; the ask was planes and trains.
 
 ---
 
@@ -116,6 +145,32 @@ image straight into whichever app you pick.
 Nothing on that page is sent anywhere. It is a drawing and some text.
 
 ---
+
+## Getting rid of the box
+
+`interesting.js` injects a **Today's best** card into each board's grid, and it
+registers itself in that board's own *Show on board* list — so it has a
+checkbox in ⚙ Settings exactly like Metrorail or Planes, and an **×** in its own
+header for getting rid of it on the spot. Either one persists, and the checkbox
+brings it back.
+
+## Photographs are not yours
+
+The card the daily job posts carries a photograph taken by somebody else:
+planespotters.net images are used under their API's terms with the
+photographer's credit drawn onto the card, and Wikimedia Commons images under
+their own licences with the author credited the same way. Credit is rendered
+into the image itself precisely because a caption gets stripped when a post is
+re-shared.
+
+If you would rather post a card that is entirely your own data, set the
+`CARD_PHOTO` repository secret (or environment variable) to `0` and the card is
+drawn type-only.
+
+One practical limit: planespotters' public API returns at most a 497px-wide
+thumbnail, so filling a 1080px card upscales it about 2× and a light sharpen is
+applied. It is a little soft at full size. A slightly soft photograph of the
+actual aircraft beats a sharp one of a different airframe.
 
 ## What it will not do
 
