@@ -80,9 +80,17 @@
   var MIN_SCORE     = 3;
 
   /* How remarkable a NON-airline aircraft must be, on universal signals alone,
-     to be scored at all while the default airline-only scope is on. Set between
-     a C-17 (36) and a police helicopter (26) — see the long note in collect(). */
-  var NON_AIRLINE_BAR = 32;
+     to be scored at all while the default airline-only scope is on.
+
+     Measured against live traffic rather than guessed. At 32 a Maryland State
+     Police AW-139 reached second place on the DC board with 34 — AGENCY_OPERATOR
+     26 plus 8 for being low overhead — which is exactly the sighting that
+     started this ("only the best board is showing trains" came after a county
+     police helicopter kept winning). 45 puts that whole class back out: a police
+     or medevac helicopter tops out around 34, while everything genuinely worth
+     stopping for clears it comfortably — a Special Air Mission 58, an An-124 76,
+     anything squawking 7700 62, a C-17 114, a B-17 124. */
+  var NON_AIRLINE_BAR = 45;
 
   /* Cities, in the order the boards' own picker lists them, so the leaderboard
      reads the same way round as the rest of the product. `id` matches the
@@ -572,8 +580,11 @@
     for (var u = 0; u < rs.length; u++) universal += rs[u].w;
 
     if (t) push(rs, 52 * rarity(c, "type:" + t) * mat, rarePhrase(c, "type:" + t, shortType(a), true));
+    /* Just "<operator> colours" — rarePhrase supplies the rest of the sentence,
+       and passing "…over this board" produced "the first Maryland State Police
+       colours over this board this board has shown". */
     if (op) push(rs, 34 * rarity(c, "op:" + op) * mat,
-                 rarePhrase(c, "op:" + op, op + " colours over this board", false));
+                 rarePhrase(c, "op:" + op, op + " colours", false));
 
     return finish(rs, {
       uni: Math.round(universal),
@@ -1112,17 +1123,19 @@
     trim(listEl);
   }
 
-  /* The boards' own fitList() only knows about the cards that were in the HTML
-     at build time, so an injected card trims itself. The height guard is the
-     one spotlog.js already needed: before layout the box measures nothing, and
-     an ungated trim deletes every row. */
-  function trim(box) {
-    if (box.clientHeight < 8) return;
-    var guard = 0;
-    while (box.scrollHeight > box.clientHeight + 2 && box.children.length > 1 && guard++ < 40) {
-      box.removeChild(box.lastElementChild);
-    }
-  }
+  /* DELIBERATELY NOT TRIMMING.
+
+     This used to delete rows until the content fit, copying the boards' old
+     fitList() behaviour. The layout has since moved on: theme.css gives every
+     .list `overflow-y:auto` and a fixed card height, so the built-in cards keep
+     everything and scroll — measured live on the DC board, railCard holds 15
+     rows in a 59px box (scrollHeight 891). This card was the only one on the
+     page destroying its own content, which on that skin cut it to a single row
+     and threw away the whole plane-vs-train mix the ranking exists to show.
+
+     Left as a no-op rather than deleted so the call site keeps documenting why
+     nothing happens here. */
+  function trim(/* box */) {}
 
   /* A "Best" link in every board's header, injected here rather than pasted
      into eleven of them by hand — the same reasoning, and the same
