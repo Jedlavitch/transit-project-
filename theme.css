@@ -1279,3 +1279,23 @@ body header .clock .meta{ font-size:10.5px; margin-top:2px }
 @media (prefers-reduced-motion:reduce){
   :root[data-style="atlas"] .list .row{ animation:none }
 }
+/* ------------------------------------------------------------------------
+   Station labels off on smaller screens.
+
+   "● Friendship Heights · 1.2 mi" spends a whole line naming the place you
+   are already standing, and on a compact screen the lines are the entire
+   budget -- the departures underneath are what anyone opened the board for.
+
+   1220px is not an arbitrary number: it is the top of the compact-tablet band
+   the boards already switch into (481-1220px forces --ui-zoom to 1 and lays
+   out at real text size), so this turns off with the same screens that layout
+   turns on for, plus the phone band below it.
+
+   Applies to every kind of stop label -- Metrorail stations, bus stops, MARC
+   and Ride On -- because they are one class and one line each. On a card that
+   lists more than one station this does lose which station a departure leaves
+   from; the row still names the line and the destination.
+   ------------------------------------------------------------------------ */
+@media (max-width:1220px){
+  body .list .stop-label{ display:none }
+}
