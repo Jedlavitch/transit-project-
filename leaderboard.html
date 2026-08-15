@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Transit Project — Today's most interesting</title>
+
+<!-- Link previews. The auto-poster puts this URL in front of people who have
+     never seen the site, and a bare link with no card looks like spam. The
+     image is the one the workflow commits each morning, so a shared link shows
+     the same card that was posted. -->
+<meta property="og:title" content="Today's most interesting plane or train" />
+<meta property="og:description" content="Every day, eleven live transit boards score what passes over and through them. The strangest thing wins." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="shots/leaderboard-latest.png" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="stylesheet" href="theme.css?v=20" />
+<script>/* pre-paint: same look as the boards, so arriving here doesn't flash */
+(function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
+var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
+var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
+<script src="config.js?v=2"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0; min-height:100%}
+  body{color:var(--text); font-family:var(--body); -webkit-font-smoothing:antialiased;
+    padding:28px 20px 70px;
+    background:
+      radial-gradient(800px 600px at 105% -8%, rgba(78,161,255,.14) 0%, transparent 58%),
+      radial-gradient(1000px 700px at 50% 120%, var(--blue-deep,#0a1a3d) 0%, transparent 60%),
+      var(--bg)}
+  .wrap{max-width:860px; margin:0 auto}
+  .back{color:var(--accent-ink); font-size:13px; text-decoration:none}
+  h1{font-family:var(--display); font-size:30px; margin:14px 0 4px; letter-spacing:-.01em;
+    background:linear-gradient(90deg,var(--text) 18%,#4ea1ff 66%,#b58cff);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    width:fit-content}
+  :root[data-theme="day"] h1{filter:brightness(.7) saturate(1.25)}
+  .lede{color:var(--muted); font-size:13.5px; line-height:1.7; margin:0 0 20px; max-width:62ch}
+
+  /* ---- scope tabs ---- */
+  .tabs{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 18px}
+  .tab{font:inherit; font-size:12px; font-weight:700; padding:6px 13px; border-radius:99px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--muted); cursor:pointer}
+  .tab:hover{border-color:var(--accent)}
+  .tab.on{background:var(--accent); border-color:var(--accent); color:#06121f}
+  :root[data-theme="day"] .tab.on{color:#fff}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:14px; padding:20px 22px; margin-bottom:16px}
+  .panel h2{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.09em;
+    color:var(--muted); margin:0 0 14px}
+
+  /* ---- the winner ---- */
+  .hero{position:relative; overflow:hidden}
+  .hero::before{content:""; position:absolute; inset:0 0 auto; height:3px;
+    background:linear-gradient(90deg,var(--accent),#b58cff)}
+  .crown{font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent-ink)}
+  .hero .name{font-family:var(--display); font-size:clamp(22px,4.4vw,34px); font-weight:800;
+    line-height:1.1; margin:8px 0 6px}
+  .hero .meta{font-size:14px; color:var(--muted); margin-bottom:14px}
+  .hero .pts{font-family:var(--mono); font-size:34px; font-weight:600; color:var(--accent-ink);
+    line-height:1}
+  .hero .ptsl{font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--muted);
+    text-transform:uppercase}
+  .hero .head{display:flex; justify-content:space-between; align-items:flex-start; gap:18px}
+  /* The photo is the point of the panel, so it gets real size — the livery is
+     not in any feed, and looking at it is the only way to see it. */
+  .photo{margin:16px 0 0; border-radius:12px; overflow:hidden; border:1px solid var(--line);
+    background:var(--row-bg)}
+  .photo img{display:block; width:100%; height:auto; max-height:420px; object-fit:cover}
+  .photo .cred{font-family:var(--mono); font-size:10px; color:var(--muted); padding:7px 11px;
+    letter-spacing:.03em}
+  .thumb{width:76px; height:50px; object-fit:cover; border-radius:6px; border:1px solid var(--row-line);
+    display:block; background:var(--row-bg)}
+  .reasons{list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:7px}
+  .reasons li{display:flex; align-items:baseline; gap:10px; font-size:13.5px; line-height:1.5}
+  .reasons b{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--accent-ink);
+    min-width:34px; text-align:right; flex:none}
+
+  /* ---- ranked list ---- */
+  table{width:100%; border-collapse:collapse}
+  th{font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); text-align:left; padding:0 8px 8px; border-bottom:1px solid var(--row-line)}
+  td{padding:11px 8px; border-bottom:1px solid var(--row-line); font-size:13.5px; vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.n{font-family:var(--mono); color:var(--muted); width:26px}
+  td.s{font-family:var(--mono); font-weight:600; color:var(--accent-ink); text-align:right; width:48px}
+  .kind{font-family:var(--mono); font-size:9px; font-weight:600; letter-spacing:.1em; padding:2px 6px;
+    border-radius:4px; background:var(--row-bg); border:1px solid var(--row-line); color:var(--muted)}
+  .t2{color:var(--muted); font-size:12px; margin-top:3px}
+  .city-chip{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--accent-ink); opacity:.85}
+
+  /* ---- share ---- */
+  .shot{width:100%; max-width:420px; border-radius:12px; border:1px solid var(--line); display:block}
+  .shrow{display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start}
+  .shcol{flex:1 1 300px; min-width:280px}
+  .btn{font:inherit; font-size:13px; font-weight:700; padding:9px 15px; border-radius:9px;
+    border:1px solid var(--line); background:var(--row-bg); color:var(--text); cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn.pri{background:var(--accent); border-color:var(--accent); color:#06121f}
+  :root[data-theme="day"] .btn.pri{color:#fff}
+  .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+  textarea{width:100%; min-height:132px; background:var(--row-bg); color:var(--text);
+    border:1px solid var(--line); border-radius:10px; padding:11px 12px; font:inherit;
+    font-size:13px; line-height:1.6; resize:vertical}
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .seg button{font:inherit; font-size:12px; font-weight:700; padding:6px 12px; border:0;
+    background:var(--row-bg); color:var(--muted); cursor:pointer}
+  .seg button.on{background:var(--accent); color:#06121f}
+  :root[data-theme="day"] .seg button.on{color:#fff}
+  .note{font-size:12px; color:var(--muted); line-height:1.65; margin:10px 0 0}
+  input[type=text]{width:100%; background:var(--row-bg); color:var(--text); border:1px solid var(--line);
+    border-radius:9px; padding:9px 11px; font:inherit; font-size:13px; font-family:var(--mono)}
+  .empty{color:var(--muted); font-size:13.5px; line-height:1.7}
+  .ok{color:var(--good-ink)}
+  .bad{color:var(--late-ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="dc.html" id="backLink">← Back to the board</a>
+  <h1>Today's most interesting</h1>
+  <p class="lede">Every board scores what it shows — an emergency squawk, a 747, a train ninety minutes
+    late, or simply something this board has never had come past before. The strangest thing wins the day.</p>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="panel" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:14px 22px">
+    <span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)">Aircraft</span>
+    <span class="seg">
+      <button type="button" id="scopeAirline">Airline flights</button>
+      <button type="button" id="scopeAll">Anything that flies</button>
+    </span>
+    <span class="note" id="scopeNote" style="margin:0; flex:1 1 260px"></span>
+  </div>
+
+  <div class="panel hero" id="hero"></div>
+
+  <div class="panel">
+    <h2 id="restHead">The rest of the day</h2>
+    <div id="rest"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Share it</h2>
+    <div class="shrow">
+      <div>
+        <canvas id="shot" class="shot" width="1080" height="1080"></canvas>
+        <div class="btns">
+          <span class="seg">
+            <button type="button" id="fmtSq" class="on">Square</button>
+            <button type="button" id="fmtWide">Wide</button>
+          </span>
+        </div>
+      </div>
+      <div class="shcol">
+        <textarea id="caption" spellcheck="false"></textarea>
+        <div class="btns">
+          <button type="button" class="btn pri" id="shareBtn">Share…</button>
+          <button type="button" class="btn" id="copyCap">Copy caption</button>
+          <button type="button" class="btn" id="dlBtn">Download image</button>
+        </div>
+        <p class="note" id="shareNote">The image and the caption are yours to post. Nothing is sent
+          anywhere from this page.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Past winners</h2>
+    <div id="archive"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Pool your screens</h2>
+    <p class="note" style="margin-top:0">Every board on this device already feeds one list — that is
+      what "All cities" is. A share code pools <em>different devices</em>: your kiosk, your laptop and
+      your phone all write to the same list, and it is also what the daily auto-post reads.
+      Leave it empty and nothing ever leaves this device.</p>
+    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap">
+      <input type="text" id="blobIn" placeholder="share code (a uuid), or paste the whole URL" />
+    </div>
+    <div class="btns">
+      <button type="button" class="btn pri" id="blobSave">Use this code</button>
+      <button type="button" class="btn" id="blobNew">Create a new one</button>
+      <button type="button" class="btn" id="blobPull">Pull now</button>
+    </div>
+    <p class="note" id="blobNote"></p>
+    <p class="note">The code is the only access control, and jsonblob.com is a public store — anyone
+      holding it can read your list. That is the same trade the Spotter's share code makes, and it is
+      why nothing is published until you set one.</p>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   leaderboard.html — the day's most interesting plane or train.
+
+   Reads what interesting.js has been storing on every board this device runs,
+   which is why "All cities" needs no server: the boards share an origin, so
+   they share localStorage. A share code (jsonblob, the same keyless store the
+   Spotter uses) merges OTHER devices in, and is what the daily poster reads.
+
+   The share card is drawn on a canvas here rather than fetched from anywhere,
+   so it works offline and on a kiosk that has never been signed in to anything.
+   ============================================================================ */
+const LS = { leaders:"tb.leaders.v1", archive:"tb.leaderArchive.v1", blob:"tb.leaderBlob",
+             fmt:"tb.leaderShotFmt" };
+const BLOB_API = "https://jsonblob.com/api/jsonBlob/";
+const SITE = "transitproject.online";
+
+/* Kept in step with interesting.js's own list — the labels are what the share
+   card and the caption say out loud, so they live in one shape. */
+const CITIES = [
+  { file:"dc.html",           id:"dc",        label:"Washington DC" },
+  { file:"philadelphia.html", id:"philly",    label:"Philadelphia"  },
+  { file:"newjersey.html",    id:"nj",        label:"New Jersey"    },
+  { file:"nyc.html",          id:"nyc",       label:"New York"      },
+  { file:"boston.html",       id:"boston",    label:"Boston"        },
+  { file:"amsterdam.html",    id:"amsterdam", label:"Amsterdam"     },
+  { file:"losangeles.html",   id:"la",        label:"Los Angeles"   },
+  { file:"sanfrancisco.html", id:"sf",        label:"San Francisco" },
+  { file:"zurich.html",       id:"zurich",    label:"Zurich"        },
+  { file:"cologne.html",      id:"cologne",   label:"Cologne"       },
+  { file:"stuttgart.html",    id:"stuttgart", label:"Stuttgart"     }
+];
+const cityLabel = id => (CITIES.find(c => c.id === id) || {}).label || id;
+const cityFile  = id => (CITIES.find(c => c.id === id) || {}).file || "dc.html";
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g,
+  c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const read = (k, f) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return v == null ? f : v; } catch (_) { return f; } };
+
+function todayStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function prettyDay(s) {
+  const d = new Date(s + "T12:00:00");
+  return isFinite(d) ? d.toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" }) : s;
+}
+
+/* ---- data ---------------------------------------------------------------
+   Local first, then anything a share code brings in. Remote entries are merged
+   per city and de-duplicated by id, keeping the higher score — two screens
+   watching the same city will both have seen the same aircraft, and it should
+   appear once with its best moment, not twice. */
+let remote = null;
+
+function localBox() {
+  const box = read(LS.leaders, null);
+  return (box && box.day === todayStr()) ? box : { day: todayStr(), cities: {} };
+}
+
+function merged() {
+  const box = localBox();
+  const out = { day: box.day, cities: {} };
+  for (const c in box.cities) out.cities[c] = (box.cities[c] || []).slice();
+  if (remote && remote.day === box.day && remote.cities) {
+    for (const c in remote.cities) {
+      const into = out.cities[c] = out.cities[c] || [];
+      (remote.cities[c] || []).forEach(e => {
+        const hit = into.findIndex(x => x.id === e.id);
+        if (hit < 0) into.push(e);
+        else if (e.score > into[hit].score) into[hit] = e;
+      });
+    }
+  }
+  for (const c in out.cities) {
+    out.cities[c].forEach(e => { e.city = e.city || c; e.cityLabel = e.cityLabel || cityLabel(c); });
+    out.cities[c].sort((a, b) => b.score - a.score);
+  }
+  return out;
+}
+
+function scopeList(scope) {
+  const box = merged();
+  if (scope === "all") {
+    const all = [];
+    for (const c in box.cities) all.push(...box.cities[c]);
+    all.sort((a, b) => b.score - a.score);
+    return all;
+  }
+  return (box.cities[scope] || []).slice();
+}
+
+function citiesWithData() {
+  const box = merged();
+  return CITIES.filter(c => (box.cities[c.id] || []).length);
+}
+
+/* ---- view ---------------------------------------------------------------- */
+let scope = new URLSearchParams(location.search).get("city") || "all";
+
+function renderTabs() {
+  const have = citiesWithData();
+  const tabs = [{ id:"all", label:"All cities" }].concat(have);
+  if (scope !== "all" && !have.some(c => c.id === scope)) tabs.push(CITIES.find(c => c.id === scope) || { id:scope, label:scope });
+  $("#tabs").innerHTML = tabs.map(t =>
+    `<button type="button" class="tab${t.id === scope ? " on" : ""}" data-id="${esc(t.id)}">${esc(t.label)}</button>`).join("");
+  $("#tabs").querySelectorAll(".tab").forEach(b => b.onclick = () => {
+    scope = b.dataset.id;
+    history.replaceState(null, "", "leaderboard.html?city=" + encodeURIComponent(scope));
+    renderAll();
+  });
+}
+
+function renderHero() {
+  const list = scopeList(scope), win = list[0], box = $("#hero");
+  if (!win) {
+    box.innerHTML = `<div class="crown">${esc(prettyDay(todayStr()))}</div>
+      <div class="name" style="font-size:22px">Nothing has stood out yet</div>
+      <p class="empty">Leave a board open and this fills in on its own. Scores build through the day,
+      and the boards learn what is ordinary here — so the longer they run, the better this gets at
+      telling a rare working out of a rush-hour service.</p>`;
+    return;
+  }
+  const where = scope === "all" ? win.cityLabel || cityLabel(win.city) : cityLabel(scope);
+  box.innerHTML =
+    `<div class="head">
+       <div style="min-width:0">
+         <div class="crown">${esc(prettyDay(todayStr()))} · ${esc(where)}</div>
+         <div class="name">${esc(win.title)}</div>
+         <div class="meta">${esc([win.sub, win.detail].filter(Boolean).join(" · "))}</div>
+       </div>
+       <div style="text-align:right; flex:none">
+         <div class="pts">${win.score}</div>
+         <div class="ptsl">${win.kind === "plane" ? "aircraft" : "rail"}</div>
+       </div>
+     </div>
+     <ul class="reasons">${(win.reasons || []).map(r =>
+        `<li><b>+${r.w}</b><span>${esc(cap(r.t))}</span></li>`).join("")}</ul>
+     <div class="photo" id="heroPhoto"></div>`;
+  paintHeroPhoto();
+}
+
+const cap = s => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
+
+function renderRest() {
+  const list = scopeList(scope).slice(1, 10), box = $("#rest");
+  $("#restHead").textContent = scope === "all" ? "The rest of the day, everywhere" : "The rest of the day";
+  if (!list.length) { box.innerHTML = `<p class="empty">Nothing else scored today.</p>`; return; }
+  box.innerHTML =
+    `<table><thead><tr><th></th><th>What</th><th>Why</th><th style="text-align:right">Score</th></tr></thead>
+     <tbody>${list.map((e, i) => `
+       <tr>
+         <td class="n">${i + 2}</td>
+         <td><span class="kind">${e.kind === "plane" ? "AIR" : "RAIL"}</span>
+             <div style="margin-top:4px">${esc(e.title)}</div>
+             <div class="t2">${esc([e.sub, e.detail].filter(Boolean).join(" · "))}</div></td>
+         <td>${esc(cap((e.reasons || [])[0] ? e.reasons[0].t : ""))}
+             ${scope === "all" ? `<div class="city-chip">${esc(e.cityLabel || cityLabel(e.city))}</div>` : ""}</td>
+         <td class="s">${e.score}</td>
+       </tr>`).join("")}</tbody></table>`;
+}
+
+function renderArchive() {
+  const arch = read(LS.archive, []).filter(a => scope === "all" || a.city === scope).slice(0, 8);
+  const box = $("#archive");
+  if (!arch.length) { box.innerHTML = `<p class="empty">Yesterday's winners show up here once this
+    has been running for more than a day.</p>`; return; }
+  box.innerHTML = `<table><tbody>${arch.map(a => `
+    <tr><td class="n" style="width:auto; white-space:nowrap">${esc(prettyDay(a.day))}</td>
+        <td>${esc(a.entry.title)}<div class="t2">${esc(cityLabel(a.city))} · ${esc(cap((a.entry.reasons||[])[0] ? a.entry.reasons[0].t : ""))}</div></td>
+        <td class="s">${a.entry.score}</td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ---- pictures ------------------------------------------------------------
+   Two sources, for two different questions, both already proven in Sky mode and
+   sharing its photo cache (`nightmode.photos`) so a device that has used one
+   arrives here warm.
+
+   planespotters.net, by ADS-B hex, is a photo of THE EXACT AIRFRAME overhead —
+   that tail number, photographed at some airport by somebody who was there.
+   It is the picture worth looking at, and it is what the hero shows.
+
+   Wikimedia Commons is a REPRESENTATIVE photo: the right type in the right
+   airline's paint, or the right train on the right line. Less precise, and
+   labelled as such — but Commons serves `access-control-allow-origin: *` and
+   plnspttrs.net does not, and a cross-origin image without that header TAINTS
+   a canvas: it draws fine and then toBlob() throws, so the Download and Share
+   buttons would break on exactly the aircraft people most want to share. So the
+   drawn card uses Commons and the page uses planespotters, and each says which.
+   (The daily poster has no CORS to worry about and uses the exact airframe.) */
+const PHOTO_CACHE_KEY = "nightmode.photos";
+const photoCache = (() => { try { return JSON.parse(localStorage.getItem(PHOTO_CACHE_KEY) || "{}"); } catch (_) { return {}; } })();
+const savePhotoCache = () => { try { localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify(photoCache)); } catch (_) {} };
+
+async function getJSON(url, ms = 12000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+
+async function exactPlanePhoto(hex) {
+  if (!hex) return null;
+  const key = "p2:" + hex, hit = photoCache[key];
+  if (hit && Date.now() - hit.t < 864e5) return (hit.v || [])[0] || null;
+  let v = [];
+  try {
+    const d = await getJSON("https://api.planespotters.net/pub/photos/hex/" + encodeURIComponent(hex));
+    v = (d && d.photos ? d.photos : []).slice(0, 6)
+      .map(p => ({ src: (p.thumbnail_large || p.thumbnail || {}).src || "", link: p.link || "", cred: p.photographer || "" }))
+      .filter(p => p.src);
+  } catch (_) {}
+  photoCache[key] = { t: Date.now(), v }; savePhotoCache();
+  return v[0] || null;
+}
+
+/* Commons' image search mixes in maps, logos, timetables and route diagrams,
+   which look wrong on a photo panel — filtered out by file type and title. */
+async function commonsPhoto(query) {
+  if (!query) return null;
+  const key = "wikiN:" + query, hit = photoCache[key];
+  if (hit && Date.now() - hit.t < 30 * 864e5) return (hit.v || [])[0] || null;
+  let v = [];
+  try {
+    const url = "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=" +
+      encodeURIComponent(query) + "&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|extmetadata" +
+      "&iiurlwidth=1600&format=json&origin=*";
+    const d = await getJSON(url);
+    const pages = d && d.query && d.query.pages;
+    if (pages) v = Object.values(pages)
+      .sort((a, b) => (a.index || 0) - (b.index || 0))
+      .map(page => {
+        const info = page && page.imageinfo && page.imageinfo[0];
+        if (!info) return null;
+        const title = String(page.title || "");
+        if (!/\.(jpe?g|png|webp)$/i.test(title)) return null;
+        if (/\b(map|diagram|logo|icon|seal|chart|schematic|timetable|sign|ticket)\b/i.test(title)) return null;
+        const artist = (((info.extmetadata || {}).Artist || {}).value || "").replace(/<[^>]+>/g, "").trim();
+        return { src: info.thumburl || info.url, link: info.descriptionurl || "", cred: artist };
+      }).filter(Boolean);
+  } catch (_) {}
+  photoCache[key] = { t: Date.now(), v }; savePhotoCache();
+  return v[0] || null;
+}
+
+/* The exact airframe if there is one, else a representative photo. `exact` is
+   what the caption under it says, so the two can never drift apart. */
+async function photoFor(entry) {
+  if (!entry) return null;
+  if (entry.kind === "plane" && entry.hex) {
+    const p = await exactPlanePhoto(entry.hex);
+    if (p) return Object.assign({ exact: true }, p);
+  }
+  const q = entry.photoQuery || (entry.kind === "plane" ? entry.title : entry.title + " train");
+  const p = await commonsPhoto(q);
+  return p ? Object.assign({ exact: false }, p) : null;
+}
+
+/* Loaded with crossOrigin so the result is safe to draw AND export. Resolves
+   null rather than rejecting when the host refuses — the card then simply has
+   no photo, which is a much better outcome than a broken Download button. */
+function loadCorsImage(src) {
+  return new Promise(res => {
+    if (!src) return res(null);
+    const im = new Image();
+    im.crossOrigin = "anonymous";
+    im.onload = () => res(im);
+    im.onerror = () => res(null);
+    im.src = src;
+  });
+}
+
+let heroPhoto = null;     // shown on the page: the exact airframe when there is one
+let cardImage = null;     // drawn on the canvas: CORS-safe, so the export works
+let cardCredit = "";
+
+async function loadPhotos() {
+  const win = scopeList(scope)[0];
+  const box = $("#heroPhoto");
+  if (!win) { if (box) box.innerHTML = ""; heroPhoto = null; cardImage = null; drawCard(); return; }
+
+  heroPhoto = await photoFor(win);
+  paintHeroPhoto();
+
+  /* The canvas needs a CORS-open source. For a train that is the same Commons
+     photo the hero shows; for an aircraft it is a second lookup, because the
+     hero's planespotters image cannot be exported. */
+  let safe = heroPhoto && !heroPhoto.exact ? heroPhoto : null;
+  if (!safe) {
+    const q = win.photoQuery || (win.kind === "plane" ? win.title : win.title + " train");
+    const p = await commonsPhoto(q);
+    if (p) safe = Object.assign({ exact: false }, p);
+  }
+  cardImage = await loadCorsImage(safe && safe.src);
+  cardCredit = safe && safe.cred ? "photo: " + safe.cred.slice(0, 46) : "";
+  drawCard();
+}
+
+function paintHeroPhoto() {
+  const box = $("#heroPhoto");
+  if (!box) return;
+  if (!heroPhoto) { box.innerHTML = ""; return; }
+  const cred = heroPhoto.exact
+    ? "This aircraft · " + (heroPhoto.cred ? "photo © " + esc(heroPhoto.cred) + " · " : "") + "planespotters.net"
+    : "Representative photo" + (heroPhoto.cred ? " · " + esc(heroPhoto.cred) : "") + " · Wikimedia Commons";
+  box.innerHTML =
+    `<a href="${esc(heroPhoto.link || "#")}" target="_blank" rel="noopener noreferrer">
+       <img src="${esc(heroPhoto.src)}" alt="" loading="lazy" />
+     </a><div class="cred">${cred}</div>`;
+}
+
+/* ---- the share card ------------------------------------------------------
+   Drawn rather than screenshotted so it is legible at thumbnail size in a
+   timeline, which a photo of a dense departure board is not. Two shapes because
+   the platforms crop differently: 1080x1080 survives Instagram's square grid,
+   1200x675 is what X and Bluesky show without cutting the type off. */
+let fmt = (localStorage.getItem(LS.fmt) === "wide") ? "wide" : "square";
+
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+/* Wrap to a pixel width, and if it still will not fit in `maxLines`, shrink the
+   face until it does. A vehicle called "Boeing 747-8F Dreamliner Freighter" has
+   to be allowed to be long — truncating the name is the one thing the card
+   cannot do, because the name IS the post. */
+function layout(g, text, font, size, maxW, maxLines) {
+  let s = size, lines;
+  for (;;) {
+    g.font = font.replace("{S}", s);
+    lines = [];
+    let line = "";
+    for (const word of String(text || "").split(/\s+/)) {
+      const t = line ? line + " " + word : word;
+      if (g.measureText(t).width <= maxW || !line) line = t;
+      else { lines.push(line); line = word; }
+    }
+    if (line) lines.push(line);
+    if (lines.length <= maxLines || s <= size * 0.55) break;
+    s -= 2;
+  }
+  return { lines, size: s };
+}
+
+function drawCard() {
+  const cv = $("#shot");
+  const W = fmt === "square" ? 1080 : 1200, H = fmt === "square" ? 1080 : 675;
+  cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  const list = scopeList(scope), win = list[0];
+  const pad = fmt === "square" ? 78 : 66;
+
+  const bg = g.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, "#0a1330"); bg.addColorStop(.55, "#0b1020"); bg.addColorStop(1, "#140d24");
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const glow = g.createRadialGradient(W, 0, 0, W, 0, W * .85);
+  glow.addColorStop(0, "rgba(78,161,255,.30)"); glow.addColorStop(1, "rgba(78,161,255,0)");
+  g.fillStyle = glow; g.fillRect(0, 0, W, H);
+
+  /* The photograph, cover-cropped across the top and faded into the card. A
+     timeline is a wall of text and a picture of the actual aircraft is the
+     thing that stops a thumb — and since livery is not in any feed, the photo
+     is the only place it can be seen at all. */
+  let photoH = 0;
+  if (cardImage) {
+    photoH = Math.round(fmt === "square" ? H * 0.46 : H * 0.42);
+    const iw = cardImage.naturalWidth, ih = cardImage.naturalHeight;
+    const s = Math.max(W / iw, photoH / ih);
+    const dw = iw * s, dh = ih * s;
+    g.save();
+    g.beginPath(); g.rect(0, 0, W, photoH); g.clip();
+    g.drawImage(cardImage, (W - dw) / 2, (photoH - dh) / 2, dw, dh);
+    /* fade the bottom third into the card colour so the type sits on ink,
+       not on whatever happened to be in the sky that day */
+    const fade = g.createLinearGradient(0, photoH * 0.45, 0, photoH);
+    fade.addColorStop(0, "rgba(10,19,48,0)");
+    fade.addColorStop(1, "#0a1330");
+    g.fillStyle = fade; g.fillRect(0, 0, W, photoH);
+    g.restore();
+    if (cardCredit) {
+      g.fillStyle = "rgba(238,243,255,.62)";
+      g.font = '500 16px "IBM Plex Mono", monospace';
+      g.textAlign = "right";
+      g.fillText(cardCredit, W - 18, photoH - 14);
+      g.textAlign = "left";
+    }
+  }
+
+  const rule = g.createLinearGradient(0, 0, W, 0);
+  rule.addColorStop(0, "#FF3D77"); rule.addColorStop(.5, "#4ea1ff"); rule.addColorStop(1, "#00E0C6");
+  g.fillStyle = rule; g.fillRect(0, 0, W, 8);
+
+  let y = photoH ? photoH + 40 : pad + 26;
+  g.fillStyle = "#93a5cf";
+  g.font = "600 " + (fmt === "square" ? 22 : 20) + 'px "IBM Plex Mono", monospace';
+  g.letterSpacing = "3px";
+  const where = !win ? "" : (scope === "all" ? (win.cityLabel || cityLabel(win.city)) : cityLabel(scope));
+  g.fillText("MOST INTERESTING TODAY" + (where ? " · " + where.toUpperCase() : ""), pad, y);
+  g.letterSpacing = "0px";
+
+  if (!win) {
+    g.fillStyle = "#eef3ff";
+    g.font = "800 46px Archivo, sans-serif";
+    g.fillText("Nothing has stood out yet.", pad, y + 90);
+    g.fillStyle = "#93a5cf"; g.font = '400 26px "IBM Plex Sans", sans-serif';
+    g.fillText("Leave a board running and check back.", pad, y + 140);
+    footer(g, W, H, pad);
+    return;
+  }
+
+  y += photoH ? 62 : (fmt === "square" ? 86 : 66);
+  const nameMax = W - pad * 2 - (fmt === "square" ? 0 : 210);
+  const nameSize = photoH ? (fmt === "square" ? 74 : 60) : (fmt === "square" ? 92 : 74);
+  const nm = layout(g, win.title, "800 {S}px Archivo, sans-serif", nameSize, nameMax, fmt === "square" ? 3 : 2);
+  g.fillStyle = "#eef3ff"; g.font = "800 " + nm.size + "px Archivo, sans-serif";
+  nm.lines.forEach(l => { g.fillText(l, pad, y); y += nm.size * 1.06; });
+
+  y += fmt === "square" ? 14 : 8;
+  g.fillStyle = "#7cc0ff";
+  g.font = "500 " + (fmt === "square" ? 32 : 27) + 'px "IBM Plex Mono", monospace';
+  const meta = [win.sub, win.detail].filter(Boolean).join("  ·  ");
+  const ml = layout(g, meta, '500 {S}px "IBM Plex Mono", monospace', fmt === "square" ? 32 : 27, W - pad * 2, 2);
+  g.font = "500 " + ml.size + 'px "IBM Plex Mono", monospace';
+  ml.lines.forEach(l => { g.fillText(l, pad, y); y += ml.size * 1.28; });
+
+  /* The reasons are the whole point of the post: a number alone invites
+     "scored how?", and a sentence answers it before anyone asks. */
+  y += fmt === "square" ? 34 : 22;
+  const maxRsn = photoH ? (fmt === "square" ? 3 : 2) : (fmt === "square" ? 4 : 3);
+  const rsn = (win.reasons || []).slice(0, maxRsn);
+  rsn.forEach(r => {
+    const chipH = fmt === "square" ? 62 : 54;
+    g.fillStyle = "rgba(255,209,102,.10)";
+    const label = cap(r.t);
+    g.font = "600 " + (fmt === "square" ? 28 : 24) + 'px "IBM Plex Sans", sans-serif';
+    const tw = Math.min(g.measureText(label).width, W - pad * 2 - 130);
+    roundRect(g, pad, y - chipH * .72, tw + 118, chipH, 12); g.fill();
+    g.fillStyle = "#ffd166";
+    g.font = "600 " + (fmt === "square" ? 24 : 21) + 'px "IBM Plex Mono", monospace';
+    g.fillText("+" + r.w, pad + 20, y);
+    g.fillStyle = "#eef3ff";
+    g.font = "600 " + (fmt === "square" ? 28 : 24) + 'px "IBM Plex Sans", sans-serif';
+    fitOne(g, label, pad + 96, y, W - pad * 2 - 120);
+    y += chipH + (fmt === "square" ? 14 : 10);
+  });
+
+  /* Runners-up fill what is otherwise a large empty band on the square card,
+     and they earn the space: they say this is a ranking of a whole day rather
+     than one lucky sighting. Skipped when the reasons already reach the score,
+     which is what happens on the wide crop. */
+  const scoreTop = H - pad - (fmt === "square" ? 92 : 74);
+  const others = list.slice(1, 3);
+  if (others.length && y < scoreTop - 150) {
+    g.strokeStyle = "#22345a"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(pad, y + 14); g.lineTo(W - pad, y + 14); g.stroke();
+    g.fillStyle = "#5f74a6"; g.font = '600 18px "IBM Plex Mono", monospace';
+    g.letterSpacing = "2px"; g.fillText("ALSO TODAY", pad, y + 44); g.letterSpacing = "0px";
+    y += 74;
+    others.forEach(o => {
+      if (y > scoreTop - 40) return;
+      g.fillStyle = "#93a5cf";
+      g.font = "600 " + (fmt === "square" ? 26 : 22) + 'px "IBM Plex Sans", sans-serif';
+      fitOne(g, o.title, pad, y, W - pad * 2 - 240);
+      g.fillStyle = "#7cc0ff"; g.textAlign = "right";
+      g.font = "600 " + (fmt === "square" ? 24 : 20) + 'px "IBM Plex Mono", monospace';
+      g.fillText(String(o.score), W - pad - 190, y);
+      if (scope === "all") {
+        g.fillStyle = "#5f74a6"; g.font = '600 17px "IBM Plex Mono", monospace';
+        g.fillText((o.cityLabel || cityLabel(o.city)).toUpperCase(), W - pad, y + 6);
+      }
+      g.textAlign = "left";
+      y += fmt === "square" ? 46 : 38;
+    });
+  }
+
+  /* score, bottom right, in the same mono face the boards use for live data */
+  const sy = H - pad - (fmt === "square" ? 92 : 74);
+  g.textAlign = "right";
+  g.fillStyle = "#ffd166";
+  g.font = "600 " + (fmt === "square" ? 108 : 88) + 'px "IBM Plex Mono", monospace';
+  g.fillText(String(win.score), W - pad, sy + (fmt === "square" ? 78 : 64));
+  g.fillStyle = "#93a5cf";
+  g.font = '600 18px "IBM Plex Mono", monospace'; g.letterSpacing = "3px";
+  g.fillText(win.kind === "plane" ? "AIRCRAFT SCORE" : "RAIL SCORE", W - pad, sy + (fmt === "square" ? 108 : 92));
+  g.letterSpacing = "0px";
+  g.textAlign = "left";
+
+  footer(g, W, H, pad);
+}
+
+function fitOne(g, text, x, y, maxW) {
+  let t = String(text || "");
+  if (g.measureText(t).width <= maxW) { g.fillText(t, x, y); return; }
+  while (t.length > 4 && g.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+  g.fillText(t + "…", x, y);
+}
+
+function footer(g, W, H, pad) {
+  g.fillStyle = "#5f74a6";
+  g.font = '500 20px "IBM Plex Mono", monospace';
+  g.letterSpacing = "2px";
+  g.fillText(SITE.toUpperCase(), pad, H - pad + 10);
+  g.letterSpacing = "0px";
+}
+
+/* ---- the caption ---------------------------------------------------------
+   Written to stand on its own in a timeline where nobody has context: what it
+   was, where, and why it won — then the link. Hashtags last, and few: a wall of
+   them reads as spam and the aviation/rail tags are the ones that actually
+   carry a post like this. */
+function buildCaption() {
+  const list = scopeList(scope), win = list[0];
+  if (!win) return "Quiet day on the boards — nothing out of the ordinary yet. " + SITE;
+  const where = scope === "all" ? (win.cityLabel || cityLabel(win.city)) : cityLabel(scope);
+  const why = (win.reasons || []).slice(0, 2).map(r => cap(r.t)).join(". ");
+  const tags = win.kind === "plane"
+    ? "#avgeek #planespotting #adsb"
+    : "#trainspotting #railfan #transit";
+  const runnerUp = list[1] ? `\n\nRunner-up: ${list[1].title} (${list[1].score}).` : "";
+  return `Most interesting over ${where} today: ${win.title}.\n\n` +
+         `${why}${why.endsWith(".") ? "" : "."} Scored ${win.score}.` +
+         runnerUp +
+         `\n\nThe boards score every plane and train they show, all day. https://${SITE}/leaderboard.html\n\n` +
+         `${tags} #${where.replace(/[^A-Za-z]/g, "")}`;
+}
+
+/* ---- share actions ------------------------------------------------------- */
+function canvasBlob() {
+  return new Promise(res => $("#shot").toBlob(res, "image/png"));
+}
+function shotName() {
+  return "transit-" + (scope === "all" ? "all" : scope) + "-" + todayStr() + ".png";
+}
+
+$("#dlBtn").onclick = async () => {
+  const b = await canvasBlob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = shotName();
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
+$("#copyCap").onclick = async () => {
+  try { await navigator.clipboard.writeText($("#caption").value); note("Caption copied.", true); }
+  catch (_) { $("#caption").select(); note("Press ⌘C / Ctrl+C to copy.", false); }
+};
+
+/* navigator.share with a file is the only route that puts this straight into
+   the Instagram or X composer on a phone. Desktop browsers mostly cannot, so
+   the fallback says what to do rather than failing silently. */
+$("#shareBtn").onclick = async () => {
+  const blob = await canvasBlob();
+  const file = new File([blob], shotName(), { type: "image/png" });
+  const text = $("#caption").value;
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text }); return; } catch (_) { return; }
+  }
+  if (navigator.share) { try { await navigator.share({ text }); return; } catch (_) {} }
+  $("#dlBtn").click();
+  note("This browser can't open a share sheet — image downloaded and caption ready to copy.", false);
+};
+
+function note(msg, ok) {
+  const n = $("#shareNote");
+  n.textContent = msg; n.className = "note " + (ok ? "ok" : "");
+  setTimeout(() => { n.className = "note"; n.textContent =
+    "The image and the caption are yours to post. Nothing is sent anywhere from this page."; }, 6000);
+}
+
+$("#fmtSq").onclick = () => setFmt("square");
+$("#fmtWide").onclick = () => setFmt("wide");
+function setFmt(v) {
+  fmt = v; try { localStorage.setItem(LS.fmt, v); } catch (_) {}
+  $("#fmtSq").classList.toggle("on", v === "square");
+  $("#fmtWide").classList.toggle("on", v === "wide");
+  drawCard();
+}
+
+/* ---- which aircraft count -----------------------------------------------
+   Scheduled airline flights by default: they have a flight number, a city pair
+   and a name people recognise, which is what makes a post land. Switching to
+   "anything that flies" puts the helicopters, bizjets and military traffic back
+   in — genuinely the rarer sightings, and the ones a spotter actually wants.
+
+   Entries already banked under the other setting are left alone rather than
+   retro-filtered: they were really seen, and quietly deleting yesterday's
+   winner because a switch moved would be worse than showing it. The change
+   takes effect from the next scoring pass on each board. */
+const PLANE_SCOPE_KEY = "tb.leaderPlaneScope";
+const planeScope = () => { try { return localStorage.getItem(PLANE_SCOPE_KEY) === "all" ? "all" : "airline"; } catch (_) { return "airline"; } };
+
+function setPlaneScope(v) {
+  try { localStorage.setItem(PLANE_SCOPE_KEY, v === "all" ? "all" : "airline"); } catch (_) {}
+  paintScope();
+}
+function paintScope() {
+  const v = planeScope();
+  $("#scopeAirline").classList.toggle("on", v === "airline");
+  $("#scopeAll").classList.toggle("on", v === "all");
+  $("#scopeNote").textContent = v === "airline"
+    ? "Scheduled airline flights only — the ones with a flight number and a route. Helicopters, private jets and military traffic are left out."
+    : "Everything the boards can see, including helicopters, private jets, survey aircraft and military flights.";
+}
+$("#scopeAirline").onclick = () => setPlaneScope("airline");
+$("#scopeAll").onclick = () => setPlaneScope("all");
+
+/* ---- share code ---------------------------------------------------------- */
+const blobId = () => { try { return (localStorage.getItem(LS.blob) || "").trim(); } catch (_) { return ""; } };
+function parseBlobId(v) {
+  const m = String(v || "").match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  return m ? m[0] : "";
+}
+function blobNote(msg, cls) { const n = $("#blobNote"); n.textContent = msg; n.className = "note " + (cls || ""); }
+
+$("#blobSave").onclick = () => {
+  const id = parseBlobId($("#blobIn").value);
+  if (!id) { blobNote("That doesn't look like a share code — it's a uuid, 36 characters with dashes.", "bad"); return; }
+  try { localStorage.setItem(LS.blob, id); } catch (_) {}
+  blobNote("Saved. Every board on this device now writes to that list.", "ok");
+  pull();
+};
+
+$("#blobNew").onclick = async () => {
+  blobNote("Creating…");
+  try {
+    const r = await fetch(BLOB_API, { method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ kind:"transit-leaders", v:1, day: todayStr(), cities: {} }) });
+    const loc = r.headers.get("Location") || "";
+    const id = parseBlobId(loc);
+    if (!id) throw new Error("no id");
+    try { localStorage.setItem(LS.blob, id); } catch (_) {}
+    $("#blobIn").value = id;
+    blobNote("Created. Put this code into your other screens, and into the GitHub secret LEADER_BLOB if you want the daily post.", "ok");
+  } catch (e) {
+    blobNote("Couldn't reach jsonblob.com just now. Nothing changed.", "bad");
+  }
+};
+
+$("#blobPull").onclick = () => pull(true);
+
+async function pull(loud) {
+  const id = blobId();
+  if (!id) { if (loud) blobNote("No share code set, so there is nothing to pull.", "bad"); return; }
+  try {
+    const r = await fetch(BLOB_API + id, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    remote = await r.json();
+    renderAll();
+    if (loud) blobNote("Pulled " + Object.keys((remote && remote.cities) || {}).length + " cities from the shared list.", "ok");
+  } catch (e) {
+    if (loud) blobNote("Couldn't read that code (" + e.message + ").", "bad");
+  }
+}
+
+/* ---- boot ---------------------------------------------------------------- */
+function renderAll() {
+  renderTabs(); renderHero(); renderRest(); renderArchive();
+  $("#caption").value = buildCaption();
+  drawCard();
+  /* Photos are a network round-trip, so the card is drawn once without one and
+     redrawn when it lands — the page is useful immediately either way. */
+  loadPhotos();
+}
+
+(function boot() {
+  const from = new URLSearchParams(location.search).get("from");
+  $("#backLink").href = from && /^[a-z]+\.html$/.test(from) ? from : cityFile(scope === "all" ? "dc" : scope);
+  $("#blobIn").value = blobId();
+  paintScope();
+  setFmt(fmt);
+  renderAll();
+  if (blobId()) pull();
+  /* Web fonts arrive after first paint, and a card drawn before they land uses
+     the fallback face — which looks wrong next to the page around it. */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawCard);
+})();
+</script>
+</body>
+</html>
