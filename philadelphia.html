@@ -36,6 +36,7 @@
 <script src="mascot-buddy.js?v=6" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
+<script src="fit-cards.js?v=5" defer></script>
 <script src="atlasrows.js?v=1" defer></script>
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
@@ -1977,20 +1978,19 @@ async function fetchPlanes(){
   renderPlanes(ac);
   drawPlanes(ac);
 }
-/* third row line: route · where it is relative to you · heading · squawk.
+/* third row line: tail · where it is relative to you · heading · squawk.
+   The origin/destination pair used to lead this line and now leads the .sub
+   line above instead -- see renderPlanes. What is left is radio detail.
    Built as DOM nodes rather than innerHTML -- every field here is unauthenticated
    radio the board didn't originate, so none of it is trusted as markup. */
-function planeRouteLine(a, rt){
+function planeRouteLine(a){
   const d=el("div","route");
   const sep=()=>{ if(d.childNodes.length) d.appendChild(document.createTextNode(" · ")); };
-  if(rt){
-    sep();
-    const ap=el("span","ap");
-    ap.append(el("b",null,rt.from), document.createTextNode(" → "), el("b",null,rt.to));
-    d.appendChild(ap);
-    if(rt.fromName && rt.toName) d.title=`${rt.fromName} → ${rt.toName}`;
-  } else if(a.r){
-    sep(); d.appendChild(document.createTextNode(a.r));   // no scheduled route: show the tail number
+  /* The tail is unconditional now. It used to appear only when there was no
+     scheduled route, because it was standing in for one; with the route gone
+     from this line it is simply the first piece of radio detail. */
+  if(a.r){
+    sep(); d.appendChild(document.createTextNode(a.r));
   }
   if(a._dist!=null){ sep(); d.appendChild(document.createTextNode(`${a._dist.toFixed(1)} nm ${compass(a.dir)}`.trim())); }
   const hdg = typeof a.track==="number" ? a.track : (typeof a.true_heading==="number" ? a.true_heading : null);
@@ -2013,12 +2013,20 @@ function renderPlanes(ac){
     const lg=airlineLogoEl(a); if(lg) destLine.appendChild(lg);
     destLine.appendChild(document.createTextNode(a.desc||a.t||"Aircraft"));
     mid.appendChild(destLine);
-    mid.appendChild(el("div","sub", [
+    /* Operator, then where it is going. The airport pair used to sit on the
+       third line, which Atlas has to hide to fit an aircraft into a card at
+       all -- and it is the most interesting thing on the row, so it moves up
+       here rather than off the board. Speed stands in when a flight has no
+       scheduled route (general aviation, mostly); the year alone read as noise
+       at a glance. MOVED, not copied -- planeRouteLine no longer draws it, so
+       nothing shows the same pair twice in the styles that keep both lines. */
+    const subEl=el("div","sub", [
       operatorFor(a),
-      a.year,
-      a.gs?Math.round(a.gs)+" kt":"",
-    ].filter(Boolean).join(" · ")));
-    mid.appendChild(planeRouteLine(a, rt));
+      rt ? `${rt.from} → ${rt.to}` : (a.gs?Math.round(a.gs)+" kt":""),
+    ].filter(Boolean).join(" · "));
+    if(rt && rt.fromName && rt.toName) subEl.title=`${rt.fromName} → ${rt.toName}`;
+    mid.appendChild(subEl);
+    mid.appendChild(planeRouteLine(a));
     const times=el("div","times");
     times.appendChild(el("div","alt", typeof a.alt_baro==="number"? a.alt_baro.toLocaleString()+"′" : (a.alt_baro||"—")));
     times.appendChild(el("div","sched", vertText(a)));
