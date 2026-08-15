@@ -969,24 +969,22 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body .card{
   background:none; border:0; border-radius:0; box-shadow:none;
   padding:14px 0 16px; margin:0;
-  /* min-height:AUTO, not 0. This is the difference between a card that gives
-     up space and one that eats its own header. With 0, flex may shrink a card
-     below its own content and overflow:hidden then cuts the heading off —
-     measured on a real board: busCard at 85px holding 124px of content, and
-     the Spotter card slicing through its statline. `auto` resolves to the
-     card's min-content, which is heading + statline + the list floor below, so
-     a card can be squeezed down to exactly its chrome and no further. The list
-     keeps absorbing everything above that, because it is the flex:1 child and
-     it scrolls. */
-  /* min-height:0 + overflow:hidden, and both are deliberate after trying the
-     alternative. `min-height:auto` looks like the safer floor but only takes
-     effect when overflow is visible (the flexbox automatic-minimum-size rule),
-     and making overflow visible to unlock it removes the definite box the list
-     needs to shrink INTO — the card then sizes to its content, the list never
-     shrinks, and the rail overflowed by 787px on a real board. So: the card
-     shrinks, and the list floor below is what stops a heading ending up over
-     nothing. */
-  flex:0 1 auto; min-height:0; max-height:none; overflow:hidden;
+  /* min-height is a real floor of one whole row -- heading 28px + row 58px +
+     30px of chrome, measured on the live board, rounded up to 8em because rows
+     are not all one height (Today's Best runs 66px against Metrorail's 58px).
+
+     Not 0: with a 0 floor, flex handed Trains six departures and squeezed four
+     other cards down to a bare heading with nothing under it. Seven cards at
+     this floor is 896px of the 1080px rail, so there is always room for every
+     card to show at least one line.
+
+     Not `auto` either, though that looks like the natural way to say the same
+     thing: it only takes effect when overflow is visible (the flexbox
+     automatic-minimum-size rule), and making overflow visible removes the
+     definite box the list shrinks INTO -- the card then sizes to its content,
+     the list never shrinks, and the rail overflowed by 787px on a real board.
+     A length floor works with overflow:hidden; `auto` does not. */
+  flex:0 1 auto; min-height:8em; max-height:none; overflow:hidden;
 }
 :root[data-style="atlas"] body .card .list{
   display:flex; flex-direction:column; gap:2px;
@@ -995,7 +993,10 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 /* :not(.mini) or the floor fights animateMini()'s inline max-height:0 and
    leaves a stub. :not(:empty) is the other direction — without it a shrunk
    Service Alerts card announces "2 active" above nothing. */
-:root[data-style="atlas"] body .card:not(.mini) .list:not(:empty){ min-height:2.4em }
+/* One whole row, not 2.4em. A floor shorter than a row let flex hand Trains
+   six departures while four other cards were squeezed down to a bare heading
+   with nothing under it. */
+:root[data-style="atlas"] body .card:not(.mini) .list:not(:empty){ min-height:3.7em }
 :root[data-style="atlas"] body .card::after{
   left:0; right:0; bottom:0; height:46px; border-radius:0;
   background:linear-gradient(180deg, rgba(6,12,26,0), var(--atlas-plate));

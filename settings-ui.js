@@ -594,3 +594,70 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
   else run();
 })();
+
+/* ------------------------------------------------------------------ *
+ * Atlas: never clip a departure row in half.
+ *
+ * Atlas gives each card `min-height:0; overflow:hidden` so the stack of
+ * cards shrinks to fit the rail exactly. That fits, but it cuts whichever
+ * row straddles the bottom edge straight through the text, and the sliced
+ * half then sits under the next card's heading looking like a rendering
+ * bug. Measured on the live DC board: 5 of 7 cards had one sliced row.
+ *
+ * So hide any row that does not fit *entirely* inside its card.
+ *
+ * visibility, not display: hiding with `display:none` would shorten the
+ * list, which lets the flex card shrink, which can bring the row back
+ * inside the box -- and it reappears on the next pass, forever. Keeping
+ * the row's geometry means hiding it changes no layout at all, so a pass
+ * always settles in one go.
+ * ------------------------------------------------------------------ */
+(function () {
+  var TAG = "data-atlas-cut", timer = 0;
+
+  function show(row) { row.style.visibility = ""; row.removeAttribute(TAG); }
+
+  function trim() {
+    timer = 0;
+    var marked = document.querySelectorAll("[" + TAG + "]"), i;
+    if (document.documentElement.getAttribute("data-style") !== "atlas") {
+      for (i = 0; i < marked.length; i++) show(marked[i]);   /* switched away */
+      return;
+    }
+    var cards = document.querySelectorAll(".card"),
+        rail = document.querySelector("main > .col:last-child"),
+        railBottom = rail ? rail.getBoundingClientRect().bottom : Infinity;
+    for (var c = 0; c < cards.length; c++) {
+      /* Every unit a list can hold, not just .row: an alert `.msg` and an
+         `.empty` ("No buses predicted right now") sit directly in the list
+         and were being sliced through the middle exactly like rows were. */
+      /* Clip against whichever edge comes first: the card's own bottom, or
+         the bottom of the rail holding it. If a board ever has more cards
+         than the rail can seat, the last card runs off the rail and only the
+         rail edge cuts it -- the card's own bottom would say it fits. */
+      var bottom = Math.min(cards[c].getBoundingClientRect().bottom, railBottom),
+          rows = cards[c].querySelectorAll(".list > *, .list .row");
+      for (var r = 0; r < rows.length; r++) {
+        /* 1px of slack: sub-pixel layout should not hide a row that fits. */
+        var cut = rows[r].getBoundingClientRect().bottom > bottom + 1;
+        if (cut && !rows[r].hasAttribute(TAG)) {
+          rows[r].style.visibility = "hidden";
+          rows[r].setAttribute(TAG, "1");
+        } else if (!cut && rows[r].hasAttribute(TAG)) show(rows[r]);
+      }
+    }
+  }
+
+  function schedule() { if (!timer) timer = setTimeout(trim, 120); }
+
+  /* childList/characterData only. Our own writes are attribute writes, so
+     they cannot re-trigger this -- no feedback loop. Text edits do fire it,
+     which is what we want: every countdown tick re-checks the fit. */
+  if (window.MutationObserver) {
+    new MutationObserver(schedule).observe(document.documentElement,
+      { childList: true, subtree: true, characterData: true });
+  }
+  window.addEventListener("resize", schedule);
+  setInterval(schedule, 10000);          /* backstop for silent re-layouts */
+  schedule();
+})();
