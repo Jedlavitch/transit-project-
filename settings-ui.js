@@ -700,13 +700,55 @@
     }
   }
 
-  function schedule() { if (!timer) timer = setTimeout(trim, 120); }
+  /* A frame callback AND the old timer, first one to arrive wins.
+     This pass can only run after layout, so the gap between a list rebuilding
+     itself and the trim landing is a gap with a sliced row on screen. At the
+     120ms this used to wait, that is about seven frames of half-glyphs sitting
+     under the next card's heading, every time a feed ticks -- which is most of
+     what "the board looks glitchy" turns out to be. A frame callback lands
+     before the paint that would have shown them, so the cut row is never drawn.
+
+     The timer stays as a backstop because rAF does not fire when the browser
+     considers the tab hidden, and "hidden" is not the same question as "on a
+     screen": the preview pane this was tested in reports visibilityState
+     "hidden" while displaying the board perfectly well, and signage wrappers
+     can do the same. Dropping the timer left the trim permanently unrun there
+     -- every card sliced, nothing marked -- which is a far worse failure than
+     the flash this is fixing. Whichever callback arrives first does the work
+     and clears the claim; the other finds it clear and returns. */
+  var raf = window.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+  function fire() { if (timer) trim(); }        /* trim() clears timer itself */
+  function schedule() {
+    if (timer) return;
+    timer = 1;
+    raf(fire);
+    setTimeout(fire, 120);
+  }
+
+  /* Map churn does not schedule.
+     The observer watches the whole document because the rail's geometry can
+     move for reasons outside it, and that is worth keeping -- but Leaflet adds
+     and removes tiles and markers on every frame of a pan, and at rAF cadence
+     that would re-measure every card in the rail for the length of a drag. A
+     record set that is ENTIRELY map churn is dropped; a mixed one still runs,
+     so anything else moving in the same frame is never masked by it. */
+  function allFromMap(recs) {
+    for (var i = 0; i < recs.length; i++) {
+      var t = recs[i].target;
+      if (t && t.nodeType === 3) t = t.parentNode;        /* characterData */
+      if (!t || !t.closest) return false;                 /* can't tell: trim */
+      if (!t.closest(".leaflet-container")) return false;
+    }
+    return true;
+  }
 
   /* childList/characterData only. Our own writes are attribute writes, so
      they cannot re-trigger this -- no feedback loop. Text edits do fire it,
      which is what we want: every countdown tick re-checks the fit. */
   if (window.MutationObserver) {
-    new MutationObserver(schedule).observe(document.documentElement,
+    new MutationObserver(function (recs) {
+      if (!allFromMap(recs)) schedule();
+    }).observe(document.documentElement,
       { childList: true, subtree: true, characterData: true });
   }
   window.addEventListener("resize", schedule);
