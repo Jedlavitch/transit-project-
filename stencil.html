@@ -2356,20 +2356,74 @@ function curPad(){ const v=parseFloat(localStorage.getItem("tb.safePad")); retur
 addEventListener("resize", ()=>{
   try{ if(localStorage.getItem("tb.uiZoom")==null) applyDisplay(autoDisplay().z, curPad()); }catch(e){}
 });
-/* Scrolling with a TV remote. The boards themselves never scroll by design, but
-   the Settings panel is taller than a screen -- and a remote has no pointer or
-   wheel, so it was effectively unreachable past the fold. Map the D-pad onto it:
-   up/down nudge, page up/down jump, and the panel scrolls to keep whatever is
-   focused in view. Typing in a field still behaves normally. */
+/* Driving the Settings panel with a TV remote.
+
+   The panel is taller than a screen and a remote has no pointer or wheel, so
+   it was unreachable past the fold. The first attempt scrolled it -- but it
+   also called preventDefault() on the arrow keys in the CAPTURE phase, and
+   arrow keys are exactly what webOS and Tizen use to drive their own spatial
+   navigation. So the keys added to make the panel reachable were the keys
+   stopping focus from ever moving off whatever happened to have it. Worst
+   case: the 150%/175% size buttons are the documented fix for a television
+   the board cannot auto-detect, and they could not be focused on the
+   television that needs them.
+
+   Up/down now MOVE FOCUS through the panel's controls, and the focusin
+   handler below scrolls whatever lands there into view. Page up/down still
+   bulk-scroll, and a real text field still keeps the arrows for its caret. */
+function tvFocusables(box){
+  const all = box.querySelectorAll("button,[href],input,select,textarea,[tabindex]");
+  const out = [];
+  for(let i=0;i<all.length;i++){
+    const el = all[i];
+    if(el.disabled) continue;
+    if(el.getAttribute("tabindex") === "-1") continue;
+    if(el.type === "hidden") continue;
+    /* getClientRects() rather than offsetParent: it is empty for anything in a
+       display:none subtree -- which is how the panel's tab rail hides the
+       groups that are off-tab -- while still counting sticky and fixed
+       chrome, whose offsetParent is null even when plainly on screen. */
+    if(!el.getClientRects().length) continue;
+    out.push(el);
+  }
+  return out;
+}
+function isTextEntry(el){
+  if(!el) return false;
+  const t = el.tagName;
+  /* TEXTAREA and SELECT only, NOT a single-line <input>. Up/down do nothing
+     useful in a one-line field -- the caret moves with left/right and
+     Home/End -- so handing the arrows over there means focus lands in the
+     address box on a television and can never leave it again, because a
+     remote has no Tab key. Measured exactly that: six presses of Down, still
+     sat in the same input. */
+  return t === "TEXTAREA" || t === "SELECT";
+}
 addEventListener("keydown", e=>{
   const box=document.querySelector("#setup.show .box");
   if(!box) return;
-  if(/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||"")) return;
   const big = e.key==="PageDown"||e.key==="PageUp";
   const dn = e.key==="ArrowDown"||e.key==="PageDown";
   const up = e.key==="ArrowUp"||e.key==="PageUp";
   if(!dn && !up) return;
-  box.scrollBy({ top:(dn?1:-1)*(big?Math.round(box.clientHeight*0.85):110), behavior:"smooth" });
+  if(!big && isTextEntry(e.target)) return;
+  if(big){
+    box.scrollBy({ top:(dn?1:-1)*Math.round(box.clientHeight*0.85), behavior:"smooth" });
+    e.preventDefault();
+    return;
+  }
+  const items = tvFocusables(box);
+  const at = items.indexOf(document.activeElement);
+  const next = at < 0 ? (dn ? 0 : items.length-1) : at + (dn ? 1 : -1);
+  /* Nothing focusable, or already at an end: nudge the panel instead of
+     trapping focus, so the sticky header and footer can still be brought
+     into view rather than the selection wrapping around unpredictably. */
+  if(!items.length || next < 0 || next >= items.length){
+    box.scrollBy({ top:(dn?1:-1)*110, behavior:"smooth" });
+    e.preventDefault();
+    return;
+  }
+  items[next].focus();
   e.preventDefault();
 }, true);
 // keep D-pad focus visible inside the scrolling panel
