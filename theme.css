@@ -640,11 +640,24 @@ body header{
    The boards are kiosk dashboards: one non-scrolling viewport, cards sharing it
    equally (grid-auto-rows:1fr), an operator zoom for TVs. On a phone all of
    that works against you -- eight cards splitting ~770px leaves ~60px each, so
-   fitList trims every departure row and the cards go blank. Below 640px, become
+   fitList trims every departure row and the cards go blank. Below 480px, become
    a normal scrolling page instead: map up top, then each card sized by its own
    content with the list capped at ~7 rows (fitList trims to the cap). The
-   kiosk zoom/overscan config is TV furniture, so it resets to 1 here. */
-@media (max-width:640px){
+   kiosk zoom/overscan config is TV furniture, so it resets to 1 here.
+
+   480px, not the 640px this originally shipped at: 481-1220px now gets its own
+   compact tablet layout instead (dc.html's own <style>, and autoDisplay()
+   forces --ui-zoom to 1 across that whole span) -- shrinking the full desktop
+   board via zoom down to a Nexus-7-width screen measured out at a genuinely
+   unreadable ~5px real font, and the same math means every width in that band
+   was degraded to some real degree, not just the narrowest ones. Reflowing to
+   a purpose-built compact layout at real (zoom:1) text size fixes the
+   legibility problem this phone branch was never meant to solve; this branch
+   now only needs to cover screens too narrow for even a compact reflow to
+   read comfortably. No mainstream phone's portrait CSS width gets close to
+   480px (iPhone 14 Pro Max is 430px, the widest common Android flagships sit
+   around 412px), so this still catches every actual phone. */
+@media (max-width:480px){
   /* `html body` (0,0,2) so this beats each board's own later `body{overflow:
      hidden}` (0,0,1) -- programmatic scrollTop works under overflow:hidden,
      which is how the first cut of this block slipped through testing, but a
@@ -969,14 +982,15 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body .card{
   background:none; border:0; border-radius:0; box-shadow:none;
   padding:14px 0 16px; margin:0;
-  /* min-height is a real floor of one whole row -- heading 28px + row 58px +
-     30px of chrome, measured on the live board, rounded up to 8em because rows
-     are not all one height (Today's Best runs 66px against Metrorail's 58px).
+  /* min-height is a real floor of one whole row -- 7.3em = heading 28px + row
+     58px + 30px of chrome, measured on the live board.
 
      Not 0: with a 0 floor, flex handed Trains six departures and squeezed four
      other cards down to a bare heading with nothing under it. Seven cards at
      this floor is 896px of the 1080px rail, so there is always room for every
-     card to show at least one line.
+     card to show at least one departure. 8em not 7.3em because rows are not
+     all one height -- Today's Best runs 66px against Metrorail's 58px, and at
+     7.3em its single row missed the cut and left a heading over nothing.
 
      Not `auto` either, though that looks like the natural way to say the same
      thing: it only takes effect when overflow is visible (the flexbox
@@ -989,22 +1003,21 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 
 /* A collapsed card is collapsed. The 8em floor above is for cards showing a
    list; applied to a .mini card it forces the thing back open to 128px, which
-   is the opposite of what collapsing it asked for -- and on the DC board those
-   two forced-open cards were holding 117px that Metrorail wanted. */
+   is the opposite of what tapping the collapse control asked for. */
 :root[data-style="atlas"] body .card.mini{ min-height:0 }
 
 /* Departures first.
-   The rail seats about eleven lines. Cards splitting it evenly left Metrorail
-   -- the reason anyone mounts this board -- showing ONE departure while
-   Spotted and Today's Best each held a slot of their own. So the three cards
-   that are context rather than departures are capped at the one-line floor,
-   and every pixel that frees goes to the cards with times in them.
+   The rail seats about eleven lines. Seven cards splitting it evenly left
+   Metrorail -- the reason anyone mounts this board -- showing ONE departure
+   while Spotted and Today's Best each held a slot of their own. So the three
+   cards that are context rather than departures are capped at the one-line
+   floor, and every pixel that frees goes to the cards with times in them.
 
    By id, deliberately. The obvious alternative -- cap whatever has no .times
    in it -- reads well but does not survive contact with the markup: Today's
    Best carries a .times too, and MARC has no .live, so no content test
    separates these three from the departure boards. A board without these ids
-   caps nothing, which is the right way to fail. */
+   simply caps nothing, which is the right way to fail. */
 :root[data-style="atlas"] body #alertCard,
 :root[data-style="atlas"] body #spotCard,
 :root[data-style="atlas"] body #leaderCard{ max-height:8em }
@@ -1012,25 +1025,44 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 /* At television zoom, departures-only.
    Scaling the board up for a TV divides the rail's height in CSS pixels by
    the zoom -- 944px of usable rail at 100%, 617px at 175%, 404px at 200% --
-   while the 8em card floor does not move. Seven cards stop fitting, and
-   capping the context cards at one line each is no longer enough: at every TV
-   rung Metrorail was down to a SINGLE train while Alerts, Spotted and Today's
-   Best each still held a line. Across a room, one departure is not a
-   departure board. Above 1.4x they leave entirely and the rail goes to the
-   times. .atlas-tight is set from the zoom setting in settings-ui.js. */
+   while the 8em card floor does not move. Seven cards simply stop fitting,
+   and capping the context cards at one line each is no longer enough: at
+   every TV rung Metrorail was down to a SINGLE train while Alerts, Spotted
+   and Today's Best each still held a line. Across a room, one departure is
+   not a departure board. So above 1.4x they leave entirely and the whole
+   rail goes to the times. The .atlas-tight class is set from the zoom
+   setting in settings-ui.js. */
 :root[data-style="atlas"].atlas-tight body #alertCard,
 :root[data-style="atlas"].atlas-tight body #spotCard,
 :root[data-style="atlas"].atlas-tight body #leaderCard{ display:none }
+/* overflow:hidden, NOT overflow-y:auto. A scrollable list is wrong twice over
+   on this board.
+
+   It does not survive a refresh. The lists are rebuilt by innerHTML on every
+   feed tick -- Metrorail every 20s, planes every few seconds -- and replacing
+   the children resets scrollTop to 0, so a scroll down is yanked back to the
+   top a moment later, on its own, repeatedly.
+
+   And what it scrolls to is blank. The rows past the card's edge are hidden by
+   the atlas-cut pass in settings-ui.js, which hides by POSITION -- scrolling
+   moves a row into the box while it is still visibility:hidden, so the reward
+   for scrolling is empty space until the next pass, and then rows blinking in
+   and out as it catches up.
+
+   Neither is fixable while the box scrolls, and neither needs to be: this is a
+   wall display, so the cut is the design. The trim pass makes the cut land
+   between rows instead of through one. */
 :root[data-style="atlas"] body .card .list{
   display:flex; flex-direction:column; gap:2px;
-  flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden;
+  flex:1 1 auto; min-height:0; max-height:none; overflow:hidden;
 }
 /* :not(.mini) or the floor fights animateMini()'s inline max-height:0 and
    leaves a stub. :not(:empty) is the other direction — without it a shrunk
    Service Alerts card announces "2 active" above nothing. */
 /* One whole row, not 2.4em. A floor shorter than a row let flex hand Trains
    six departures while four other cards were squeezed down to a bare heading
-   with nothing under it. */
+   with nothing under it. Seven cards each needing a heading plus one row is
+   ~686px of the 1080px rail, so there is always room for this. */
 :root[data-style="atlas"] body .card:not(.mini) .list:not(:empty){ min-height:3.7em }
 :root[data-style="atlas"] body .card::after{
   left:0; right:0; bottom:0; height:46px; border-radius:0;
@@ -1104,6 +1136,17 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body .list .row .live.arr{
   font-size:calc(var(--live-fs) * 1.05); padding:2px 10px; border-radius:3px;
 }
+/* The plane row's hero is its ALTITUDE — a plane overhead has no departure
+   time, so .alt is what sits in the left column where every other card puts a
+   countdown. Left at its own 15px it was the one number on the rail that did
+   not belong to the ruled vertical: a small grey figure adrift in a 9.2em
+   column sized for "in 27 min", which is what made the card read as broken
+   rather than different. Same ramp as .live. Worst case measured 105px of the
+   147, so nothing overflows -- "41,000′" is as wide as the string ever gets. */
+:root[data-style="atlas"] body .list .row .times .alt{
+  font-size:calc(var(--live-fs) * 1.72); line-height:1.02; letter-spacing:-.02em;
+  text-shadow:var(--atlas-ink-shadow);
+}
 
 /* ---- 7. colour never becomes text ---------------------------------------
    Cancels the gradient text-clips back to solid colour. Half of a clipped
@@ -1132,153 +1175,7 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body.map-full #mapFsBtn{ left:26px; bottom:26px }
 
 }   /* end @media (min-width:1221px) */
-/* ============================================================================
-   COMMAND BAR REDESIGN
-   The header was one flat flex row of eight peers: mark, wordmark, city
-   select, five view links, three buttons, clock. Everything carried the same
-   visual weight, so nothing read as primary, and at tablet widths it wrapped
-   into a ragged second row.
 
-   Regrouped into four bands with real hierarchy -- identity, context,
-   navigation, controls+status -- using only CSS, because the markup is
-   duplicated across eleven boards and the stencil and this has to reach all
-   of them from one place. `body header` beats each board's own `header`
-   rule at specificity (0,1,1) vs (0,0,1) regardless of source order, which
-   is the same technique the grid fixes above use.
-
-   NOT touched: #settingsBtn. settings-ui.js gives it an accent fill and a
-   label with !important, deliberately, so the one control that opens
-   everything does not read as the least important. It stays the single
-   primary action; everything else here is quieter than it was.
-   ============================================================================ */
-
-body header{
-  gap:12px; padding:9px 16px;
-  box-shadow:none;
-  border-bottom:2px solid transparent;
-  border-image:linear-gradient(90deg,var(--brand-pink),var(--brand-blue) 50%,var(--brand-teal)) 1;
-}
-
-/* ---- 1. identity ---------------------------------------------------------
-   The location was inline after the wordmark, which made the title a long
-   ragged string and cost ~180px of the row. Stacked under it instead: same
-   information, half the width, and it now reads as a subtitle rather than as
-   a second title. */
-body header .title{ font-size:17px; letter-spacing:.2px; line-height:1.15; min-width:0 }
-body header .title small,
-body header .title #tbLocBtn{
-  display:block; margin:2px 0 0; font-size:11px; font-weight:500;
-  color:var(--muted); letter-spacing:.02em; white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; max-width:26ch;
-}
-/* locpicker.js swaps the <small> for a <button> so the location is operable
-   from a keyboard and a TV remote. It therefore has to be caught by the same
-   rules -- matching only `small` silently returned the location to an inline
-   string and cost the header 12px of height. flex, not the block above, so
-   the caret stays on the baseline next to the text. */
-body header .title #tbLocBtn{ display:flex; align-items:center; gap:4px; max-width:30ch }
-
-/* ---- 2. context: the city switcher --------------------------------------
-   Given a hairline to its left so the bar reads as identity | everything
-   else, rather than as one undifferentiated run of controls. */
-body header .city-picker{ position:relative; padding-left:12px; flex:none }
-body header .city-picker::before{
-  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
-  width:1px; height:24px; background:var(--line);
-}
-body header .city-picker select{ font-weight:600; border-radius:9px; padding:7px 30px 7px 11px }
-
-/* ---- 3. navigation: one segmented group ---------------------------------
-   Five separate bordered pills competed with the three real buttons beside
-   them. One tray with quiet items inside reads as a single navigation
-   control, and drops the border count from five to one. */
-body header .view-links{
-  display:flex; gap:2px; padding:3px; flex:none;
-  background:var(--panel2); border:1px solid var(--line); border-radius:11px;
-}
-body header .view-links a{
-  background:transparent; border:0; border-radius:8px;
-  padding:6px 11px; font-size:12.5px; font-weight:600; color:var(--muted);
-  line-height:1; transition:background .15s ease, color .15s ease;
-}
-body header .view-links a:hover,
-body header .view-links a:focus-visible{ background:var(--panel); color:var(--text) }
-
-/* ---- 4. controls + status ------------------------------------------------
-   fs and minimise-all become equal squares so they read as a matched pair of
-   icon actions; the clock stops competing with the wordmark (28px -> 21px,
-   which is still the largest mono figure on the bar). */
-body header #fsBtn,
-body header #minAllBtn{
-  width:34px; height:34px; padding:0; border-radius:9px;
-  display:inline-flex; align-items:center; justify-content:center;
-  font-size:14px; line-height:1; flex:none;
-}
-body header #minAllBtn{ margin-right:2px }
-body header .clock{ margin-left:auto; text-align:right; flex:none }
-body header .clock .time{ font-size:21px; letter-spacing:.01em }
-body header .clock .meta{ font-size:10.5px; margin-top:2px }
-
-/* ---- 5. graceful degradation --------------------------------------------
-   Shed information in order of importance instead of wrapping: the coordinate
-   readout goes first, then the location subtitle, then the nav tray tightens.
-   The board itself already stacks at 1220, so these thresholds sit inside
-   that and keep the bar on one line down to iPad portrait. */
-@media (max-width:1200px){
-  body header{ gap:10px; padding:8px 12px }
-  body header .clock .meta{ display:none }
-  body header .clock .time{ font-size:19px }
-}
-@media (max-width:1000px){
-  body header .title small,
-  body header .title #tbLocBtn{ display:none }
-  body header .view-links a{ padding:6px 9px; font-size:12px }
-}
-@media (max-width:820px){
-  body header{ gap:8px }
-  body header .title{ font-size:15px }
-  body header .city-picker{ padding-left:8px }
-  body header .city-picker::before{ display:none }
-  body header .view-links{ padding:2px }
-  body header .view-links a{ padding:5px 7px; font-size:11.5px }
-  body header #fsBtn, body header #minAllBtn{ width:30px; height:30px }
-}
-
-/* ============================================================================
-   ATLAS: drop the repeated stop label, and slide departures in
-   Atlas is the wall-display style, and on a board sitting in one place every
-   system's nearest stop is the same stop -- "SOUTH STATION · 0.0 MI" printed
-   once under Subway, once under Commuter Rail, once under Silver Line, saying
-   nothing new each time and costing a line of the card every time. The default
-   style keeps it: there the cards are read close up and the label is what tells
-   you which platform a departure belongs to.
-   ============================================================================ */
-:root[data-style="atlas"] .list .stop-label{ display:none }
-
-/* One departure arriving at a time, sliding on from the left. The stagger is
-   indexed by atlasrows.js so rows come in as a wave rather than together; it
-   is capped at eight because past that the last row would wait almost a second
-   and a wall display should be settled before anyone looks up. */
-@keyframes tbAtlasSlide{
-  from{ transform:translateX(-14%); opacity:0 }
-  to  { transform:none;             opacity:1 }
-}
-:root[data-style="atlas"] .list .row{
-  animation:tbAtlasSlide .42s cubic-bezier(.22,.61,.36,1) both;
-}
-/* --tbi is stamped by atlasrows.js and counts ROWS ONLY. nth-child cannot do
-   this: it counts every child of .list, and the stop/direction labels are
-   children too -- hidden in Atlas but still holding positions -- so the wave
-   skipped steps wherever a label sat between two departures. The 0 fallback
-   means a board that somehow loads without the script still animates, just
-   without the stagger, rather than not animating at all. */
-:root[data-style="atlas"] .list .row{ animation-delay:calc(var(--tbi,0) * .06s) }
-
-/* A kiosk that re-renders its list every few seconds would otherwise replay
-   the whole wave forever in someone's peripheral vision. */
-@media (prefers-reduced-motion:reduce){
-  :root[data-style="atlas"] .list .row{ animation:none }
-}
 /* ------------------------------------------------------------------------
    Station labels off on smaller screens.
 
