@@ -1,5 +1,12 @@
 # The daily post
 
+> **Two bots now.** This page describes `post-daily.py`, which posts what your
+> *browsers* saw. There is also **`roundup.py`** — a standalone bot that gathers
+> its own data for all eleven cities and posts one round-up to Threads, Mastodon
+> and Bluesky, whether or not any board is open. See [The round-up bot](#the-round-up-bot)
+> at the bottom. Both can run; neither depends on the other.
+
+
 Every board scores the planes and trains it shows. At the end of the day the
 strangest one wins, and this posts it.
 
@@ -217,3 +224,87 @@ Run the poster anywhere, not just on GitHub:
 ```bash
 LEADER_BLOB=<your-share-code> DRY_RUN=1 python3 post-daily.py
 ```
+
+---
+
+# The round-up bot
+
+`roundup.py` is the standalone one. It needs no browser, no share code and no board
+open anywhere: it gathers its own data for all eleven cities, scores **aircraft and
+trains separately**, and posts one card a day.
+
+```
+ADS-B proxy (per city)  ─┐
+amtraker (one national)  ├─►  roundup.py  ─►  card  ─►  push  ─►  Threads
+GTFS bundles (on disk)  ─┘                      └────────────────►  Mastodon, Bluesky
+```
+
+## What it can and cannot see
+
+| | source | delays? |
+|---|---|---|
+| Aircraft, all 11 cities | your ADS-B proxy | n/a |
+| Amtrak, the 7 US cities | amtraker, live | **yes** |
+| Metro, tram, regional rail | GTFS bundles in this repo | **no** |
+| Zurich, Cologne, Stuttgart rail | *nothing* — those boards use live transitous, which has no bundle | — |
+
+Be clear-eyed about the bottom two rows. A bundled timetable carries no delays and
+no vehicle identity, so those trains are scored on which line and destination is
+running and how rarely the bot has seen it. And the three German-speaking cities
+produce **aircraft only**. The card renders that as an absent train, never as
+"feed unavailable" — a missing timetable and a broken feed are different claims.
+
+## Setup
+
+**Settings → Secrets and variables → Actions.**
+
+| Secret | For |
+|---|---|
+| `ADSB_URL` | **required** — your ADS-B proxy. Without it there is nothing to score. |
+| `BSKY_HANDLE`, `BSKY_APP_PASSWORD` | Bluesky — one app password, a minute's work |
+| `MASTODON_BASE_URL`, `MASTODON_TOKEN` | Mastodon — one token, scopes `write:statuses` + `write:media` |
+| `THREADS_USER_ID`, `THREADS_ACCESS_TOKEN` | Threads — see below |
+| `CARD_PHOTO` | set to `0` to draw the card without a photograph |
+
+Then **Actions → Daily round-up → Run workflow** with *dry run* ticked. It prints the
+winners and all three captions and posts nothing.
+
+## Threads is the awkward one
+
+Two facts shape the whole design, both verified against Meta's docs:
+
+**There is no byte upload.** Meta cURLs the image from a public HTTPS URL. So the bot
+renders the card, commits and pushes it to `shots/daily/YYYY-MM-DD.png`, waits for
+Pages to serve it, and only then calls Threads. A dated path is used deliberately: a
+URL that has never existed cannot be served stale by Meta's fetcher or the CDN.
+
+**The token expires every 60 days.** Getting one is a three-leg OAuth flow in a
+browser: create a Meta app with the Threads use case, authorise with scopes
+`threads_basic` and `threads_content_publish`, exchange the code for a short-lived
+token, then exchange that for a long-lived one *within the hour*. The `user_id` comes
+back in leg 2 — save it then. The bot does **not** auto-rotate: that needs a PAT and
+libsodium, and this repo is stdlib-only. Instead it fails loudly on Graph error 190
+so you know to redo it. Put a reminder in your calendar for ~55 days.
+
+## What it refuses to do
+
+**Post a thin day.** If fewer than four cities produce data, it says nothing. A league
+table that is mostly empty is worse than silence.
+
+**Report a lapsed timetable as a quiet railway.** Bundles carry the agency's own
+service calendar and expire. An expired bundle is skipped and logged, never counted as
+zero trains.
+
+**Run twice.** Scoring, drawing, pushing and posting are one invocation. An earlier
+draft split render and post across two workflow steps, which re-scored from scratch
+and handed Meta the URL of a card built from a different snapshot of the sky.
+
+## Running it yourself
+
+```bash
+DRY_RUN=1 CITIES=dc,nyc python3 roundup.py
+```
+
+`CITIES` limits the run; leave it out for all eleven. Note the loop paces itself ~3.5s
+per city — the proxy returns empty for rapid successive calls, and without the pause
+the bot concludes most of the world has an empty sky.
