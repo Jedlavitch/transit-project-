@@ -348,8 +348,24 @@ function renderHero() {
 
 const cap = s => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
 
+/* Keep the true order, but make sure the minority kind is represented when it
+   exists at all — a page headed "the most interesting plane or train" that
+   lists nine trains has failed its own premise even when every score is right.
+   Position 1 is never swapped: saying an aircraft won when a train did would be
+   a lie, and the reasons list exists so it can be checked. */
+function mixForDisplay(list, n, minMinority) {
+  if (list.length <= n) return list.slice();
+  const head = list.slice(0, n);
+  const has = k => head.some(e => e.kind === k);
+  const short = !has("plane") ? "plane" : (!has("train") ? "train" : null);
+  if (!short) return head;
+  const missing = list.filter(e => e.kind === short).slice(0, minMinority);
+  if (!missing.length) return head;
+  return head.slice(0, Math.max(1, n - missing.length)).concat(missing);
+}
+
 function renderRest() {
-  const list = scopeList(scope).slice(1, 10), box = $("#rest");
+  const list = mixForDisplay(scopeList(scope), 10, 3).slice(1, 10), box = $("#rest");
   $("#restHead").textContent = scope === "all" ? "The rest of the day, everywhere" : "The rest of the day";
   if (!list.length) { box.innerHTML = `<p class="empty">Nothing else scored today.</p>`; return; }
   box.innerHTML =

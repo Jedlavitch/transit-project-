@@ -66,6 +66,7 @@
   }
 
   var KEEP_PER_CITY = 12;      // stored per city per day; the page shows 10
+  var KEEP_PER_KIND = 8;       // ...but each kind is guaranteed its own shelf
   var ARCHIVE_MAX   = 30;      // days of past winners kept
   var SEEN_HALFLIFE = 45;      // days after which a token is forgotten entirely
   var TICK_MS       = 20000;   // scoring pass; the boards refresh on a similar beat
@@ -254,12 +255,19 @@
   /* How much history has this city accumulated? Used to damp the learned half
      of the score: with three days of watching, "never seen before" means
      "the board only started on Tuesday". */
+  /* THE FLOOR MATTERS MORE THAN THE RAMP. Damping to literally zero on a new
+     board did not make the leaderboard humble, it made it wrong: every learned
+     signal vanished, and since ordinary airliners have almost no history-free
+     signal while every Amtrak train has a named-service or lateness bonus, the
+     card filled with trains on all eleven boards. "The first A380 this board has
+     shown" is TRUE on day one — it is merely less impressive than it will be in
+     a month. So scale it down, never out. */
   function maturity(c) {
     var days = {}, n = 0;
     for (var t in c) { if (c[t] && c[t].last) { days[c[t].last] = 1; n++; } }
     var distinct = Object.keys(days).length;
-    // full confidence at 7 days of observation AND 150 tokens on file
-    return Math.max(0, Math.min(1, Math.min(distinct / 7, n / 150)));
+    var ramp = Math.min(1, Math.min(distinct / 4, n / 80));   // full confidence sooner
+    return Math.max(0.28, ramp);                              // and never nothing
   }
 
   /* Drop tokens nothing has seen in a month and a half, so the registry cannot
@@ -379,7 +387,9 @@
     "vermonter":           [22, "a long-distance train into Vermont"],
     "borealis":            [22, "one of the newest long-distance services"],
     "pennsylvanian":       [18, "a daily through train over the Alleghenies"],
-    "acela":               [20, "the Acela — the fastest train in the country"]
+    /* An Acela is the fastest train in the country and also runs many times a
+       day past every board on the corridor. Worth naming, not worth winning. */
+    "acela":               [10, "the Acela — the fastest train in the country"]
   };
 
   /* Operators that make an aircraft interesting whatever it is. A county police
@@ -621,14 +631,19 @@
 
     var late = null;
     try { if (typeof window.amtrakLateMin === "function") late = window.amtrakLateMin(nextStop(t)); } catch (_) {}
-    if (late != null && late >= 180) push(rs, 52, "running " + Math.round(late / 60) + " hours late");
-    else if (late != null && late >= 90) push(rs, 38, late + " minutes late");
-    else if (late != null && late >= 45) push(rs, 22, late + " minutes late");
-    else if (late != null && late <= -10) push(rs, 12, Math.abs(late) + " minutes early");
+    /* LATENESS WAS OVER-REWARDED, and it is why the card filled with trains.
+       A late train is common, not interesting — the Northeast Corridor produces
+       one every hour — and at +22 for merely 45 minutes down it outscored every
+       aircraft in the sky. Only a genuinely extraordinary delay says anything. */
+    if (late != null && late >= 180) push(rs, 26, "running " + Math.round(late / 60) + " hours late");
+    else if (late != null && late >= 90) push(rs, 16, late + " minutes late");
+    else if (late != null && late >= 45) push(rs, 8, late + " minutes late");
+    else if (late != null && late <= -10) push(rs, 6, Math.abs(late) + " minutes early");
 
+    /* Same reasoning: 100 mph is simply what a train on this corridor does. */
     var v = num(t.velocity);
-    if (v != null && v >= 125) push(rs, 30, "doing " + Math.round(v) + " mph");
-    else if (v != null && v >= 100) push(rs, 16, "doing " + Math.round(v) + " mph");
+    if (v != null && v >= 125) push(rs, 14, "doing " + Math.round(v) + " mph");
+    else if (v != null && v >= 100) push(rs, 6, "doing " + Math.round(v) + " mph");
 
     if (route) push(rs, 30 * rarity(c, "route:" + route) * mat, rarePhrase(c, "route:" + route, route, false) + " on this board");
     if (dest) push(rs, 14 * rarity(c, "dest:" + dest) * mat, rarePhrase(c, "dest:" + dest, "service to " + dest, false));
@@ -686,6 +701,11 @@
     var to = dest ? clean(dest.textContent) : "";
     var detail = sub ? clean(sub.textContent) : "";
     if (!line && !to) return null;
+    /* Placeholder rows — a board renders "--" into a badge while a feed is still
+       loading, and one card's empty state literally reads "Train". Scoring those
+       put "-- to Train" on the leaderboard. Require a real word somewhere. */
+    if (!/[a-z0-9]/i.test(line + to)) return null;
+    if (/^-+$/.test(line) && /^(train|bus|tram)$/i.test(to)) return null;
 
     var rs = [];
     /* Lateness is written into the row by delays.js as its own span, and also
@@ -802,6 +822,45 @@
     list.push(entry);
   }
 
+  /* THE EVICTION BUG. A flat "keep the best twelve" looks harmless and is not:
+     a board watches five or six rail systems at six to eight rows each, so
+     thirty-odd trains compete for those slots against as few as two aircraft
+     inside the 12 nm radius. On a busy corridor the trains simply filled the
+     list, and once an aircraft has been dropped at STORAGE time no amount of
+     clever display can bring it back — the data is gone.
+
+     So each kind gets its own guaranteed shelf. The ranking across them is
+     still honest: whoever scored highest is still first, and a day with
+     genuinely no aircraft still shows none. */
+  function capPerKind(list) {
+    var planes = [], trains = [], out = [];
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      var into = e.kind === "plane" ? planes : trains;
+      if (into.length < KEEP_PER_KIND) { into.push(e); out.push(e); }
+    }
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out;
+  }
+
+  /* Pick `n` for display, keeping the true order but making sure the minority
+     kind is represented when it exists at all. The winner is never swapped —
+     saying an aircraft won when a train did would be a lie, and the whole point
+     of the reasons list is that it can be checked. */
+  function mixForDisplay(list, n, minMinority) {
+    if (list.length <= n) return list.slice();
+    var head = list.slice(0, n);
+    var kinds = {};
+    head.forEach(function (e) { kinds[e.kind] = (kinds[e.kind] || 0) + 1; });
+    var short = (kinds.plane || 0) === 0 ? "plane" : ((kinds.train || 0) === 0 ? "train" : null);
+    if (!short) return head;
+    var missing = list.filter(function (e) { return e.kind === short; }).slice(0, minMinority);
+    if (!missing.length) return head;
+    /* Drop the weakest of the dominant kind, never position 1. */
+    var keep = head.slice(0, Math.max(1, n - missing.length));
+    return keep.concat(missing);
+  }
+
   var lastPublish = 0;
 
   function pass() {
@@ -823,7 +882,7 @@
       upsert(list, e);
     }
     list.sort(function (a, b) { return b.score - a.score; });
-    box.cities[CITY.id] = list.slice(0, KEEP_PER_CITY);
+    box.cities[CITY.id] = capPerKind(list);
     write(LS.leaders, box);
 
     /* The registry is updated AFTER scoring, so the first sighting of the day
@@ -931,9 +990,18 @@
     if (!listEl) return;
 
     countEl.textContent = list.length ? list.length + " scored" : "";
-    statEl.textContent = list.length
-      ? "best of " + CITY.label + " today · tap for the full board"
-      : "watching — the first standout will appear here";
+    /* A board inside a quiet 12 nm circle can honestly have no aircraft at all
+       — Amsterdam regularly sees one — and then the card is all trains through
+       no fault of the scoring. Say which, so it reads as a fact about the sky
+       rather than as a feature that has stopped working. */
+    var st = boardState();
+    var aloft = (st && st._planes) ? st._planes.length : 0;
+    var gotPlane = list.some(function (e) { return e.kind === "plane"; });
+    statEl.textContent = !list.length
+      ? "watching — the first standout will appear here"
+      : (!gotPlane && !aloft
+          ? "best of " + CITY.label + " today · no aircraft in range right now"
+          : "best of " + CITY.label + " today · tap for the full board");
 
     listEl.innerHTML = "";
     if (!list.length) {
@@ -943,7 +1011,7 @@
       listEl.appendChild(empty);
       return;
     }
-    list.slice(0, 5).forEach(function (e, i) {
+    mixForDisplay(list, 5, 2).forEach(function (e, i) {
       var row = document.createElement("div");
       row.className = "row" + (i === 0 ? " top" : "");
       row.innerHTML =

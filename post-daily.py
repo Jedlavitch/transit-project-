@@ -93,6 +93,26 @@ def pick(box, scope):
     return rows
 
 
+def mix_for_display(rows, n, min_minority=1):
+    """
+    Keep the true order, but let the minority kind appear among the runners-up
+    when it exists at all. The winner is never swapped — claiming an aircraft
+    won when a train did would be a lie, and the card prints the reasons so it
+    can be checked.
+    """
+    if len(rows) <= n:
+        return list(rows)
+    head = rows[:n]
+    kinds = {e.get("kind") for e in head}
+    short = "plane" if "plane" not in kinds else ("train" if "train" not in kinds else None)
+    if not short:
+        return head
+    missing = [e for e in rows if e.get("kind") == short][:min_minority]
+    if not missing:
+        return head
+    return head[:max(1, n - len(missing))] + missing
+
+
 def city_label(e):
     return e.get("cityLabel") or CITY_LABELS.get(e.get("city", ""), e.get("city", ""))
 
@@ -690,7 +710,8 @@ def main():
             % (day, today))
         return 0
 
-    win, others = rows[0], rows[1:3]
+    shown = mix_for_display(rows, 3, 1)
+    win, others = shown[0], shown[1:3]
     log("  winner: %s (%s) — %d" % (win.get("title"), city_label(win), win.get("score", 0)))
 
     # CARD_PHOTO=0 turns the picture off. Photographs belong to the people who
