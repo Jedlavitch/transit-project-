@@ -1,0 +1,97 @@
+# Posts the day's most interesting plane or train.
+#
+# WHAT RUNS
+#   post-daily.py reads the leaderboard your boards have been building (via the
+#   share code), draws the card, and posts it to whichever networks you have
+#   given credentials. With no credentials it draws the card and stops, which is
+#   a safe way to watch it work for a few days before it says anything in public.
+#
+# SETUP (all of it is in SOCIAL.md, this is the map)
+#   1. On any board: Best -> Pool your screens -> "Create a new one". Copy the code.
+#      Paste that same code into every other screen you want counted.
+#   2. Here: Settings -> Secrets and variables -> Actions -> New repository secret
+#        LEADER_BLOB   the share code            <- required, nothing runs without it
+#      Then one set per network you want, all optional:
+#        BSKY_HANDLE + BSKY_APP_PASSWORD                     (easiest by far)
+#        MASTODON_BASE_URL + MASTODON_TOKEN
+#        X_API_KEY + X_API_SECRET + X_ACCESS_TOKEN + X_ACCESS_SECRET
+#        DISCORD_WEBHOOK
+#   3. Run it by hand once: Actions -> "Daily post" -> Run workflow, with
+#      "dry run" ticked. Read the caption in the log before you let it loose.
+#
+# HONEST LIMITS
+#   * It can only post what a board saw. If no screen was running, the list is
+#     empty or stale and the job exits without posting rather than inventing one.
+#   * GitHub's scheduled runs are best-effort and are regularly late by 5-15
+#     minutes when GitHub is busy. For a once-a-day post that does not matter.
+#   * The committed card is what the leaderboard page's link preview uses, so a
+#     link shared anywhere shows the same image that was posted.
+
+name: Daily post
+
+on:
+  schedule:
+    # 23:10 UTC — evening in the US, so a full day has been watched, and off the
+    # hour because GitHub queues every on-the-hour job in the world at once.
+    - cron: "10 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (draw the card, print the caption, post nothing)"
+        type: boolean
+        default: true
+      scope:
+        description: "Which leaderboard to post (all, or a city id like dc / nyc)"
+        default: "all"
+
+concurrency:
+  group: daily-post
+  cancel-in-progress: false
+
+permissions:
+  contents: write        # only to commit the rendered card back for link previews
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pillow
+        run: python3 -m pip install --quiet --disable-pip-version-check Pillow
+
+      - name: Draw the card and post it
+        env:
+          LEADER_BLOB:       ${{ secrets.LEADER_BLOB }}
+          SCOPE:             ${{ github.event.inputs.scope || 'all' }}
+          DRY_RUN:           ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+          BSKY_HANDLE:       ${{ secrets.BSKY_HANDLE }}
+          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
+          MASTODON_BASE_URL: ${{ secrets.MASTODON_BASE_URL }}
+          MASTODON_TOKEN:    ${{ secrets.MASTODON_TOKEN }}
+          X_API_KEY:         ${{ secrets.X_API_KEY }}
+          X_API_SECRET:      ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN:    ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET:   ${{ secrets.X_ACCESS_SECRET }}
+          DISCORD_WEBHOOK:   ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -z "$LEADER_BLOB" ]; then
+            echo "LEADER_BLOB is not set — see the setup notes at the top of this file."
+            exit 0
+          fi
+          python3 post-daily.py
+
+      - name: Keep the link-preview image current
+        run: |
+          # Most days this commits one changed PNG. On a day nothing was posted
+          # the files are unchanged and this is a no-op.
+          if [ -n "$(git status --porcelain shots/)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add shots/leaderboard-latest.png shots/leaderboard-latest-wide.png
+            git commit -m "Today's card"
+            git push
+          else
+            echo "No card change to commit."
+          fi
