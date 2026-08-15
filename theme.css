@@ -986,6 +986,28 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
      A length floor works with overflow:hidden; `auto` does not. */
   flex:0 1 auto; min-height:8em; max-height:none; overflow:hidden;
 }
+
+/* A collapsed card is collapsed. The 8em floor above is for cards showing a
+   list; applied to a .mini card it forces the thing back open to 128px, which
+   is the opposite of what collapsing it asked for -- and on the DC board those
+   two forced-open cards were holding 117px that Metrorail wanted. */
+:root[data-style="atlas"] body .card.mini{ min-height:0 }
+
+/* Departures first.
+   The rail seats about eleven lines. Cards splitting it evenly left Metrorail
+   -- the reason anyone mounts this board -- showing ONE departure while
+   Spotted and Today's Best each held a slot of their own. So the three cards
+   that are context rather than departures are capped at the one-line floor,
+   and every pixel that frees goes to the cards with times in them.
+
+   By id, deliberately. The obvious alternative -- cap whatever has no .times
+   in it -- reads well but does not survive contact with the markup: Today's
+   Best carries a .times too, and MARC has no .live, so no content test
+   separates these three from the departure boards. A board without these ids
+   caps nothing, which is the right way to fail. */
+:root[data-style="atlas"] body #alertCard,
+:root[data-style="atlas"] body #spotCard,
+:root[data-style="atlas"] body #leaderCard{ max-height:8em }
 :root[data-style="atlas"] body .card .list{
   display:flex; flex-direction:column; gap:2px;
   flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden;
