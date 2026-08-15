@@ -507,8 +507,87 @@
     check();
   }
 
+  /* ---- Board style ---------------------------------------------------------
+     Adds the Classic / Atlas picker to the settings panel.
+
+     HERE RATHER THAN IN TWELVE BOARD FILES because this script already owns
+     #setup and already moves nodes around inside it. Twelve hand-edits is
+     twelve chances to get one wrong, and the row needs no markup a board does
+     not already have — .accent-lbl and .theme-row/.theme-btn are on every one
+     of them, so it inherits the existing look and the existing D-pad handling
+     for free.
+
+     It runs BEFORE attach(), so the new row is bucketed like any other: the
+     Display test above already matches /style|layout/, which puts it next to
+     Theme and Trains per box rather than in Advanced.
+
+     GATED ON #themeRow, which exists on the twelve city boards and not on the
+     departure board or sky view. That is the correct gate rather than a lucky
+     one: Atlas restyles `main > .col + .col`, the map-and-cards structure only
+     those twelve have. Offering it where it cannot apply would be a setting
+     that does nothing. */
+  function setBoardStyle(mode) {
+    var d = document.documentElement;
+    /* Classic is the ABSENCE of the attribute, not a value of it, so a board
+       that has never heard of this feature is byte-for-byte unchanged. */
+    if (mode === "classic") d.removeAttribute("data-style");
+    else d.setAttribute("data-style", mode);
+    try { localStorage.setItem("tb.style", mode); } catch (e) {}
+
+    var btns = document.querySelectorAll("#styleRow .theme-btn");
+    for (var i = 0; i < btns.length; i++)
+      btns[i].classList.toggle("active", btns[i].getAttribute("data-style") === mode);
+
+    /* The map's box just moved. Same 120ms + invalidateSize + fitAll the
+       legend toggle uses for the identical problem — belt and braces, since
+       the ResizeObserver on #map fires on its own too. Both guarded: `state`
+       is a top-level const on the boards, so window.state may be undefined. */
+    setTimeout(function () {
+      try { if (window.state && window.state.map) window.state.map.invalidateSize(); } catch (e) {}
+      try { if (typeof window.fitAll === "function") window.fitAll(); } catch (e) {}
+    }, 120);
+  }
+
+  function addStylePicker(panel) {
+    if (!panel || panel.querySelector("#styleRow")) return;
+    var themeRow = panel.querySelector("#themeRow");
+    if (!themeRow) return;                       // not a city board — see above
+
+    var lbl = document.createElement("div");
+    lbl.className = "accent-lbl";
+    lbl.textContent = "Board style";
+
+    var row = document.createElement("div");
+    row.className = "theme-row";
+    row.id = "styleRow";
+
+    var saved = "classic";
+    try { saved = localStorage.getItem("tb.style") || "classic"; } catch (e) {}
+
+    [["classic", "Classic"], ["atlas", "Atlas"]].forEach(function (pair) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "theme-btn" + (pair[0] === saved ? " active" : "");
+      b.setAttribute("data-style", pair[0]);
+      b.textContent = pair[1];
+      b.addEventListener("click", function () { setBoardStyle(pair[0]); });
+      row.appendChild(b);
+    });
+
+    var hint = document.createElement("div");
+    hint.style.cssText = "font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.5";
+    hint.textContent = "Atlas puts the map full-screen and stands the departures on it. Wide screens only.";
+
+    /* Immediately after Theme: they are the same kind of decision, and it puts
+       the two look-and-feel controls together at the top of Display. */
+    themeRow.parentNode.insertBefore(hint, themeRow.nextSibling);
+    themeRow.parentNode.insertBefore(row, hint);
+    themeRow.parentNode.insertBefore(lbl, row);
+  }
+
   function run() {
     styleOnce();
+    PANELS.forEach(function (id) { addStylePicker(document.getElementById(id)); });
     PANELS.forEach(function (id) { attach(document.getElementById(id)); });
   }
 

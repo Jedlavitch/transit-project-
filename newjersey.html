@@ -13,8 +13,8 @@
 <title>New Jersey Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=18" />
-<script src="settings-ui.js?v=10" defer></script>
+<link rel="stylesheet" href="theme.css?v=19" />
+<script src="settings-ui.js?v=11" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
      page's own inline code had already begun fetching. -->
@@ -37,11 +37,13 @@
 <script src="feedback.js?v=4" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
+<script src="interesting.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardmycity.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
 var a=g("tb.accent")||g("transitboardmycity.accent");if(a)d.style.setProperty("--accent",a);
-var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribute("data-rows",r);}catch(e){}})();</script>
+var r=g("tb.rows")||g("transitboardmycity.rows");if(r&&r!=="normal")d.setAttribute("data-rows",r);
+var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e){}})();</script>
 <style>
   /* Palette, typeface, row-density vars, and header city-tabs all
      come from the shared theme.css; only page-specific styles live here. */

@@ -802,3 +802,291 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
     --row-bg:color-mix(in srgb, var(--accent) 5%, #ffffff);
   }
 }
+
+/* ============================================================================
+   ATLAS — the optional second board style.  :root[data-style="atlas"]
+
+   The default board is unchanged and stays the default by being the ABSENCE of
+   this attribute, not a value of it. Nothing below runs until somebody picks
+   Atlas in Settings, so a screen that never touches it is byte-for-byte what it
+   was.
+
+   THE IDEA. The map stops being a panel on the board and becomes the board:
+   full-bleed, drained to graphite, with the departures standing on it behind a
+   plate of light that fades in from nothing. One photographic field, type set
+   into it, and exactly one hierarchy — time, then place, then everything else.
+
+   THREE COMMITMENTS, and each one is load-bearing:
+
+   DRAIN THE MAP. Carto Dark Matter is dark but not quiet: orange motorway
+   casings, green parks, blue water, and its own place labels competing at the
+   same value as our data. Filtering the TILE PANE ONLY takes it to graphite
+   while every overlay the boards already draw — line livery, Amtrak dashes,
+   vehicle icons — keeps full colour. The transit network becomes the only
+   saturated thing on screen.
+
+   THE TIMES COME FIRST, LITERALLY. order:-1 on .times puts every countdown on
+   one left vertical, so the eye scans a ruled column instead of a ragged right
+   edge. This is the single best move in the design and it costs one property.
+
+   COLOUR NEVER BECOMES TEXT. Every gradient-clipped glyph is cancelled back to
+   a solid colour. Half of a clipped gradient sits at the low-contrast end of a
+   ramp, and at ten feet that IS the "washed out" complaint this product has
+   had. Agency colour survives on the h2 spine and the badges, which is louder,
+   not quieter. The wordmark keeps its gradient — that is identity.
+
+   TELEVISION ONLY, above 1220px. Below that the shipped stacked/phone layouts
+   stand unchanged; this is a design for a wall, and it does not fight the
+   phone block for id-specificity it would lose anyway.
+
+   OLD CHROMIUM: nothing here needs a fallback. No color-mix (111), no dvh
+   (108), no inset (87), no :has (105), no backdrop-filter (76), no clamp() in
+   a custom property (the pending-substitution trap this file documents further
+   up). Plain rgba, plain grid, plain flex — the oldest thing used is CSS
+   filter (Chrome 18) and the sibling combinator (CSS2).
+   ============================================================================ */
+@media (min-width:1221px){
+
+/* ---- 1. tokens ---------------------------------------------------------- */
+:root[data-style="atlas"]{
+  --atlas-rail:36%;
+  --atlas-feather:104px;
+  --atlas-plate:rgba(6,12,26,.94);
+  --atlas-tile:saturate(.26) brightness(.58) contrast(1.08);
+  --atlas-hair:rgba(160,190,255,.16);
+  --atlas-ink-shadow:0 1px 3px rgba(0,0,0,.85);
+}
+:root[data-style="atlas"][data-theme="black"]{
+  --atlas-plate:rgba(0,0,0,.95);
+  --atlas-tile:saturate(.2) brightness(.5) contrast(1.1);
+}
+:root[data-style="atlas"][data-theme="day"]{
+  --atlas-plate:rgba(252,253,255,.95);
+  --atlas-tile:saturate(.2) brightness(1.05) contrast(.92);
+  --atlas-hair:rgba(30,55,110,.16);
+  --atlas-ink-shadow:0 1px 2px rgba(255,255,255,.9);
+}
+
+/* ---- 2. #app becomes four rows; main spans all of them -------------------
+   No measured heights and no magic numbers: rows 1/2/4 size to whatever the
+   chrome actually is at this zoom, row 3 takes the rest, and main covers the
+   lot. Grid's own rule protects this — an item spanning a 1fr track does not
+   contribute to the intrinsic sizing of the fixed tracks it also crosses. */
+:root[data-style="atlas"] body #app{
+  display:grid; grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto auto minmax(0,1fr) auto;
+}
+:root[data-style="atlas"] body #app > header    { grid-column:1; grid-row:1;    z-index:6 }
+:root[data-style="atlas"] body #app > #statStrip{ grid-column:1; grid-row:2;    z-index:6 }
+:root[data-style="atlas"] body #app > main      { grid-column:1; grid-row:1/-1; z-index:1; min-height:0 }
+:root[data-style="atlas"] body #app > footer    { grid-column:1; grid-row:4;    z-index:6 }
+
+/* The chrome floats on the scrim instead of sitting on its own surfaces.
+   pointer-events are handed back to the children so the city tabs, the gear
+   and the links all still work. */
+:root[data-style="atlas"] body header,
+:root[data-style="atlas"] body #statStrip,
+:root[data-style="atlas"] body footer{
+  pointer-events:none; background:none; border:0; box-shadow:none; border-image:none;
+}
+:root[data-style="atlas"] body header > *,
+:root[data-style="atlas"] body #statStrip > *,
+:root[data-style="atlas"] body footer > *{ pointer-events:auto }
+/* text-shadow inherits, and through a transparent text-fill it renders as a
+   grey blur INSIDE the glyph. The scrim carries the wordmark instead. */
+:root[data-style="atlas"] body header .title .t-grad{ text-shadow:none }
+
+/* ---- 3. one cell, map underneath ---------------------------------------- */
+:root[data-style="atlas"] body main{
+  display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr);
+  gap:0; padding:0;
+}
+:root[data-style="atlas"] body main > .col{
+  grid-column:1; grid-row:1; min-width:0; min-height:0; gap:0;
+}
+/* Required, not decorative: without a stacking context here, Leaflet's marker
+   (600) and popup (700) panes compete directly in main's context and paint
+   over the rail. */
+:root[data-style="atlas"] body main > .col:first-child{ position:relative; z-index:0 }
+:root[data-style="atlas"] body #map{
+  border:0 !important; border-radius:0; height:100%; min-height:0;
+}
+:root[data-style="atlas"] .leaflet-tile-pane{ filter:var(--atlas-tile) }
+
+/* ---- 4. the scrim, INSIDE the map column --------------------------------
+   Not on main::after. That would sit above the whole column and bury
+   #followBanner (z1000, appended into #map) under an .80-alpha band. Here it
+   is above Leaflet's panes and below the banner and the fullscreen button.
+   pointer-events:none is load-bearing — it covers the entire map. */
+:root[data-style="atlas"] body main > .col:first-child::after{
+  content:""; position:absolute; top:0; right:0; bottom:0; left:0;
+  z-index:900; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.80) 0%, rgba(0,0,0,.42) 46%, rgba(0,0,0,0) 100%) top/100% 190px no-repeat,
+    linear-gradient(0deg,   rgba(0,0,0,.72) 0%, rgba(0,0,0,.34) 55%, rgba(0,0,0,0) 100%) bottom/100% 120px no-repeat,
+    radial-gradient(125% 105% at 46% 46%, rgba(0,0,0,0) 42%, rgba(0,0,0,.44) 100%);
+}
+:root[data-style="atlas"][data-theme="day"] body main > .col:first-child::after{
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.55) 46%, rgba(255,255,255,0) 100%) top/100% 190px no-repeat,
+    linear-gradient(0deg,   rgba(255,255,255,.88) 0%, rgba(255,255,255,.45) 55%, rgba(255,255,255,0) 100%) bottom/100% 120px no-repeat,
+    radial-gradient(125% 105% at 46% 46%, rgba(255,255,255,0) 42%, rgba(190,205,235,.40) 100%);
+}
+/* Map furniture bottom-left, so nothing depends on the rail's width. */
+:root[data-style="atlas"] body .legend{
+  position:absolute; left:26px; right:auto; top:auto; bottom:14px;
+  z-index:950; max-width:52%; text-shadow:var(--atlas-ink-shadow);
+}
+:root[data-style="atlas"] #mapFsBtn{ top:auto; right:auto; left:26px; bottom:64px }
+:root[data-style="atlas"] .leaflet-top.leaflet-left{ top:auto; bottom:120px }
+
+/* ---- 5. the rail --------------------------------------------------------
+   The gradient's first stop is the plate colour at zero alpha, NOT
+   `transparent`, so no engine can produce a grey seam from unpremultiplied
+   interpolation. The 104px ramp sits entirely inside the left padding: no
+   glyph ever lands on the soft part. That is the design — do not shave it. */
+:root[data-style="atlas"] body main > .col:last-child{
+  z-index:3; justify-self:end;
+  width:var(--atlas-rail); min-width:534px; max-width:864px;
+  padding:96px 30px 40px calc(var(--atlas-feather) + 4px);
+  overflow:hidden; display:flex; flex-direction:column;
+  background:linear-gradient(90deg,
+    rgba(6,12,26,0) 0, var(--atlas-plate) var(--atlas-feather), var(--atlas-plate) 100%);
+}
+:root[data-style="atlas"][data-theme="day"] body main > .col:last-child{
+  background:linear-gradient(90deg,
+    rgba(252,253,255,0) 0, var(--atlas-plate) var(--atlas-feather), var(--atlas-plate) 100%);
+}
+/* The shrink chain. column-width:auto must be written explicitly — the
+   multi-column rules further up this file set 330px, and a calc() of it inside
+   @supports(zoom). flex:0 1 auto makes each card's basis its natural height and
+   its shrink proportional to that, so a 12-departure card gives up more than a
+   2-departure one: what balanceCards() hand-computes for a grid, free. */
+:root[data-style="atlas"] body .cards{
+  display:flex; flex-direction:column; column-width:auto; column-gap:0; gap:0;
+  flex:1 1 auto; min-height:0; overflow:hidden;
+}
+:root[data-style="atlas"] body .card{
+  background:none; border:0; border-radius:0; box-shadow:none;
+  padding:14px 0 16px; margin:0;
+  /* min-height:AUTO, not 0. This is the difference between a card that gives
+     up space and one that eats its own header. With 0, flex may shrink a card
+     below its own content and overflow:hidden then cuts the heading off —
+     measured on a real board: busCard at 85px holding 124px of content, and
+     the Spotter card slicing through its statline. `auto` resolves to the
+     card's min-content, which is heading + statline + the list floor below, so
+     a card can be squeezed down to exactly its chrome and no further. The list
+     keeps absorbing everything above that, because it is the flex:1 child and
+     it scrolls. */
+  /* min-height:0 + overflow:hidden, and both are deliberate after trying the
+     alternative. `min-height:auto` looks like the safer floor but only takes
+     effect when overflow is visible (the flexbox automatic-minimum-size rule),
+     and making overflow visible to unlock it removes the definite box the list
+     needs to shrink INTO — the card then sizes to its content, the list never
+     shrinks, and the rail overflowed by 787px on a real board. So: the card
+     shrinks, and the list floor below is what stops a heading ending up over
+     nothing. */
+  flex:0 1 auto; min-height:0; max-height:none; overflow:hidden;
+}
+:root[data-style="atlas"] body .card .list{
+  display:flex; flex-direction:column; gap:2px;
+  flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden;
+}
+/* :not(.mini) or the floor fights animateMini()'s inline max-height:0 and
+   leaves a stub. :not(:empty) is the other direction — without it a shrunk
+   Service Alerts card announces "2 active" above nothing. */
+:root[data-style="atlas"] body .card:not(.mini) .list:not(:empty){ min-height:2.4em }
+:root[data-style="atlas"] body .card::after{
+  left:0; right:0; bottom:0; height:46px; border-radius:0;
+  background:linear-gradient(180deg, rgba(6,12,26,0), var(--atlas-plate));
+}
+:root[data-style="atlas"][data-theme="day"] body .card::after{
+  background:linear-gradient(180deg, rgba(252,253,255,0), var(--atlas-plate));
+}
+
+/* ---- 6. headings and rows ----------------------------------------------- */
+:root[data-style="atlas"] body .card h2{
+  font-size:12px; letter-spacing:.22em; color:var(--muted); opacity:1;
+  padding-bottom:9px; margin:0 0 11px; border-bottom:1px solid var(--atlas-hair);
+}
+:root[data-style="atlas"] body .card h2::before{ width:4px; height:15px; border-radius:0 }
+:root[data-style="atlas"] body .card h2 .count{ font-size:11px }
+:root[data-style="atlas"] body .statline{ font-size:11px; margin:-4px 0 9px }
+
+:root[data-style="atlas"] body .list .row{
+  display:flex; align-items:baseline; gap:14px;
+  background:none; border:0; border-left:0; border-radius:0; box-shadow:none;
+  padding:7px 2px 8px 0;
+}
+/* order:-1 is the design. Every countdown lands on one left vertical, so the
+   eye scans a ruled column instead of a ragged right edge. Safe on all 12:
+   .times is always the LAST child appended, so re-ordering it is purely visual. */
+:root[data-style="atlas"] body .list .row .times{
+  order:-1; flex:0 0 auto; width:7.4em; min-width:7.4em;
+  align-items:flex-start; text-align:left;
+}
+/* the unclassed middle div — the only handle on it. min-width:0 is what keeps
+   the existing .dest ellipsis working. */
+:root[data-style="atlas"] body .list .row > div:nth-child(2){ flex:1 1 auto; min-width:0 }
+:root[data-style="atlas"] body .list .row .badge{
+  order:0; height:calc(var(--badge-h) * 1.2); font-size:14px; border-radius:2px;
+}
+/* Multiplicative, never flat px: :root[data-style] and :root[data-rows] are
+   both (0,2,0), so flat values would silently kill "Trains per box" depending
+   on source order. */
+:root[data-style="atlas"] body .list .row .dest{
+  font-size:calc(var(--dest-fs) * 1.42); line-height:1.15; text-shadow:var(--atlas-ink-shadow);
+}
+:root[data-style="atlas"] body .list .row .sub{ font-size:calc(var(--sub-fs) * 1.2) }
+:root[data-style="atlas"] body .list .row .sched{ font-size:11.5px }
+:root[data-style="atlas"] body .list .row .live-tag{ font-size:12px }
+:root[data-style="atlas"] body .list .stop-label{ font-size:12px; letter-spacing:.2em; margin:14px 0 5px; opacity:1 }
+:root[data-style="atlas"] body .list .empty{ font-size:14px; padding:10px 0; text-align:left }
+:root[data-style="atlas"] body .alert-row{ background:none; border:0; border-left:3px solid var(--sev,var(--accent)) }
+
+:root[data-style="atlas"] body .list .row .live,
+:root[data-style="atlas"] body .list .row .live-eta{
+  font-size:calc(var(--live-fs) * 1.72); line-height:1.02; letter-spacing:-.02em;
+  text-shadow:var(--atlas-ink-shadow);
+}
+/* Where both exist in one .times, .live is the countdown and .live-eta is the
+   delay chip beside it (the Transitous boards). Only one of them is the hero.
+   A standalone .live-eta — where it IS the time value — still gets hero size.
+   Sibling combinator, CSS2, no :has(). */
+:root[data-style="atlas"] body .list .row .times .live ~ .live-eta{
+  font-size:calc(var(--live-fs) * .95); letter-spacing:0;
+}
+/* filled BRD/ARR pills are a flat size by design — don't inflate them into
+   lozenges. */
+:root[data-style="atlas"] body .list .row .live.brd,
+:root[data-style="atlas"] body .list .row .live.arr{
+  font-size:calc(var(--live-fs) * 1.05); padding:2px 10px; border-radius:3px;
+}
+
+/* ---- 7. colour never becomes text ---------------------------------------
+   Cancels the gradient text-clips back to solid colour. Half of a clipped
+   gradient sits at the low-contrast end of its ramp; at ten feet that is the
+   "washed out" complaint. Agency colour survives on the h2 spine and badges. */
+:root[data-style="atlas"] body .card h2 .t{
+  background:none; -webkit-text-fill-color:currentColor; color:var(--muted); filter:none;
+}
+:root[data-style="atlas"] body .stat .s-value{
+  background:none; -webkit-text-fill-color:currentColor; color:var(--text); filter:none;
+}
+:root[data-style="atlas"] body .stat .s-glyph{ filter:none; color:var(--sys,var(--muted)) }
+:root[data-style="atlas"] body .stat .s-value small{ -webkit-text-fill-color:var(--muted) }
+
+/* ---- 8. map-full ---------------------------------------------------------
+   Not winnable on z-index: the fixed map is trapped inside .col:first-child's
+   stacking context and position:fixed cannot escape one. Hiding the overlay is
+   exact — map-full is defined further up as "just the map and its vehicles".
+   Hiding the header collapses rows 1/2/4 to zero, which is fine: main spans
+   1/-1 and simply takes the whole grid. */
+:root[data-style="atlas"] body.map-full main > .col:last-child,
+:root[data-style="atlas"] body.map-full main > .col:first-child::after,
+:root[data-style="atlas"] body.map-full #app > header,
+:root[data-style="atlas"] body.map-full #app > #statStrip,
+:root[data-style="atlas"] body.map-full #app > footer{ display:none }
+:root[data-style="atlas"] body.map-full #mapFsBtn{ left:26px; bottom:26px }
+
+}   /* end @media (min-width:1221px) */
