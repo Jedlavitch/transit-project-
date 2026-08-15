@@ -66,7 +66,7 @@
   }
 
   var KEEP_PER_CITY = 12;      // stored per city per day; the page shows 10
-  var KEEP_PER_KIND = 8;       // ...but each kind is guaranteed its own shelf
+  var RESERVE_PER_KIND = 4;    // ...of which each kind is guaranteed this many
   var ARCHIVE_MAX   = 30;      // days of past winners kept
   var SEEN_HALFLIFE = 45;      // days after which a token is forgotten entirely
   var TICK_MS       = 20000;   // scoring pass; the boards refresh on a similar beat
@@ -78,6 +78,11 @@
      as the registry matures the genuinely unusual rises past the ordinary on
      its own. */
   var MIN_SCORE     = 3;
+
+  /* How remarkable a NON-airline aircraft must be, on universal signals alone,
+     to be scored at all while the default airline-only scope is on. Set between
+     a C-17 (36) and a police helicopter (26) — see the long note in collect(). */
+  var NON_AIRLINE_BAR = 32;
 
   /* Cities, in the order the boards' own picker lists them, so the leaderboard
      reads the same way round as the rest of the product. `id` matches the
@@ -365,6 +370,14 @@
      all: it is the most ordinary train on the busiest line in the country, and
      scoring it at all would be backwards. */
   var NAMED_TRAINS = {
+    /* Priced by HOW OFTEN THE SERVICE RUNS, which is what makes a sighting
+       rare. Three-a-week trains sit at the top; once-daily around 20; and the
+       Acela sits near the bottom despite being the famous one, because roughly
+       twenty round trips a weekday pass through a 60-mile radius almost
+       continuously on five of these boards. It kept winning for being famous
+       rather than for being unusual, which is the opposite of the job. The
+       sentence stays — it is still the fastest train in the country — it just
+       does not out-point an aeroplane for turning up. */
     "empire builder":      [40, "one of the long-distance trains — Chicago to the Pacific Northwest"],
     "california zephyr":   [42, "one of the long-distance trains — Chicago to San Francisco Bay"],
     "southwest chief":     [40, "one of the long-distance trains — Chicago to Los Angeles"],
@@ -550,11 +563,20 @@
        Said that way in the reason text, because claiming to detect a special
        livery would be inventing a capability. The photograph is where the paint
        actually gets seen, which is why the card leads with one. */
+    /* Everything pushed up to HERE is universal — true of the aeroplane itself,
+       needing no history. What follows is learned. The split is recorded so the
+       non-airline admission gate below can ask "is this remarkable in itself?"
+       rather than "is this merely unfamiliar?", which on a young board is a
+       question every aircraft answers yes to. */
+    var universal = 0;
+    for (var u = 0; u < rs.length; u++) universal += rs[u].w;
+
     if (t) push(rs, 52 * rarity(c, "type:" + t) * mat, rarePhrase(c, "type:" + t, shortType(a), true));
     if (op) push(rs, 34 * rarity(c, "op:" + op) * mat,
                  rarePhrase(c, "op:" + op, op + " colours over this board", false));
 
     return finish(rs, {
+      uni: Math.round(universal),
       id: "plane:" + (clean(a.hex) || cs || clean(a.r)),
       kind: "plane",
       title: titleOf(a),
@@ -706,6 +728,13 @@
        put "-- to Train" on the leaderboard. Require a real word somewhere. */
     if (!/[a-z0-9]/i.test(line + to)) return null;
     if (/^-+$/.test(line) && /^(train|bus|tram)$/i.test(to)) return null;
+    /* Not-in-service workings. WMATA reports a train's ServiceType as
+       "NoPassengers" or "Unknown" and the board renders that straight into the
+       row, which put "No to No Passenger" on the leaderboard — a deadhead move
+       to the yard, dressed up as the most interesting train of the day. The
+       boards already drop these from the MAP; the card does not, so filter
+       here rather than reaching into eleven files to change what they render. */
+    if (/^(no|unknown|nopassengers?)$/i.test(line) || /no ?passenger/i.test(to)) return null;
 
     var rs = [];
     /* Lateness is written into the row by delays.js as its own span, and also
@@ -746,10 +775,44 @@
       var airlineOnly = planeScope() === "airline";
       for (var i = 0; i < st._planes.length && i < 40; i++) {
         var a = st._planes[i], op = operator(a);
-        if (airlineOnly && !isAirlineFlight(a, op)) continue;
-        out.push(scorePlane(a, c, mat));
-        /* Only what was scored teaches the registry. Learning from aircraft the
-           board is filtering out would make an airliner look common because a
+        var e = scorePlane(a, c, mat);
+
+        /* THE AIRLINE FILTER USED TO `continue` HERE, BEFORE SCORING, AND THAT
+           QUIETLY KILLED MOST OF THIS FILE.
+
+           isAirlineFlight() rejects tail-number callsigns, rotorcraft, agency
+           operators and every CALLSIGN_TAGS prefix — which is the exact
+           population that CALLSIGN_TAGS (19 entries, 34-95 points),
+           AGENCY_OPERATOR, and 28 of the 52 PLANE_TYPES entries describe. Every
+           military and every vintage type in that table flies on a tail number,
+           not a flight number. So a B-17, a DC-3, an An-124, a C-17 and an
+           aircraft squawking 7700 were all discarded before a single point was
+           counted: roughly 60% of the universal aircraft scoring was
+           unreachable, and the most interesting aeroplane that can appear over
+           anybody's board could never win.
+
+           The filter was right about WHAT it was avoiding and wrong about HOW.
+           The thing to keep out is the police helicopter orbiting for an hour —
+           not because it is non-airline, but because it is not interesting.
+           So score everything, and let a non-airline aircraft in only when its
+           UNIVERSAL half clears the bar: it has to be remarkable in itself,
+           not merely unfamiliar. That distinction matters because maturity() is
+           floored at 0.28, so on a young board simply being new is worth ~25
+           points to anything — enough to walk a survey aircraft straight in on
+           learned rarity alone. Universal-only is immune to that.
+
+           Where the bar lands, with today's weights: a B-17 (78), Air Force One
+           (95), a U-2 (72), a DC-3 (64), anything squawking 7700 (62), an
+           An-124 (58), a Special Air Mission (58), a C-5 (48), a C-17 (36) are
+           in. A county police helicopter (26), a news helicopter, a survey
+           aircraft, a flight-school Cessna and an ordinary bizjet (all 0) stay
+           out. That is the cut the user asked for, drawn on interest rather
+           than on category. */
+        if (airlineOnly && !isAirlineFlight(a, op) && (e.uni || 0) < NON_AIRLINE_BAR) continue;
+
+        out.push(e);
+        /* Only what was ADMITTED teaches the registry. Learning from aircraft
+           the board filters out would make an airliner look common because a
            hundred bizjets went past, which is a different question. */
         var t = clean(a.t).toUpperCase();
         if (t) tokens.push("type:" + t);
@@ -833,13 +896,30 @@
      still honest: whoever scored highest is still first, and a day with
      genuinely no aircraft still shows none. */
   function capPerKind(list) {
-    var planes = [], trains = [], out = [];
+    var byScore = function (a, b) { return b.score - a.score; };
+    var planes = [], trains = [];
     for (var i = 0; i < list.length; i++) {
-      var e = list[i];
-      var into = e.kind === "plane" ? planes : trains;
-      if (into.length < KEEP_PER_KIND) { into.push(e); out.push(e); }
+      (list[i].kind === "plane" ? planes : trains).push(list[i]);
     }
-    out.sort(function (a, b) { return b.score - a.score; });
+    planes.sort(byScore); trains.sort(byScore);
+
+    /* Each kind gets a guaranteed floor, because storage is the ONE eviction
+       that cannot be undone further down: publish() ships this exact list to
+       jsonblob, and that is the daily poster's only input. An aircraft dropped
+       here at 09:14 does not exist for the card, the page, the share image or
+       the 23:10 post. Above the floor, the remaining slots go to whatever
+       actually scored highest, whichever kind that is.
+
+       The total cap is applied too. A previous version filled a shelf of eight
+       PER KIND and never applied KEEP_PER_CITY at all, so the constant became
+       dead code, storage quietly grew from 12 entries to as many as 16, and
+       every board PUT a payload a third larger to jsonblob every five
+       minutes. */
+    var out = planes.slice(0, RESERVE_PER_KIND).concat(trains.slice(0, RESERVE_PER_KIND));
+    var rest = planes.slice(RESERVE_PER_KIND).concat(trains.slice(RESERVE_PER_KIND));
+    rest.sort(byScore);
+    out = out.concat(rest.slice(0, Math.max(0, KEEP_PER_CITY - out.length)));
+    out.sort(byScore);
     return out;
   }
 
@@ -858,7 +938,12 @@
     if (!missing.length) return head;
     /* Drop the weakest of the dominant kind, never position 1. */
     var keep = head.slice(0, Math.max(1, n - missing.length));
-    return keep.concat(missing);
+    /* Place the promoted entry at rank 2, NOT last. trim() removes
+       lastElementChild first to fit the card's height, so appending it meant
+       the card deleted the promotion before anyone saw it — on exactly the
+       short skins where the card has least room and the mix matters most.
+       Position 1 is still never touched: the winner is whoever actually won. */
+    return [keep[0]].concat(missing, keep.slice(1));
   }
 
   var lastPublish = 0;

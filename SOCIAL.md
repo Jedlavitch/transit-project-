@@ -59,14 +59,26 @@ What is real, and is what the scorer uses:
 
 ### Aircraft scope
 
-By default only **scheduled airline flights** are scored: things with a flight
-number, a city pair and an operator people recognise. Left to itself the scorer
-kept handing the day to a county police helicopter, which is genuinely the odd
-thing overhead and a poor post.
+By default the board scores **scheduled airline flights, plus any aircraft
+remarkable in its own right**. Left to itself the scorer kept handing the day to
+a county police helicopter, which is genuinely the odd thing overhead and a poor
+post — so non-airline aircraft have to earn their place.
 
-Switch to *anything that flies* on the leaderboard page and the helicopters,
-private jets, survey aircraft and military traffic come back — the rarer
-sightings, and what an actual spotter wants. One control, no code change.
+The test is deliberately *not* "is it an airline?". It is whether the aircraft
+scores highly on signals that need no history: a B-17, a DC-3, an An-124, a
+Special Air Mission, a C-17, anything squawking 7700. Those are in. A police
+helicopter, a news helicopter, a survey aircraft, a flight-school Cessna and an
+ordinary bizjet are out.
+
+That distinction matters. An earlier version filtered by category instead, and
+because every military and every vintage type flies on a tail number rather than
+a flight number, it silently discarded the most interesting aeroplane that can
+appear over anybody's board — about 60% of the aircraft scoring table was
+unreachable. Interest, not category, is the right cut.
+
+Switch to *anything that flies* on the leaderboard page and the everyday
+helicopters, private jets and survey aircraft come back too — what an actual
+spotter wants. One control, no code change.
 
 Buses are never scored; the ask was planes and trains.
 

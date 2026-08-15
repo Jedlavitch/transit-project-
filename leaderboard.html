@@ -830,8 +830,8 @@ function paintScope() {
   $("#scopeAirline").classList.toggle("on", v === "airline");
   $("#scopeAll").classList.toggle("on", v === "all");
   $("#scopeNote").textContent = v === "airline"
-    ? "Scheduled airline flights only — the ones with a flight number and a route. Helicopters, private jets and military traffic are left out."
-    : "Everything the boards can see, including helicopters, private jets, survey aircraft and military flights.";
+    ? "Scheduled airline flights, plus anything remarkable in its own right — a warbird, a heavy-lift Antonov, an emergency squawk. Routine helicopters, private jets and survey aircraft are left out."
+    : "Everything the boards can see, including the everyday helicopters, private jets and survey aircraft.";
 }
 $("#scopeAirline").onclick = () => setPlaneScope("airline");
 $("#scopeAll").onclick = () => setPlaneScope("all");
