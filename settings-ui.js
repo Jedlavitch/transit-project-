@@ -615,35 +615,87 @@
 (function () {
   var TAG = "data-atlas-cut", timer = 0;
 
-  function show(row) { row.style.visibility = ""; row.removeAttribute(TAG); }
+  function show(el) { el.style.visibility = ""; el.removeAttribute(TAG); }
+  function hide(el) {
+    if (!el.hasAttribute(TAG)) { el.style.visibility = "hidden"; el.setAttribute(TAG, "1"); }
+  }
+
+  /* Departures-only once the board has been scaled up for a television.
+     The rail's height in CSS pixels is the viewport divided by the zoom, so
+     scaling for a TV shrinks the space the cards are laid out in even though
+     the screen has not changed: measured 944px of usable rail at 100%, 617px
+     at 175%, 404px at 200%. The card floor stays 128px, so seven cards stop
+     fitting and the ones that lose are departures -- Metrorail fell to a
+     single train at every TV rung. Above 1.4x the context cards drop out
+     entirely and their room goes to the times.
+
+     Keyed on the zoom SETTING rather than on measured fit, deliberately.
+     "Does everything fit?" flips the moment hiding a card makes it fit again,
+     which oscillates forever; the zoom is an input nothing here changes. */
+  function setTight(root) {
+    var z = parseFloat(getComputedStyle(root).getPropertyValue("--ui-zoom")) || 1;
+    if (z >= 1.4) root.classList.add("atlas-tight");
+    else root.classList.remove("atlas-tight");
+  }
 
   function trim() {
     timer = 0;
+    var root = document.documentElement;
     var marked = document.querySelectorAll("[" + TAG + "]"), i;
-    if (document.documentElement.getAttribute("data-style") !== "atlas") {
+    if (root.getAttribute("data-style") !== "atlas") {
       for (i = 0; i < marked.length; i++) show(marked[i]);   /* switched away */
+      root.classList.remove("atlas-tight");
       return;
     }
+    setTight(root);
     var cards = document.querySelectorAll(".card"),
         rail = document.querySelector("main > .col:last-child"),
-        railBottom = rail ? rail.getBoundingClientRect().bottom : Infinity;
+        railBottom = Infinity;
+    if (rail) {
+      /* The CONTENT edge, not the border-box edge: the rail carries 40px of
+         bottom padding, and a row sitting in that padding is off the design
+         rather than on it. */
+      railBottom = rail.getBoundingClientRect().bottom -
+                   (parseFloat(getComputedStyle(rail).paddingBottom) || 0);
+    }
     for (var c = 0; c < cards.length; c++) {
+      var card = cards[c], box = card.getBoundingClientRect();
+      if (!box.height) continue;
+      /* Hide the WHOLE card when the rail cannot seat it. Trimming its rows
+         is not enough, because the thing being sliced is then the card's own
+         HEADING, which is not a list item and so was never a candidate: at
+         200% zoom this left "AMTRAK — REGIONAL RAIL" cut through the middle
+         against the bottom of the rail. */
+      var head = card.querySelector("h2, .hd, header");
+      if (box.top >= railBottom - 1 ||
+          (head && head.getBoundingClientRect().bottom > railBottom + 1)) {
+        hide(card);
+        continue;
+      }
+      if (card.hasAttribute(TAG)) show(card);
       /* Every unit a list can hold, not just .row: an alert `.msg` and an
          `.empty` ("No buses predicted right now") sit directly in the list
-         and were being sliced through the middle exactly like rows were. */
-      /* Clip against whichever edge comes first: the card's own bottom, or
-         the bottom of the rail holding it. If a board ever has more cards
-         than the rail can seat, the last card runs off the rail and only the
-         rail edge cuts it -- the card's own bottom would say it fits. */
-      var bottom = Math.min(cards[c].getBoundingClientRect().bottom, railBottom),
-          rows = cards[c].querySelectorAll(".list > *, .list .row");
+         and were being sliced through the middle exactly like rows were.
+         Clip against whichever edge comes first, the card's or the rail's. */
+      var bottom = Math.min(box.bottom, railBottom),
+          rows = card.querySelectorAll(".list > *, .list .row");
       for (var r = 0; r < rows.length; r++) {
         /* 1px of slack: sub-pixel layout should not hide a row that fits. */
-        var cut = rows[r].getBoundingClientRect().bottom > bottom + 1;
-        if (cut && !rows[r].hasAttribute(TAG)) {
-          rows[r].style.visibility = "hidden";
-          rows[r].setAttribute(TAG, "1");
-        } else if (!cut && rows[r].hasAttribute(TAG)) show(rows[r]);
+        if (rows[r].getBoundingClientRect().bottom > bottom + 1) hide(rows[r]);
+        else if (rows[r].hasAttribute(TAG)) show(rows[r]);
+      }
+      /* Anything the card holds that is neither its heading nor its list is a
+         unit in its own right. The Spotted card hangs a RAIL/BUS/AIR chip
+         strip below the heading, outside the list entirely, and it was being
+         sliced horizontally through the middle of the chips. The list itself
+         is excluded on purpose -- it is the part meant to be clipped item by
+         item above, and hiding it whole would empty the card. */
+      var kids = card.children;
+      for (var k = 0; k < kids.length; k++) {
+        var kid = kids[k];
+        if (kid === head || (kid.classList && kid.classList.contains("list"))) continue;
+        if (kid.getBoundingClientRect().bottom > bottom + 1) hide(kid);
+        else if (kid.hasAttribute(TAG)) show(kid);
       }
     }
   }
