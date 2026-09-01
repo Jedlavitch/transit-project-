@@ -803,6 +803,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="basemap.js?v=1"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -961,7 +962,7 @@ function handleUseMyLocation(){
 function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
-  state.tileLayer = L.tileLayer(tileUrlForTheme(document.documentElement.getAttribute("data-theme")), { maxZoom:19 }).addTo(state.map);
+  state.tileLayer = TBBasemap.add(state.map, document.documentElement.getAttribute("data-theme"), { maxZoom:19 });
   state.ringLayer   = L.layerGroup().addTo(state.map);   // tactical range rings, beneath everything
   state.subwayRouteLayer = L.layerGroup().addTo(state.map); // subway line shapes, beneath everything
   state.lirrRouteLayer = L.layerGroup().addTo(state.map);   // LIRR branch lines
@@ -2939,15 +2940,7 @@ function setBoardTheme(mode){
   document.documentElement.setAttribute("data-theme", mode);
   localStorage.setItem("transitboardnyc.theme", mode); localStorage.setItem("tb.theme", mode);
   document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
-  if(state.tileLayer) state.tileLayer.setUrl(tileUrlForTheme(mode));
-}
-// Day is a light UI theme; CartoDB's Positron ("light_all") basemap is the free
-// light counterpart to the Dark Matter ("dark_all") tiles used for Dark/Black,
-// same provider/URL scheme already in use elsewhere in this project, no key needed.
-function tileUrlForTheme(theme){
-  return theme==="day"
-    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  if(state.tileLayer) state.tileLayer.setTheme(mode);
 }
 function buildThemeButtons(){
   document.querySelectorAll("#themeRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardTheme(b.dataset.theme); });

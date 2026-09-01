@@ -30,6 +30,7 @@
 <script src="account.js?v=2" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+<script src="basemap.js?v=1"></script>
 <script>/* pre-paint: same shared look as the boards (tb.theme / tb.accent) */
 (function(){try{var g=k=>localStorage.getItem(k),d=document.documentElement;
 var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -1205,7 +1206,7 @@ function renderMap(){
   if(typeof L==="undefined"){ hint.textContent="Map library still loading…"; return; }
   if(!sMap){
     sMap=L.map("spotMap",{zoomControl:true, attributionControl:false});
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(sMap);
+    TBBasemap.addDark(sMap, { maxZoom:19 });
     sMarkers=L.layerGroup().addTo(sMap);
     sMap.setView([39.5,-98.35],3);
   }

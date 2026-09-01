@@ -568,6 +568,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="basemap.js?v=1"></script>
 <script>
 "use strict";
 /* The sky view is shared by all the boards. Which one opened it comes in
@@ -1037,7 +1038,7 @@ function initMiniMap(){
   miniMap=L.map("miniMap",{ zoomControl:false, attributionControl:false, dragging:false,
     scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, fadeAnimation:false })
     .setView([0,0], 3);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom:19 }).addTo(miniMap);
+  TBBasemap.addDark(miniMap, { maxZoom:19 });
   initRadar(miniMap, .5);                          // live precipitation overlay
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
   miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng

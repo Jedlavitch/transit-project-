@@ -351,6 +351,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="basemap.js?v=1"></script>
 <script>
 "use strict";
 const $ = s=>document.querySelector(s);
@@ -903,7 +904,7 @@ function initMap(){
   map=L.map("map",{ zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false,
     doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, worldCopyJump:true })
     .setView([39.5,-98], 4);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{ maxZoom:19, keepBuffer:6 }).addTo(map);
+  TBBasemap.addDark(map, { maxZoom:19, keepBuffer:6 });
   routeLayer=L.layerGroup().addTo(map);
   // own pane between tiles (200) and overlays (400): the night shade re-adds
   // itself every 5 min and must never land on top of routes/trails

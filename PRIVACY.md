@@ -241,7 +241,10 @@ it takes effect.
 3. **Check the map and geocoding terms — this is now urgent, because the product
    is paid.** Nominatim's usage policy is aimed at low-volume, non-commercial
    use and a paid kiosk geocoding on every location change can breach it.
-   CARTO's free basemap tier has limits and an attribution requirement.
+   Map tiles moved off CARTO in September 2026, when it began requiring an API
+   key for its raster basemaps and watermarking unauthenticated tiles; its free
+   tier was non-commercial anyway. Esri's Canvas basemaps need no key, and their
+   attribution is drawn by basemap.js.
 4. **There is still no route to delete an account or a licence record.** Neither
    Worker has a `/delete` endpoint, so a right-to-erasure request means editing
    KV by hand. The policy above promises deletion within 30 days; keep that
