@@ -27,6 +27,15 @@ on:
     # Mondays and Thursdays, 11:10 UTC. Off the hour because GitHub queues
     # every on-the-hour job in the world at once and drops the overflow.
     - cron: "10 11 * * 1,4"
+    # Saturdays and Sundays, same time. Agencies change service ON a weekend and
+    # publish the replacement pick right at the changeover, not before it: Ride On
+    # and the MTA Manhattan buses both end a pick on Sat 2026-09-05 with no fall
+    # feed out yet. A Mon/Thu cadence alone turns that into a card that is empty
+    # from Saturday night until Monday lunchtime -- and Ride On has no real-time
+    # feed to fall back on, so it shows nothing at all. Covering the weekend caps
+    # the gap at a few hours. Most weekend runs regenerate nothing and commit
+    # nothing; the cost is two no-op jobs a week.
+    - cron: "10 11 * * 6,0"
   workflow_dispatch:
     inputs:
       audit_only:

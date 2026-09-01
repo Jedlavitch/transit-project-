@@ -1,0 +1,87 @@
+# The all-cities round-up bot.
+#
+# WHAT THIS IS, AND HOW IT DIFFERS FROM daily-post.yml
+#   daily-post.yml posts a leaderboard that BROWSERS built — interesting.js scores
+#   what a board displays and publishes it to a jsonblob. That can only cover cities
+#   whose board was actually open on somebody's screen, so in practice one or two.
+#
+#   This one owes nothing to a browser. roundup.py gathers its own data for all
+#   eleven cities (aircraft from the ADS-B proxy, Amtrak from amtraker, rail from the
+#   GTFS bundles committed in this repo), scores aircraft and trains SEPARATELY, and
+#   posts one round-up card to Threads, Mastodon and Bluesky.
+#
+#   Both can run. Neither depends on the other.
+#
+# THE ORDER IS LOAD-BEARING, AND IT LIVES INSIDE roundup.py
+#   Threads has no byte upload. Meta fetches the image from a public HTTPS URL you
+#   hand it (developers.facebook.com/docs/threads/posts: "We will cURL your image
+#   using the URL provided so it must be on a public server"). Bluesky and Mastodon
+#   take raw bytes and do not care. So the card is rendered, committed and pushed
+#   FIRST, and roundup.py waits for Pages to serve it before making the Threads call.
+#   Post-then-commit — which is what daily-post.yml does — hands Meta a 404.
+#
+# SETUP: see SOCIAL.md. Required secret is ADSB_URL; everything else is per-network
+#   and optional, and with none set this renders the card and posts nothing.
+#
+# RUN IT BY HAND: Actions -> "Daily round-up" -> Run workflow, leaving "dry run"
+#   ticked. It prints the winners and all three captions without posting.
+
+name: Daily round-up
+
+on:
+  schedule:
+    # 23:40 UTC — a full day watched in the Americas, and late evening in Europe.
+    # Off the hour because GitHub queues every on-the-hour job in the world at once.
+    - cron: "40 23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (score, draw the card, print the captions, post nothing)"
+        type: boolean
+        default: true
+      cities:
+        description: "Limit to these city ids, comma separated (blank = all eleven)"
+        default: ""
+
+concurrency:
+  group: daily-roundup
+  cancel-in-progress: false
+
+permissions:
+  contents: write        # commits the card and the learned-rarity registry
+
+jobs:
+  roundup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pillow
+        run: python3 -m pip install --quiet --disable-pip-version-check Pillow
+
+      # ONE invocation does everything, in order: score every city, draw the card,
+      # commit and push it, wait for Pages to serve it, then post. Splitting render
+      # and post across two steps re-scored from scratch and handed Meta the URL of
+      # a card built from a different snapshot of the sky.
+      - name: Score, draw, publish, post
+        env:
+          ADSB_URL:          ${{ secrets.ADSB_URL }}
+          CITIES:            ${{ github.event.inputs.cities }}
+          SITE:              transitproject.online
+          COMMIT_CARD:       "1"
+          DRY_RUN:           ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+          CARD_PHOTO:        ${{ secrets.CARD_PHOTO }}
+          BSKY_HANDLE:       ${{ secrets.BSKY_HANDLE }}
+          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
+          MASTODON_BASE_URL: ${{ secrets.MASTODON_BASE_URL }}
+          MASTODON_TOKEN:    ${{ secrets.MASTODON_TOKEN }}
+          THREADS_USER_ID:   ${{ secrets.THREADS_USER_ID }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$ADSB_URL" ]; then
+            echo "ADSB_URL is not set — no aircraft feed, so there is nothing to score."
+            echo "See SOCIAL.md. Exiting without failing the run."
+            exit 0
+          fi
+          python3 roundup.py

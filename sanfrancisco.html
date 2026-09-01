@@ -12,7 +12,7 @@
 <title>San Francisco Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=30" />
+<link rel="stylesheet" href="theme.css?v=29" />
 <script src="settings-ui.js?v=15" defer></script>
 <script src="clock-faces.js?v=1" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
@@ -30,6 +30,7 @@
 <script src="gate.js?v=3" defer></script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
+<script src="vehicle-icons.js?v=1"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -37,13 +38,17 @@
 <script src="mascot-buddy.js?v=6" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="atlasrows.js?v=1" defer></script>
 <script src="fit-cards.js?v=5" defer></script>
+<script src="atlasrows.js?v=1" defer></script>
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
 <script src="interesting.js?v=2" defer></script>
+<script src="departures.js?v=1" defer></script>
+<script src="commute.js?v=6" defer></script>
+<script src="ontime.js?v=3" defer></script>
+<script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardsf.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -749,6 +754,12 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
       <button type="button" class="theme-btn" data-legend="on">Shown</button>
     </div>
 
+    <div class="accent-lbl">Vehicles on the map</div>
+    <div class="theme-row" id="vehIconRow">
+      <button type="button" class="theme-btn" data-vehicons="shapes">Shapes</button>
+      <button type="button" class="theme-btn" data-vehicons="dots">Dots</button>
+    </div>
+
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
@@ -992,16 +1003,24 @@ function drawRangeRings(){
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 // A dot at the exact location + an info chip floating to its right (hidden when
 // zoomed out). Use this for any ground-vehicle marker.
-function labelIcon(color, label){
-  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:8px;top:-8px;
+/* `mode` ("metro"/"bus"/"train"/…) upgrades the dot to a mode glyph from
+   vehicle-icons.js, so shape says WHAT it is while colour keeps saying WHICH
+   LINE. Omit it — or turn glyphs off in Settings, or serve a board without
+   vehicle-icons.js — and this is exactly the dot it has always drawn. */
+function vehGlyphsOn(){ return (localStorage.getItem("tb.vehIcons")||"shapes")!=="dots"; }
+function labelIcon(color, label, mode){
+  const glyph = (mode && vehGlyphsOn() && window.TBVeh) ? TBVeh.glyphHTML(mode, color, 15) : "";
+  // The chip clears the marker it hangs off, so it has to move when the marker
+  // grows: 8px was measured against the 9px dot and would sit on top of a glyph.
+  const chipLeft = glyph ? 11 : 8;
+  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:${chipLeft}px;top:-8px;
       background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
       font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
       box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  const mark = glyph || `<span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>`;
   return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
-    html:`<div style="position:relative">
-      <span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
-        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>${chip}
-    </div>` });
+    html:`<div style="position:relative">${mark}${chip}</div>` });
 }
 // Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
 function planeIcon(track, label){
@@ -1623,6 +1642,10 @@ const BART_COL={ Yellow:"#FFE733", Orange:"#FF9933", Green:"#339933", Red:"#FF44
 const MUNI_COL={ J:"#F5A81C", K:"#008C9A", L:"#92278F", M:"#008752", N:"#005B95",
   T:"#BF2B45", F:"#B26F16" };
 const CABLE_COL="#8C4A2F", CTRAIN_COL="#E31837";
+/* Which glyph each family gets on the map (vehicle-icons.js). Colour still
+   carries the line; shape now carries the mode, so a tram and a bus sharing
+   a corridor and a palette stop looking like the same vehicle. */
+const VEH_MODE={ bart:"metro", muni:"tram", cable:"tram", ctrain:"train" };
 const SYSTEMS={
   bart:  { url:"sf-bart-schedule.json",     color:l=>BART_COL[l]||"#888", tag:"BART" },
   muni:  { url:"sf-muni-schedule.json",     color:l=>MUNI_COL[l]||"#BF2B45", tag:"Muni" },
@@ -1705,6 +1728,9 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
   const liveVeh=state.liveVeh[key]||{};
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0, anyLive=false;
+  // NOT `deps`: the per-station loop below already declares a `const deps`, which
+  // would shadow this one at exactly the point the rows are pushed.
+  const depFeed=[];   // this render's rows for the commute countdown (departures.js)
   for(const {st,mi} of near){
     if(used>=stations) break;
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
@@ -1742,6 +1768,8 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
         } else {
           times.appendChild(dualTime(t, rel));
         }
+        depFeed.push({ mode:VEH_MODE[key], stop:st.name, route:d.line||"", dest:d.hs||"",
+                       min:rel, color:col, live:isLive });
         row.append(b, mid, el("div"), times);
         // follow-from-box: click a departure to follow that train on the map --
         // the LIVE vehicle when this trip is being tracked (same trip_id the
@@ -1761,6 +1789,7 @@ async function refreshCityCard({key, list, count, stations=2, badgeCls, noneMsg}
   }
   if(!shown) box.appendChild(el("div","empty",noneMsg||"No more departures today at nearby stations."));
   const c=$(count); if(c) c.textContent = anyLive ? "live times" : (s._stale ? "stale schedule" : "scheduled");
+  if(window.TBDep) TBDep.feed(key, depFeed);
   fitList(box);
 }
 /* BART is the one Bay Area system with a CORS-open, keyless live API
@@ -1784,6 +1813,7 @@ async function refreshBart(){
       `https://api.bart.gov/api/etd.aspx?cmd=etd&orig=${n.st.id}&key=MW9S-E7SL-26DU-VV8V&json=y`, 10000)
       .then(j=>(j.root&&j.root.station&&j.root.station[0])||null).catch(()=>null)));
     box.innerHTML=""; let shown=0;
+    const depFeed=[];   // live BART rows for the commute countdown (departures.js)
     near.forEach((n,i)=>{
       const stn=etds[i]; if(!stn || !stn.etd || !stn.etd.length) return;
       box.appendChild(el("div","stop-label","◼ "+stn.name+`  ·  ${n.mi.toFixed(1)} mi`));
@@ -1802,12 +1832,19 @@ async function refreshBart(){
           const bl=el("div","live", est.minutes==="Leaving" ? "BRD" : countdownText(bm));
           if(est.minutes!=="Leaving" && isFinite(bm)) bl.classList.add("eta", etaClass(bm));
           times.append(bl, el("div","sched", isFinite(bm)?"live · ≈ "+etaClock(bm):"live")); }
+        { const bm=est.minutes==="Leaving"?0:parseInt(est.minutes,10);
+          // "Leaving" is 0 minutes -- you cannot walk to a train already going.
+          depFeed.push({ mode:VEH_MODE.bart, stop:stn.name, route:colName?colName[0]+colName.slice(1).toLowerCase():"",
+                         dest:d.destination||"", min:isFinite(bm)?bm:NaN, color:col, live:true }); }
         row.append(b, mid, el("div"), times);
         box.appendChild(row); shown++;
       });
     });
     if(!shown) throw new Error("no etds");   // e.g. overnight closure -> scheduled fallback
     const c=$("#bartCount"); if(c) c.textContent="live";
+    // Replaces the scheduled bucket under the same key, so the countdown never
+    // shows live and timetable rows for the same trains at once.
+    if(window.TBDep) TBDep.feed("bart", depFeed);
     fitList(box);
   }catch(e){ refreshBartSched(); }
 }
@@ -1837,7 +1874,7 @@ async function drawSchedFleet(key){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       const col=sys.color(tr.line);
       items.push({ id:key+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(col, `${tr.line} → ${tr.hs}`), ik:key+"-"+tr.line+"-"+i,
+        icon:()=>labelIcon(col, `${tr.line} → ${tr.hs}`, VEH_MODE[key]), ik:key+"-"+tr.line+"-"+i,
         tip:`${sys.tag} ${tr.line} → ${tr.hs} (scheduled)`,
         color:col, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean), label:`${sys.tag} ${tr.line} → ${tr.hs}` });
       break;
@@ -1889,7 +1926,7 @@ async function fetchSfLive(){
         const trip = s && s._trip && v.tripId ? s._trip[v.tripId] : null;
         const route = trip ? trip.st.map(([sid])=>s._coord[sid]).filter(Boolean) : null;
         items.push({ id:"lv"+key+(v.tripId||idx), lat:v.lat, lon:v.lon,
-          icon:()=>labelIcon(col, line), ik:"lv-"+line,
+          icon:()=>labelIcon(col, line, VEH_MODE[key]), ik:"lv-"+line,
           tip:`${sys.tag} ${line} (live)`,
           color:col, route, label:`${sys.tag} ${line}${trip&&trip.hs?" → "+trip.hs:""}` });
       });
@@ -2366,7 +2403,7 @@ function renderAmtrak(list){
 function drawAmtrak(list){
   const items=list.map(({t})=>({
     id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
+    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`, "train"),
     ik:"a-"+(t.trainNum||"")+(t.destCode||""),
     tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
   }));
@@ -2804,6 +2841,23 @@ function setLegend(mode){
 function buildLegendButtons(){
   document.querySelectorAll("#legendRow .theme-btn").forEach(b=>{ b.onclick=()=>setLegend(b.dataset.legend); });
 }
+
+/* Mode glyphs vs the original dots. Dots are kept as a real choice, not a
+   grudging fallback: at a low zoom on a big city the glyphs are deliberately
+   more ink than a dot, and somebody running the board as ambient wallpaper may
+   well want the quieter map back. */
+function setVehIcons(mode){
+  mode = (mode==="dots") ? "dots" : "shapes";
+  localStorage.setItem("tb.vehIcons", mode);
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.vehicons===mode));
+  // Repaint what is already on the map -- markers only rebuild their icon when
+  // their icon key changes, so without this the switch would not show until
+  // each vehicle happened to change line or route.
+  if(typeof refreshFleetIcons==="function") refreshFleetIcons();
+}
+function buildVehIconButtons(){
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>{ b.onclick=()=>setVehIcons(b.dataset.vehicons); });
+}
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
@@ -3045,6 +3099,7 @@ function boot(){
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
+  setVehIcons(localStorage.getItem("tb.vehIcons")||"shapes"); buildVehIconButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();

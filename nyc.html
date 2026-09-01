@@ -12,7 +12,7 @@
 <title>New York Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=30" />
+<link rel="stylesheet" href="theme.css?v=29" />
 <script src="settings-ui.js?v=15" defer></script>
 <script src="clock-faces.js?v=1" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
@@ -30,6 +30,7 @@
 <script src="gate.js?v=3" defer></script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
+<script src="vehicle-icons.js?v=1"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -37,13 +38,17 @@
 <script src="mascot-buddy.js?v=6" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="atlasrows.js?v=1" defer></script>
 <script src="fit-cards.js?v=5" defer></script>
+<script src="atlasrows.js?v=1" defer></script>
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
 <script src="interesting.js?v=2" defer></script>
+<script src="departures.js?v=1" defer></script>
+<script src="commute.js?v=6" defer></script>
+<script src="ontime.js?v=3" defer></script>
+<script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardnyc.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -761,6 +766,12 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
       <button type="button" class="theme-btn" data-legend="on">Shown</button>
     </div>
 
+    <div class="accent-lbl">Vehicles on the map</div>
+    <div class="theme-row" id="vehIconRow">
+      <button type="button" class="theme-btn" data-vehicons="shapes">Shapes</button>
+      <button type="button" class="theme-btn" data-vehicons="dots">Dots</button>
+    </div>
+
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
@@ -1025,16 +1036,24 @@ function drawRangeRings(){
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 // A dot at the exact location + an info chip floating to its right.
 // The chip is hidden when zoomed out (state.labelsOn) to avoid clutter.
-function labelIcon(color, label){
-  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:8px;top:-8px;
+/* `mode` ("metro"/"bus"/"train"/…) upgrades the dot to a mode glyph from
+   vehicle-icons.js, so shape says WHAT it is while colour keeps saying WHICH
+   LINE. Omit it — or turn glyphs off in Settings, or serve a board without
+   vehicle-icons.js — and this is exactly the dot it has always drawn. */
+function vehGlyphsOn(){ return (localStorage.getItem("tb.vehIcons")||"shapes")!=="dots"; }
+function labelIcon(color, label, mode){
+  const glyph = (mode && vehGlyphsOn() && window.TBVeh) ? TBVeh.glyphHTML(mode, color, 15) : "";
+  // The chip clears the marker it hangs off, so it has to move when the marker
+  // grows: 8px was measured against the 9px dot and would sit on top of a glyph.
+  const chipLeft = glyph ? 11 : 8;
+  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:${chipLeft}px;top:-8px;
       background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
       font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
       box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  const mark = glyph || `<span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>`;
   return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
-    html:`<div style="position:relative">
-      <span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
-        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>${chip}
-    </div>` });
+    html:`<div style="position:relative">${mark}${chip}</div>` });
 }
 // Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
 function planeIcon(track, label){
@@ -1757,7 +1776,7 @@ function renderAmtrak(list){
 function drawAmtrak(list){
   const items=list.map(({t})=>({
     id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
+    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`, "train"),
     ik:"a-"+(t.trainNum||"")+(t.destCode||""),
     tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`,
     color:"#3ad0c8", label:`${t.routeName||"Amtrak"} #${t.trainNum} → ${t.destName||"?"}`,
@@ -2051,7 +2070,8 @@ async function fetchSubwayLive(){
 function renderSubway(list){
   state.lastMtaOk=Date.now();   // feed readout
   const box=$("#subwayList"); if(!box) return; box.innerHTML="";
-  if(!list.length){ box.appendChild(el("div","empty","No subway trains found nearby right now.")); $("#subwayCount").textContent=""; return; }
+  if(!list.length){ box.appendChild(el("div","empty","No subway trains found nearby right now.")); $("#subwayCount").textContent="";
+    if(window.TBDep) TBDep.clear("subway"); return; }
   list.slice(0,20).forEach(({v,lateMin,arrSec,mi,stationName})=>{
     const row=el("div","row");
     const b=el("div","badge", v.routeId||"?"); b.style.background=SUBWAY_COL[v.routeId]||"#888";
@@ -2069,13 +2089,22 @@ function renderSubway(list){
     row.onclick=()=>startFollow("subway", "sw"+v.tripId);
     box.appendChild(row);
   });
+  /* Feed the commute countdown and the wait recorder (departures.js). These
+     rows are trains near YOU rather than departures from one stop, so the
+     "stop" is the station each train is at or approaching and the time is that
+     train's own live prediction for it — which is exactly what the countdown
+     needs once you pick that station. */
+  if(window.TBDep) TBDep.feed("subway", list.filter(x=>x.stationName && x.arrSec).map(x=>({
+    mode:"metro", stop:x.stationName, route:(x.v&&x.v.routeId)||"", dest:"",
+    min:Math.round((x.arrSec*1000-Date.now())/60000),
+    color:SUBWAY_COL[x.v&&x.v.routeId]||"#888", live:true })));
   $("#subwayCount").textContent = `${list.length} nearby`;
   fitList(box);
 }
 function drawSubway(list){
   const items=list.map(({v,lat,lon,stationName})=>({
     id:"sw"+v.tripId, lat, lon,
-    icon:()=>labelIcon(SUBWAY_COL[v.routeId]||"#888", v.routeId||"?"),
+    icon:()=>labelIcon(SUBWAY_COL[v.routeId]||"#888", v.routeId||"?", "metro"),
     ik:"sw-"+(v.routeId||""),
     tip:`${v.routeId||"?"} train${stationName?` · ${v.status===1?"at":"approaching"} ${stationName}`:""}`
   }));
@@ -2439,7 +2468,8 @@ async function fetchRailLive(feedPath, ensureSched, lineOf){
 }
 function renderRailCard(listId, countId, list, color, fleet){
   const box=$(listId); if(!box) return; box.innerHTML="";
-  if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent=""; return; }
+  if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent="";
+    if(window.TBDep && fleet) TBDep.clear(fleet); return; }
   list.slice(0,20).forEach(({v,lateMin,arrSec,mi,stationName,line})=>{
     const row=el("div","row");
     const b=el("div","badge rail", line||"?"); b.style.background=color;
@@ -2457,14 +2487,21 @@ function renderRailCard(listId, countId, list, color, fleet){
     }
     box.appendChild(row);
   });
+  if(window.TBDep && fleet) TBDep.feed(fleet, (list||[]).filter(x=>x.stationName && x.arrSec).map(x=>({
+    mode:NYC_FLEET_MODE[fleet]||"train", stop:x.stationName, route:x.line||"", dest:"",
+    min:Math.round((x.arrSec*1000-Date.now())/60000), color:color, live:true })));
   $(countId).textContent = `${list.length} nearby`;
   fitList(box);
 }
 const NYC_FLEET_NAME={ subway:"Subway", lirr:"LIRR", mnr:"Metro-North" };
+/* Which glyph each family gets on the map (vehicle-icons.js). Colour still
+   carries the line; shape now carries the mode, so a tram and a bus sharing
+   a corridor and a palette stop looking like the same vehicle. */
+const NYC_FLEET_MODE={ subway:"metro", lirr:"train", mnr:"train" };
 function drawRailFleet(fleet, list, color){
   const items=(list||[]).map(({v,lat,lon,stationName,line})=>({
     id:fleet+v.tripId, lat, lon,
-    icon:()=>labelIcon(color, line||"?"),
+    icon:()=>labelIcon(color, line||"?", NYC_FLEET_MODE[fleet]),
     ik:fleet+"-"+(line||""),
     tip:`${line||"Train"}${stationName?` · ${v.status===1?"at":"approaching"} ${stationName}`:""}`,
     color, label:`${NYC_FLEET_NAME[fleet]||""} ${line||""}`.trim()||"Train"
@@ -2518,11 +2555,17 @@ async function refreshBusScheduled(){
   const active=marcActiveServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
+  /* Fed from this stop's whole `deps` list rather than the three-per-direction
+     slice the card displays: the countdown wants every departure you could
+     still walk to, not just the ones that fitted in the box. */
+  const depFeed=[];
   for(const {st,mi} of near){
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
+    depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
+      mode:"bus", stop:st.name, route:d.line||"", dest:d.hs||"", min:d.t-nowMin, color:BUS_COL, live:false })));
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "bus", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||group[0].line)));
@@ -2542,6 +2585,7 @@ async function refreshBusScheduled(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more scheduled buses today at nearby stops."));
+  if(window.TBDep) TBDep.feed("bus", depFeed);
   $("#busCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
@@ -2564,7 +2608,7 @@ async function drawBusScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"bs"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(BUS_COL, `${tr.line} → ${tr.hs}`),
+        icon:()=>labelIcon(BUS_COL, `${tr.line} → ${tr.hs}`, "bus"),
         ik:"bs-"+tr.line+"-"+i, tip:`MTA Bus ${tr.line} → ${tr.hs} (scheduled)`,
         color:BUS_COL, label:`MTA Bus ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -2677,11 +2721,16 @@ async function refreshPathScheduled(){
   const active=marcActiveServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
+  const depFeed=[];
   for(const {st,mi} of near){
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t})).filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
+    /* Fed from the stop's whole `deps` list rather than the slice the card
+       shows: the countdown wants every departure you could still walk to. */
+    depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
+      mode:"metro", stop:st.name, route:"PATH", dest:d.hs||"", min:d.t-nowMin, color:PATH_COL, live:false })));
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "path", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||"PATH")));
@@ -2700,6 +2749,7 @@ async function refreshPathScheduled(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No more PATH trains today at nearby stations."));
+  if(window.TBDep) TBDep.feed("path", depFeed);
   $("#pathCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
@@ -2717,7 +2767,7 @@ async function drawPathScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"path"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(PATH_COL, `PATH → ${tr.hs}`),
+        icon:()=>labelIcon(PATH_COL, `PATH → ${tr.hs}`, "metro"),
         ik:"path-"+i, tip:`PATH → ${tr.hs} (scheduled)`,
         color:PATH_COL, label:`PATH → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -3196,6 +3246,23 @@ function setLegend(mode){
 function buildLegendButtons(){
   document.querySelectorAll("#legendRow .theme-btn").forEach(b=>{ b.onclick=()=>setLegend(b.dataset.legend); });
 }
+
+/* Mode glyphs vs the original dots. Dots are kept as a real choice, not a
+   grudging fallback: at a low zoom on a big city the glyphs are deliberately
+   more ink than a dot, and somebody running the board as ambient wallpaper may
+   well want the quieter map back. */
+function setVehIcons(mode){
+  mode = (mode==="dots") ? "dots" : "shapes";
+  localStorage.setItem("tb.vehIcons", mode);
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.vehicons===mode));
+  // Repaint what is already on the map -- markers only rebuild their icon when
+  // their icon key changes, so without this the switch would not show until
+  // each vehicle happened to change line or route.
+  if(typeof refreshFleetIcons==="function") refreshFleetIcons();
+}
+function buildVehIconButtons(){
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>{ b.onclick=()=>setVehIcons(b.dataset.vehicons); });
+}
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
@@ -3245,6 +3312,7 @@ async function refreshNjt(){
   const active=marcActiveServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
+  const depFeed=[];
   for(const {st,mi} of near){
     if(mi>25) break;
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
@@ -3252,6 +3320,11 @@ async function refreshNjt(){
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     used++;
+    /* Fed from the stop's whole `deps` list rather than the slice the card
+       shows: the countdown wants every departure you could still walk to. */
+    depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
+      mode:"train", stop:njtStation(st.name), route:d.line||"", dest:njtStation(d.hs)||njtName(d.line)||"",
+      min:d.t-nowMin, color:njtCol(d.line), live:false })));
     box.appendChild(el("div","stop-label","◼ "+njtStation(st.name)+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "njt", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(njtStation(group[0].hs)||njtName(group[0].line))));
@@ -3275,6 +3348,7 @@ async function refreshNjt(){
     });
   }
   if(!shown) box.appendChild(el("div","empty","No NJ Transit nearby (or none scheduled soon)."));
+  if(window.TBDep) TBDep.feed("njt", depFeed);
   $("#njtCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
   fitList(box);
 }
@@ -3293,7 +3367,7 @@ async function drawNjtScheduledMap(){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       const lbl=`${tr.line} → ${njtStation(tr.hs)}`;
       items.push({ id:"nj"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(njtCol(tr.line), lbl), ik:"nj-"+i,
+        icon:()=>labelIcon(njtCol(tr.line), lbl, "train"), ik:"nj-"+i,
         tip:`NJ Transit ${njtName(tr.line)} → ${njtStation(tr.hs)} (scheduled)`,
         color:njtCol(tr.line), label:`NJT ${lbl}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -3545,6 +3619,7 @@ function boot(){
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem("transitboardnyc.rows")||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
+  setVehIcons(localStorage.getItem("tb.vehIcons")||"shapes"); buildVehIconButtons();
   buildCardToggles();
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);

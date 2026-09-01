@@ -13,7 +13,7 @@
 <title>City Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=30" />
+<link rel="stylesheet" href="theme.css?v=29" />
 <script src="settings-ui.js?v=15" defer></script>
 <script src="clock-faces.js?v=1" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
@@ -28,18 +28,21 @@
 <script src="gate.js?v=3" defer></script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
+<script src="vehicle-icons.js?v=1"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
-<script src="atlasrows.js?v=1" defer></script>
-<script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="mascot.js?v=2" defer></script>
 <script src="mascot-buddy.js?v=6" defer></script>
 <script src="spotlog.js?v=13" defer></script>
-<script src="interesting.js?v=2" defer></script>
+<script src="interesting.js?v=1" defer></script>
+<script src="departures.js?v=1" defer></script>
+<script src="commute.js?v=6" defer></script>
+<script src="ontime.js?v=3" defer></script>
+<script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardmycity.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -730,6 +733,12 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
       <button type="button" class="theme-btn" data-legend="on">Shown</button>
     </div>
 
+    <div class="accent-lbl">Vehicles on the map</div>
+    <div class="theme-row" id="vehIconRow">
+      <button type="button" class="theme-btn" data-vehicons="shapes">Shapes</button>
+      <button type="button" class="theme-btn" data-vehicons="dots">Dots</button>
+    </div>
+
     <div class="accent-lbl">Show on board</div>
     <div class="theme-row" id="cardToggles"></div>
 
@@ -886,6 +895,28 @@ function refreshEverythingForNewLocation(){
   // [ADD-A-SYSTEM] refresh call: add your system's initial fetch here so it
   // reloads when the location changes, e.g.  refreshBus(); busMapTick();
 }
+/* [ADD-A-SYSTEM] commute countdown + track record: at the end of the function
+   that renders your system's departures card, hand the same departures to
+   departures.js and both of those cards start working for your city:
+
+     if(window.TBDep) TBDep.feed("bus", rows.map(d=>({
+       mode:"bus",              // vehicle-icons.js mode: metro/bus/train/tram/ferry
+       stop:  st.name,          // the stop, as a person would say it
+       route: d.line,           // line or route designation, "" if it has none
+       dest:  d.hs,             // headsign, "" if the feed has none
+       min:   d.t - nowMin,     // WHOLE minutes from now, 0 for boarding
+       color: BUS_COL,          // the colour this board already gives the line
+       live:  false,            // true only for a real-time prediction
+     })));
+
+   Feed one key per system and re-feed it on every render — a key replaces its
+   own bucket wholesale, so nothing goes stale. Call TBDep.clear("bus") on the
+   path where the card has nothing to show, or the last departures of the night
+   sit in the countdown until morning.
+
+   Two rules: never feed a vehicle nobody can board (out-of-service moves), and
+   never feed a cancelled departure. Both would have the countdown telling
+   somebody to leave the house for a train that is not coming. */
 function requestGeo(){
   if(!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
@@ -989,16 +1020,24 @@ function drawRangeRings(){
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 // A dot at the exact location + an info chip floating to its right (hidden when
 // zoomed out). Use this for any ground-vehicle marker.
-function labelIcon(color, label){
-  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:8px;top:-8px;
+/* `mode` ("metro"/"bus"/"train"/…) upgrades the dot to a mode glyph from
+   vehicle-icons.js, so shape says WHAT it is while colour keeps saying WHICH
+   LINE. Omit it — or turn glyphs off in Settings, or serve a board without
+   vehicle-icons.js — and this is exactly the dot it has always drawn. */
+function vehGlyphsOn(){ return (localStorage.getItem("tb.vehIcons")||"shapes")!=="dots"; }
+function labelIcon(color, label, mode){
+  const glyph = (mode && vehGlyphsOn() && window.TBVeh) ? TBVeh.glyphHTML(mode, color, 15) : "";
+  // The chip clears the marker it hangs off, so it has to move when the marker
+  // grows: 8px was measured against the 9px dot and would sit on top of a glyph.
+  const chipLeft = glyph ? 11 : 8;
+  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:${chipLeft}px;top:-8px;
       background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
       font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
       box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  const mark = glyph || `<span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>`;
   return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
-    html:`<div style="position:relative">
-      <span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
-        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>${chip}
-    </div>` });
+    html:`<div style="position:relative">${mark}${chip}</div>` });
 }
 // Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
 function planeIcon(track, label){
@@ -2015,7 +2054,7 @@ function renderAmtrak(list){
 function drawAmtrak(list){
   const items=list.map(({t})=>({
     id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
+    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`, "train"),
     ik:"a-"+(t.trainNum||"")+(t.destCode||""),
     tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`
   }));
@@ -2448,6 +2487,23 @@ function setLegend(mode){
 function buildLegendButtons(){
   document.querySelectorAll("#legendRow .theme-btn").forEach(b=>{ b.onclick=()=>setLegend(b.dataset.legend); });
 }
+
+/* Mode glyphs vs the original dots. Dots are kept as a real choice, not a
+   grudging fallback: at a low zoom on a big city the glyphs are deliberately
+   more ink than a dot, and somebody running the board as ambient wallpaper may
+   well want the quieter map back. */
+function setVehIcons(mode){
+  mode = (mode==="dots") ? "dots" : "shapes";
+  localStorage.setItem("tb.vehIcons", mode);
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.vehicons===mode));
+  // Repaint what is already on the map -- markers only rebuild their icon when
+  // their icon key changes, so without this the switch would not show until
+  // each vehicle happened to change line or route.
+  if(typeof refreshFleetIcons==="function") refreshFleetIcons();
+}
+function buildVehIconButtons(){
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>{ b.onclick=()=>setVehIcons(b.dataset.vehicons); });
+}
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
@@ -2506,6 +2562,7 @@ function boot(){
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
+  setVehIcons(localStorage.getItem("tb.vehIcons")||"shapes"); buildVehIconButtons();
   buildCardToggles();
   // applyCardVis() must run AFTER initMap() -- it needs state.map + the layers to exist.
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();

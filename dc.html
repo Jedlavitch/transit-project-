@@ -12,7 +12,7 @@
 <title>Washington DC Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=30" />
+<link rel="stylesheet" href="theme.css?v=29" />
 <script src="settings-ui.js?v=15" defer></script>
 <script src="clock-faces.js?v=1" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
@@ -31,17 +31,21 @@
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="delays.js?v=2"></script>
+<script src="vehicle-icons.js?v=1"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=2" defer></script>
 <script src="mascot-buddy.js?v=6" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="atlasrows.js?v=1" defer></script>
 <script src="fit-cards.js?v=5" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
+<script src="departures.js?v=1" defer></script>
+<script src="commute.js?v=6" defer></script>
+<script src="ontime.js?v=3" defer></script>
+<script src="weather-radar.js?v=1" defer></script>
 <script src="interesting.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -666,6 +670,11 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="statline" id="planeStat"></div>
           <div class="list" id="planeList"><div class="empty">Scanning the sky…</div></div>
         </div>
+        <div class="card" id="liftCard" style="--sys:#8f7cf0; --sys2:#c3b3ff">
+          <h2><span class="t">Lifts &amp; escalators</span> <span class="count" id="liftCount"></span></h2>
+          <div class="statline" id="liftStat"></div>
+          <div class="list" id="liftList"><div class="empty">Checking step-free access…</div></div>
+        </div>
       </div>
     </div>
   </main>
@@ -757,6 +766,12 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
     <div class="theme-row" id="legendRow">
       <button type="button" class="theme-btn" data-legend="off">Hidden</button>
       <button type="button" class="theme-btn" data-legend="on">Shown</button>
+    </div>
+
+    <div class="accent-lbl">Vehicles on the map</div>
+    <div class="theme-row" id="vehIconRow">
+      <button type="button" class="theme-btn" data-vehicons="shapes">Shapes</button>
+      <button type="button" class="theme-btn" data-vehicons="dots">Dots</button>
     </div>
 
     <div class="accent-lbl">Show on board</div>
@@ -1229,16 +1244,24 @@ function wireFollowRow(row, fleet, prefix, d){
 }
 // A dot at the exact location + an info chip floating to its right.
 // The chip is hidden when zoomed out (state.labelsOn) to avoid clutter.
-function labelIcon(color, label){
-  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:8px;top:-8px;
+/* `mode` ("metro"/"bus"/"train"/…) upgrades the dot to a mode glyph from
+   vehicle-icons.js, so shape says WHAT it is while colour keeps saying WHICH
+   LINE. Omit it — or turn glyphs off in Settings, or serve a board without
+   vehicle-icons.js — and this is exactly the dot it has always drawn. */
+function vehGlyphsOn(){ return (localStorage.getItem("tb.vehIcons")||"shapes")!=="dots"; }
+function labelIcon(color, label, mode){
+  const glyph = (mode && vehGlyphsOn() && window.TBVeh) ? TBVeh.glyphHTML(mode, color, 15) : "";
+  // The chip clears the marker it hangs off, so it has to move when the marker
+  // grows: 8px was measured against the 9px dot and would sit on top of a glyph.
+  const chipLeft = glyph ? 11 : 8;
+  const chip = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:${chipLeft}px;top:-8px;
       background:rgba(9,13,24,.85);color:#fff;padding:1px 5px;border-radius:5px;
       font:700 10px/13px -apple-system,system-ui,sans-serif;white-space:nowrap;border-left:3px solid ${color};
       box-shadow:0 1px 3px rgba(0,0,0,.55)">${esc(label)}</span>` : "";
+  const mark = glyph || `<span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>`;
   return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
-    html:`<div style="position:relative">
-      <span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
-        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>${chip}
-    </div>` });
+    html:`<div style="position:relative">${mark}${chip}</div>` });
 }
 // Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
 function planeIcon(track, label){
@@ -1451,6 +1474,27 @@ function railMinCell(min){
 function renderRail(trains){
   const box=$("#railList"); box.innerHTML="";
   state._rail=trains;   // stats strip reads this
+  /* Feed the commute countdown and the wait recorder via departures.js, which
+     buckets per key so each render owns exactly its own rows — a feed that
+     stops updating goes stale on its own rather than leaving orphans nobody can
+     attribute. BRD/ARR are 0 minutes: you cannot walk to a train already there. */
+  const metroDeps = trains.filter(t=>{
+    if(!t.LocationName) return false;
+    /* Drop the trains you cannot board. WMATA publishes out-of-service and
+       terminating moves in the same list as real departures, marked by a
+       LineCode of "--"/"No" and a destination of "No Passenger" or "Train".
+       They are legitimately shown in the departures card (a train IS coming),
+       but a countdown telling you to leave the house for one, or a wait
+       statistic counting one, would be plainly wrong. */
+    if(!t.Line || t.Line==="--" || t.Line==="No") return false;
+    if(/^(no passenger|train|ssenger)$/i.test((t.DestinationName||"").trim())) return false;
+    return true;
+  }).map(t=>({
+    mode:"metro", stop:t.LocationName, route:t.Line, dest:t.DestinationName||t.Destination||"",
+    min: railKey(t.Min)<0 ? 0 : parseInt(t.Min,10),
+    color: RAIL_COLORS[t.Line]||"#8aa", live:true,
+  })).filter(d=>isFinite(d.min));
+  if(window.TBDep) TBDep.feed("metro", metroDeps);
   // group by our stations (in order of distance)
   const byStation=new Map();
   state.nearRail.forEach(s=>byStation.set(s.Name, []));
@@ -1581,7 +1625,9 @@ function fitList(box){
   box.dataset.want=String(content);
 }
 /* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
-const LIST_IDS=["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList"];
+const LIST_IDS=["#railList","#busList","#amtrakList","#marcList","#rideonList","#planeList",
+  "#liftList"];   // #cmList is absent on purpose: commute.js sets its own data-want
+                  // (fitList would overwrite it with the post-trim height)
 function fitAll(){
   balanceCards();
   LIST_IDS.forEach(sel=>fitList($(sel)));
@@ -1637,6 +1683,7 @@ async function fetchBus(){
   await ensureBusStops();
   const box=$("#busList"); box.innerHTML="";
   let any=false, predCount=0, soonest=null;
+  const busDeps=[];   // this render's rows for the commute countdown
   for(const stop of state.busStops){
     let pred={}, sched={};
     try{ pred = await getJSON(wmata(`NextBusService.svc/json/jPredictions?StopID=${stop.StopID}`)); }catch(e){}
@@ -1650,6 +1697,8 @@ async function fetchBus(){
       preds.forEach(p=>{
         predCount++;
         if(soonest==null || p.Minutes<soonest.min) soonest={min:p.Minutes, label:`${p.RouteID} · ${p.DirectionText||""}`};
+        busDeps.push({ mode:"bus", stop:stop.Name||("Stop "+stop.StopID), route:p.RouteID||"",
+          dest:p.DirectionText||"", min:p.Minutes, color:"#6aa9ff", live:true });
         const row=el("div","row");
         const b=el("div","badge", p.RouteID); b.style.background="#6aa9ff";
         const mid=el("div"); mid.appendChild(el("div","dest", p.DirectionText||"—"));
@@ -1675,6 +1724,7 @@ async function fetchBus(){
   }
   if(!any) box.appendChild(el("div","empty","No buses predicted at nearby stops right now."));
   state._busPreds=predCount; state._busNext=soonest;   // stats strip reads these
+  if(window.TBDep) TBDep.feed("bus", busDeps);
   $("#busCount").textContent = state.busStops.length? `${state.busStops.length} stops nearby` : "";
   fitList(box);
 }
@@ -2152,7 +2202,7 @@ async function fetchMetroTrains(){
     if(!ll) return;
     const destN=nameByCode[tp.DestinationStationCode]||tp.DestinationStationCode||"";
     items.push({ id:"mt"+(tp.TrainId||tp.TrainNumber||tp.CircuitId), lat:ll[0], lon:ll[1],
-      icon:()=>labelIcon(RAIL_COLORS[tp.LineCode]||"#8aa", `${tp.LineCode}${destN?" → "+destN:""}`),
+      icon:()=>labelIcon(RAIL_COLORS[tp.LineCode]||"#8aa", `${tp.LineCode}${destN?" → "+destN:""}`, "metro"),
       ik:"metro-"+tp.LineCode+"-"+(tp.DestinationStationCode||""),
       tip:`Metro ${tp.LineCode} → ${destN||"?"}${tp.CarCount?` · ${tp.CarCount} cars`:""}`,
       color:RAIL_COLORS[tp.LineCode]||"#8aa", label:`Metro ${tp.LineCode} → ${destN||"?"}` });
@@ -2168,7 +2218,7 @@ async function fetchBusPositions(){
   catch(e){ return; }
   const items=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null).map(v=>({
     id:"b"+(v.VehicleID||`${v.RouteID}-${v.Lat}`), lat:v.Lat, lon:v.Lon,
-    icon:()=>labelIcon("#6aa9ff", v.RouteID), ik:"bus-"+v.RouteID,
+    icon:()=>labelIcon("#6aa9ff", v.RouteID, "bus"), ik:"bus-"+v.RouteID,
     tip:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`,
     color:"#6aa9ff", label:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`
   }));
@@ -2287,7 +2337,7 @@ function renderAmtrak(list){
 function drawAmtrak(list){
   const items=list.map(({t})=>({
     id:"a"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`),
+    icon:()=>labelIcon("#3ad0c8", `${t.trainNum||"?"}${t.destCode?" "+t.destCode:""}`, "train"),
     ik:"a-"+(t.trainNum||"")+(t.destCode||""),
     tip:`${t.routeName} #${t.trainNum} → ${t.destName||"?"}`,
     color:"#3ad0c8", label:`${t.routeName||"Amtrak"} #${t.trainNum} → ${t.destName||"?"}`,
@@ -2334,7 +2384,7 @@ async function fetchMarc(){
 function drawMarc(veh){
   const items=veh.map(v=>({
     id:"m"+(v.id||v.train), lat:v.lat, lon:v.lon,
-    icon:()=>labelIcon(MARC_COL[v.line]||"#e8792b", `${v.line} ${v.train}`), ik:"marc-"+v.line+"-"+v.train,
+    icon:()=>labelIcon(MARC_COL[v.line]||"#e8792b", `${v.line} ${v.train}`, "train"), ik:"marc-"+v.line+"-"+v.train,
     tip:`MARC ${v.line} #${v.train}${v.mph!=null?` · ${v.mph} mph`:""}`
   }));
   updateFleet("marc", items, CFG.marcEveryMs);
@@ -2454,7 +2504,7 @@ async function drawMarcScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"ms"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(MARC_COL[tr.line]||"#e8792b", `${tr.line} → ${marcStationName(tr.hs)}`),
+        icon:()=>labelIcon(MARC_COL[tr.line]||"#e8792b", `${tr.line} → ${marcStationName(tr.hs)}`, "train"),
         ik:"ms-"+tr.line+"-"+i, tip:`MARC ${tr.line} → ${tr.hs} (scheduled)`,
         color:MARC_COL[tr.line]||"#e8792b", label:`MARC ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -2540,7 +2590,7 @@ async function drawRideOnScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"ro"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(RIDEON_COL[tr.line]||"#3b527d", `${tr.line} → ${tr.hs}`),
+        icon:()=>labelIcon(RIDEON_COL[tr.line]||"#3b527d", `${tr.line} → ${tr.hs}`, "bus"),
         ik:"ro-"+tr.line+"-"+i, tip:`Ride On ${tr.line} → ${tr.hs} (scheduled)`,
         color:RIDEON_COL[tr.line]||"#3b527d", label:`Ride On ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -3030,6 +3080,23 @@ function buildLegendButtons(){
   document.querySelectorAll("#legendRow .theme-btn").forEach(b=>{ b.onclick=()=>setLegend(b.dataset.legend); });
 }
 
+/* Mode glyphs vs the original dots. Dots are kept as a real choice, not a
+   grudging fallback: at a low zoom on a big city the glyphs are deliberately
+   more ink than a dot, and somebody running the board as ambient wallpaper may
+   well want the quieter map back. */
+function setVehIcons(mode){
+  mode = (mode==="dots") ? "dots" : "shapes";
+  localStorage.setItem("tb.vehIcons", mode);
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.vehicons===mode));
+  // Repaint what is already on the map -- markers only rebuild their icon when
+  // their icon key changes, so without this the switch would not show until
+  // each vehicle happened to change line or route.
+  if(typeof refreshFleetIcons==="function") refreshFleetIcons();
+}
+function buildVehIconButtons(){
+  document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>{ b.onclick=()=>setVehIcons(b.dataset.vehicons); });
+}
+
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
@@ -3041,6 +3108,7 @@ const CARD_DEFS=[
   {id:"railCard", label:"Metrorail"}, {id:"busCard", label:"Metrobus"},
   {id:"amtrakCard", label:"Amtrak"}, {id:"marcCard", label:"MARC"},
   {id:"rideonCard", label:"Ride On"}, {id:"planeCard", label:"Planes"},
+  {id:"liftCard", label:"Lifts & escalators"},
 ];
 // Which map layer(s) each card's "show on board" toggle also controls -- hiding
 // a card means turning off that whole system, not just its departure-list card.
@@ -3246,6 +3314,126 @@ function paintAlerts(){
   // restate it AND cost a row's worth of the little height this card gets.
   list.innerHTML=lastRanked.slice(0,n).map(alertRowHTML).join("");
 }
+/* ---------- lifts & escalators (WMATA ElevatorIncidents) --------------------
+   The board already called Incidents and BusIncidents but never this one, and
+   it is the only feed that answers a question the others cannot: can I
+   actually get down to the platform. A delayed train costs you minutes; a dead
+   lift at the one accessible entrance costs you the trip, and you want to know
+   before you leave the house rather than at the top of the stairs.
+
+   Elevators outrank escalators absolutely — never interleaved by station or
+   time — because a broken escalator is an inconvenience and a broken lift can
+   be a closed door. Within each group, your own stations come first.
+
+   Unlike the service-alert card this one stays put when all is well: "step-free
+   at all 3" is the answer to the question, not the absence of one, and a card
+   that vanishes on good news can't be told from a card that failed to load. */
+const LIFT_ETA_FMT = { month:"short", day:"numeric" };
+function liftBackText(rec){
+  const raw=rec.EstimatedReturnToService||"";
+  const d=raw?new Date(raw):null;
+  if(!d || isNaN(d)) return "";                       // WMATA leaves this blank more often than not
+  const now=new Date();
+  if(d<now) return "overdue";
+  if(d.toDateString()===now.toDateString()) return "back "+d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  // Some of these run long -- a garage lift can be out until next winter. A
+  // bare "Jan 18" on a September board reads as eight months AGO, so anything
+  // landing in another year says which one.
+  const fmt = d.getFullYear()===now.getFullYear() ? LIFT_ETA_FMT : {...LIFT_ETA_FMT, year:"numeric"};
+  return "back "+d.toLocaleDateString([], fmt);
+}
+/* WMATA writes these for a maintenance system: ALL CAPS unit names, symptoms
+   like "SAFETY DEVICE ACTIVATED", and location text that repeats the station
+   name it is already filed under. Strip that back to the part that tells you
+   WHICH lift, since the station is the badge next to it. */
+function liftWhere(rec){
+  let s=(rec.LocationDescription||"").replace(/\s+/g," ").trim();
+  const stn=(rec.StationName||"").split(",")[0].trim();
+  if(stn) s=s.replace(new RegExp("^"+stn.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"[\\s,:-]*","i"),"");
+  s=s.replace(/\b(elevator|escalator)\b/ig,"").replace(/\s{2,}/g," ").replace(/^[\s,:-]+|[\s,:-]+$/g,"");
+  if(!s) s=(rec.UnitName||"").trim();
+  if(s.length>44) s=s.slice(0,42).replace(/\s+\S*$/,"")+"…";
+  return s;
+}
+function renderLifts(recs, ok){
+  const box=$("#liftList"); if(!box) return;
+  box.innerHTML="";
+  if(!ok){
+    box.appendChild(el("div","empty", state.wmataKey ? "Step-free status unavailable right now." : "Add a WMATA key in Settings to see lift outages."));
+    $("#liftCount").textContent=""; $("#liftStat").textContent="";
+    fitList(box); return;
+  }
+  // Your stations, by the codes the board is already watching. Transfer
+  // stations carry more than one code, so match on name too or a Metro Center
+  // outage filed under the other line's code would read as "somewhere else".
+  const mine=new Set(), mineNames=new Set();
+  state.nearRail.forEach(s=>{ if(s.Code) mine.add(s.Code); if(s.Name) mineNames.add(s.Name.split(",")[0].trim().toLowerCase()); });
+  const isMine=r=> mine.has(r.StationCode) || mineNames.has((r.StationName||"").split(",")[0].trim().toLowerCase());
+  const lifts=recs.filter(r=>/elevator/i.test(r.UnitType||""));
+  const escs =recs.filter(r=>/escalator/i.test(r.UnitType||""));
+  const rank=(a,b)=>(isMine(b)-isMine(a)) || (a.StationName||"").localeCompare(b.StationName||"");
+  lifts.sort(rank); escs.sort(rank);
+
+  const myLifts=lifts.filter(isMine), myEscs=escs.filter(isMine);
+  $("#liftCount").textContent = `${lifts.length} lift${lifts.length===1?"":"s"} · ${escs.length} esc`;
+  const stns=state.nearRail.length;
+  $("#liftStat").textContent = myLifts.length
+    ? `${myLifts.length} lift${myLifts.length===1?"":"s"} out at your station${myLifts.length===1?"":"s"}`
+    : (stns ? `step-free at all ${stns} of your stations` : "system-wide");
+
+  const rowFor=(r, kind)=>{
+    const row=el("div","row"+(kind==="lift"&&isMine(r)?" top":""));
+    const b=el("div","badge", kind==="lift"?"LIFT":"ESC");
+    b.style.background = kind==="lift" ? "#8f7cf0" : "#4a5578";
+    b.style.color="#fff";
+    const mid=el("div");
+    mid.appendChild(el("div","dest", (r.StationName||"—").split(",")[0]));
+    mid.appendChild(el("div","sub", [liftWhere(r), isMine(r)?"your station":""].filter(Boolean).join(" · ")));
+    const times=el("div","times");
+    const back=liftBackText(r);
+    times.appendChild(el("div","live"+(kind==="lift"?" arr":""), kind==="lift"?"OUT":"out"));
+    if(back) times.appendChild(el("div","sched", back));
+    row.append(b, mid, el("div"), times);
+    return row;
+  };
+  // Yours first under their own heading, then the rest of the system, so the
+  // list degrades gracefully when fitList() trims it: what gets cut is always
+  // the far-away half.
+  let any=false;
+  if(myLifts.length||myEscs.length){
+    box.appendChild(el("div","stop-label","● Your stations"));
+    myLifts.forEach(r=>{ box.appendChild(rowFor(r,"lift")); any=true; });
+    myEscs.forEach(r=>{ box.appendChild(rowFor(r,"esc")); any=true; });
+  }
+  /* Cap the away list hard. Metro runs ~600 escalators and 50-odd are out on an
+     ordinary day, so rendering them all made this card ask balanceCards() for
+     1947px — five times what the trains card wanted, on the strength of
+     escalators in stations you are not going to. The header already carries
+     the true totals, so the rows only have to cover the ones worth glancing at.
+     Lifts fill the quota before escalators for the same reason they sort
+     first. */
+  const REST_MAX=6;
+  const rest=[...lifts.filter(r=>!isMine(r)).map(r=>[r,"lift"]), ...escs.filter(r=>!isMine(r)).map(r=>[r,"esc"])]
+    .slice(0, REST_MAX);
+  if(rest.length){
+    box.appendChild(el("div","stop-label","● Elsewhere on Metro"));
+    rest.forEach(([r,k])=>{ box.appendChild(rowFor(r,k)); any=true; });
+  }
+  if(!any) box.appendChild(el("div","empty","Every lift and escalator is running."));
+  fitList(box);
+}
+async function refreshLifts(){
+  if(!state.wmataKey){ renderLifts([], false); return; }
+  try{
+    const d=await getJSON(wmata("Incidents.svc/json/ElevatorIncidents"));
+    renderLifts(d.ElevatorIncidents||[], true);
+  }catch(e){
+    // Keep the last good answer on screen rather than blanking it: outages
+    // change over hours, so a stale list is far better than no list.
+    if(!$("#liftList").querySelector(".row")) renderLifts([], false);
+  }
+}
+
 async function refreshAlertTicker(){
   if(!state.wmataKey){ renderTicker([]); return; }
   try{
@@ -3278,6 +3466,7 @@ function boot(){
   setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem("transitboard.rows")||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
+  setVehIcons(localStorage.getItem("tb.vehIcons")||"shapes"); buildVehIconButtons();
   buildCardToggles();
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);
@@ -3318,6 +3507,9 @@ function boot(){
   setInterval(refreshMarc, 30000);             // recompute next scheduled MARC trains (card)
   setInterval(refreshRideOn, 60000);           // recompute next scheduled Ride On (card)
   refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
+  // Lift crews work in hours, not minutes -- polling this faster would only
+  // spend the same shared WMATA quota the departures need.
+  refreshLifts(); setInterval(refreshLifts, 300000);
   setInterval(drawRideOnScheduledMap, CFG.rideonEveryMs); // Ride On positions on the map (scheduled)
   setInterval(fetchRailRoutes, CFG.routesEveryMs);
 
