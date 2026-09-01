@@ -30,7 +30,7 @@
 <script src="gate.js?v=3" defer></script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
-<script src="vehicle-icons.js?v=1"></script>
+<script src="vehicle-icons.js?v=5"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -625,13 +625,13 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         <span>Amtrak</span>
         <span style="color:#4F758B">▦ SEPTA rail</span>
         <span><span style="color:#1c6bb0">▦</span> SEPTA MFL <span style="color:#f7941d">▦</span> BSL</span>
-        <span style="color:#e8a33c">▦ SEPTA bus</span>
+        <span style="color:#2563eb">▦ SEPTA bus</span>
         <span style="color:#BC0035">▦ PATCO</span>
         <span style="color:#f0ab00">▦ NJ Transit</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
         <span style="color:#4F758B">━ SEPTA rail lines</span>
         <span><span style="color:#1c6bb0">━</span> MFL <span style="color:#f7941d">━</span> BSL</span>
-        <span style="color:#e8a33c">━ SEPTA bus lines</span>
+        <span style="color:#2563eb">━ SEPTA bus lines</span>
         <span style="color:#BC0035">━ PATCO line</span>
         <span style="opacity:.7">vehicles move live · zoom in for labels</span>
       </div>
@@ -654,7 +654,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="statline" id="septaSubwayStat"></div>
           <div class="list" id="septaSubwayList"><div class="empty">Loading SEPTA schedule…</div></div>
         </div>
-        <div class="card" id="septaBusCard" style="--sys:#e8a33c; --sys2:#ffd166; display:none">
+        <div class="card" id="septaBusCard" style="--sys:#2563eb; --sys2:#93b4fb; display:none">
           <h2><span class="t">SEPTA Bus — 3, 4 &amp; 16</span> <span class="count" id="septaBusCount"></span></h2>
           <div class="statline" id="septaBusStat"></div>
           <div class="list" id="septaBusList"><div class="empty">Loading SEPTA bus schedule…</div></div>
@@ -774,6 +774,12 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
     <div class="theme-row" id="vehIconRow">
       <button type="button" class="theme-btn" data-vehicons="shapes">Shapes</button>
       <button type="button" class="theme-btn" data-vehicons="dots">Dots</button>
+    </div>
+
+    <div class="accent-lbl">SEPTA Metro markers</div>
+    <div class="theme-row" id="septaMarkerRow">
+      <button type="button" class="theme-btn" data-septa="letters">Letters</button>
+      <button type="button" class="theme-btn" data-septa="vehicles">Vehicles</button>
     </div>
 
     <div class="accent-lbl">Show on board</div>
@@ -1684,7 +1690,7 @@ async function fetchBus(){
     if(preds.length){
       preds.forEach(p=>{
         const row=el("div","row");
-        const b=el("div","badge", p.RouteID); b.style.background="#6aa9ff";
+        const b=el("div","badge", p.RouteID); b.style.background="#2563eb";
         const mid=el("div"); mid.appendChild(el("div","dest", p.DirectionText||"—"));
         const schedT=schedByRoute[p.RouteID];
         mid.appendChild(el("div","sub", schedT?`sched ${schedT}`:""));
@@ -2198,7 +2204,7 @@ async function fetchBusPositions(){
   catch(e){ return; }
   const items=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null).map(v=>({
     id:"b"+(v.VehicleID||`${v.RouteID}-${v.Lat}`), lat:v.Lat, lon:v.Lon,
-    icon:()=>labelIcon("#6aa9ff", v.RouteID, "bus"), ik:"bus-"+v.RouteID,
+    icon:()=>labelIcon("#2563eb", v.RouteID, "bus"), ik:"bus-"+v.RouteID,
     tip:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`
   }));
   updateFleet("bus", items, CFG.busPosEveryMs);
@@ -2444,7 +2450,7 @@ function marcMapTick(){ if(state.marcUrl) fetchMarc(); else drawMarcScheduledMap
    gen-rideon-schedule.py) to show next-departure times AND to place buses
    on the map by interpolating each running trip between stops. Filtered to
    routes 23 and 29 only — see ROUTES in the generator script. */
-const RIDEON_COL = { "23":"#2f9e44", "29":"#1c7ed6" };
+const RIDEON_COL = { "23":"#5b8def", "29":"#1e3a8a" };
 async function ensureRideOnSchedule(){
   if(state.roSched) return state.roSched;
   try{
@@ -2648,7 +2654,8 @@ async function drawSeptaRailScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"sr"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(SEPTA_COL, `${tr.line} → ${tr.hs}`, "train"),
+        icon:()=>labelIcon(SEPTA_COL, `${tr.line} → ${tr.hs}`,
+                 septaMarkerStyle()==="vehicles" ? "pict-rail" : "train"),
         ik:"sr-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)`,
         color:SEPTA_COL, label:`SEPTA ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -2664,7 +2671,10 @@ async function drawSeptaRailScheduledMap(){
    routes to ROUTES in gen-septa-bus-schedule.py and re-run to track others.
    If the optional live Worker (below) is configured, live positions take
    over from scheduled ones automatically. */
-const SEPTA_BUS_COL = "#e8a33c";
+/* Violet, not the amber it was: that amber sat between the B line's orange
+   and the G line's yellow, which are real SEPTA brand colours and now carry
+   letter tiles. Buses have no line colour to defend. */
+const SEPTA_BUS_COL = "#2563eb";
 async function ensureSeptaBusSchedule(){
   if(state.septaBusSched) return state.septaBusSched;
   try{
@@ -2743,7 +2753,8 @@ async function drawSeptaBusScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"sb"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(SEPTA_BUS_COL, `${tr.line} → ${tr.hs}`, "bus"),
+        icon:()=>septaMetroIcon(tr.line, `${tr.line} → ${tr.hs}`)
+                 || labelIcon(SEPTA_BUS_COL, `${tr.line} → ${tr.hs}`, "bus"),
         ik:"sb-"+tr.line+"-"+i, tip:`SEPTA Route ${tr.line} → ${tr.hs} (scheduled)`,
         color:SEPTA_BUS_COL, label:`SEPTA Route ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -2775,7 +2786,8 @@ async function fetchSeptaLive(){
       .sort((a,b)=>a.mi-b.mi);
     const items=trains.map(({t})=>({
       id:"slt"+t.trainno, lat:+t.lat, lon:+t.lon,
-      icon:()=>labelIcon(SEPTA_COL, `${t.line||"?"} → ${t.dest||"?"}`, "train"), ik:"slt-"+t.trainno,
+      icon:()=>labelIcon(SEPTA_COL, `${t.line||"?"} → ${t.dest||"?"}`,
+        septaMarkerStyle()==="vehicles" ? "pict-rail" : "train"), ik:"slt-"+t.trainno,
       tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${delayHtml(liveLateInfo(t.late))} (live)`
     }));
     updateFleet("septaRail", items, CFG.septaEveryMs);
@@ -2810,7 +2822,9 @@ async function fetchSeptaLive(){
       .filter(x=>x.mi<=15).sort((a,b2)=>a.mi-b2.mi).slice(0,60);
     const items=buses.map(({b})=>({
       id:"slb"+b.VehicleID, lat:+b.lat, lon:+b.lng,
-      icon:()=>labelIcon("#e8a33c", `${b.route_id} → ${b.destination||"?"}`, "bus"), ik:"slb-"+b.route_id,
+      icon:()=>septaMetroIcon(b.route_id, `${b.route_id} → ${b.destination||"?"}`)
+               || labelIcon(SEPTA_BUS_COL, `${b.route_id} → ${b.destination||"?"}`, "bus"),
+      ik:"slb-"+b.route_id+"-"+septaMarkerStyle(),
       tip:`SEPTA Route ${b.route_id} → ${b.destination}${delayHtml(liveLateInfo(b.late))} (live)`
     }));
     updateFleet("septaBus", items, CFG.septaEveryMs);
@@ -2822,7 +2836,7 @@ async function fetchSeptaLive(){
       if(!buses.length) box.appendChild(el("div","empty","No SEPTA buses/trolleys within 15 mi right now."));
       buses.slice(0,20).forEach(({b,mi})=>{
         const row=el("div","row");
-        const bd=el("div","badge", b.route_id); bd.style.background="#e8a33c"; bd.style.color="#2a1c00";
+        const bd=el("div","badge", b.route_id); bd.style.background=SEPTA_BUS_COL; bd.style.color="#fff";
         const mid=el("div");
         mid.appendChild(el("div","dest", b.destination||"—"));
         const bSub=el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}`);
@@ -2850,6 +2864,58 @@ function septaMapTick(){
    Philadelphia you live). Surface trolleys aren't bundled yet — see
    gen-septa-subway-schedule.py to add specific ones once you know your
    school/dorm, the same way Ride On was scoped to routes 23 & 29. */
+/* ---------- SEPTA Metro identity on the map -------------------------------
+   SEPTA's 2024 wayfinding standard names things in four levels: PROVIDER
+   (SEPTA) → SYSTEM (Metro) → LINE (L B T M G D) → SERVICE PATTERN (L1, B1-B3,
+   T1-T5, M1, G1, D1-D2). This board already speaks the bottom level: the
+   bundled subway timetable is keyed L1/B1/B2/B3, and SEPTA's own live
+   transitview feed publishes T1-T5, M1, G1 and D1/D2 directly. So the LINE a
+   vehicle belongs to is simply the first character of what the feed already
+   says.
+
+   Two marker styles, because they answer different questions and the standard
+   uses both. "Letters" draws the line's own tile — what the station signage,
+   the pylon and the pocket map all show, so the map matches what a rider is
+   standing under. "Vehicles" draws the mode pictogram — trolley, metro car,
+   elevated — which says what will actually pull up. Settings picks; letters is
+   the default because it is the identity SEPTA itself leads with.
+
+   Regional Rail is deliberately excluded from the letter scheme: it is a
+   separate system in SEPTA's own hierarchy and its lines are named (Trenton,
+   Fox Chase), not lettered. It gets the mainline-rail pictogram either way. */
+const SEPTA_METRO_COL = {
+  L:"#1c6bb0",   // Market-Frankford      (the value this board already used for L1)
+  B:"#f7941d",   // Broad Street          (likewise for B1/B2/B3)
+  T:"#3f9c46",   // Subway-Surface trolleys — T1=10, T2=34, T3=13, T4=11, T5=36
+  M:"#5b2d90",   // Norristown High Speed Line
+  G:"#fdb913",   // Girard Ave trolley (route 15)
+  D:"#e0457b",   // Media-Sharon Hill  — D1=101, D2=102
+};
+// Which pictogram each line's vehicles actually are.
+const SEPTA_METRO_PICT = {
+  L:"pict-el",      // the El
+  B:"pict-metro",   // subway
+  M:"pict-metro",   // high-speed line, metro rolling stock
+  T:"pict-tram", G:"pict-tram", D:"pict-tram",
+};
+/* The digit is required, not optional. SEPTA also runs BUS routes lettered G,
+   H, J, K, L and R — a bare "L" in the vehicle feed is the L bus, not the
+   Market-Frankford Line, and painting it blue with an L tile would be a
+   confident lie. Every Metro code in both the bundle and the live feed carries
+   its service-pattern number. */
+function septaMetro(code){
+  const c=String(code||"").toUpperCase().trim();
+  if(!/^[LBTMGD]\d+$/.test(c)) return null;
+  const letter=c[0];
+  return { letter, color: SEPTA_METRO_COL[letter]||"#556", pict: SEPTA_METRO_PICT[letter]||"pict-metro" };
+}
+function septaMarkerStyle(){ return localStorage.getItem("tb.septaMarkers")==="vehicles" ? "vehicles" : "letters"; }
+/* The icon a SEPTA Metro vehicle gets, in the line's own colour. Falls back to
+   the caller's own icon when the code is not a Metro line (every numbered bus). */
+function septaMetroIcon(code, label){
+  const m=septaMetro(code); if(!m) return null;
+  return labelIcon(m.color, label, septaMarkerStyle()==="vehicles" ? m.pict : "letter:"+m.letter);
+}
 const SEPTA_SUBWAY_COL = { L1:"#1c6bb0", B1:"#f7941d", B2:"#f7941d", B3:"#f7941d" };
 async function ensureSeptaSubwaySchedule(){
   if(state.septaSubwaySched) return state.septaSubwaySched;
@@ -2922,7 +2988,8 @@ async function drawSeptaSubwayScheduledMap(){
       const ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"ss"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
-        icon:()=>labelIcon(SEPTA_SUBWAY_COL[tr.line]||"#556", `${tr.line} → ${tr.hs}`, "metro"),
+        icon:()=>septaMetroIcon(tr.line, `${tr.line} → ${tr.hs}`)
+                 || labelIcon(SEPTA_SUBWAY_COL[tr.line]||"#556", `${tr.line} → ${tr.hs}`, "metro"),
         ik:"ss-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)`,
         color:SEPTA_SUBWAY_COL[tr.line]||"#556", label:`SEPTA ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
@@ -3628,6 +3695,21 @@ function setVehIcons(mode){
 function buildVehIconButtons(){
   document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>{ b.onclick=()=>setVehIcons(b.dataset.vehicons); });
 }
+
+/* SEPTA Metro: the line's own letter tile, or the mode pictogram. See the
+   SEPTA_METRO_COL block for why both exist. */
+function setSeptaMarkers(mode){
+  mode = (mode==="vehicles") ? "vehicles" : "letters";
+  localStorage.setItem("tb.septaMarkers", mode);
+  document.querySelectorAll("#septaMarkerRow .theme-btn").forEach(b=>b.classList.toggle("active", b.dataset.septa===mode));
+  // Markers only rebuild their icon when their icon KEY changes, so repaint the
+  // whole fleet -- otherwise the switch would not show until a vehicle happened
+  // to change route.
+  if(typeof refreshFleetIcons==="function") refreshFleetIcons();
+}
+function buildSeptaMarkerButtons(){
+  document.querySelectorAll("#septaMarkerRow .theme-btn").forEach(b=>{ b.onclick=()=>setSeptaMarkers(b.dataset.septa); });
+}
 function buildDisplayButtons(){
   document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
@@ -3877,6 +3959,7 @@ function boot(){
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
   setVehIcons(localStorage.getItem("tb.vehIcons")||"shapes"); buildVehIconButtons();
+  setSeptaMarkers(localStorage.getItem("tb.septaMarkers")||"letters"); buildSeptaMarkerButtons();
   buildCardToggles();
   loadSavedLoc(); applyLoc(state.loc); initMap(); applyCardVis(); initMiniCards();
   tickClock(); setInterval(tickClock, CFG.clockEveryMs);

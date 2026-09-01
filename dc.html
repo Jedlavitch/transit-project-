@@ -31,7 +31,7 @@
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="delays.js?v=2"></script>
-<script src="vehicle-icons.js?v=1"></script>
+<script src="vehicle-icons.js?v=5"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=2" defer></script>
@@ -628,7 +628,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         <span>aircraft</span>
         <span>Amtrak</span>
         <span style="color:#e8792b">▦ MARC</span>
-        <span><span style="color:#2f9e44">▦</span> Ride On 23 <span style="color:#1c7ed6">▦</span> 29</span>
+        <span><span style="color:#5b8def">▦</span> Ride On 23 <span style="color:#1e3a8a">▦</span> 29</span>
         <span>live Metrobus</span>
         <span>◉ Metro train</span>
         <span>Metro station</span>
@@ -645,7 +645,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="statline" id="railStat"></div>
           <div class="list" id="railList"><div class="empty">Loading trains…</div></div>
         </div>
-        <div class="card" id="busCard" style="--sys:#6aa9ff; --sys2:#b58cff">
+        <div class="card" id="busCard" style="--sys:#2563eb; --sys2:#93b4fb">
           <h2><span class="t">Buses — Metrobus</span> <span class="count" id="busCount"></span></h2>
           <div class="statline" id="busStat"></div>
           <div class="list" id="busList"><div class="empty">Loading buses…</div></div>
@@ -660,7 +660,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="statline" id="marcStat"></div>
           <div class="list" id="marcList"><div class="empty">Loading MARC schedule…</div></div>
         </div>
-        <div class="card" id="rideonCard" style="display:none; --sys:#2f9e44; --sys2:#7ce38b">
+        <div class="card" id="rideonCard" style="display:none; --sys:#5b8def; --sys2:#93b4fb">
           <h2><span class="t">Ride On — 23 &amp; 29</span> <span class="count" id="rideonCount"></span></h2>
           <div class="statline" id="rideonStat"></div>
           <div class="list" id="rideonList"><div class="empty">Loading Ride On schedule…</div></div>
@@ -1698,9 +1698,9 @@ async function fetchBus(){
         predCount++;
         if(soonest==null || p.Minutes<soonest.min) soonest={min:p.Minutes, label:`${p.RouteID} · ${p.DirectionText||""}`};
         busDeps.push({ mode:"bus", stop:stop.Name||("Stop "+stop.StopID), route:p.RouteID||"",
-          dest:p.DirectionText||"", min:p.Minutes, color:"#6aa9ff", live:true });
+          dest:p.DirectionText||"", min:p.Minutes, color:"#2563eb", live:true });
         const row=el("div","row");
-        const b=el("div","badge", p.RouteID); b.style.background="#6aa9ff";
+        const b=el("div","badge", p.RouteID); b.style.background="#2563eb";
         const mid=el("div"); mid.appendChild(el("div","dest", p.DirectionText||"—"));
         const schedT=schedByRoute[p.RouteID];
         mid.appendChild(el("div","sub", schedT?`sched ${schedT}`:""));
@@ -2218,9 +2218,9 @@ async function fetchBusPositions(){
   catch(e){ return; }
   const items=(data.BusPositions||[]).filter(v=>v.Lat!=null&&v.Lon!=null).map(v=>({
     id:"b"+(v.VehicleID||`${v.RouteID}-${v.Lat}`), lat:v.Lat, lon:v.Lon,
-    icon:()=>labelIcon("#6aa9ff", v.RouteID, "bus"), ik:"bus-"+v.RouteID,
+    icon:()=>labelIcon("#2563eb", v.RouteID, "bus"), ik:"bus-"+v.RouteID,
     tip:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`,
-    color:"#6aa9ff", label:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`
+    color:"#2563eb", label:`Metrobus ${v.RouteID} → ${v.TripHeadsign||""}`
   }));
   updateFleet("bus", items, CFG.busPosEveryMs);
 }
@@ -2522,7 +2522,9 @@ function marcMapTick(){ if(state.marcUrl) fetchMarc(); else drawMarcScheduledMap
    gen-rideon-schedule.py) to show next-departure times AND to place buses
    on the map by interpolating each running trip between stops. Filtered to
    routes 23 and 29 only — see ROUTES in the generator script. */
-const RIDEON_COL = { "23":"#2f9e44", "29":"#1c7ed6" };
+/* Ride On sits in the same violet family as Metrobus — both are buses — but
+   keeps two shades so the legend can still tell 23 from 29. */
+const RIDEON_COL = { "23":"#5b8def", "29":"#1e3a8a" };
 async function ensureRideOnSchedule(){
   if(state.roSched) return state.roSched;
   try{

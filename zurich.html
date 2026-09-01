@@ -28,7 +28,7 @@
 <script src="gate.js?v=3" defer></script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
-<script src="vehicle-icons.js?v=1"></script>
+<script src="vehicle-icons.js?v=5"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -626,7 +626,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         <span style="color:#3ad0c8">▦ regional</span>
         <span style="color:#4ea1ff">▦ metro</span>
         <span style="color:#f0ab00">▦ tram</span>
-        <span style="color:#6aa9ff">▦ bus</span>
+        <span style="color:#2563eb">▦ bus</span>
         <span style="color:#5ad17a">▦ boat</span>
         <!-- [ADD-A-SYSTEM] legend swatch: one <span style="color:#XXX">▦ YourSystem</span> per system -->
         <span style="opacity:.7">positions from the timetable · zoom in for labels</span>
@@ -664,7 +664,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="statline" id="tramStat"></div>
           <div class="list" id="tramList"><div class="empty">Loading…</div></div>
         </div>
-        <div class="card" id="busxCard" style="--sys:#6aa9ff; --sys2:#8fc4ff">
+        <div class="card" id="busxCard" style="--sys:#2563eb; --sys2:#93b4fb">
           <h2><span class="t">Buses</span> <span class="count" id="busxCount"></span></h2>
           <div class="statline" id="busxStat"></div>
           <div class="list" id="busxList"><div class="empty">Loading…</div></div>
@@ -1833,7 +1833,7 @@ function vertText(a){
 const FAMILY_CARDS = [["intl","international"],["ld","longdistance"],["regio","regional"],["metro","metro"],
                       ["tram","tram"],["busx","bus"],["ferry","ferry"]];
 const FAMILY_COL = {intl:"#1D4E9E", ld:"#e2504f", regio:"#3ad0c8", metro:"#4ea1ff",
-                    tram:"#f0ab00", busx:"#6aa9ff", ferry:"#5ad17a"};
+                    tram:"#f0ab00", busx:"#2563eb", ferry:"#5ad17a"};   // busx violet: #6aa9ff was a few units from metro above
 /* Which glyph each family gets on the map (vehicle-icons.js). Colour still
    carries the line; shape now carries the mode, so a tram and a bus sharing
    a corridor and a palette stop looking like the same vehicle. */

@@ -30,7 +30,7 @@
 <script src="gate.js?v=3" defer></script>
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
-<script src="vehicle-icons.js?v=1"></script>
+<script src="vehicle-icons.js?v=5"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -623,7 +623,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         <span style="color:#EE352E">▦ Subway</span>
         <span style="color:#00985F">▦ LIRR</span>
         <span style="color:#A72650">▦ Metro-North</span>
-        <span style="color:#6E6E6E">▦ MTA Bus</span>
+        <span style="color:#2563eb">▦ MTA Bus</span>
         <span style="color:#00A9E0">▦ PATH</span>
         <span style="color:#f0ab00">▦ NJ Transit</span>
         <span style="color:#3ad0c8">┈ Amtrak route</span>
@@ -649,7 +649,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="statline" id="mnrStat"></div>
           <div class="list" id="mnrList"><div class="empty">Finding nearby trains…</div></div>
         </div>
-        <div class="card" id="busCard" style="--sys:#6E6E6E; --sys2:#b0b8c9">
+        <div class="card" id="busCard" style="--sys:#2563eb; --sys2:#93b4fb">
           <h2><span class="t">MTA Bus — M42/M15/M34</span> <span class="count" id="busCount"></span></h2>
           <div class="statline" id="busStat"></div>
           <div class="list" id="busList"><div class="empty">Loading bus schedule…</div></div>
@@ -2528,7 +2528,9 @@ async function fetchMnrLive(){
    positions (interpolated between stops) with no setup; pasting a deployed
    Worker URL into Settings upgrades to exact live positions for the same
    card+map. */
-const BUS_COL = "#6E6E6E";
+/* Was a neutral grey, which said "no line colour" honestly enough but read
+   as dead on a dark basemap. Violet says the same thing and can be seen. */
+const BUS_COL = "#2563eb";
 function busClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>=12?"PM":"AM"; return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${ap}`; }
 async function ensureBusSchedule(){
   if(state.busSched) return state.busSched;
