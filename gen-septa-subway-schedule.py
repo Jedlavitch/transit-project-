@@ -30,7 +30,20 @@ import csv, io, json, os, urllib.request, zipfile, datetime
 
 GTFS_URL = "https://www3.septa.org/developer/gtfs_public.zip"
 OUT = os.path.join(os.path.dirname(__file__), "septa-subway-schedule.json")
-ROUTES = {"L1", "B1", "B2", "B3"}   # Market-Frankford Line + Broad Street Line
+# Every SEPTA Metro service pattern. This started as just the two rapid-transit
+# spines because the trolleys "add real bulk" — they run very frequently, so
+# they carry a lot of stop_times. That was the right call when the board had no
+# other way to show them; it is the wrong one now that the map draws all six
+# lines and the departure card is called SEPTA Metro but could only ever answer
+# for two of them.
+#
+#   L1          Market-Frankford Line ("the El")
+#   B1/B2/B3    Broad Street Line — Local / Express / Ridge Spur
+#   T1-T5       Subway-Surface trolleys — routes 10, 34, 13, 11, 36
+#   G1          Girard Ave trolley — route 15
+#   D1/D2       Media and Sharon Hill trolleys — routes 101, 102
+#   M1          Norristown High Speed Line
+ROUTES = {"L1", "B1", "B2", "B3", "T1", "T2", "T3", "T4", "T5", "G1", "D1", "D2", "M1"}
 
 def rows(zf, name):
     with zf.open(name) as fh:

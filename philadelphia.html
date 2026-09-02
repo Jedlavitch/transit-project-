@@ -3042,7 +3042,11 @@ function septaMetroIcon(code, label){
   const m=septaMetro(code); if(!m) return null;
   return labelIcon(m.color, label, septaMarkerStyle()==="vehicles" ? m.pict : "letter:"+m.letter);
 }
+/* Kept for anything that still asks by pattern, but septaMetroCol() is the
+   answer now: the bundle carries all thirteen patterns and a four-entry table
+   painted the nine new ones "#556" grey. */
 const SEPTA_SUBWAY_COL = { L1:"#1c6bb0", B1:"#f7941d", B2:"#f7941d", B3:"#f7941d" };
+const septaMetroCol = code => (septaMetro(code)||{}).color || SEPTA_SUBWAY_COL[code] || "#556";
 async function ensureSeptaSubwaySchedule(){
   if(state.septaSubwaySched) return state.septaSubwaySched;
   try{
@@ -3062,25 +3066,35 @@ async function refreshSeptaSubway(){
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   box.innerHTML=""; let shown=0, used=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
+  /* Cover LINES, not merely the nearest stop. The bundle went from 107 stations
+     to 711 when the trolleys were added, and trolley stops come every couple of
+     blocks — so "nearest stop wins, stop looking" would hand the whole card to
+     whichever trolley happens to run past the door and push the L and B, the
+     two lines most people actually want, off their own card. A stop earns a
+     slot only if it brings a line the card is not already showing. */
+  const shownLines=new Set();
   for(const {st,mi} of near){
-    if(mi>15) break;         // subway stations only matter if genuinely nearby
-    if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
+    if(mi>15) break;         // Metro stops only matter if genuinely nearby
+    if(used>=3) break;       // three line-groups is what the card's height affords
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
+    const here=new Set(deps.map(d=>(septaMetro(d.line)||{}).letter || d.line));
+    if([...here].every(l=>shownLines.has(l))) continue;   // nothing new to say
+    here.forEach(l=>shownLines.add(l));
     used++;
     /* Fed from the stop's whole `deps` list rather than the three-per-direction
        slice the card shows: the countdown wants every departure you could still
        walk to, not only the ones that fitted in the box. */
     depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
       mode:"metro", stop:st.name, route:d.line||"", dest:d.hs||"",
-      min:d.t-nowMin, color:SEPTA_SUBWAY_COL[d.line]||"#556", live:false })));
+      min:d.t-nowMin, color:septaMetroCol(d.line), live:false })));
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "septaSubway", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
       group.forEach(d=>{
         const row=el("div","row");
-        const b=el("div","badge rail", d.line); b.style.background=SEPTA_SUBWAY_COL[d.line]||"#556";
+        const b=el("div","badge rail", d.line); b.style.background=septaMetroCol(d.line);
         const mid=el("div");
         mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
         const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
@@ -3118,9 +3132,9 @@ async function drawSeptaSubwayScheduledMap(){
       const f = b[1]>a[1] ? (nm-a[1])/(b[1]-a[1]) : 0;
       items.push({ id:"ss"+i, lat:ca[0]+(cb[0]-ca[0])*f, lon:ca[1]+(cb[1]-ca[1])*f,
         icon:()=>septaMetroIcon(tr.line, `${tr.line} → ${tr.hs}`)
-                 || labelIcon(SEPTA_SUBWAY_COL[tr.line]||"#556", `${tr.line} → ${tr.hs}`, "metro"),
+                 || labelIcon(septaMetroCol(tr.line), `${tr.line} → ${tr.hs}`, "metro"),
         ik:"ss-"+tr.line+"-"+i, tip:`SEPTA ${tr.line} → ${tr.hs} (scheduled)`,
-        color:SEPTA_SUBWAY_COL[tr.line]||"#556", label:`SEPTA ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
+        color:septaMetroCol(tr.line), label:`SEPTA ${tr.line} → ${tr.hs}`, route:tr.st.map(([sid])=>s._coord[sid]).filter(Boolean) });
       break;
     }
   });
@@ -4175,7 +4189,15 @@ function computeHubs(){
     const lines={};                      // station id -> Set(line)
     (s.trips||[]).forEach(tr=>{
       if(!tr || !Array.isArray(tr.st)) return;
-      tr.st.forEach(([sid])=>{ (lines[sid]=lines[sid]||new Set()).add(String(tr.line)); });
+      /* Count LINES, not service patterns. A hub is where different lines meet,
+         and T1-T5 are five patterns of the one T — so a shared trolley corridor
+         in West Philadelphia was registering as a five-line interchange the
+         moment the trolleys joined the bundle, and Baltimore Av & 45th St
+         started drawing a labelled hub next to 30th Street. septaMetro() folds
+         a pattern onto its letter and returns null for everything else, so no
+         other agency's bundle is affected. */
+      const key = (typeof septaMetro==="function" && (septaMetro(tr.line)||{}).letter) || String(tr.line);
+      tr.st.forEach(([sid])=>{ (lines[sid]=lines[sid]||new Set()).add(key); });
     });
     (s.stations||[]).forEach(st=>{
       const set=lines[st.id]; if(!set || !set.size) return;
