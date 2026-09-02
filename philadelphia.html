@@ -650,7 +650,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
           <div class="list" id="septaRailList"><div class="empty">Loading SEPTA schedule…</div></div>
         </div>
         <div class="card" id="septaSubwayCard" style="--sys:#1c6bb0; --sys2:#5aa9ff; display:none">
-          <h2><span class="t">SEPTA Subway (MFL/BSL)</span> <span class="count" id="septaSubwayCount"></span></h2>
+          <h2><span class="t">SEPTA Metro</span> <span class="count" id="septaSubwayCount"></span></h2>
           <div class="statline" id="septaSubwayStat"></div>
           <div class="list" id="septaSubwayList"><div class="empty">Loading SEPTA schedule…</div></div>
         </div>
@@ -874,9 +874,20 @@ function haversine(a,b){
   return 2*R*Math.asin(Math.sqrt(s)); // km
 }
 const kmToMi = km => km*0.621371;
-async function getJSON(url, timeout=12000){
+/* `cache` is passed straight to fetch(). The bundled timetables are loaded with
+   "no-cache", which revalidates rather than refetches: an unchanged bundle 304s
+   and costs nothing, but a REDEPLOYED one is picked up without a hard refresh.
+
+   Without it the browser is free to serve a bundle from cache indefinitely, and
+   it does. A kiosk that had been running for a fortnight was still holding a
+   timetable generated two weeks earlier — one whose service calendar had since
+   run out — so it drew empty departure cards and raised schedule-health.js's
+   "timetable out of date" warning about a file that had in fact been refreshed
+   in the repo days before. The bundle was fine; the copy in the browser was
+   not. San Francisco and Boston already did this; everyone else does now. */
+async function getJSON(url, timeout=12000, cache){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
   finally{ clearTimeout(t); }
 }
 const wmata = (path) => `https://api.wmata.com/${path}${path.includes("?")?"&":"?"}api_key=${encodeURIComponent(state.wmataKey)}`;
@@ -919,6 +930,11 @@ function applyLoc(loc){
 function refreshEverythingForNewLocation(){
   drawRangeRings();
   fetchAmtrak(); refreshSeptaRail(); refreshSeptaSubway(); refreshSeptaBusScheduled(); septaMapTick();
+  /* Track geometry, not timetable — so it must not ride on a schedule bundle
+     loading, being in date, or the live Worker being configured. It was doing
+     all three, which meant the Metro lines vanished from the map whenever the
+     subway bundle expired. */
+  drawSeptaMetroShapes();
   refreshPatco(); drawPatcoScheduledMap(); refreshNjt(); drawNjtScheduledMap(); refreshPlanes();
 }
 function requestGeo(){
@@ -1161,10 +1177,27 @@ function declutterLabels(){
   });
   items.sort((a,b)=>a.d-b.d);
   const kept=[];
-  const hits=(a,b)=> a.left < b.right+2 && a.right+2 > b.left &&
-                     a.top  < b.bottom+1 && a.bottom+1 > b.top;
+  /* Real breathing room, not merely "not overlapping". At +2/+1 a label only had
+     to miss its neighbour by a hair to qualify, so a dense centre kept twenty of
+     them and they closed into a curtain over the route lines — technically
+     legible, individually, and unreadable as a map. */
+  const hits=(a,b)=> a.left < b.right+7 && a.right+7 > b.left &&
+                     a.top  < b.bottom+4 && a.bottom+4 > b.top;
+  /* And a ceiling on top of the spacing. Spacing alone still lets a big screen
+     fill edge to edge — Philadelphia puts ~100 vehicles on the map and New York
+     nearer 700, and every one of them wants to introduce itself. The nearest to
+     the centre win, which is the order items are already in, and the rest keep
+     their marker and lose only their chip.
+
+     Scaled to the map's area rather than fixed, because this board runs from a
+     Nexus 7 up to a 1080p wall display: a constant that reads as calm in a
+     small card is austere across a television, and one that suits the
+     television is a curtain on the tablet. Roughly one chip per 55,000 square
+     pixels, bounded so neither extreme goes silly. */
+  const area=box.width*box.height;
+  const LABEL_MAX=Math.max(6, Math.min(22, Math.round(area/55000)));
   items.forEach(it=>{
-    if(kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
+    if(kept.length>=LABEL_MAX || kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
     else kept.push(it.r);
   });
 }
@@ -2265,7 +2298,7 @@ function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"
 async function ensureAmtrakRouteShapes(){
   if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
   try{
-    const data=await getJSON("amtrak-routes.json", 15000);
+    const data=await getJSON("amtrak-routes.json", 15000, "no-cache");
     const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
     state.amtrakRouteShapes=map;
   }catch(e){ state.amtrakRouteShapes={}; }
@@ -2358,7 +2391,7 @@ function marcClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h
 function marcStationName(n){ return (n||"").replace(/\bMARC\b/ig,"").replace(/\b(eb|wb|nb|sb)\b/ig,"").replace(/\s+/g," ").trim(); }
 async function ensureMarcSchedule(){
   if(state.marcSched) return state.marcSched;
-  try{ const s=await getJSON("marc-schedule.json", 15000);
+  try{ const s=await getJSON("marc-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
@@ -2454,7 +2487,7 @@ const RIDEON_COL = { "23":"#5b8def", "29":"#1e3a8a" };
 async function ensureRideOnSchedule(){
   if(state.roSched) return state.roSched;
   try{
-    const s=await getJSON("rideon-schedule.json", 15000);
+    const s=await getJSON("rideon-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
@@ -2535,7 +2568,12 @@ const SEPTA_COL = "#4F758B";   // SEPTA's own Regional Rail brand color
    the trip with the most stops per line (fullest run, not a short turnback),
    and connect its already-correctly-ordered stop sequence. Works for any
    bundled schedule sharing the {stations,_coord,trips:[{line,st}]} shape. */
-function drawScheduleRouteLines(schedule, layer, colorFn){
+/* Every network used to draw at weight 4, opacity .5 — Regional Rail's
+   thirteen identical slate lines with exactly the presence of the rapid-transit
+   spine, and a three-route bus bundle with it. Thirteen of anything at full
+   strength is not a map, it is hatching. `w` and `op` let each network say how
+   loud it should be; see the call sites for the ranking. */
+function drawScheduleRouteLines(schedule, layer, colorFn, w, op){
   if(!schedule || !schedule.trips || !layer) return;
   layer.clearLayers();
   const bestByLine={};
@@ -2546,20 +2584,60 @@ function drawScheduleRouteLines(schedule, layer, colorFn){
   Object.values(bestByLine).forEach(tr=>{
     const pts=tr.st.map(([sid])=>schedule._coord[sid]).filter(Boolean);
     if(pts.length>1) L.polyline(pts, {
-      color:colorFn(tr.line), weight:4, opacity:.5, lineCap:"round", lineJoin:"round"
+      color:colorFn(tr.line), weight:w||4, opacity:op||.5, lineCap:"round", lineJoin:"round"
     }).addTo(layer);
   });
+}
+
+/* ---------- SEPTA Metro route geometry -----------------------------------
+   Real traced track from septa-metro-shapes.json, which is what SEPTA
+   publishes in its GTFS shapes.txt and what gen-septa-metro-shapes.py trims
+   down to 4KB. Two things this fixes that joining stops with straight lines
+   could not:
+
+     · The four Metro lines with no bundled timetable — the T trolleys, G on
+       Girard, D to Media and Sharon Hill, M to Norristown — had no line at all,
+       because the old drawer needs a schedule to find stops to join.
+     · The two that did have one were a diagram rather than a map: the L came
+       out as a dogleg across Center City instead of following Market Street.
+
+   Drawn in two passes rather than one, casings then colours. A dark halo under
+   each line is what keeps six bright routes readable where they braid together
+   downtown — and it has to be ALL the casings first, or the B's halo paints
+   over the L's colour everywhere they cross. */
+async function drawSeptaMetroShapes(){
+  const layer=state.septaSubwayRouteLayer; if(!layer || typeof L==="undefined") return;
+  let shapes=state.septaMetroShapes;
+  if(!shapes){
+    try{ shapes=state.septaMetroShapes=await getJSON("septa-metro-shapes.json", 15000, "no-cache"); }
+    catch(e){ return; }   // no shapes file: the map simply has no Metro lines, as before
+  }
+  /* Keyed by SERVICE PATTERN (T1..T5, D1, D2, B1..B3, L1, G1, M1), so each
+     branch is its own polyline — the five trolley routes fan out to five
+     different termini and the D splits at Drexel Hill, none of which shows if
+     you draw one line per letter. Colour still comes from the LINE, via
+     septaMetro(), so all five T branches are the same green. */
+  const pats=Object.keys(shapes).filter(k=>Array.isArray(shapes[k]) && shapes[k].length>1);
+  const colOf=k=>{ const m=septaMetro(k); return (m&&m.color) || SEPTA_METRO_COL[String(k)[0]] || "#556"; };
+  layer.clearLayers();
+  pats.forEach(k=>L.polyline(shapes[k], {
+    color:"#05070e", weight:6.5, opacity:.5, lineCap:"round", lineJoin:"round", interactive:false
+  }).addTo(layer));
+  pats.forEach(k=>L.polyline(shapes[k], {
+    color:colOf(k), weight:3.4, opacity:.92, lineCap:"round", lineJoin:"round", interactive:false
+  }).addTo(layer));
 }
 
 async function ensureSeptaRailSchedule(){
   if(state.septaSched) return state.septaSched;
   try{
-    const s=await getJSON("septa-rail-schedule.json", 15000);
+    const s=await getJSON("septa-rail-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.septaSched=s;
-    drawScheduleRouteLines(s, state.septaRailRouteLayer, ()=>SEPTA_COL);
+    // Thirteen lines in one colour: they are context for the Metro, not the subject.
+    drawScheduleRouteLines(s, state.septaRailRouteLayer, ()=>SEPTA_COL, 2, .32);
   }catch(e){}
   return state.septaSched;
 }
@@ -2678,12 +2756,12 @@ const SEPTA_BUS_COL = "#2563eb";
 async function ensureSeptaBusSchedule(){
   if(state.septaBusSched) return state.septaBusSched;
   try{
-    const s=await getJSON("septa-bus-schedule.json", 15000);
+    const s=await getJSON("septa-bus-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.septaBusSched=s;
-    drawScheduleRouteLines(s, state.septaBusRouteLayer, ()=>SEPTA_BUS_COL);
+    drawScheduleRouteLines(s, state.septaBusRouteLayer, ()=>SEPTA_BUS_COL, 2, .28);
   }catch(e){}
   return state.septaBusSched;
 }
@@ -2817,16 +2895,64 @@ async function fetchSeptaLive(){
   }catch(e){}
   try{
     const data=await getJSON(`${base}/transitview`, 12000);
-    const buses=(data.bus||[]).filter(b=>b.lat&&b.lng)
+    /* SEPTA's transitview feed is one list for everything that is not Regional
+       Rail: the ~300 numbered bus routes AND the Metro lines that are not the
+       subway — the T trolleys, the G on Girard, the D to Media and Sharon Hill,
+       and the M up to Norristown.
+
+       Splitting them apart matters twice over.
+
+       Budget. A single "nearest 60 vehicles" cut is decided entirely by the
+       buses, because buses are 85% of the feed. Measured from Temple, that cut
+       landed at 2.01 miles and took the whole Norristown line (nearest car 7.9
+       mi), both Media/Sharon Hill branches, and most of the trolleys with it —
+       the lines vanished from the map not because they were far away but
+       because a lot of buses were near. The Metro lines are half a dozen LINES,
+       not hundreds of routes, so they get their own budget and the buses get
+       what is left.
+
+       Layer. These are Metro, not bus. Filed under the bus fleet they sat on
+       the bus card's layer, so switching "SEPTA Bus" off in Settings also took
+       the trolleys and the Norristown line off the map, which is not a choice
+       anybody asked to make. */
+    const isMetro = b => !!septaMetro(b.route_id);
+    /* SEPTA sends VehicleID "None" for a fair slice of the fleet — 28 of 368 in
+       one sample — and disproportionately for the Metro lines, whose cars it
+       does not badge the way it badges buses. Every one of those became the id
+       "slbNone", and updateFleet() keys markers BY ID, so they all collapsed
+       onto a single marker: 54 Metro vehicles drew as 25, and a handful of bus
+       routes had been quietly losing cars to this for as long as the live feed
+       has been wired up.
+
+       `trip` is unique across every such row in the same sample and stable for
+       the length of a run, which is exactly what updateFleet needs to glide a
+       marker between fixes instead of destroying and recreating it. */
+    const vehKey = b => {
+      const v=String(b.VehicleID||"");
+      if(v && v!=="None") return "v"+v;
+      if(b.trip) return "t"+b.trip;
+      if(b.BlockID) return "k"+b.BlockID;
+      return "p"+b.route_id+"@"+b.lat+","+b.lng;   // last resort, and it will flicker
+    };
+    const near=(data.bus||[]).filter(b=>b.lat&&b.lng)
       .map(b=>({ b, mi: kmToMi(haversine(here,{lat:+b.lat,lon:+b.lng})) }))
-      .filter(x=>x.mi<=15).sort((a,b2)=>a.mi-b2.mi).slice(0,60);
-    const items=buses.map(({b})=>({
-      id:"slb"+b.VehicleID, lat:+b.lat, lon:+b.lng,
+      .filter(x=>x.mi<=25).sort((a,b2)=>a.mi-b2.mi);
+    // 25 mi, not 15: Norristown is 17 miles out and the M is a Metro line the
+    // whole way, not a suburban afterthought.
+    const metroVeh=near.filter(x=>isMetro(x.b)).slice(0,120);
+    const buses=near.filter(x=>!isMetro(x.b) && x.mi<=15).slice(0,60);
+
+    const row=({b})=>({
+      id:"slb"+vehKey(b), lat:+b.lat, lon:+b.lng,
       icon:()=>septaMetroIcon(b.route_id, `${b.route_id} → ${b.destination||"?"}`)
                || labelIcon(SEPTA_BUS_COL, `${b.route_id} → ${b.destination||"?"}`, "bus"),
       ik:"slb-"+b.route_id+"-"+septaMarkerStyle(),
-      tip:`SEPTA Route ${b.route_id} → ${b.destination}${delayHtml(liveLateInfo(b.late))} (live)`
-    }));
+      tip:`SEPTA ${isMetro(b)?b.route_id:("Route "+b.route_id)} → ${b.destination}${delayHtml(liveLateInfo(b.late))} (live)`
+    });
+    // Metro rides the subway card's layer alongside the L and the B; only the
+    // numbered routes stay on the bus one.
+    updateFleet("septaSubway", metroVeh.map(row), CFG.septaEveryMs);
+    const items=buses.map(row);
     updateFleet("septaBus", items, CFG.septaEveryMs);
     $("#septaBusCard").style.display = "flex";
     $("#septaBusCount").textContent = items.length ? `${items.length} nearby` : "";
@@ -2920,12 +3046,11 @@ const SEPTA_SUBWAY_COL = { L1:"#1c6bb0", B1:"#f7941d", B2:"#f7941d", B3:"#f7941d
 async function ensureSeptaSubwaySchedule(){
   if(state.septaSubwaySched) return state.septaSubwaySched;
   try{
-    const s=await getJSON("septa-subway-schedule.json", 15000);
+    const s=await getJSON("septa-subway-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.septaSubwaySched=s;
-    drawScheduleRouteLines(s, state.septaSubwayRouteLayer, line=>SEPTA_SUBWAY_COL[line]||"#556");
   }catch(e){}
   return state.septaSubwaySched;
 }
@@ -2976,6 +3101,10 @@ async function refreshSeptaSubway(){
 }
 async function drawSeptaSubwayScheduledMap(){
   const s=await ensureSeptaSubwaySchedule(); if(!s || !s.trips) return;
+  /* The live Worker owns this fleet once configured — it publishes the real L
+     and B cars, plus every other Metro line. Two writers on one fleet would
+     thrash, each updateFleet() removing the other's markers. */
+  if(state.septaUrl) return;
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
   s.trips.forEach((tr,i)=>{
@@ -3007,12 +3136,12 @@ const PATCO_COL = "#BC0035";   // PATCO's own brand color
 async function ensurePatcoSchedule(){
   if(state.patcoSched) return state.patcoSched;
   try{
-    const s=await getJSON("patco-schedule.json", 15000);
+    const s=await getJSON("patco-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.patcoSched=s;
-    drawScheduleRouteLines(s, state.patcoRouteLayer, ()=>PATCO_COL);
+    drawScheduleRouteLines(s, state.patcoRouteLayer, ()=>PATCO_COL, 3, .5);
   }catch(e){}
   return state.patcoSched;
 }
@@ -3105,12 +3234,12 @@ const njtCol  = l => NJT_COL[l] || "#f0ab00";
 async function ensureNjtSchedule(){
   if(state.njtSched) return state.njtSched;
   try{
-    const s=await getJSON("njt-phl-schedule.json", 20000);
+    const s=await getJSON("njt-phl-schedule.json", 20000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.njtSched=s;
-    drawScheduleRouteLines(s, state.njtRouteLayer, tr=>njtCol(tr.line));
+    drawScheduleRouteLines(s, state.njtRouteLayer, tr=>njtCol(tr.line), 2.5, .38);
   }catch(e){}
   return state.njtSched;
 }
@@ -3719,7 +3848,7 @@ function buildDisplayButtons(){
 /* ---------- customize: which cards show on the board ---------- */
 const CARD_DEFS=[
   {id:"amtrakCard", label:"Amtrak"}, {id:"septaRailCard", label:"SEPTA Rail"},
-  {id:"septaSubwayCard", label:"SEPTA Subway"}, {id:"septaBusCard", label:"SEPTA Bus"},
+  {id:"septaSubwayCard", label:"SEPTA Metro"}, {id:"septaBusCard", label:"SEPTA Bus"},
   {id:"patcoCard", label:"PATCO"}, {id:"njtCard", label:"NJ Transit"}, {id:"planeCard", label:"Planes"},
 ];
 // Which map layer(s) each card's "show on board" toggle also controls -- hiding

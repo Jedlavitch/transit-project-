@@ -883,9 +883,20 @@ function haversine(a,b){
   return 2*R*Math.asin(Math.sqrt(s)); // km
 }
 const kmToMi = km => km*0.621371;
-async function getJSON(url, timeout=12000){
+/* `cache` is passed straight to fetch(). The bundled timetables are loaded with
+   "no-cache", which revalidates rather than refetches: an unchanged bundle 304s
+   and costs nothing, but a REDEPLOYED one is picked up without a hard refresh.
+
+   Without it the browser is free to serve a bundle from cache indefinitely, and
+   it does. A kiosk that had been running for a fortnight was still holding a
+   timetable generated two weeks earlier — one whose service calendar had since
+   run out — so it drew empty departure cards and raised schedule-health.js's
+   "timetable out of date" warning about a file that had in fact been refreshed
+   in the repo days before. The bundle was fine; the copy in the browser was
+   not. San Francisco and Boston already did this; everyone else does now. */
+async function getJSON(url, timeout=12000, cache){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return expandBundle(await r.json()); }
+  try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return expandBundle(await r.json()); }
   finally{ clearTimeout(t); }
 }
 
@@ -1145,10 +1156,27 @@ function declutterLabels(){
   });
   items.sort((a,b)=>a.d-b.d);
   const kept=[];
-  const hits=(a,b)=> a.left < b.right+2 && a.right+2 > b.left &&
-                     a.top  < b.bottom+1 && a.bottom+1 > b.top;
+  /* Real breathing room, not merely "not overlapping". At +2/+1 a label only had
+     to miss its neighbour by a hair to qualify, so a dense centre kept twenty of
+     them and they closed into a curtain over the route lines — technically
+     legible, individually, and unreadable as a map. */
+  const hits=(a,b)=> a.left < b.right+7 && a.right+7 > b.left &&
+                     a.top  < b.bottom+4 && a.bottom+4 > b.top;
+  /* And a ceiling on top of the spacing. Spacing alone still lets a big screen
+     fill edge to edge — Philadelphia puts ~100 vehicles on the map and New York
+     nearer 700, and every one of them wants to introduce itself. The nearest to
+     the centre win, which is the order items are already in, and the rest keep
+     their marker and lose only their chip.
+
+     Scaled to the map's area rather than fixed, because this board runs from a
+     Nexus 7 up to a 1080p wall display: a constant that reads as calm in a
+     small card is austere across a television, and one that suits the
+     television is a curtain on the tablet. Roughly one chip per 55,000 square
+     pixels, bounded so neither extreme goes silly. */
+  const area=box.width*box.height;
+  const LABEL_MAX=Math.max(6, Math.min(22, Math.round(area/55000)));
   items.forEach(it=>{
-    if(kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
+    if(kept.length>=LABEL_MAX || kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
     else kept.push(it.r);
   });
 }
@@ -1719,7 +1747,7 @@ function normAmtrakName(n){ return (n||"").toLowerCase().replace(/\s+service$/,"
 async function ensureAmtrakRouteShapes(){
   if(state.amtrakRouteShapes) return state.amtrakRouteShapes;
   try{
-    const data=await getJSON("amtrak-routes.json", 15000);
+    const data=await getJSON("amtrak-routes.json", 15000, "no-cache");
     const map={}; for(const name in data) map[normAmtrakName(name)]=data[name];
     state.amtrakRouteShapes=map;
   }catch(e){ state.amtrakRouteShapes={}; }
@@ -1995,7 +2023,7 @@ function appendLiveTimes(row, late, arrSec){
 async function ensureSubwaySchedule(){
   if(state.subwaySched) return state.subwaySched;
   try{
-    const s=expandBundle(await getJSON("mta-subway-schedule.json", 20000));
+    const s=expandBundle(await getJSON("mta-subway-schedule.json", 20000, "no-cache"));
     s._coord={}; s._name={};
     (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     state.subwaySched=s;
@@ -2024,7 +2052,7 @@ async function drawSubwayRoutes(){
   if(!state.subwayRouteLayer || state.subwayRoutesDrawn) return;
   state.subwayRoutesDrawn = true;
   let shapes;
-  try{ shapes = await getJSON("mta-subway-shapes.json", 20000); }catch(e){ return; }
+  try{ shapes = await getJSON("mta-subway-shapes.json", 20000, "no-cache"); }catch(e){ return; }
   state.subwayRouteLayer.clearLayers();
   for(const routeId in shapes){
     const pts = shapes[routeId];
@@ -2415,7 +2443,7 @@ const LIRR_COL = "#00985F", MNR_COL = "#A72650";
 async function ensureLirrSchedule(){
   if(state.lirrSched) return state.lirrSched;
   try{
-    const s=expandBundle(await getJSON("lirr-schedule.json", 20000));
+    const s=expandBundle(await getJSON("lirr-schedule.json", 20000, "no-cache"));
     s._coord={}; s._name={};
     (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     state.lirrSched=s;
@@ -2426,7 +2454,7 @@ async function ensureLirrSchedule(){
 async function ensureMnrSchedule(){
   if(state.mnrSched) return state.mnrSched;
   try{
-    const s=expandBundle(await getJSON("mnr-schedule.json", 20000));
+    const s=expandBundle(await getJSON("mnr-schedule.json", 20000, "no-cache"));
     s._coord={}; s._name={};
     (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     state.mnrSched=s;
@@ -2535,7 +2563,7 @@ function busClock(min){ let h=Math.floor(min/60)%24, m=Math.round(min%60), ap=h>
 async function ensureBusSchedule(){
   if(state.busSched) return state.busSched;
   try{
-    const s=expandBundle(await getJSON("mta-bus-schedule.json", 20000));
+    const s=expandBundle(await getJSON("mta-bus-schedule.json", 20000, "no-cache"));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
@@ -2653,7 +2681,7 @@ const PATH_COL = "#00A9E0";
 async function ensurePathSchedule(){
   if(state.pathSched) return state.pathSched;
   try{
-    const s=expandBundle(await getJSON("path-schedule.json", 20000));
+    const s=expandBundle(await getJSON("path-schedule.json", 20000, "no-cache"));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
@@ -3292,7 +3320,7 @@ const njtCol  = l => NJT_COL[l] || "#f0ab00";
 async function ensureNjtSchedule(){
   if(state.njtSched) return state.njtSched;
   try{
-    const s=expandBundle(await getJSON("njt-nyc-schedule.json", 20000));
+    const s=expandBundle(await getJSON("njt-nyc-schedule.json", 20000, "no-cache"));
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
     (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));

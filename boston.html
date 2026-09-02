@@ -1101,10 +1101,27 @@ function declutterLabels(){
   });
   items.sort((a,b)=>a.d-b.d);
   const kept=[];
-  const hits=(a,b)=> a.left < b.right+2 && a.right+2 > b.left &&
-                     a.top  < b.bottom+1 && a.bottom+1 > b.top;
+  /* Real breathing room, not merely "not overlapping". At +2/+1 a label only had
+     to miss its neighbour by a hair to qualify, so a dense centre kept twenty of
+     them and they closed into a curtain over the route lines — technically
+     legible, individually, and unreadable as a map. */
+  const hits=(a,b)=> a.left < b.right+7 && a.right+7 > b.left &&
+                     a.top  < b.bottom+4 && a.bottom+4 > b.top;
+  /* And a ceiling on top of the spacing. Spacing alone still lets a big screen
+     fill edge to edge — Philadelphia puts ~100 vehicles on the map and New York
+     nearer 700, and every one of them wants to introduce itself. The nearest to
+     the centre win, which is the order items are already in, and the rest keep
+     their marker and lose only their chip.
+
+     Scaled to the map's area rather than fixed, because this board runs from a
+     Nexus 7 up to a 1080p wall display: a constant that reads as calm in a
+     small card is austere across a television, and one that suits the
+     television is a curtain on the tablet. Roughly one chip per 55,000 square
+     pixels, bounded so neither extreme goes silly. */
+  const area=box.width*box.height;
+  const LABEL_MAX=Math.max(6, Math.min(22, Math.round(area/55000)));
   items.forEach(it=>{
-    if(kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
+    if(kept.length>=LABEL_MAX || kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
     else kept.push(it.r);
   });
 }
