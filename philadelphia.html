@@ -47,7 +47,7 @@
 <script src="interesting.js?v=2" defer></script>
 <script src="departures.js?v=1" defer></script>
 <script src="commute.js?v=6" defer></script>
-<script src="ontime.js?v=3" defer></script>
+<script src="ontime.js?v=10" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -2854,14 +2854,53 @@ function appendLiveTimes(row, late){
   times.appendChild(el("div","live-tag","live"));
   row.appendChild(times);
 }
+/* Regional Rail lines are named, not lettered, and the names are too long for a
+   badge. Initials where there is more than one word ("Chestnut Hill East" ->
+   CHE, which is also what keeps East and West apart), first three letters where
+   there is only one ("Airport" -> AIR). */
+function septaRailBadge(line){
+  const words=String(line||"").split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if(words.length>1) return words.map(w=>w[0]).join("").toUpperCase().slice(0,4);
+  return (words[0]||"?").slice(0,3).toUpperCase();
+}
+
+/* ---------- SEPTA's own lateness, which is the real thing -------------------
+   Every departure this board pools is `live:false`: all five feeds are bundled
+   GTFS timetables, so the wait-time recorder in ontime.js correctly records
+   nothing here and its card takes itself off the screen.
+
+   But SEPTA publishes something better than a prediction. TrainView and
+   TransitView both carry `late` per vehicle — minutes behind SEPTA'S OWN
+   schedule, computed by SEPTA. That is a genuine on-time figure, not one
+   inferred from a countdown, and it is available for every mode this board
+   shows live: Regional Rail, the Metro lines (L, B, T, G, D, M) and the
+   numbered buses.
+
+   Scope differs by mode on purpose. Regional Rail reports every train in the
+   feed: there are a dozen lines covering the whole region, and a line is worth
+   tracking even at the moment none of its trains happens to be near you. Buses
+   and Metro report only the vehicles already cut to what is near — there are
+   ~300 bus routes, and a record of one you will never ride is noise that would
+   push the ones you do ride out of ontime.js's key cap.
+
+   PATCO and NJ Transit are absent because this board has no live feed for
+   either; they are timetable bundles here, with nothing to be late against. */
 async function fetchSeptaLive(){
   if(!state.septaUrl) return;
   const here=state.loc, base=state.septaUrl;
+  /* Collected across both fetches and reported once. ontime.js throttles to one
+     observation per 25s, so two calls would silently drop the second. */
+  const lateRows=[];
   try{
     const data=await getJSON(`${base}/trainview`, 12000);
     const trains=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon)
       .map(t=>({ t, mi: kmToMi(haversine(here,{lat:+t.lat,lon:+t.lon})) }))
       .sort((a,b)=>a.mi-b.mi);
+    trains.forEach(({t})=>{
+      if(!t.line) return;
+      lateRows.push({ id:"septa-rail|"+t.line, label:t.line, badge:septaRailBadge(t.line),
+        mode:"train", color:SEPTA_COL, late:t.late });
+    });
     const items=trains.map(({t})=>({
       id:"slt"+t.trainno, lat:+t.lat, lon:+t.lon,
       icon:()=>labelIcon(SEPTA_COL, `${t.line||"?"} → ${t.dest||"?"}`,
@@ -2942,6 +2981,18 @@ async function fetchSeptaLive(){
     const metroVeh=near.filter(x=>isMetro(x.b)).slice(0,120);
     const buses=near.filter(x=>!isMetro(x.b) && x.mi<=15).slice(0,60);
 
+    metroVeh.forEach(({b})=>{
+      const m=septaMetro(b.route_id); if(!m) return;
+      lateRows.push({ id:"septa-metro|"+b.route_id, badge:b.route_id, mode:"metro",
+        label:b.route_id+" · "+(SEPTA_METRO_NAME[m.letter]||"Metro"),
+        color:m.color, late:b.late });
+    });
+    buses.forEach(({b})=>{
+      if(!b.route_id) return;
+      lateRows.push({ id:"septa-bus|"+b.route_id, badge:String(b.route_id), mode:"bus",
+        label:"Route "+b.route_id, color:SEPTA_BUS_COL, late:b.late });
+    });
+
     const row=({b})=>({
       id:"slb"+vehKey(b), lat:+b.lat, lon:+b.lng,
       icon:()=>septaMetroIcon(b.route_id, `${b.route_id} → ${b.destination||"?"}`)
@@ -2978,6 +3029,8 @@ async function fetchSeptaLive(){
       fitList(box);
     }
   }catch(e){}
+
+  if(window.TBOnTime && TBOnTime.late) TBOnTime.late(lateRows);
 }
 function septaMapTick(){
   drawSeptaRailScheduledMap(); drawSeptaSubwayScheduledMap(); drawSeptaBusScheduledMap();
@@ -3016,6 +3069,12 @@ const SEPTA_METRO_COL = {
   M:"#5b2d90",   // Norristown High Speed Line
   G:"#fdb913",   // Girard Ave trolley (route 15)
   D:"#e0457b",   // Media-Sharon Hill  — D1=101, D2=102
+};
+/* The line's name in plain English, for anything that has to say which line it
+   is rather than draw it — the on-time record, whose rows are read as a list. */
+const SEPTA_METRO_NAME = {
+  L:"Market-Frankford", B:"Broad Street", T:"Subway-Surface",
+  M:"Norristown", G:"Girard", D:"Media-Sharon Hill",
 };
 // Which pictogram each line's vehicles actually are.
 const SEPTA_METRO_PICT = {

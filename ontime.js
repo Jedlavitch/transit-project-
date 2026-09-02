@@ -26,7 +26,8 @@
 (function (root) {
   "use strict";
 
-  var LS = { hist: "tb.ontime.hist", hours: "tb.ontime.hours", hide: "tb.ontime.hidden" };
+  var LS = { hist: "tb.ontime.hist", hours: "tb.ontime.hours", late: "tb.ontime.late",
+             hide: "tb.ontime.hidden" };
   var HIDE_ID = "ontimeCard";
   var KEEP_DAYS = 14;        // two weeks: enough for a weekday baseline, small enough to stay tiny
   var MIN_SAMPLES = 8;       // below this a "typical" is noise, and is shown as "—"
@@ -124,6 +125,17 @@
      kiosk left on for a month should not grow a localStorage entry without
      bound, and the median of a day's waits is well approximated by its mean
      once there are dozens of samples of a bounded quantity. */
+  /* Bands of waiting, in whole minutes. Recorded as counts rather than a
+     threshold flag because any single threshold has to be chosen at WRITE time,
+     and there is no threshold that is right for both a three-minute subway and
+     a half-hourly bus. Counting into fixed bands lets the question ("how often
+     is it bad?") be asked at READ time, against whatever definition of bad the
+     stop deserves — and it is the only way to answer it at all without a
+     timetable to be late against. */
+  var BANDS = ["0–2", "3–5", "6–10", "11–20", "21+"];
+  var LONG_BAND = 3;         // band 3 and up = a wait over ten minutes
+  function bandOf(v) { return v <= 2 ? 0 : v <= 5 ? 1 : v <= 10 ? 2 : v <= 20 ? 3 : 4; }
+
   var hist = read(LS.hist, {});
 
   /* ---- the hour-of-day profile -------------------------------------------
@@ -141,6 +153,28 @@
      over a week or two rather than being anchored forever to how the route ran
      the month you set the board up. */
   var hours = read(LS.hours, {});
+
+  /* ---- lateness, where an agency actually publishes it ---------------------
+     Everything above measures waiting, because most feeds have no timetable to
+     be late against. SEPTA is the exception on these boards: its TrainView and
+     TransitView feeds carry a `late` field per vehicle — minutes behind ITS OWN
+     schedule, computed by SEPTA, not inferred here. That is a real on-time
+     figure, and it is the one thing this file said it could not honestly show.
+
+     So it is kept in its own store, with its own shape and its own vocabulary,
+     rather than smuggled into the wait-time history. The two must never be
+     averaged together or presented as the same measurement: one is what the
+     rider experiences, the other is what the operator promised.
+
+       { "septa-rail|PAO": { _: [label, mode, colour],
+                             "2026-09-01": [n, sumLate, onTime, worst, [bands]] } }
+
+     A board opts in by calling, once per refresh, with one row per vehicle:
+       TBOnTime.late([{ id, label, mode, color, late }, ...])   */
+  var LATE_ON_TIME = 6;      // SEPTA calls Regional Rail on time inside 5:59
+  var LATE_BANDS = ["≤0", "1–5", "6–14", "15–29", "30+"];
+  function lateBandOf(m) { return m <= 0 ? 0 : m <= 5 ? 1 : m <= 14 ? 2 : m <= 29 ? 3 : 4; }
+  var lateHist = read(LS.late, {});
 
   function prune() {
     var cut = new Date(); cut.setDate(cut.getDate() - KEEP_DAYS);
@@ -177,12 +211,148 @@
        dropped as least-observed) takes its hour buckets with it. Without this
        the profile would be the one unbounded thing left in the feature. */
     for (var h in hours) if (!hist[h]) { delete hours[h]; changed = true; }
+
+    /* The lateness store keeps its own dates, so it expires on its own rather
+       than following hist's key set — a board can have lateness and no wait
+       history at all, which is exactly what Philadelphia is. */
+    var lk = Object.keys(lateHist);
+    lk.forEach(function (id) {
+      var rec = lateHist[id], live = 0;
+      for (var d in rec) {
+        if (d === "_") continue;
+        if (d < cutKey) { delete rec[d]; changed = true; } else live++;
+      }
+      if (!live) { delete lateHist[id]; changed = true; }
+    });
+    lk = Object.keys(lateHist);
+    if (lk.length > MAX_KEYS) {
+      var seenL = lk.map(function (id) {
+        var n = 0;
+        for (var d in lateHist[id]) if (d !== "_") n += lateHist[id][d][0];
+        return { k: id, n: n };
+      }).sort(function (a, b) { return a.n - b.n; });
+      var dropL = lk.length - MAX_KEYS;
+      for (var j2 = 0; j2 < dropL; j2++) { delete lateHist[seenL[j2].k]; changed = true; }
+    }
     return changed;
   }
+
+  /* One observation per line per call: the MEDIAN lateness of that line's
+     vehicles. Not the mean — a single train stuck behind a disabled one should
+     not decide how the whole line is described — and not per-vehicle, which
+     would count a train that stays twenty minutes late for an hour as dozens of
+     separate failures. The worst single vehicle is kept separately, because
+     "how bad did it get" is a different question from "how is it running". */
+  /* Which lines THIS board has reported, this session. The store is shared by
+     every city — transitproject.online serves all of them from one origin — so
+     without this a Los Angeles board would list SEPTA's bus routes because the
+     browser had visited Philadelphia earlier, and LA's deliberate "I have
+     nothing to measure, take me off the screen" would stop working. The dialog
+     still lists everything: looking up a record you recorded elsewhere is
+     reasonable. Putting it on this board's card is not. */
+  var seenLate = {};
+  var lastLateAt = 0;
+  function recordLate(rows) {
+    if (!rows || !rows.length) return;
+    var now = Date.now();
+    if (now - lastLateAt < 25000) return;
+
+    var by = {};
+    rows.forEach(function (r) {
+      if (!r || !r.id) return;
+      var m = Number(r.late);
+      // Same sanity bound delays.js uses: past an hour and a half it is a
+      // parsing fault, not a delay.
+      if (!isFinite(m) || Math.abs(m) > 90) return;
+      if (!by[r.id]) by[r.id] = { meta: [r.label || r.id, r.mode || "", r.color || "", r.badge || ""], v: [] };
+      by[r.id].v.push(Math.round(m));
+    });
+
+    var day = today(), any = false;
+    for (var id in by) {
+      var v = by[id].v.sort(function (a, b) { return a - b; });
+      var med = v.length % 2
+        ? v[(v.length - 1) / 2]
+        : Math.round((v[v.length / 2 - 1] + v[v.length / 2]) / 2);
+      if (!lateHist[id]) lateHist[id] = {};
+      lateHist[id]._ = by[id].meta;
+      var rec = lateHist[id][day] || [0, 0, 0, 0, [0, 0, 0, 0, 0]];
+      if (!rec[4]) rec[4] = [0, 0, 0, 0, 0];
+      rec[0] += 1;
+      rec[1] += med;
+      if (med < LATE_ON_TIME) rec[2] += 1;
+      if (v[v.length - 1] > rec[3]) rec[3] = v[v.length - 1];
+      rec[4][lateBandOf(med)] += 1;
+      lateHist[id][day] = rec;
+      seenLate[id] = 1;
+      any = true;
+    }
+    if (!any) return;
+    lastLateAt = now;
+    prune();
+    write(LS.late, lateHist);
+    paint();
+  }
+
+  function lateStats(id) {
+    var days = lateHist[id] || {}, day = today();
+    var meta = days._ || [id, "", "", ""];
+    var series = [], onSeries = [], band = [0, 0, 0, 0, 0], bandN = 0;
+    var worst = 0, worstDay = "", totalN = 0;
+    var bN = 0, bSum = 0, bOn = 0;          // the fortnight, excluding today
+    Object.keys(days).sort().forEach(function (d) {
+      if (d === "_") return;
+      var r = days[d], n = r[0] || 0;
+      if (!n) return;
+      series.push({ x: d, label: dayLabel(d), avg: r[1] / n, n: n, cur: d === day });
+      onSeries.push({ x: d, label: dayLabel(d), avg: r[2] / n, n: n, cur: d === day });
+      totalN += n;
+      if (r[3] > worst) { worst = r[3]; worstDay = d; }
+      if (r[4]) for (var b = 0; b < 5; b++) { band[b] += r[4][b] || 0; bandN += r[4][b] || 0; }
+      if (d !== day) { bN += n; bSum += r[1]; bOn += r[2]; }
+    });
+    var tRec = days[day];
+    return {
+      id: id, label: meta[0], mode: meta[1], color: meta[2],
+      badge: meta[3] || String(meta[0]).slice(0, 4),
+      series: series, onSeries: onSeries,
+      band: band, bandN: bandN,
+      todayOn: tRec && tRec[0] >= MIN_SAMPLES ? tRec[2] / tRec[0] : null,
+      todayLate: tRec && tRec[0] >= MIN_SAMPLES ? tRec[1] / tRec[0] : null,
+      todayN: tRec ? tRec[0] : 0,
+      baseOn: bN >= MIN_SAMPLES ? bOn / bN : null,
+      baseLate: bN >= MIN_SAMPLES ? bSum / bN : null,
+      baseN: bN,
+      worst: worst, worstDay: worstDay,
+      totalN: totalN,
+      since: series.length ? series[0].x : "",
+    };
+  }
+
+  /* Sorted worst-first, same as the wait rows: the reason to look is that
+     something is off today. */
+  function lateKeys() {
+    var out = [];
+    Object.keys(lateHist).forEach(function (id) {
+      var st = lateStats(id);
+      if (st.totalN) out.push(st);
+    });
+    out.sort(function (a, b) {
+      var av = a.todayOn == null ? 2 : a.todayOn, bv = b.todayOn == null ? 2 : b.todayOn;
+      return (av - bv) || (b.totalN - a.totalN);
+    });
+    return out;
+  }
+
 
   /* One sample per (stop, route) per call: the SOONEST departure, which is the
      wait a person arriving now would face. Taking every listed departure would
      bias the average upwards by however many rows the feed happens to return. */
+  /* The wait-side twin of seenLate: stops THIS board has sampled this session.
+     Both stores are shared by every city — one origin serves all of them — so
+     "what is in localStorage" and "what this board is about" are different
+     questions, and the dialog must ask the second one. */
+  var seenStop = {};
   var lastSampleAt = 0;
   function sample() {
     var now = Date.now();
@@ -204,7 +374,13 @@
       if (!hist[key]) hist[key] = {};
       var rec = hist[key][day] || [0, 0, 0];
       rec[0] += 1; rec[1] += soonest[key]; rec[2] = Math.max(rec[2], soonest[key]);
+      // Days recorded before this existed have no rec[3]; deepStats counts the
+      // bands separately from rec[0] so those readings are reported as unknown
+      // rather than quietly landing in band 0.
+      if (!rec[3]) rec[3] = [0, 0, 0, 0, 0];
+      rec[3][bandOf(soonest[key])] += 1;
       hist[key][day] = rec; any = true;
+      seenStop[key] = 1;
 
       if (!hours[key]) hours[key] = {};
       var hrec = hours[key][hr] || [0, 0, 0];
@@ -282,10 +458,18 @@
       var row = e.target && e.target.closest && e.target.closest("[data-otkey]");
       if (row) openDetail(row.getAttribute("data-otkey"));
     });
+    if (l) l.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var row = e.target && e.target.closest && e.target.closest("[data-otkey]");
+      if (row) { e.preventDefault(); openDetail(row.getAttribute("data-otkey")); }
+    });
     injectCss();
     if ("ResizeObserver" in root) {
       var tmr = null;
-      new ResizeObserver(function () { clearTimeout(tmr); tmr = setTimeout(paint, 140); }).observe(card);
+      new ResizeObserver(function () {
+        card.classList.toggle("ot-narrow", card.clientWidth < 320);
+        clearTimeout(tmr); tmr = setTimeout(paint, 140);
+      }).observe(card);
     }
     /* eslint-disable-next-line no-undef */
     if (typeof initMiniCards === "function") setTimeout(initMiniCards, 0);
@@ -296,14 +480,151 @@
     var st = document.createElement("style");
     st.id = "otCss";
     st.textContent =
+      /* ---- the card ------------------------------------------------------ */
       "#ontimeCard .ot-spark{display:block}" +
       "#ontimeCard .ot-delta{font-family:var(--mono,monospace);font-weight:700;font-size:12px}" +
       "#ontimeCard .ot-worse{color:var(--late-ink,#ff6b81)}" +
       "#ontimeCard .ot-better{color:var(--live-ink,#39d98a)}" +
       "#ontimeCard .ot-same{color:var(--muted,#93a5cf)}" +
-      "#ontimeCard h2 #otHideBtn{margin-left:auto;background:none;border:0;cursor:pointer;font-size:15px;" +
+      "#ontimeCard .ot-row{cursor:pointer}" +
+      "#ontimeCard .ot-row:hover,#ontimeCard .ot-row:focus-visible{border-color:var(--accent,#4ea1ff);outline:none}" +
+      "#ontimeCard h2 #otHideBtn{background:none;border:0;cursor:pointer;font-size:15px;" +
         "line-height:1;color:var(--muted,#93a5cf);padding:0 2px}" +
-      "#ontimeCard h2 #otHideBtn:hover{color:var(--late-ink,#ff6b81)}";
+      "#ontimeCard h2 #otHideBtn:hover{color:var(--late-ink,#ff6b81)}" +
+      /* Sits between the count (which owns the margin-left:auto) and the ×. */
+      "#ontimeCard h2 #otMoreBtn{display:inline-flex;align-items:center;gap:4px;flex:none;" +
+        "padding:2px 7px;border-radius:999px;background:transparent;cursor:pointer;" +
+        "border:1px solid var(--line,#22345a);color:var(--muted,#93a5cf);" +
+        "font:700 9px/1.5 var(--mono,monospace);letter-spacing:.09em;text-transform:uppercase}" +
+      "#ontimeCard h2 #otMoreBtn:hover{border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff)}" +
+      /* The word goes before the card's own title has to truncate; the glyph and
+         the title attribute still say what the button is. .ot-narrow is set from
+         the card's measured width (see ensureCard); the media query is the
+         fallback where ResizeObserver is missing. */
+      "#ontimeCard.ot-narrow h2 #otMoreBtn span,#ontimeCard.mini h2 #otMoreBtn span{display:none}" +
+      "@media (max-width:900px){#ontimeCard h2 #otMoreBtn span{display:none}}" +
+      /* The title keeps its full name; the count is what gives way. */
+      "#ontimeCard h2 .t{flex:none}" +
+      "#ontimeCard h2 .count{flex:0 1 auto;min-width:0}" +
+
+      /* ---- the dialog ----------------------------------------------------- */
+      /* Over #setup's 9999, under feedback.js's 10050, and far under gate.js's
+         lock screen, which has to stay on top of everything. */
+      "#otdOverlay{position:fixed;inset:0;top:0;right:0;bottom:0;left:0;z-index:10040;display:flex;" +
+        "align-items:center;justify-content:center;padding:16px;background:var(--scrim,rgba(5,10,22,.86))}" +
+      "#otdBox{position:relative;display:flex;flex-direction:column;width:min(780px,95vw);max-height:92vh;" +
+        "background:var(--panel,#111d36);border:1px solid var(--line,#22345a);border-radius:12px;" +
+        "color:var(--text,#eef3ff);font-family:var(--body,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif);" +
+        "box-shadow:0 18px 60px rgba(0,0,0,.45);overflow:hidden}" +
+      "#otdBox header{display:grid;grid-template-columns:1fr auto;align-items:start;gap:8px;" +
+        "padding:16px 18px 12px;border-bottom:1px solid var(--line,#22345a)}" +
+      "#otdBox header h3{margin:0;font-size:16px;letter-spacing:.01em}" +
+      "#otdBox header p{grid-column:1;margin:3px 0 0;font-size:12px;color:var(--muted,#93a5cf);line-height:1.45}" +
+      "#otdBox header #otdClose{grid-column:2;grid-row:1/3;background:none;border:0;cursor:pointer;font-size:22px;line-height:1;" +
+        "color:var(--muted,#93a5cf);padding:0 2px}" +
+      "#otdBox header #otdClose:hover{color:var(--text,#eef3ff)}" +
+      "#otdBody{padding:14px 18px 18px;overflow:auto;-webkit-overflow-scrolling:touch}" +
+
+      /* stop picker */
+      "#otdBody .ot-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px;" +
+        "scrollbar-width:thin}" +
+      "#otdBody .ot-chip{flex:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;" +
+        "padding:6px 11px;border-radius:999px;border:1px solid var(--line,#22345a);background:var(--row-bg,#0d1830);" +
+        "color:var(--muted,#93a5cf);font:600 12px/1.2 inherit;white-space:nowrap}" +
+      "#otdBody .ot-chip:hover{border-color:var(--accent,#4ea1ff)}" +
+      "#otdBody .ot-chip.on{border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff);" +
+        "background:var(--panel2,#0c1628)}" +
+      "#otdBody .ot-chip i{width:8px;height:8px;border-radius:50%;flex:none}" +
+      "#otdBody .ot-chip b{font-family:var(--mono,monospace);font-weight:700}" +
+      "#otdBody .ot-chip em{font-style:normal;opacity:.5}" +
+      "#otdBody .ot-chip.late{border-style:dashed}" +
+      "#otdBody .ot-chip.late.on{border-style:solid}" +
+
+      /* stat tiles */
+      "#otdBody .ot-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}" +
+      "@media (max-width:560px){#otdBody .ot-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}" +
+      "#otdBody .ot-since{font-size:11px;color:var(--muted,#93a5cf);margin:0 0 18px}" +
+      "#otdBody .ot-tile{padding:9px 11px;border-radius:8px;background:var(--row-bg,#0d1830);" +
+        "border:1px solid var(--row-line,#1c2c4e);min-width:0}" +
+      "#otdBody .ot-tl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#93a5cf);" +
+        "font-family:var(--mono,monospace);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      /* Proportional figures: tabular-nums makes a standalone value look loose. */
+      "#otdBody .ot-tv{font-size:19px;font-weight:700;margin:2px 0 1px;letter-spacing:-.01em}" +
+      "#otdBody .ot-ts{font-size:11px;color:var(--muted,#93a5cf);line-height:1.3}" +
+      "#otdBody .ot-ts.ot-worse{color:var(--late-ink,#ff6b81)}" +
+      "#otdBody .ot-ts.ot-better{color:var(--live-ink,#39d98a)}" +
+
+      /* figure */
+      "#otdBody .ot-fig{margin:0 0 20px}" +
+      "#otdBody .ot-fig-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}" +
+      "#otdBody .ot-fig-h h4{margin:0;font-size:13px;font-weight:700}" +
+      "#otdBody .ot-fig-h span{font-size:11px;color:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-plot{position:relative}" +
+      "#otdBody .ot-cols,#otdBody .ot-axis{display:flex;gap:3px;align-items:flex-end;height:100%;padding-right:58px;box-sizing:border-box}" +
+      "#otdBody .ot-col{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;" +
+        "justify-content:flex-end;align-items:center;cursor:default;outline:none}" +
+      /* Bars are capped rather than filling the slot; the leftover is deliberate air.
+         4px rounded data-end, squared where it meets the baseline. */
+      "#otdBody .ot-bar{width:100%;max-width:24px;border-radius:4px 4px 1px 1px;background:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-col[data-s='worse'] .ot-bar{background:var(--late-ink,#ff6b81)}" +
+      "#otdBody .ot-col[data-s='better'] .ot-bar{background:var(--live-ink,#39d98a)}" +
+      "#otdBody .ot-col[data-s='none'] .ot-bar{background:var(--line,#22345a);height:2px!important;min-height:2px}" +
+      /* Emphasis for today / this hour is a ring and a label, never a hue swap:
+         two shades of one colour are the pair people cannot separate. */
+      "#otdBody .ot-col[data-cur] .ot-bar{box-shadow:0 0 0 2px var(--panel,#111d36),0 0 0 3px currentColor}" +
+      "#otdBody .ot-col[data-cur]{color:var(--accent-ink,#4ea1ff)}" +
+      "#otdBody .ot-col:hover .ot-bar,#otdBody .ot-col:focus-visible .ot-bar{filter:brightness(1.18)}" +
+      "#otdBody .ot-col:focus-visible{outline:1px solid var(--accent,#4ea1ff);outline-offset:1px;border-radius:3px}" +
+      "#otdBody .ot-val{font:700 10px/1 var(--mono,monospace);color:var(--text,#eef3ff);margin-bottom:4px;" +
+        "white-space:nowrap}" +
+      /* Reference line: solid hairline, one step off the surface, with its value
+         named at the end so the bars above it need no explaining. */
+      "#otdBody .ot-base{position:absolute;left:0;right:0;height:0;display:flex;align-items:center;" +
+        "pointer-events:none;z-index:1}" +
+      "#otdBody .ot-base i{flex:1;height:1px;background:var(--sched-b,#b3c3e8);opacity:.5}" +
+      "#otdBody .ot-base b{flex:none;width:58px;padding-left:6px;box-sizing:border-box;font:700 9px/1 var(--mono,monospace);letter-spacing:.06em;" +
+        "text-transform:uppercase;color:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-axis{align-items:flex-start;height:auto;margin-top:6px}" +
+      /* overflow:visible so a wide label can spill into the blank slots beside it */
+      "#otdBody .ot-axis span{flex:1 1 0;min-width:0;text-align:center;white-space:nowrap;overflow:visible;" +
+        "font:600 9.5px/1.3 var(--mono,monospace);color:var(--muted,#93a5cf);letter-spacing:.02em}" +
+      "#otdBody .ot-axis span.cur{color:var(--text,#eef3ff)}" +
+      /* Narrow: keep only every second label the wide layout shows. Scoped to
+         .thin so the hour axis, whose labels are short enough already, is
+         left alone. */
+      "@media (max-width:620px){#otdBody .ot-axis.thin span:not([data-n2]){visibility:hidden}}" +
+      "#otdBody .ot-split{margin-top:10px;font-size:11.5px;color:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-split b{color:var(--text,#eef3ff);font-family:var(--mono,monospace)}" +
+
+      /* tooltip */
+      "#otdTip{position:absolute;z-index:3;pointer-events:none;max-width:230px;padding:6px 9px;border-radius:7px;" +
+        "background:var(--panel2,#0c1628);border:1px solid var(--line,#22345a);color:var(--text,#eef3ff);" +
+        "font-size:11.5px;line-height:1.4;box-shadow:0 6px 18px rgba(0,0,0,.4)}" +
+
+      /* table twin */
+      "#otdBody .ot-tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;" +
+        "margin:12px 0 4px}" +
+      "#otdBody .ot-tbl{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}" +
+      "#otdBody .ot-tbl th,#otdBody .ot-tbl td{text-align:right;padding:3px 6px;white-space:nowrap}" +
+      "#otdBody .ot-tbl th{text-align:left;font-weight:600}" +
+      "#otdBody .ot-tbl thead tr{color:var(--muted,#93a5cf);border-bottom:1px solid var(--line,#22345a)}" +
+      "#otdBody .ot-tbl thead td{text-align:right;font-size:10px;letter-spacing:.05em;text-transform:uppercase}" +
+      "#otdBody .ot-tbl tbody tr:nth-child(even){background:var(--row-bg,#0d1830)}" +
+      "#otdBody .ot-tbl .ot-worse{color:var(--late-ink,#ff6b81)}" +
+      "#otdBody .ot-tbl .ot-better{color:var(--live-ink,#39d98a)}" +
+      "#otdBody .ot-tbl .ot-same{color:var(--muted,#93a5cf)}" +
+
+      /* the rest */
+      "#otdBody .ot-none{padding:14px 0;font-size:12.5px;color:var(--muted,#93a5cf);line-height:1.55}" +
+      "#otdBody .ot-explain{margin:16px 0 0;font-size:11.5px;line-height:1.6;color:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-explain b{color:var(--text,#eef3ff)}" +
+      "#otdBody .ot-ghost{padding:7px 13px;border-radius:8px;cursor:pointer;background:transparent;" +
+        "border:1px solid var(--line,#22345a);color:var(--muted,#93a5cf);font:600 11.5px/1 inherit}" +
+      "#otdBody .ot-ghost:hover{border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff)}" +
+      "#otdBody .ot-ghost.danger:hover{border-color:var(--late-ink,#ff6b81);color:var(--late-ink,#ff6b81)}" +
+      "#otdBody .ot-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line,#22345a)}" +
+      "@media (prefers-reduced-motion:no-preference){#otdBox{animation:otdIn .16s ease-out}" +
+        "@keyframes otdIn{from{opacity:0;transform:translateY(6px)}}}";
     document.head.appendChild(st);
   }
 
@@ -354,8 +675,17 @@
       return db - da;
     });
 
+    /* Philadelphia has no live departures at all — every one of its feeds is a
+       bundled timetable — so it can never produce a wait row. What it does have
+       is SEPTA publishing its own lateness, which is a better measurement than
+       anything on this card. Those rows come from a different store and read
+       the other way round (higher is better), so they are built separately and
+       appended rather than merged into `rows`. */
+    var lrows = lateKeys().filter(function (st) { return seenLate[st.id]; });
+
     var withBase = rows.filter(function (r) { return r.baseAvg != null; }).length;
-    count.textContent = withBase ? withBase + " tracked" : "";
+    count.textContent = (withBase || lrows.length)
+      ? (withBase + lrows.length) + " tracked" : "";
 
     /* A board with no real-time departures at all can never fill this card.
        Los Angeles is the clear case: Metro Rail and Metrolink are both bundled
@@ -368,19 +698,20 @@
        live feed appears (a board can gain one via an optional Worker), and any
        history already recorded keeps it visible. */
     var anyLive = pool().some(function (d) { return d.live; });
-    if (!rows.length && !anyLive) {
+    if (!rows.length && !lrows.length && !anyLive) {
       card.style.display = "none";
       return;
     }
     card.style.display = "";
 
-    if (!rows.length) {
+    if (!rows.length && !lrows.length) {
       stat.textContent = "";
       list.innerHTML = '<div class="empty" style="text-align:left">Watching how long you wait at these stops. ' +
         "A typical wait needs a day or so of the board being on.</div>";
       return;
     }
-    stat.textContent = withBase ? "today vs your last 2 weeks" : "learning your usual waits…";
+    stat.textContent = !rows.length ? "on time today vs your last 2 weeks"
+      : withBase ? "today vs your last 2 weeks" : "learning your usual waits…";
 
     list.innerHTML = rows.slice(0, 8).map(function (r) {
       var m = r.meta;
@@ -400,7 +731,7 @@
         "<div>" + sparkSVG(r.series.slice(-7), m.color || "#7cc0ff") + "</div>" +
         '<div class="times"><div class="live">' + esc(todayTxt) + "</div>" +
         '<div class="sched ot-delta ' + cls + '">' + esc(dTxt) + "</div></div></div>";
-    }).join("");
+    }).join("") + lrows.slice(0, rows.length ? 4 : 8).map(lateRow).join("");
     /* eslint-disable-next-line no-undef */
     if (typeof fitList === "function") { try { fitList(list); } catch (_) {} }
   }
@@ -447,6 +778,7 @@
     return n + ap;
   }
   function mins(v) { return v == null ? "—" : v.toFixed(1).replace(/\.0$/, "") + " min"; }
+  function group(n) { return String(n).replace(/\B(?=(\d{3})+$)/g, ","); }
 
   /* Everything the dialog needs about one stop, computed once per render rather
      than per chart. Deliberately not folded into statsFor(), which runs for every
@@ -456,10 +788,12 @@
 
     var series = [], maxSeen = 0, maxDay = "", totalN = 0;
     var wdN = 0, wdSum = 0, weN = 0, weSum = 0, bN = 0, bSum = 0;
+    var band = [0, 0, 0, 0, 0], bandN = 0;
     Object.keys(days).sort().forEach(function (d) {
       var r = days[d], avg = r[0] ? r[1] / r[0] : 0;
       series.push({ x: d, label: dayLabel(d), avg: avg, n: r[0], max: r[2], cur: d === day });
       totalN += r[0];
+      if (r[3]) for (var b = 0; b < 5; b++) { band[b] += r[3][b] || 0; bandN += r[3][b] || 0; }
       if (r[2] > maxSeen) { maxSeen = r[2]; maxDay = d; }
       if (d !== day) { bN += r[0]; bSum += r[1]; }
       var wd = dayParts(d).getDay();
@@ -482,9 +816,33 @@
       if (ok) { hN += r2[0]; hSum += r2[1]; }
     }
 
+    /* Two different "how often", because they answer two different questions and
+       conflating them is how this sort of card starts lying.
+
+       ranLong  — days this stop was slower than ITS OWN usual. Relative, so it
+                  means the same thing on a 3-minute subway and a 30-minute bus.
+       longShare— share of readings where you would have stood there more than
+                  ten minutes. Absolute, so it is comparable between stops and
+                  is the one that matches what a person means by "a bad wait".
+
+       Neither is an on-time percentage, and neither is presented as one. */
+    var ranLong = null, ranLongOf = 0;
+    if (bN >= MIN_SAMPLES && bSum) {
+      var ref = bSum / bN;
+      ranLong = 0;
+      series.forEach(function (p) { ranLongOf++; if (p.avg >= ref + 1) ranLong++; });
+    }
+    var longShare = bandN ? (band[LONG_BAND] + band[LONG_BAND + 1]) / bandN : null;
+
+    var worstHour = null;
+    hourly.forEach(function (p) { if (p.avg != null && (!worstHour || p.avg > worstHour.avg)) worstHour = p; });
+
     var tRec = days[day];
     return {
       key: key,
+      band: band, bandN: bandN,
+      ranLong: ranLong, ranLongOf: ranLongOf, longShare: longShare,
+      worstHour: worstHour,
       series: series,
       hourly: hourly,
       hourBase: hN ? hSum / hN : null,
@@ -533,10 +891,14 @@
      and preserveAspectRatio="none" (which stretches the glyphs). Divs keep the
      labels at real CSS sizes at every width, and a bar is a rectangle either
      way. */
-  function state(v, base) {
+  /* NOT `state`: the boards declare `let state = {...}` at top level and
+     boardState() finds it by bare identifier. A same-named function in this
+     closure would shadow it, and every card row would silently vanish. */
+  function barState(v, base, tol, invert) {
     if (v == null || base == null) return "same";
-    var d = v - base;
-    return d >= 1 ? "worse" : d <= -1 ? "better" : "same";
+    var d = (v - base) * (invert ? -1 : 1);
+    var t = tol || 1;
+    return d >= t ? "worse" : d <= -t ? "better" : "same";
   }
   function deltaWords(v, base, what) {
     if (v == null) return "no reading";
@@ -558,43 +920,56 @@
 
     // 1.28x headroom so the tallest bar's own label has somewhere to sit.
     var top = Math.max.apply(null, vals) * 1.28 || 1;
-    var worst = -1, worstV = -Infinity;
-    pts.forEach(function (p, i) { if (p.avg != null && p.avg > worstV) { worstV = p.avg; worst = i; } });
+    var worst = -1, worstV = o.invert ? Infinity : -Infinity;
+    pts.forEach(function (p, i) {
+      if (p.avg == null) return;
+      if (o.invert ? p.avg < worstV : p.avg > worstV) { worstV = p.avg; worst = i; }
+    });
 
     var cols = pts.map(function (p, i) {
-      var st = p.avg == null ? "none" : state(p.avg, o.base);
+      var bs = p.avg == null ? "none" : barState(p.avg, o.base, o.tol, o.invert);
       var pct = p.avg == null ? 0 : Math.max(2, (p.avg / top) * 100);
       // Selective labels only: the current column and the worst one. A number on
       // every bar is unreadable and goes unread.
       var lab = (p.cur || i === worst) && p.avg != null
-        ? '<span class="ot-val">' + esc(p.avg.toFixed(1).replace(/\.0$/, "")) + "</span>" : "";
-      var tip = p.label + " · " + (p.avg == null
+        ? '<span class="ot-val">' + esc(o.fmt ? o.fmt(p) : p.avg.toFixed(1).replace(/\.0$/, "")) + "</span>" : "";
+      var tip = o.tipFn ? o.tipFn(p) : (p.label + " · " + (p.avg == null
         ? (p.n ? "only " + p.n + " readings — not enough yet" : "board was off")
-        : deltaWords(p.avg, o.base, o.baseWord) + " · " + p.n + " readings");
-      return '<div class="ot-col" data-s="' + st + (p.cur ? '" data-cur="1' : '"') +
+        : deltaWords(p.avg, o.base, o.baseWord) + " · " + p.n + " readings"));
+      return '<div class="ot-col" data-s="' + bs + (p.cur ? '" data-cur="1' : '"') +
         ' tabindex="0" data-tip="' + esc(tip) + '">' + lab +
         '<span class="ot-bar" style="height:' + pct.toFixed(1) + '%"></span></div>';
     }).join("");
 
     var basePct = o.base == null ? null : Math.min(96, (o.base / top) * 100);
-    var baseEl = basePct == null ? "" :
-      '<div class="ot-base" style="bottom:' + basePct.toFixed(1) + '%"><i></i><b>' +
-      esc(o.baseWord + " " + o.base.toFixed(1).replace(/\.0$/, "")) + "</b></div>";
+    /* Formatted INSIDE the guard: the distribution charts pass no base at all,
+       and reading .toFixed off it before checking is how this threw. */
+    var baseEl = "";
+    if (basePct != null) {
+      var baseTxt = o.baseFmt ? o.baseFmt(o.base) : o.base.toFixed(1).replace(/\.0$/, "");
+      baseEl = '<div class="ot-base" style="bottom:' + basePct.toFixed(1) + '%"><i></i><b>' +
+        esc(o.baseWord + " " + baseTxt) + "</b></div>";
+    }
 
     var nth = o.everyNth || 1;
+    var wide = o.narrowNth || 0;             // opt-in: halve the labels on a phone
+    var last = pts.length - 1;
     var axis = pts.map(function (p, i) {
-      var show = nth === 1 || i % nth === 0 || p.cur;
-      return '<span' + (p.cur ? ' class="cur"' : "") + ">" + (show ? esc(p.label) : "") + "</span>";
+      var d = last - i;
+      var show = nth === 1 || d % nth === 0;
+      var keep = wide && d % wide === 0;
+      return "<span" + (p.cur ? ' class="cur"' : "") + (keep ? " data-n2" : "") + ">" +
+        (show ? esc(p.label) : "") + "</span>";
     }).join("");
 
     return '<div class="ot-plot" style="height:' + PLOT_H + 'px">' + baseEl +
       '<div class="ot-cols">' + cols + "</div></div>" +
-      '<div class="ot-axis">' + axis + "</div>";
+      '<div class="ot-axis' + (wide ? " thin" : "") + '">' + axis + "</div>";
   }
 
   /* The table twin. A tooltip is an enhancement; it must never be the only way
      to read a value — and on a touchscreen kiosk there is no hover at all. */
-  function table(pts, base, head) {
+  function table(pts, base, head, baseWord) {
     var rows = pts.map(function (p) {
       var d = (p.avg != null && base != null) ? p.avg - base : null;
       var dTxt = d == null ? "—" : (Math.abs(d) < 1 ? "same" : (d > 0 ? "+" : "−") + Math.abs(d).toFixed(1).replace(/\.0$/, ""));
@@ -603,8 +978,18 @@
         esc(dTxt) + "</td><td>" + (p.n || 0) + "</td></tr>";
     }).join("");
     return '<table class="ot-tbl"><thead><tr><th>' + esc(head) +
-      "</th><td>Typical wait</td><td>vs usual</td><td>Readings</td></tr></thead><tbody>" +
+      "</th><td>Typical wait</td><td>vs " + esc(baseWord || "usual") +
+      "</td><td>Readings</td></tr></thead><tbody>" +
       rows + "</tbody></table>";
+  }
+
+  function bandTable(st) {
+    var rows = BANDS.map(function (lbl, i) {
+      return "<tr><th>" + esc(lbl) + " min</th><td>" + Math.round((st.band[i] / st.bandN) * 100) +
+        "%</td><td>" + group(st.band[i]) + "</td></tr>";
+    }).join("");
+    return '<table class="ot-tbl"><thead><tr><th>Wait</th><td>Share</td>' +
+      "<td>Readings</td></tr></thead><tbody>" + rows + "</tbody></table>";
   }
 
   /* ---- the dialog --------------------------------------------------------- */
@@ -616,6 +1001,23 @@
       '<div class="ot-ts ' + (cls || "") + '">' + esc(sub || "") + "</div></div>";
   }
 
+  /* Which stop to open on. The same answer the card gives: the one that is most
+     out of character today. A stop with no baseline yet can only show a bar or
+     two, so it is never the landing page while something else has a fortnight
+     behind it. */
+  function defaultKey(keys) {
+    var best = keys[0].key, bestScore = -Infinity;
+    keys.forEach(function (k) {
+      var st = deepStats(k.key);
+      var score;
+      if (st.base != null && st.todayAvg != null) score = 3000 + (st.todayAvg - st.base);
+      else if (st.base != null) score = 2000 + st.series.length;
+      else score = Math.min(999, st.totalN / 100);
+      if (score > bestScore) { bestScore = score; best = k.key; }
+    });
+    return best;
+  }
+
   function renderDetail() {
     if (!dlg) return;
     var body = dlg.querySelector("#otdBody");
@@ -623,7 +1025,8 @@
     var keep = body.scrollTop;
 
     var keys = trackedKeys();
-    if (!keys.length) {
+    var lates = lateKeys();
+    if (!keys.length && !lates.length) {
       body.innerHTML = '<div class="ot-none">Nothing recorded yet. The board notes how long the next ' +
         "vehicle is away each time it refreshes; leave it running and a day or so from now this will " +
         "have something to show.</div>" + explainerHTML();
@@ -631,22 +1034,75 @@
     }
     var found = false;
     keys.forEach(function (k) { if (k.key === selKey) found = true; });
-    if (!found) selKey = keys[0].key;
+    lates.forEach(function (k) { if ("~late|" + k.id === selKey) found = true; });
+    /* Only what this board is actually showing. A Philadelphia board listing
+       Red Line stops recorded in Washington is not a picker, it is a filing
+       cabinet — but the records are still yours, so nothing is deleted: the
+       rest sit behind one chip at the end of the strip. */
+    var isMine = function (k) { return k.live || seenStop[k.key]; };
+    var mineKeys = keys.filter(isMine), otherKeys = keys.filter(function (k) { return !isMine(k); });
+    var mineLates = lates.filter(function (k) { return seenLate[k.id]; });
+    var otherLates = lates.filter(function (k) { return !seenLate[k.id]; });
+    var otherN = otherKeys.length + otherLates.length;
+    // Nothing of this board's own yet — show the rest rather than an empty strip.
+    var expand = showAll || (!mineKeys.length && !mineLates.length);
 
-    var meta = keys[0];
-    keys.forEach(function (k) { if (k.key === selKey) meta = k; });
-    var st = deepStats(selKey);
+    /* Land on something this board actually shows. History is per-browser and
+       the whole site is one origin, so a Philadelphia board's `keys` can be full
+       of stops recorded in Washington — opening on one of those is opening on
+       the wrong city. Preference order: a stop the board is watching now, then a
+       line it is measuring, and only then the leftovers. */
+    var liveKeys = keys.filter(function (k) { return k.live; });
+    if (!found) {
+      selKey = liveKeys.length ? defaultKey(liveKeys)
+             : mineLates.length ? "~late|" + mineLates[0].id
+             : mineKeys.length ? defaultKey(mineKeys)
+             : lates.length ? "~late|" + lates[0].id
+             : defaultKey(keys);
+    }
 
-    var chips = keys.map(function (k) {
+    var waitChip = function (k) {
       return '<button type="button" class="ot-chip' + (k.key === selKey ? " on" : "") +
         '" data-otkey="' + esc(k.key) + '">' +
         '<i style="background:' + esc(k.color || "var(--muted,#93a5cf)") + '"></i>' +
         (k.route ? "<b>" + esc(k.route) + "</b>" : "") + esc(k.stop) +
         (k.live ? "" : '<em title="not on the board right now">·</em>') + "</button>";
-    }).join("");
+    };
+    var lateChip = function (k) {
+      var id = "~late|" + k.id;
+      return '<button type="button" class="ot-chip late' + (id === selKey ? " on" : "") +
+        '" data-otkey="' + esc(id) + '" title="On-time record, from the operator\u2019s own figures">' +
+        '<i style="background:' + esc(k.color || "var(--muted,#93a5cf)") + '"></i>' +
+        "<b>" + esc(k.badge) + "</b>" + esc(k.label) + "</button>";
+    };
+
+    var chips = mineKeys.filter(function (k) { return k.live; }).map(waitChip).join("") +
+      mineLates.map(lateChip).join("") +
+      mineKeys.filter(function (k) { return !k.live; }).map(waitChip).join("") +
+      (expand ? otherKeys.map(waitChip).join("") + otherLates.map(lateChip).join("") : "") +
+      (otherN
+        ? '<button type="button" class="ot-more-chip" title="Records kept in this browser from ' +
+          'another board — the history is shared, the boards are not">' +
+          (expand ? "Hide the " + otherN + " from other boards"
+                  : "+ " + otherN + " from other boards") + "</button>"
+        : "");
+
+    setSub(selKey.indexOf("~late|") === 0);
+
+    if (selKey.indexOf("~late|") === 0) {
+      var lst = lateStats(selKey.slice(6));
+      body.innerHTML = '<div class="ot-chips">' + chips + "</div>" + lateBody(lst);
+      afterRender(body, keep);
+      return;
+    }
+
+    var meta = keys[0];
+    keys.forEach(function (k) { if (k.key === selKey) meta = k; });
+    var st = deepStats(selKey);
 
     var dNow = (st.todayAvg != null && st.base != null) ? st.todayAvg - st.base : null;
     var dCls = dNow == null ? "" : dNow >= 1 ? "ot-worse" : dNow <= -1 ? "ot-better" : "";
+    var pct = function (f) { return Math.round(f * 100) + "%"; };
     var tiles =
       tile("Today", st.todayAvg == null ? "—" : mins(st.todayAvg),
         dNow == null ? (st.todayN ? st.todayN + " readings" : "nothing yet today")
@@ -654,14 +1110,40 @@
           : (dNow > 0 ? "+" : "−") + Math.abs(dNow).toFixed(1).replace(/\.0$/, "") + " min vs usual", dCls) +
       tile("Usual", st.base == null ? "learning…" : mins(st.base),
         st.base == null ? "needs a day or so more" : "over " + st.series.length + " days") +
+      /* "How often is it bad" in the stop's own terms. */
+      tile("Ran long", st.ranLong == null ? "—" : st.ranLong + " of " + st.ranLongOf + " days",
+        st.ranLong == null ? "needs a usual to compare against" : "slower than its own usual",
+        st.ranLong != null && st.ranLong * 2 > st.ranLongOf ? "ot-worse" : "") +
+      /* ...and in terms anyone can compare between stops. */
+      tile("Waits over 10 min", st.longShare == null ? "—" : pct(st.longShare),
+        st.longShare == null ? "counting from today on"
+          : "of " + group(st.bandN) + " readings",
+        st.longShare != null && st.longShare >= 0.25 ? "ot-worse" : "") +
       tile("Longest wait seen", st.maxSeen ? st.maxSeen + " min" : "—",
         st.maxDay ? "on " + dayLabel(st.maxDay) : "") +
-      tile("Readings", String(st.totalN),
-        st.since ? "since " + dayLabel(st.since) : "");
+      tile("Worst hour", st.worstHour ? st.worstHour.label : "—",
+        st.worstHour ? mins(st.worstHour.avg) + " typical" : "not enough of the day yet");
 
     var split = (st.weekday != null && st.weekend != null)
       ? '<div class="ot-split">Weekdays <b>' + esc(mins(st.weekday)) + "</b> · Weekends <b>" +
         esc(mins(st.weekend)) + "</b></div>" : "";
+
+    /* The distribution. No reference line and no better/worse colouring: this
+       is one series showing a shape, and a status hue here would be claiming a
+       verdict the chart is not making. */
+    var distBody = "";
+    if (st.bandN) {
+      var dist = BANDS.map(function (lbl, i) {
+        return { x: String(i), label: lbl, avg: st.band[i] / st.bandN, n: st.band[i], cur: false };
+      });
+      distBody = chart({
+        pts: dist,
+        fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
+        tipFn: function (p) {
+          return p.label + " min · " + Math.round(p.avg * 100) + "% of readings (" + group(p.n) + ")";
+        },
+      });
+    }
 
     var hourBody = st.hourly.length
       ? chart({ pts: st.hourly, base: st.hourBase, baseWord: "all hours",
@@ -672,33 +1154,177 @@
     body.innerHTML =
       '<div class="ot-chips">' + chips + "</div>" +
       '<div class="ot-tiles">' + tiles + "</div>" +
+      '<div class="ot-since">' + esc(group(st.totalN) + " readings" +
+        (st.since ? " since " + dayLabel(st.since) : "") + ", taken every time the board refreshed.") + "</div>" +
 
       '<section class="ot-fig"><div class="ot-fig-h"><h4>Typical wait, by day</h4>' +
       '<span>bars above the line were slower than your usual</span></div>' +
-      chart({ pts: st.series, base: st.base, baseWord: "usual" }) + split + "</section>" +
+      chart({ pts: st.series, base: st.base, baseWord: "usual",
+              everyNth: st.series.length > 8 ? 2 : 1,
+              narrowNth: st.series.length > 8 ? 4 : 0 }) + split + "</section>" +
 
       '<section class="ot-fig"><div class="ot-fig-h"><h4>Typical wait, by hour of day</h4>' +
       "<span>when this stop is worth leaving early for</span></div>" + hourBody + "</section>" +
 
+      (distBody
+        ? '<section class="ot-fig"><div class="ot-fig-h"><h4>How long the waits actually are</h4>' +
+          "<span>share of every reading, by minutes waited</span></div>" + distBody + "</section>"
+        : "") +
+
       '<button type="button" id="otdNums" class="ot-ghost">' +
       (showNums ? "Hide the numbers" : "Show the numbers") + "</button>" +
       (showNums
-        ? '<div class="ot-tables">' + table(st.series, st.base, "Day") +
-          (st.hourly.length ? table(st.hourly, st.hourBase, "Hour") : "") + "</div>"
+        ? '<div class="ot-tables">' + table(st.series, st.base, "Day", "usual") +
+          (st.hourly.length ? table(st.hourly, st.hourBase, "Hour", "all hours") : "") +
+          (st.bandN ? bandTable(st) : "") + "</div>"
         : "") +
       explainerHTML() +
       '<div class="ot-foot"><button type="button" id="otdWipe" class="ot-ghost danger">' +
       "Forget this history</button></div>";
 
+    afterRender(body, keep);
+  }
+
+  /* The two views measure different things, so the standfirst cannot describe
+     both. */
+  function setSub(isLate) {
+    var el2 = dlg && dlg.querySelector("#otdSub");
+    if (!el2) return;
+    el2.textContent = isLate
+      ? "On-time running, from the operator’s own published figures."
+      : "How long you have actually waited, at the stops this board watches.";
+  }
+
+  /* Chip first, scroll position second: scrollIntoView can nudge the body
+     vertically as well as the strip horizontally, and restoring the caller's
+     scrollTop afterwards undoes exactly that half of it. */
+  function afterRender(body, keep) {
+    var on = body.querySelector(".ot-chip.on");
+    if (on && on.scrollIntoView) {
+      try { on.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {}
+    }
     body.scrollTop = keep;
   }
 
+  /* The lateness view. Same charts, opposite polarity: on a wait chart taller is
+     worse, and on the on-time chart taller is better — so barState() is fed the
+     negated values rather than being told about percentages, and the reference
+     line still means "your usual". */
+  function lateBody(st) {
+    var pctI = function (f) { return Math.round(f * 100) + "%"; };
+    var dOn = (st.todayOn != null && st.baseOn != null) ? st.todayOn - st.baseOn : null;
+    var tiles =
+      tile("On time today", st.todayOn == null ? "—" : pctI(st.todayOn),
+        st.todayOn == null
+          ? (st.todayN ? group(st.todayN) + " of " + MIN_SAMPLES + " readings needed" : "nothing yet today")
+          : dOn == null ? group(st.todayN) + " readings"
+          : Math.abs(dOn) < 0.03 ? "about its usual"
+          : (dOn > 0 ? "+" : "−") + Math.round(Math.abs(dOn) * 100) + " points vs usual",
+        dOn == null ? "" : dOn >= 0.03 ? "ot-better" : dOn <= -0.03 ? "ot-worse" : "") +
+      tile("On time, 2 weeks", st.baseOn == null ? "learning…" : pctI(st.baseOn),
+        st.baseOn == null ? "needs a day or so more" : "under " + LATE_ON_TIME + " min late") +
+      tile("Typical delay", st.baseLate == null ? "—" : mins(st.baseLate),
+        st.baseLate == null ? "needs a day or so more" : "median across the line") +
+      tile("Worst delay seen", st.worst ? st.worst + " min" : "—",
+        st.worstDay ? "on " + dayLabel(st.worstDay) : "", st.worst >= 20 ? "ot-worse" : "") +
+      tile("Today so far", st.todayLate == null ? "—" : mins(st.todayLate),
+        "typical delay today") +
+      tile("Readings", group(st.totalN), st.since ? "since " + dayLabel(st.since) : "");
+
+    /* On-time percent runs the other way from a wait: taller is better, and
+       three points either side of your usual is noise rather than a trend. */
+    var TOL = 0.03;
+    var onPts = st.onSeries;
+    var onChart = chart({
+      pts: onPts, base: st.baseOn, baseWord: "usual", tol: TOL, invert: true,
+      everyNth: onPts.length > 8 ? 2 : 1, narrowNth: onPts.length > 8 ? 4 : 0,
+      fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
+      baseFmt: function (v) { return Math.round(v * 100) + "%"; },
+      tipFn: function (p) {
+        var d = st.baseOn == null ? null : p.avg - st.baseOn;
+        var w = d == null ? "" : (Math.abs(d) < TOL ? " — about its usual"
+          : " — " + Math.round(Math.abs(d) * 100) + " points " + (d > 0 ? "better" : "worse") +
+            " than usual");
+        return p.label + " · " + Math.round(p.avg * 100) + "% on time" + w +
+          " · " + group(p.n) + " readings";
+      },
+    });
+
+    var distBody = "";
+    if (st.bandN) {
+      var dist = LATE_BANDS.map(function (lbl, i) {
+        return { x: String(i), label: lbl, avg: st.band[i] / st.bandN, n: st.band[i], cur: false };
+      });
+      distBody = '<section class="ot-fig"><div class="ot-fig-h"><h4>How late it actually runs</h4>' +
+        "<span>share of readings, by minutes behind schedule</span></div>" +
+        chart({
+          pts: dist,
+          fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
+          tipFn: function (p) {
+            return p.label + " min late · " + Math.round(p.avg * 100) +
+              "% of readings (" + group(p.n) + ")";
+          },
+        }) + "</section>";
+    }
+
+    return '<div class="ot-tiles">' + tiles + "</div>" +
+      '<div class="ot-since">' + esc(st.label + " — " + group(st.totalN) + " readings" +
+        (st.since ? " since " + dayLabel(st.since) : "") + ".") + "</div>" +
+      '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, by day</h4>' +
+      "<span>bars below the line were worse than its usual</span></div>" + onChart + "</section>" +
+      distBody +
+      '<button type="button" id="otdNums" class="ot-ghost">' +
+      (showNums ? "Hide the numbers" : "Show the numbers") + "</button>" +
+      (showNums
+        ? '<div class="ot-tables">' + lateTable(st) + (st.bandN ? lateBandTable(st) : "") + "</div>"
+        : "") +
+      lateExplainerHTML() +
+      '<div class="ot-foot"><button type="button" id="otdWipe" class="ot-ghost danger">' +
+      "Forget this history</button></div>";
+  }
+
+  function lateTable(st) {
+    var rows = st.onSeries.map(function (p, i) {
+      var late = st.series[i];
+      return "<tr><th>" + esc(p.label) + "</th><td>" + Math.round(p.avg * 100) + "%</td><td>" +
+        esc(mins(late ? late.avg : null)) + "</td><td>" + group(p.n) + "</td></tr>";
+    }).join("");
+    return '<table class="ot-tbl"><thead><tr><th>Day</th><td>On time</td>' +
+      "<td>Typical delay</td><td>Readings</td></tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+  function lateBandTable(st) {
+    var rows = LATE_BANDS.map(function (lbl, i) {
+      return "<tr><th>" + esc(lbl) + " min</th><td>" + Math.round((st.band[i] / st.bandN) * 100) +
+        "%</td><td>" + group(st.band[i]) + "</td></tr>";
+    }).join("");
+    return '<table class="ot-tbl"><thead><tr><th>Late by</th><td>Share</td>' +
+      "<td>Readings</td></tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+
+  function lateExplainerHTML() {
+    return '<p class="ot-explain">This one <b>is</b> an on-time figure, and it is the operator\u2019s ' +
+      "own: SEPTA publishes how many minutes behind schedule each vehicle is running, so nothing here " +
+      "is inferred from a countdown. On time means <b>under " + LATE_ON_TIME + " minutes late</b>, " +
+      "SEPTA\u2019s own Regional Rail standard, applied to every mode for consistency.<br><br>" +
+      "Each reading is the <b>median</b> across the line\u2019s vehicles at that moment, not one per " +
+      "vehicle — a train that stays twenty minutes late for an hour is one line running late, not " +
+      "dozens of separate failures. The worst single vehicle is reported separately.<br><br>" +
+      "Recorded by this screen, kept in this browser, uploaded nowhere.</p>";
+  }
+
+
   function explainerHTML() {
     return '<p class="ot-explain">This measures <b>how long you wait</b>, not whether a vehicle ' +
-      "was late — most of these feeds publish a countdown and no timetable to be late against, so " +
-      "a percentage on-time would be invented rather than measured. A typical wait tracks headway, " +
-      "which is the thing that actually goes wrong. Every figure here came from this screen watching " +
-      "its own board; nothing was uploaded, and clearing it below is the end of it.</p>";
+      "was late. Most of these feeds publish a countdown and no timetable to be late against — " +
+      "Metrorail publishes none at all — so a percentage on-time would be invented rather than " +
+      "measured. A typical wait tracks headway, which is the thing that actually goes wrong.<br><br>" +
+      "So <b>how often it is bad</b> is answered twice, because one number cannot do it. " +
+      '<b>Ran long</b> counts days this stop was slower than its own usual, which means the same ' +
+      "thing on a three-minute subway and a half-hourly bus. <b>Waits over 10 min</b> counts " +
+      "individual readings against a fixed bar, which is what a person means by a bad wait and is " +
+      "comparable between stops. Neither is an on-time figure and neither is offered as one.<br><br>" +
+      "Every figure here came from this screen watching its own board; nothing was uploaded, and " +
+      "clearing it below is the end of it.</p>";
   }
 
   function openDetail(key) {
@@ -711,7 +1337,7 @@
     dlg.innerHTML =
       '<div id="otdBox" role="dialog" aria-modal="true" aria-label="Track record">' +
       '<header><h3>Track record</h3>' +
-      "<p>How long you have actually waited, at the stops this board watches.</p>" +
+      '<p id="otdSub">How long you have actually waited, at the stops this board watches.</p>' +
       '<button type="button" id="otdClose" aria-label="Close">×</button></header>' +
       '<div id="otdBody"></div><div id="otdTip" hidden></div></div>';
 
@@ -737,7 +1363,8 @@
       if (!txt) { tip.hidden = true; return; }
       tip.textContent = txt;
       tip.hidden = false;
-      var b = dlg.querySelector("#otdBox").getBoundingClientRect(), r = el.getBoundingClientRect();
+      var mark = el.querySelector(".ot-bar") || el;
+      var b = dlg.querySelector("#otdBox").getBoundingClientRect(), r = mark.getBoundingClientRect();
       var x = r.left - b.left + r.width / 2 - tip.offsetWidth / 2;
       tip.style.left = Math.max(6, Math.min(b.width - tip.offsetWidth - 6, x)) + "px";
       tip.style.top = (r.top - b.top - tip.offsetHeight - 7) + "px";
@@ -769,8 +1396,8 @@
       }, 4000);
       return;
     }
-    hist = {}; hours = {};
-    write(LS.hist, hist); write(LS.hours, hours);
+    hist = {}; hours = {}; lateHist = {};
+    write(LS.hist, hist); write(LS.hours, hours); write(LS.late, lateHist);
     selKey = null;
     renderDetail();
     paint();
@@ -783,6 +1410,32 @@
     if (dlg) { dlg.remove(); dlg = null; }
     var b = document.getElementById("otMoreBtn");
     if (b) b.focus();
+  }
+
+  /* Reads the other way round from a wait row: a HIGHER number is better here,
+     so the green/red sense is inverted and the delta is in percentage points,
+     not minutes. Keeping that inversion in one function rather than
+     parameterising the wait row was deliberate — the two are different
+     measurements and merging their rendering is how one starts being described
+     in the other's words. */
+  function lateRow(st) {
+    var d = (st.todayOn != null && st.baseOn != null) ? st.todayOn - st.baseOn : null;
+    var cls = d == null ? "ot-same" : d >= 0.03 ? "ot-better" : d <= -0.03 ? "ot-worse" : "ot-same";
+    var dTxt = d == null ? "" : Math.abs(d) < 0.03 ? "same"
+      : (d > 0 ? "+" : "−") + Math.round(Math.abs(d) * 100) + " pts";
+    var todayTxt = st.todayOn == null ? "—" : Math.round(st.todayOn * 100) + "%";
+    var sub = st.baseOn != null ? "usually " + Math.round(st.baseOn * 100) + "% on time"
+      : st.todayOn == null ? "learning — " + st.todayN + " so far"
+      : "learning its usual…";
+    return '<div class="row ot-row" tabindex="0" role="button" data-otkey="~late|' + esc(st.id) +
+      '" title="See this line\u2019s on-time record">' +
+      '<div class="badge" style="background:' + esc(st.color || "#556") + ';color:#fff">' +
+      esc(st.badge) + "</div>" +
+      '<div><div class="dest">' + esc(st.label) + "</div>" +
+      '<div class="sub">' + esc(sub) + "</div></div>" +
+      "<div>" + sparkSVG(st.onSeries.slice(-7), st.color || "#7cc0ff") + "</div>" +
+      '<div class="times"><div class="live">' + esc(todayTxt) + "</div>" +
+      '<div class="sched ot-delta ' + cls + '">' + esc(dTxt) + "</div></div></div>";
   }
 
   function onData() { try { sample(); paint(); if (dlg) renderDetail(); } catch (_) {} }
@@ -800,6 +1453,15 @@
   root.TBOnTime = {
     onData: onData,
     stats: statsFor,
-    reset: function () { hist = {}; write(LS.hist, hist); paint(); },
+    deep: deepStats,
+    late: recordLate,
+    lateStats: lateStats,
+    open: openDetail,
+    close: closeDetail,
+    reset: function () {
+      hist = {}; hours = {}; lateHist = {};
+      write(LS.hist, hist); write(LS.hours, hours); write(LS.late, lateHist);
+      paint();
+    },
   };
 })(typeof window !== "undefined" ? window : this);
