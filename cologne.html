@@ -46,7 +46,7 @@
 <script src="interesting.js?v=2" defer></script>
 <script src="departures.js?v=1" defer></script>
 <script src="commute.js?v=6" defer></script>
-<script src="ontime.js?v=10" defer></script>
+<script src="ontime.js?v=15" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -1964,6 +1964,12 @@ async function refreshTransit(){
      the card — would be listed and never drawn. */
   state._extraDeps = extra;
 
+  /* Transitous publishes both halves of an on-time record — minutes late against
+     the operator's own timetable, and an explicit cancelled flag — so this board
+     can report all three states rather than the two a delay figure alone allows.
+     Accumulated across the families and reported once: ontime.js throttles to one
+     observation per 25s, so a call per family would drop all but the first. */
+  const lateRows=[];
   FAMILY_CARDS.forEach(([key,fam])=>{
     const box=$("#"+key+"List"); if(!box) return;
     const mine=all.filter(d=>d.family===fam).sort((a,b)=>a.when-b.when).slice(0,10);
@@ -2023,8 +2029,33 @@ async function refreshTransit(){
       mode: FAMILY_MODE[key], stop: (d.stop&&d.stop.name)||"", route: d.route||d.label||"",
       dest: d.headsign||"", min: transitMinutes(d.when), color: FAMILY_COL[key], live: !!d.realTime,
     })));
+    /* Cancelled departures are INCLUDED here, unlike the pool above: a service
+       that did not run is exactly what the cancelled share counts, and dropping
+       it would make a line look better the worse it got.
+
+       Grouped by LINE where the feed names one, and by service category where it
+       does not. Long-distance routeShortName is a train number — "EC 95", "TGV
+       Lyria 9206" — unique to a single journey, so keying on it would record one
+       observation per train and never a second, filling the history with entries
+       that can never grow a track record. A line designation has no space and is
+       short ("S1", "U6", "17", "RE7", "IC1"); anything else falls back to
+       labelFor()'s category ("EC", "TGV"). */
+    lateRows.push(...mine.map(d=>{
+      const rt=String(d.route||"").trim();
+      const line = rt && rt.length<=5 && !/\s/.test(rt);
+      const grp = line ? rt : (d.label||rt||"?");
+      return {
+        id: "transitous|"+FAMILY_MODE[key]+"|"+grp,
+        badge: grp,
+        label: (line && d.label && d.label!==grp) ? (d.label+" "+grp) : grp,
+        mode: FAMILY_MODE[key], color: FAMILY_COL[key],
+        late: d.realTime ? d.delayMin : null,
+        cancelled: !!d.cancelled, statusKnown: true,
+      };
+    }));
     fitList(box);
   });
+  if(window.TBOnTime && TBOnTime.late) TBOnTime.late(lateRows);
   drawTransitStops(stops);
   refreshTransitVehicles();
   state.lastTransitOk = Date.now();

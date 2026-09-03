@@ -45,7 +45,7 @@
 <script src="interesting.js?v=2" defer></script>
 <script src="departures.js?v=1" defer></script>
 <script src="commute.js?v=6" defer></script>
-<script src="ontime.js?v=10" defer></script>
+<script src="ontime.js?v=15" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -2239,6 +2239,27 @@ function renderIntlLive(b){
     box.appendChild(row);
   });
   if(!box.children.length) box.appendChild(el("div","empty","No more international trains today."));
+
+  /* The only card on this board with an on-time record to keep. Amsterdam's
+     metros, trams, ferries and local rail all run off bundled timetables — the
+     rows say "gepland" for a reason — so there is nothing to be late against.
+     The international trains come through Transitous, which publishes both a
+     delay figure and a cancelled flag, so those get the full three-way record.
+     Grouped by service category ("ICE", "EST", "NJ"), never by the route field:
+     that is a train number here, unique to one journey, and keying on it would
+     file every train under its own heading and never build a record at all. */
+  if(window.TBOnTime && TBOnTime.late){
+    TBOnTime.late(b.departures.slice(0,8).map(d=>{
+      const tr=d.trip;
+      const rt = d.realTime || !!(tr && tr.realTime);
+      const dm = d.realTime ? d.delayMin : (tr ? tr.delayMin : null);
+      const grp = d.label || d.route || "?";
+      return { id:"transitous|intl|"+grp, badge:grp, label:grp+" international",
+        mode:"train", color:((SYSTEMS.intl&&SYSTEMS.intl.color) ? SYSTEMS.intl.color(grp) : "") || "#b58cff",
+        late: rt ? dm : null, cancelled: !!d.cancelled, statusKnown:true };
+    }));
+  }
+
   const live=b.departures.slice(0,8).filter(d=>d.realTime||(d.trip&&d.trip.realTime)).length;
   const c=$("#intlCount"); if(c) c.textContent = live? `${live} live` : "gepland";
   fitList(box);

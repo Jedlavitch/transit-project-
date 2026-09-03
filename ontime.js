@@ -166,8 +166,16 @@
      averaged together or presented as the same measurement: one is what the
      rider experiences, the other is what the operator promised.
 
-       { "septa-rail|PAO": { _: [label, mode, colour],
-                             "2026-09-01": [n, sumLate, onTime, worst, [bands]] } }
+       { "septa-rail|PAO": { _: [label, mode, colour, badge, cancelKnown],
+                             "2026-09-01": [n, sumLate, onTime, worst, [bands],
+                                            [nOnTime, nDelayed, nCancelled]] } }
+
+     Two different counts live in one record on purpose. The first four are one
+     observation per REFRESH — the median across the line, so a train that stays
+     late for an hour is one line running late rather than dozens of failures.
+     The last is one count per DEPARTURE, because "how often is it cancelled" is
+     a question about services, not about how the line felt on average, and a
+     median cannot express a cancellation at all.
 
      A board opts in by calling, once per refresh, with one row per vehicle:
        TBOnTime.late([{ id, label, mode, color, late }, ...])   */
@@ -268,21 +276,56 @@
       by[r.id].v.push(Math.round(m));
     });
 
+    /* Status is counted over every row, including the cancelled ones the median
+       above deliberately skips — a cancelled service has no lateness to average
+       and pretending it does would flatter the line. A feed that publishes no
+       cancellation field sets no `statusKnown`, and its record keeps a zero
+       rather than a false "never cancelled": see cancelKnown below. */
+    rows.forEach(function (r) {
+      if (!r || !r.id) return;
+      if (!by[r.id]) {
+        by[r.id] = { meta: [r.label || r.id, r.mode || "", r.color || "", r.badge || ""], v: [] };
+      }
+      var b = by[r.id];
+      if (!b.st) b.st = [0, 0, 0];
+      if (r.statusKnown) b.known = 1;
+      if (r.cancelled) { b.st[2] += 1; return; }
+      var lm = Number(r.late);
+      if (!isFinite(lm) || Math.abs(lm) > 90) return;   // no figure = no verdict
+      if (Math.round(lm) >= LATE_ON_TIME) b.st[1] += 1; else b.st[0] += 1;
+    });
+
     var day = today(), any = false;
     for (var id in by) {
       var v = by[id].v.sort(function (a, b) { return a - b; });
-      var med = v.length % 2
-        ? v[(v.length - 1) / 2]
-        : Math.round((v[v.length / 2 - 1] + v[v.length / 2]) / 2);
+      /* A line whose every departure is cancelled contributes no lateness at
+         all, and the even-length median of an empty list is NaN — which would
+         have poisoned the running sum permanently. The status counts below
+         still record it, which is the whole point of counting them separately. */
+      var med = null;
+      if (v.length) {
+        med = v.length % 2
+          ? v[(v.length - 1) / 2]
+          : Math.round((v[v.length / 2 - 1] + v[v.length / 2]) / 2);
+      }
       if (!lateHist[id]) lateHist[id] = {};
-      lateHist[id]._ = by[id].meta;
-      var rec = lateHist[id][day] || [0, 0, 0, 0, [0, 0, 0, 0, 0]];
+      var mt = by[id].meta.slice();
+      // Sticky: a feed that has published cancellations once still publishes
+      // them on a refresh where nothing happened to be cancelled.
+      mt[4] = by[id].known || (lateHist[id]._ && lateHist[id]._[4]) || 0;
+      lateHist[id]._ = mt;
+      var rec = lateHist[id][day] || [0, 0, 0, 0, [0, 0, 0, 0, 0], [0, 0, 0]];
       if (!rec[4]) rec[4] = [0, 0, 0, 0, 0];
-      rec[0] += 1;
-      rec[1] += med;
-      if (med < LATE_ON_TIME) rec[2] += 1;
-      if (v[v.length - 1] > rec[3]) rec[3] = v[v.length - 1];
-      rec[4][lateBandOf(med)] += 1;
+      if (!rec[5]) rec[5] = [0, 0, 0];
+      if (med != null) {
+        rec[0] += 1;
+        rec[1] += med;
+        if (med < LATE_ON_TIME) rec[2] += 1;
+        if (v[v.length - 1] > rec[3]) rec[3] = v[v.length - 1];
+        rec[4][lateBandOf(med)] += 1;
+      }
+      var st = by[id].st || [0, 0, 0];
+      rec[5][0] += st[0]; rec[5][1] += st[1]; rec[5][2] += st[2];
       lateHist[id][day] = rec;
       seenLate[id] = 1;
       any = true;
@@ -296,25 +339,55 @@
 
   function lateStats(id) {
     var days = lateHist[id] || {}, day = today();
-    var meta = days._ || [id, "", "", ""];
+    var meta = days._ || [id, "", "", "", 0];
     var series = [], onSeries = [], band = [0, 0, 0, 0, 0], bandN = 0;
+    // one entry per day, each a share of that day's classified departures
+    var statusDays = [[], [], []], status = [0, 0, 0], statusN = 0;
     var worst = 0, worstDay = "", totalN = 0;
     var bN = 0, bSum = 0, bOn = 0;          // the fortnight, excluding today
     Object.keys(days).sort().forEach(function (d) {
       if (d === "_") return;
       var r = days[d], n = r[0] || 0;
-      if (!n) return;
+      if (!n) {
+        // status-only day: still counts towards the three-way breakdown below
+        var sr0 = r[5];
+        if (sr0) {
+          var t0 = (sr0[0] || 0) + (sr0[1] || 0) + (sr0[2] || 0);
+          for (var c0 = 0; c0 < 3; c0++) {
+            status[c0] += sr0[c0] || 0;
+            statusDays[c0].push({ x: d, label: dayLabel(d), n: t0, cur: d === day,
+                                  avg: t0 ? (sr0[c0] || 0) / t0 : null });
+          }
+          statusN += t0;
+        }
+        return;
+      }
       series.push({ x: d, label: dayLabel(d), avg: r[1] / n, n: n, cur: d === day });
       onSeries.push({ x: d, label: dayLabel(d), avg: r[2] / n, n: n, cur: d === day });
       totalN += n;
       if (r[3] > worst) { worst = r[3]; worstDay = d; }
       if (r[4]) for (var b = 0; b < 5; b++) { band[b] += r[4][b] || 0; bandN += r[4][b] || 0; }
+      var sr = r[5];
+      if (sr) {
+        var tot = (sr[0] || 0) + (sr[1] || 0) + (sr[2] || 0);
+        for (var c = 0; c < 3; c++) {
+          status[c] += sr[c] || 0;
+          statusDays[c].push({ x: d, label: dayLabel(d), n: tot, cur: d === day,
+                               avg: tot ? (sr[c] || 0) / tot : null });
+        }
+        statusN += tot;
+      }
       if (d !== day) { bN += n; bSum += r[1]; bOn += r[2]; }
     });
     var tRec = days[day];
     return {
       id: id, label: meta[0], mode: meta[1], color: meta[2],
       badge: meta[3] || String(meta[0]).slice(0, 4),
+      /* Without this the cancelled chart would read "0% cancelled, every day"
+         on a feed that simply never says — which is a stronger claim than any
+         agency makes about itself. */
+      cancelKnown: !!meta[4],
+      status: status, statusN: statusN, statusDays: statusDays,
       series: series, onSeries: onSeries,
       band: band, bandN: bandN,
       todayOn: tRec && tRec[0] >= MIN_SAMPLES ? tRec[2] / tRec[0] : null,
@@ -539,6 +612,10 @@
       "#otdBody .ot-chip em{font-style:normal;opacity:.5}" +
       "#otdBody .ot-chip.late{border-style:dashed}" +
       "#otdBody .ot-chip.late.on{border-style:solid}" +
+      "#otdBody .ot-more-chip{flex:none;align-self:center;cursor:pointer;white-space:nowrap;" +
+        "padding:6px 11px;border-radius:999px;border:1px dashed var(--line,#22345a);background:none;" +
+        "color:var(--muted,#93a5cf);font:600 11.5px/1.2 inherit}" +
+      "#otdBody .ot-more-chip:hover{border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff)}" +
 
       /* stat tiles */
       "#otdBody .ot-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}" +
@@ -568,6 +645,7 @@
       "#otdBody .ot-bar{width:100%;max-width:24px;border-radius:4px 4px 1px 1px;background:var(--muted,#93a5cf)}" +
       "#otdBody .ot-col[data-s='worse'] .ot-bar{background:var(--late-ink,#ff6b81)}" +
       "#otdBody .ot-col[data-s='better'] .ot-bar{background:var(--live-ink,#39d98a)}" +
+      "#otdBody .ot-col[data-s='warn'] .ot-bar{background:var(--warn-ink,#ffcc33)}" +
       "#otdBody .ot-col[data-s='none'] .ot-bar{background:var(--line,#22345a);height:2px!important;min-height:2px}" +
       /* Emphasis for today / this hour is a ring and a label, never a hue swap:
          two shades of one colour are the pair people cannot separate. */
@@ -595,6 +673,18 @@
       "@media (max-width:620px){#otdBody .ot-axis.thin span:not([data-n2]){visibility:hidden}}" +
       "#otdBody .ot-split{margin-top:10px;font-size:11.5px;color:var(--muted,#93a5cf)}" +
       "#otdBody .ot-split b{color:var(--text,#eef3ff);font-family:var(--mono,monospace)}" +
+      "#otdBody .ot-together{font:700 13px/1.4 var(--mono,monospace);letter-spacing:.01em;margin:-4px 0 14px;" +
+        "color:var(--text,#eef3ff)}" +
+      "#otdBody .ot-multiples{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px}" +
+      "#otdBody .ot-panel{min-width:0}" +
+      "#otdBody .ot-panel-h{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11.5px;" +
+        "color:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-panel-h b{margin-left:auto;font:700 14px/1 inherit;color:var(--text,#eef3ff)}" +
+      "#otdBody .ot-dot{width:9px;height:9px;border-radius:50%;flex:none}" +
+      "#otdBody .ot-t-better{background:var(--live-ink,#39d98a)}" +
+      "#otdBody .ot-t-warn{background:var(--warn-ink,#ffcc33)}" +
+      "#otdBody .ot-t-worse{background:var(--late-ink,#ff6b81)}" +
+      "#otdBody .ot-note{margin:12px 0 0;font-size:11.5px;line-height:1.5;color:var(--muted,#93a5cf)}" +
 
       /* tooltip */
       "#otdTip{position:absolute;z-index:3;pointer-events:none;max-width:230px;padding:6px 9px;border-radius:7px;" +
@@ -919,7 +1009,7 @@
     if (!vals.length) return '<div class="ot-none">Nothing recorded yet.</div>';
 
     // 1.28x headroom so the tallest bar's own label has somewhere to sit.
-    var top = Math.max.apply(null, vals) * 1.28 || 1;
+    var top = o.top != null ? o.top : (Math.max.apply(null, vals) * 1.28 || 1);
     var worst = -1, worstV = o.invert ? Infinity : -Infinity;
     pts.forEach(function (p, i) {
       if (p.avg == null) return;
@@ -927,7 +1017,7 @@
     });
 
     var cols = pts.map(function (p, i) {
-      var bs = p.avg == null ? "none" : barState(p.avg, o.base, o.tol, o.invert);
+      var bs = p.avg == null ? "none" : (o.tone || barState(p.avg, o.base, o.tol, o.invert));
       var pct = p.avg == null ? 0 : Math.max(2, (p.avg / top) * 100);
       // Selective labels only: the current column and the worst one. A number on
       // every bar is unreadable and goes unread.
@@ -994,6 +1084,8 @@
 
   /* ---- the dialog --------------------------------------------------------- */
   var dlg = null, selKey = null, showNums = false;
+  // Whether the chip strip also lists records made on another board.
+  var showAll = false;
 
   function tile(label, value, sub, cls) {
     return '<div class="ot-tile"><div class="ot-tl">' + esc(label) + "</div>" +
@@ -1250,6 +1342,56 @@
       },
     });
 
+    /* "On time, delayed or cancelled, all together."
+
+       Three single-series charts rather than one stacked bar, and the reason is
+       measured rather than stylistic: green / amber / red is the obvious
+       encoding and it is the one that fails. Checked against both of this
+       board's surfaces, the day theme's own status tokens land at ΔE 13.3 in
+       NORMAL vision and 3.8 under deuteranopia — three fills nobody can
+       separate. Every green+warm trio tried failed the same way; it is the
+       red-green collapse, not a bad choice of step. Faceting removes the
+       problem instead of dressing it: nothing here has to be told from anything
+       else by hue, because each panel is one series with its name written above
+       it. They share one 0–100% scale so the heights mean the same thing, and
+       each panel states its own fortnight figure in text — which is what stays
+       readable when a 2% cancellation rate draws as two pixels. */
+    var statusBody = "";
+    if (st.statusN) {
+      var names = ["On time", "Delayed", "Cancelled"];
+      var tones = ["better", "warn", "worse"];
+      var panels = [0, 1, 2];
+      if (!st.cancelKnown) panels = [0, 1];
+      var share = function (i) { return st.status[i] / st.statusN; };
+
+      var together = panels.map(function (i) {
+        return names[i] + " " + Math.round(share(i) * 100) + "%";
+      }).join(" · ");
+
+      statusBody =
+        '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, delayed or cancelled</h4>' +
+        "<span>every departure this board saw, over the fortnight</span></div>" +
+        '<div class="ot-together">' + esc(together) + "</div>" +
+        '<div class="ot-multiples">' +
+        panels.map(function (i) {
+          return '<div class="ot-panel"><div class="ot-panel-h"><span class="ot-dot ot-t-' + tones[i] +
+            '"></span>' + esc(names[i]) + '<b>' + Math.round(share(i) * 100) + "%</b></div>" +
+            chart({
+              pts: st.statusDays[i], tone: tones[i], top: 1.28,
+              everyNth: st.statusDays[i].length > 6 ? 3 : 1,
+              fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
+              tipFn: function (p) {
+                return p.label + " · " + Math.round(p.avg * 100) + "% " + names[i].toLowerCase() +
+                  " of " + group(p.n) + " departures";
+              },
+            }) + "</div>";
+        }).join("") + "</div>" +
+        (st.cancelKnown ? "" :
+          '<p class="ot-note">This feed does not publish cancellations, so there is no ' +
+          "cancelled share to show — an empty bar would be a claim it never made.</p>") +
+        "</section>";
+    }
+
     var distBody = "";
     if (st.bandN) {
       var dist = LATE_BANDS.map(function (lbl, i) {
@@ -1272,13 +1414,14 @@
         (st.since ? " since " + dayLabel(st.since) : "") + ".") + "</div>" +
       '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, by day</h4>' +
       "<span>bars below the line were worse than its usual</span></div>" + onChart + "</section>" +
+      statusBody +
       distBody +
       '<button type="button" id="otdNums" class="ot-ghost">' +
       (showNums ? "Hide the numbers" : "Show the numbers") + "</button>" +
       (showNums
         ? '<div class="ot-tables">' + lateTable(st) + (st.bandN ? lateBandTable(st) : "") + "</div>"
         : "") +
-      lateExplainerHTML() +
+      lateExplainerHTML(st) +
       '<div class="ot-foot"><button type="button" id="otdWipe" class="ot-ghost danger">' +
       "Forget this history</button></div>";
   }
@@ -1301,15 +1444,24 @@
       "<td>Readings</td></tr></thead><tbody>" + rows + "</tbody></table>";
   }
 
-  function lateExplainerHTML() {
+  /* Deliberately names no agency: the same view backs SEPTA in Philadelphia and
+     Transitous across the European boards, and an explainer that says "SEPTA"
+     on a Zurich screen is worse than none. */
+  function lateExplainerHTML(st) {
     return '<p class="ot-explain">This one <b>is</b> an on-time figure, and it is the operator\u2019s ' +
-      "own: SEPTA publishes how many minutes behind schedule each vehicle is running, so nothing here " +
-      "is inferred from a countdown. On time means <b>under " + LATE_ON_TIME + " minutes late</b>, " +
-      "SEPTA\u2019s own Regional Rail standard, applied to every mode for consistency.<br><br>" +
-      "Each reading is the <b>median</b> across the line\u2019s vehicles at that moment, not one per " +
-      "vehicle — a train that stays twenty minutes late for an hour is one line running late, not " +
-      "dozens of separate failures. The worst single vehicle is reported separately.<br><br>" +
-      "Recorded by this screen, kept in this browser, uploaded nowhere.</p>";
+      "own: the feed behind this line publishes how many minutes behind schedule each vehicle is " +
+      "running, so nothing here is inferred from a countdown. On time means <b>under " +
+      LATE_ON_TIME + " minutes late</b> — a common commuter-rail standard, applied to every mode so " +
+      "the figures stay comparable.<br><br>" +
+      "The daily figure is the <b>median</b> across the line\u2019s vehicles at each refresh, not one " +
+      "reading per vehicle: a train that stays twenty minutes late for an hour is one line running " +
+      "late, not dozens of separate failures. The on time / delayed / cancelled split is counted the " +
+      "other way, once per <b>departure</b>, because a cancellation is a service that did not run and " +
+      "no median can express it." +
+      (st && !st.cancelKnown
+        ? " This feed publishes no cancellations, so only two of the three are shown."
+        : "") +
+      "<br><br>Recorded by this screen, kept in this browser, uploaded nowhere.</p>";
   }
 
 
@@ -1349,6 +1501,7 @@
     var body = dlg.querySelector("#otdBody");
     body.addEventListener("click", function (e) {
       var t = e.target;
+      if (t.closest && t.closest(".ot-more-chip")) { showAll = !showAll; renderDetail(); return; }
       var chip = t.closest && t.closest(".ot-chip");
       if (chip) { selKey = chip.getAttribute("data-otkey"); renderDetail(); return; }
       if (t.id === "otdNums") { showNums = !showNums; renderDetail(); return; }
