@@ -511,11 +511,44 @@
       var st = lateStats(id);
       if (st.totalN) out.push(st);
     });
-    out.sort(function (a, b) {
-      var av = a.todayOn == null ? 2 : a.todayOn, bv = b.todayOn == null ? 2 : b.todayOn;
-      return (av - bv) || (b.totalN - a.totalN);
+    /* Lines that have earned a verdict come first, worst on-time first: that is
+       the reason to look at the card at all.
+
+       The ones still learning are then ROUND-ROBINED ACROSS THEIR SOURCES
+       rather than ranked by how much has been seen. Sampling rates are not
+       comparable between feeds — Regional Rail is reported system-wide on every
+       refresh while a bus route is only counted when one is near you — so
+       ranking by observation count is really ranking by how often a feed
+       happens to talk, and on Philadelphia's first day that filled all eight
+       card rows with Regional Rail while thirty-five bus routes and eleven
+       Metro lines sat unseen behind them. Round-robin shows a rail line, a
+       Metro line, a bus and an Amtrak route instead, which is what the board
+       actually covers. Once a line has real readings the verdict sort takes
+       over again and the worst rise regardless of source. */
+    var verdict = [], learning = [];
+    out.forEach(function (x) { (x.todayOn == null ? learning : verdict).push(x); });
+    verdict.sort(function (a, b) { return (a.todayOn - b.todayOn) || (b.totalN - a.totalN); });
+
+    var bySrc = {}, srcs = [];
+    learning.forEach(function (x) {
+      var k = String(x.id).split("|")[0];
+      if (!bySrc[k]) { bySrc[k] = []; srcs.push(k); }
+      bySrc[k].push(x);
     });
-    return out;
+    srcs.sort();
+    srcs.forEach(function (k) {
+      bySrc[k].sort(function (a, b) { return b.totalN - a.totalN; });
+    });
+    var mixed = [], i = 0, more = true;
+    while (more) {
+      more = false;
+      for (var j = 0; j < srcs.length; j++) {
+        var arr = bySrc[srcs[j]];
+        if (i < arr.length) { mixed.push(arr[i]); more = true; }
+      }
+      i++;
+    }
+    return verdict.concat(mixed);
   }
 
 
@@ -786,6 +819,7 @@
       "#otdBody .ot-t-warn{background:var(--warn-ink,#ffcc33)}" +
       "#otdBody .ot-t-worse{background:var(--late-ink,#ff6b81)}" +
       "#otdBody .ot-note{margin:12px 0 0;font-size:11.5px;line-height:1.5;color:var(--muted,#93a5cf)}" +
+      "#otdBody .ot-sparse{margin:9px 0 0;font-size:11.5px;line-height:1.5;color:var(--muted,#93a5cf);font-style:italic}" +
 
       /* tooltip */
       "#otdTip{position:absolute;z-index:3;pointer-events:none;max-width:230px;padding:6px 9px;border-radius:7px;" +
@@ -965,6 +999,13 @@
 
   var MIN_HOUR = 4;          // samples before an hour is worth drawing at all
   var PLOT_H   = 132;        // px; the axis strip is outside this, so it can't clip
+  /* A day-old board has one bar. Drawn at full height that is a single 2px stub
+     adrift in a 132px box, which reads as a chart that failed rather than one
+     that has barely started — and the emptiness becomes the loudest thing on
+     screen. Under four populated columns the plot collapses to a strip and says
+     how much it has, which is the same information without the alarm. */
+  var MIN_SHAPE = 4;
+  var SHORT_H   = 66;
 
   var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -1112,6 +1153,11 @@
     return mins(v) + " — " + Math.abs(d).toFixed(0) + " min " + (d > 0 ? "longer" : "shorter") + " than " + what;
   }
 
+  function sparseNote(n, unit) {
+    return '<p class="ot-sparse">Only ' + n + " " + unit + (n === 1 ? "" : "s") +
+      " recorded so far — the shape fills in as the board keeps running.</p>";
+  }
+
   function chart(o) {
     // o: { pts, base, baseWord, everyNth, id }
     var pts = o.pts;
@@ -1155,6 +1201,11 @@
         esc(o.baseWord + " " + baseTxt) + "</b></div>";
     }
 
+    var nData = 0;
+    pts.forEach(function (q) { if (q.avg != null) nData++; });
+    var sparse = nData > 0 && nData < MIN_SHAPE;
+    var plotH = sparse ? SHORT_H : PLOT_H;
+
     var nth = o.everyNth || 1;
     var wide = o.narrowNth || 0;             // opt-in: halve the labels on a phone
     var last = pts.length - 1;
@@ -1166,9 +1217,14 @@
         (show ? esc(p.label) : "") + "</span>";
     }).join("");
 
-    return '<div class="ot-plot" data-fig="' + esc(o.figId || "f") + '" style="height:' + PLOT_H + 'px">' + baseEl +
+    /* Only where the caller named a unit. The three small multiples share one
+       day count, so three identical notes would be three times the noise; that
+       section carries a single one of its own. */
+    var note = (sparse && o.unitName) ? sparseNote(nData, o.unitName) : "";
+
+    return '<div class="ot-plot" data-fig="' + esc(o.figId || "f") + '" style="height:' + plotH + 'px">' + baseEl +
       '<div class="ot-cols">' + cols + "</div></div>" +
-      '<div class="ot-axis' + (wide ? " thin" : "") + '">' + axis + "</div>";
+      '<div class="ot-axis' + (wide ? " thin" : "") + '">' + axis + "</div>" + note;
   }
 
   /* The table twin. A tooltip is an enhancement; it must never be the only way
@@ -1354,7 +1410,7 @@
 
     var hourBody = st.hourly.length
       ? chart({ pts: st.hourly, base: st.hourBase, baseWord: "all hours", figId: "wait-hour",
-                everyNth: st.hourly.length > 10 ? 3 : 1 })
+                unitName: "hour", everyNth: st.hourly.length > 10 ? 3 : 1 })
       : '<div class="ot-none">Not enough of the day observed yet — an hour needs about a minute of ' +
         "the board being on before it counts.</div>";
 
@@ -1368,7 +1424,7 @@
       '<span>bars above the line were slower than your usual</span></div>' +
       chart({ pts: st.series, base: st.base, baseWord: "usual",
               everyNth: st.series.length > 8 ? 2 : 1,
-              narrowNth: st.series.length > 8 ? 4 : 0 , figId: "wait-day" }) + split + "</section>" +
+              narrowNth: st.series.length > 8 ? 4 : 0, figId: "wait-day", unitName: "day" }) + split + "</section>" +
 
       '<section class="ot-fig"><div class="ot-fig-h"><h4>Typical wait, by hour of day</h4>' +
       "<span>when this stop is worth leaving early for</span></div>" + hourBody + "</section>" +
@@ -1492,6 +1548,7 @@
     var onPts = st.onSeries;
     var onChart = chart({
       pts: onPts, base: st.baseOn, baseWord: "usual", tol: TOL, invert: true, figId: "late-day",
+      unitName: "day",
       everyNth: onPts.length > 8 ? 2 : 1, narrowNth: onPts.length > 8 ? 4 : 0,
       fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
       baseFmt: function (v) { return Math.round(v * 100) + "%"; },
@@ -1549,6 +1606,8 @@
               },
             }) + "</div>";
         }).join("") + "</div>" +
+        (st.statusDays[0].length < MIN_SHAPE
+          ? sparseNote(st.statusDays[0].length, "day") : "") +
         (st.cancelKnown ? "" :
           '<p class="ot-note">This feed does not publish cancellations, so there is no ' +
           "cancelled share to show — an empty bar would be a claim it never made.</p>") +
@@ -1558,7 +1617,7 @@
     var hourBody = st.hourly.length
       ? chart({
           pts: st.hourly, base: st.hourBaseOn, baseWord: "all hours", tol: TOL, invert: true,
-          figId: "late-hour", everyNth: st.hourly.length > 10 ? 3 : 1,
+          figId: "late-hour", unitName: "hour", everyNth: st.hourly.length > 10 ? 3 : 1,
           fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
           baseFmt: function (v) { return Math.round(v * 100) + "%"; },
           tipFn: function (p) {
