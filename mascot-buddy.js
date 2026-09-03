@@ -8,6 +8,29 @@
      departure board that is pleased to see you is a thing people show other
      people. That is the point of it.
 
+     Three characters, three voices. The cast used to rotate through identical
+     lines, which taught you the swap was decorative; now each has a
+     temperament and a pool only they use, and the bubble prints whose it is.
+     Pim keeps the timetable and is let down by it. Vix knows the fast way
+     through. Otto works nights and is in no hurry. Names come from mascot.js,
+     so the picker and the Spotted card cannot disagree about who anyone is.
+
+   WHAT IT KNOWS
+     Everything specific it says is read off state the page already has — no
+     feed of its own, nothing to configure, nothing new to break at 3am:
+
+       lastRanked    the live service alerts, ranked worst-first by the card
+       TBDep         what is actually leaving, from departures.js
+       TBOnTime      how far off the next one usually is, per stop and route
+       TBCommute     your saved stop and how long you take to walk to it
+       TBLeaders     the day's best sighting, and the rarity registry behind it
+       tb.spots      your own collection, from spotlog.js
+       __lastSubject the aircraft Sky view is watching, and how far through
+
+     Each is a chance rather than a rule. A mascot that ALWAYS reads out the
+     departures has become a second departure display, and the board behind it
+     is a much better one.
+
    ONE SCRIPT TAG, NO OTHER WIRING — same drop-in shape as wake.js. It borrows
    the artwork from mascot.js (TBMascot) rather than drawing its own, so the
    character in the corner is the character in the tour.
@@ -23,7 +46,8 @@
      thirty seconds is a character somebody unplugs. So: it speaks once shortly
      after arriving, then only every few minutes; it never speaks while the tab
      is hidden; and it can be dismissed for good with one click on the bubble's
-     ×, remembered in localStorage. The idle chatter is the garnish. The poke is
+     ×, remembered in localStorage. Between 2am and 5am it dozes and says
+     nothing at all until poked. The idle chatter is the garnish. The poke is
      the feature.
 
    ABOUT THE WORDS
@@ -113,6 +137,93 @@
     },
     dismissed: ["Right. I will be in the corner if you need me."],
   };
+
+  /* ---- three characters, three voices ------------------------------------
+     The cast rotated on every line, and every one of them said exactly the
+     same things. That made the swap decorative: you noticed a different animal
+     and heard an identical joke, which is worse than not swapping at all,
+     because it quietly tells you the choice does not matter.
+
+     So each one gets a temperament and a pool of lines only they say. The
+     shared pools stay shared — a city's own jokes belong to the city, not to
+     whoever happens to be standing there — and these mix in on top. The result
+     is that "Surprise me" is now worth choosing, and pinning one is worth
+     choosing too, which is the first time the picker has been a real decision.
+
+     Keyed by the slug mascot.js derives from the filename, so a customer who
+     drops in their own art simply falls through to the shared pools rather
+     than getting somebody else's personality. */
+  var VOICE = {
+    penguin: {
+      hello: [
+        "Pim here. I have read today's timetable. It is an optimistic document.",
+        "Pim. Everything below is scheduled. Scheduled is not the same as happening.",
+      ],
+      own: [
+        "I have the timetable memorised. It has disappointed me every day this week.",
+        "The published time and the real time are two different numbers and I follow both.",
+        "A schedule is a promise. That is a philosophical position and it has cost me.",
+        "I stand on the exact spot where the doors will open. It is the only control I have.",
+        "I once caught a train that was early. I have never fully recovered.",
+        "♪ Departs at nine, departs at nine, departs at nine, departs at ten ♪",
+        "Somebody wrote these times down and meant them. I think about that person a lot.",
+      ],
+      wake: ["Pim. Awake. The 04:52 does not run today, before you ask."],
+    },
+    fox: {
+      hello: [
+        "Vix. I have already worked out the fast way through this station.",
+        "Vix here. Whatever you are about to do, there is a quicker version.",
+      ],
+      own: [
+        "Third carriage. The doors line up with the stairs. You are welcome.",
+        "Everyone queues at the nearest door. I am not everyone.",
+        "There is a faster route and it involves one more change. Trust me on this.",
+        "Four-minute connection is plenty if you know which end of the platform to stand on.",
+        "I know which exit puts you on the correct side of the road. It is my whole personality.",
+        "♪ Out the back, down the steps, through the gap, gone ♪",
+        "Never run for the first one. Run for the one after, from a better position.",
+      ],
+      wake: ["Vix. I was resting my eyes strategically."],
+    },
+    owl: {
+      hello: [
+        "Otto. I have been watching this board a while. It is decent company.",
+        "Otto here. Nothing is coming for a bit. That is not a complaint.",
+      ],
+      own: [
+        "I like the last service best. Everyone on it has a story and nobody tells it.",
+        "Waiting is not wasted time. It is only time you did not pick.",
+        "I watched this platform for two hours once. Nothing came. It was lovely.",
+        "The night bus makes no promises, which makes it the honest one.",
+        "Empty platform, one light on, nothing due. My favourite screen in the world.",
+        "♪ Nothing due, nothing due, and I am in no hurry either ♪",
+        "Everyone wants the next one. Almost nobody wants the one after. Their loss.",
+      ],
+      wake: ["Otto. I am nocturnal, so technically that was rude."],
+    },
+  };
+
+  /* Which of them is standing there right now. charIndex walks the cast, so
+     this is the same arithmetic drawCharacter() does — asked of the same list,
+     one line later, so the voice can never belong to a different face than the
+     one on screen. */
+  function currentSrc() {
+    var l = [];
+    try { l = (window.TBMascot && TBMascot.list && TBMascot.list()) || []; } catch (_) { return ""; }
+    if (!l.length) return "";
+    return l[((charIndex % l.length) + l.length) % l.length];
+  }
+  function currentVoice() {
+    var m = null;
+    try { m = window.TBMascot && TBMascot.meta ? TBMascot.meta(currentSrc()) : null; } catch (_) {}
+    return (m && VOICE[m.slug]) || null;
+  }
+  function currentName() {
+    var m = null;
+    try { m = window.TBMascot && TBMascot.meta ? TBMascot.meta(currentSrc()) : null; } catch (_) {}
+    return (m && m.name) || "";
+  }
 
   /* ---- where we are ------------------------------------------------------
      Keyed off the filename rather than the board's internals: every board is
@@ -289,6 +400,349 @@
     ]);
   }
 
+  /* ---- what is actually leaving, right now -------------------------------
+     departures.js pools every board's rendered departures on TBDep so the
+     commute countdown and the wait recorder can share one supply. A third
+     reader costs nothing and finally gets the mascot the thing this file's
+     header has always claimed for it: a remark about THIS screen, now. "The 21
+     goes in two minutes" beats every joke about buses in general, and until now
+     only Sky view had anything of the sort.
+
+     Read defensively and cheaply. TBDep is absent on Sky view and on any board
+     that has not opted in, an empty pool is the normal state for the first few
+     seconds of every load, and a mascot must never be why a wall display
+     throws. */
+  /* Feeds pad strings for their own layout — Sky view's route line has double
+     spaces either side of its arrow — and a bubble is not that layout. */
+  function clip(v, n) {
+    var t = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+    return t.length > n ? "" : t;
+  }
+  function depName(d) {
+    var r = clip(d.route, 14);
+    if (r) return "The " + r;
+    var m = String(d.mode || "").toLowerCase();
+    return m === "ferry" ? "The ferry" : m === "tram" ? "The tram"
+         : m === "bus" ? "The bus" : m === "train" ? "The train" : "The next one";
+  }
+  function depTo(d) { var t = clip(d.dest, 22); return t ? " to " + t : ""; }
+  /* clip() drops a string that runs long, which is right for a NAME — a
+     40-character leasing-trust title reads worse than no name at all. It is
+     wrong wherever the text itself is the information. The alert card's own
+     tidier caps its sentences at about 115 characters, so a 100-character clip
+     here was strictly tighter than the source and threw away precisely the
+     most detailed warnings: Washington's live "shuttle buses replace trains"
+     notice is 104 and never once got spoken. Cut at a word instead. */
+  function snip(v, n) {
+    var t = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+    if (t.length <= n) return t;
+    return t.slice(0, n - 1).replace(/\s+\S*$/, "") + "…";
+  }
+
+  function depRows() {
+    var rows = [];
+    try { rows = (window.TBDep && TBDep.all && TBDep.all()) || []; } catch (_) { return []; }
+    return rows.slice().sort(function (a, b) { return a.min - b.min; });
+  }
+  function norm(v) { return String(v == null ? "" : v).toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+  function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+  /* Mode words spelled out, because naive pluralisation says "2 buss" — and one
+     word like that makes every figure next to it look unchecked. */
+  var MODE_WORD = { metro: ["metro", "metros"], bus: ["bus", "buses"],
+                    train: ["train", "trains"], tram: ["tram", "trams"],
+                    ferry: ["ferry", "ferries"], other: ["departure", "departures"] };
+  function modeWord(m, n) {
+    var w = MODE_WORD[m] || MODE_WORD.other;
+    return n + " " + w[n === 1 ? 0 : 1];
+  }
+
+  function boardLine() {
+    var rows = depRows();
+    if (!rows.length) return "";
+    var soon = rows[0], opts = [], i;
+
+    if (soon.min <= 1) {
+      opts.push(depName(soon) + depTo(soon) + " goes in about a minute. That is a run, not a walk.");
+      opts.push(depName(soon) + " is leaving now. You and I are both too late for it.");
+    } else if (soon.min <= 4) {
+      opts.push(depName(soon) + depTo(soon) + " in " + soon.min + " minutes. Comfortable, if you go now.");
+    }
+
+    /* Two of the same route, minutes apart, is the oldest complaint in
+       transport and the one people most enjoy being told they were right
+       about. Only worth saying while both are still on the board. */
+    for (i = 1; i < rows.length && rows[i].min <= 25; i++) {
+      var a = rows[i - 1], b = rows[i];
+      if (a.route && a.route === b.route && b.min - a.min <= 3) {
+        var gap = Math.max(1, b.min - a.min);
+        opts.push("Two " + a.route + "s, " + gap + (gap === 1 ? " minute" : " minutes") +
+                  " apart. Naturally.");
+        break;
+      }
+    }
+
+    if (soon.min >= 18) {
+      opts.push("Nothing for " + soon.min + " minutes. Whatever you were going to do, there is time.");
+      opts.push(soon.min + " minutes until anything at all happens here. Sit down.");
+    }
+
+    var live = 0;
+    for (i = 0; i < rows.length; i++) if (rows[i].live) live++;
+    if (!live && rows.length >= 4) {
+      opts.push("Not one of these is live. They are timetable numbers wearing a confident face.");
+    }
+    if (rows.length >= 14 && soon.min <= 5) {
+      opts.push(rows.length + " departures on this board and precisely one of them is yours.");
+    }
+    return pick(opts);
+  }
+
+  /* ---- what is actually wrong, in words ----------------------------------
+     Six boards run a live service-alert card, and each keeps its ranked set on
+     a top-level `lastRanked` — a LEXICAL global, reachable as a bare
+     identifier, never a property of window. departures.js reads the boards'
+     `state` exactly this way and documents why; this is the same trick and the
+     same caveat, so it is wrapped in the same defensive shape.
+
+     The card ranks worst-first and removes itself when nothing is wrong, so
+     entry zero is the single most useful sentence on the screen. Saying it out
+     loud matters because the card is one small box in a grid and a person
+     glancing at a board from the hallway will not read it. */
+  function boardAlerts() {
+    try { /* eslint-disable-next-line no-undef */
+      return (typeof lastRanked !== "undefined" && Array.isArray(lastRanked)) ? lastRanked : null;
+    } catch (_) { return null; }
+  }
+  function alertLine() {
+    var a = boardAlerts();
+    if (!a || !a.length) return "";
+    var top = a[0] || {}, who = clip(top.lbl, 34), txt = snip(top.txt, 130);
+    if (!txt) return "";
+    var sev = String(top.sev || "");
+    var head = sev === "major" ? "Worth knowing. " : sev === "delay" ? "Heads up. " : "";
+    var more = a.length > 1 ? " Plus " + plural(a.length - 1, "other") + " on the card." : "";
+    return head + (who ? who + ": " : "") + txt + more;
+  }
+
+  /* ---- how this stop normally behaves ------------------------------------
+     ontime.js has been quietly recording, per stop and route, how far away the
+     next departure is every time the board refreshes — and nothing says the
+     result in words. "Usually 6 minutes, today 14" is the most useful sentence
+     this screen can produce, because it is the only one that knows what normal
+     looks like here.
+
+     The key is rebuilt rather than looked up: statsFor() is keyed
+     mode|stop|route and every one of those fields is on the row already, so
+     the mascot asks about a departure it can actually see. Scheduled rows are
+     skipped because ontime.js does not record them — a timetable is not an
+     observation, and their key would come back empty. */
+  function waitLine() {
+    if (!window.TBOnTime || !TBOnTime.stats) return "";
+    var live = depRows().filter(function (d) { return d.live && d.stop; });
+    if (!live.length) return "";
+    var d = live[Math.floor(Math.random() * live.length)], st = null;
+    try { st = TBOnTime.stats(d.mode + "|" + d.stop + "|" + (d.route || "")); } catch (_) { return ""; }
+    if (!st || st.baseAvg == null) return "";
+    var where = clip(d.stop, 26);
+    if (!where) return "";
+    var what = d.route ? "the " + clip(d.route, 14) : "the next one";
+    if (!what) return "";
+    var base = Math.round(st.baseAvg);
+    var span = st.baseSpan === "weeks" ? "Normally" : "So far today";
+    // Only claim a difference the reading can carry. A single morning against
+    // a fortnight is noise, and saying it would make every other figure here
+    // less believable.
+    if (st.todayAvg != null && st.baseSpan === "weeks" && st.todayN >= 4) {
+      var now = Math.round(st.todayAvg), gap = now - base;
+      if (gap >= 2) return where + ": " + what + " is normally " + base +
+                           " minutes off. Today it is averaging " + now + ".";
+      if (gap <= -2) return where + ": " + what + " is normally " + base +
+                            " minutes off. Today it is running " + now + ". Better than usual.";
+    }
+    return span + " at " + where + ", " + what + " is about " + base + " minutes away when you look.";
+  }
+
+  /* ---- your own journey --------------------------------------------------
+     commute.js already knows the stop you saved and how long you take to walk
+     there. The countdown card says it in numbers; this says the only figure
+     that actually decides anything, which is when to stand up. */
+  function commuteLine() {
+    var t = null;
+    try { t = window.TBCommute && TBCommute.trip ? TBCommute.trip() : null; } catch (_) { return ""; }
+    if (!t || !t.stop) return "";
+    var where = clip(t.stop, 26);
+    if (!where) return "";
+    var mine = depRows().filter(function (d) {
+      return norm(d.stop) === norm(t.stop) && (!t.route || norm(d.route) === norm(t.route));
+    });
+    if (!mine.length) return "Nothing from " + where + " on the board at the moment.";
+    var catchable = null;
+    for (var i = 0; i < mine.length; i++) if (mine[i].min - t.walk >= 0) { catchable = mine[i]; break; }
+    if (!catchable) {
+      return "Everything from " + where + " right now is inside your " + t.walk +
+             " minute walk. The next one you could make is not on the board yet.";
+    }
+    var leave = catchable.min - t.walk;
+    return where + ": one goes in " + plural(catchable.min, "minute") + ", so " +
+           (leave === 0 ? "leave now." : "leave in " + plural(leave, "minute") + ".");
+  }
+
+  /* ---- what is on the board at all ---------------------------------------
+     A count is not a joke and is not meant to be. It answers the question a
+     glance across a room cannot: is this thing showing me much, and is any of
+     it real? The live/scheduled split is the honest half — a board of
+     timetable numbers looks identical to a board of predictions. */
+  function mixLine() {
+    var rows = depRows();
+    if (rows.length < 3) return "";
+    var by = {}, live = 0, i;
+    for (i = 0; i < rows.length; i++) {
+      var m = String(rows[i].mode || "").toLowerCase() || "other";
+      by[m] = (by[m] || 0) + 1;
+      if (rows[i].live) live++;
+    }
+    var parts = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; })
+      .slice(0, 3).map(function (m) { return modeWord(m, by[m]); });
+    if (!parts.length) return "";
+    var tail = live === rows.length ? "Every one of them is a live prediction."
+             : live ? live + " of them are live predictions, the rest timetable."
+             : "None of them are live — that is the timetable talking.";
+    return "On the board now: " + parts.join(", ") + ". " + tail;
+  }
+
+  /* ---- what this screen has learned --------------------------------------
+     interesting.js scores rarity from a registry it builds itself, per city,
+     and damps it while young. Nothing tells you that registry exists. Saying
+     its size and its age is what makes the leaderboard trustworthy instead of
+     magic: it is rare HERE, and here is a place this screen has been watching
+     since a date you can check. */
+  function learnedLine() {
+    var reg = null, id = cityId();
+    if (!id) return "";
+    try { reg = window.TBLeaders && TBLeaders.seen ? TBLeaders.seen() : null; } catch (_) { return ""; }
+    var c = reg && reg[id];
+    if (!c) return "";
+    var tokens = Object.keys(c), first = "";
+    if (tokens.length < 12) return "";      // too young to be worth quoting
+    for (var i = 0; i < tokens.length; i++) {
+      var f = c[tokens[i]] && c[tokens[i]].first;
+      if (f && (!first || f < first)) first = f;
+    }
+    return "I have learned " + tokens.length + " regulars on this board" +
+           (first ? " since " + first : "") + ". Anything off that list scores as rare.";
+  }
+
+  /* ---- the best thing that went past today -------------------------------
+     interesting.js scores every plane and train a board renders and keeps the
+     day's best per city. That is already on screen in its own card, so the
+     mascot's job is not to read the leaderboard out — it is to do the thing a
+     card cannot, and bring it up unprompted three hours later. */
+  /* Which city this page is, in interesting.js's own vocabulary. Two readers
+     want it now, and asking the module that owns the list beats keeping a
+     second copy of the filename-to-id mapping in here. */
+  function cityId() {
+    try {
+      if (!window.TBLeaders || !TBLeaders.cities) return "";
+      var f = (location.pathname.split("/").pop() || "").toLowerCase();
+      for (var i = 0; i < TBLeaders.cities.length; i++) {
+        if (TBLeaders.cities[i].file === f) return TBLeaders.cities[i].id;
+      }
+    } catch (_) {}
+    return "";
+  }
+  function rareLine() {
+    var box = null, id = cityId();
+    if (!id) return "";
+    try { box = TBLeaders.read(); } catch (_) { return ""; }
+    var list = (box && box.cities && box.cities[id]) || [];
+    if (!list.length) return "";
+    var top = list[0], t = clip(top.title, 30);
+    if (!t) return "";
+    var when = "";
+    try {
+      var d = new Date(top.ts);
+      if (top.ts && !isNaN(d.getTime())) {
+        when = " at " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+      }
+    } catch (_) {}
+    /* The entry carries the numbers the leaderboard row shows — route, height,
+       speed for a plane; how late, and out of where, for a train. Quoting them
+       is the difference between naming the winner and saying what made it one. */
+    var detail = clip(top.detail, 46), score = Number(top.score);
+    var opts = [
+      "Best thing past this screen today: " + t + when + ". You were looking at your phone.",
+      t + " came through" + when + ". Still the most interesting thing all day.",
+      "Nothing has beaten " + t + " yet today. The day is young.",
+    ];
+    if (detail) {
+      opts.push(t + ", today's best: " + detail + ".");
+      opts.push("Today's winner is " + t + " — " + detail + ".");
+    }
+    if (isFinite(score) && score > 0) {
+      opts.push(t + " is leading today on " + Math.round(score) +
+                " points. Rarity is scored against what this board usually sees.");
+    }
+    return pick(opts);
+  }
+
+  /* ---- the aircraft Sky view is watching ---------------------------------
+     subjectLine() names the airline and stops there. The subject object also
+     carries where it came from, where it is going, and how far through the
+     flight it is — which is the part a person actually wonders about while
+     looking up. Same defensive read: that object belongs to night.html. */
+  function skyLine() {
+    var s = null;
+    try { s = window.__lastSubject || null; } catch (_) { return ""; }
+    if (!s) return "";
+    var o = clip(s.oCity, 22), d = clip(s.dCity, 22), opts = [];
+    var pct = Number(s.progPct), togo = Number(s.progToGo), flown = Number(s.progFlown);
+    if (o && d) {
+      opts.push("That one is flying " + o + " to " + d + ", straight over you.");
+      if (isFinite(pct) && pct > 4 && pct < 96) {
+        opts.push("Overhead: " + o + " to " + d + ", about " + Math.round(pct) + " per cent of the way there.");
+      }
+    } else if (d) {
+      opts.push("That one is on its way to " + d + ".");
+    }
+    if (isFinite(togo) && togo > 20) {
+      opts.push("Still " + Math.round(togo).toLocaleString() + " nautical miles to run on that one.");
+    }
+    if (isFinite(flown) && flown > 20 && isFinite(togo) && togo > 20) {
+      opts.push(Math.round(flown).toLocaleString() + " miles behind it, " +
+                Math.round(togo).toLocaleString() + " ahead. It is not quite halfway through its day.");
+    }
+    var sl = clip(s.subline, 52);
+    if (sl && sl.indexOf("→") >= 0) opts.push("Route on that one: " + sl + ".");
+    return pick(opts);
+  }
+
+  /* ---- your own collection -----------------------------------------------
+     The Spotted card keeps sightings in tb.spots, and mascot.js already writes
+     about them — but those lines are sized for a caption inside that card. Out
+     here the same facts want a different register, and today's count is the one
+     worth speaking, because it is the only one that can change while you are
+     stood in front of the thing. */
+  function spotLine() {
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem("tb.spots") || "[]"); } catch (_) { return ""; }
+    if (!Array.isArray(arr) || !arr.length) return "";
+    var midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    var t0 = midnight.getTime(), today = 0, i;
+    for (i = 0; i < arr.length; i++) if (arr[i] && arr[i].ts >= t0) today++;
+    /* Milestones speak on the exact number, so they land as "you just did that"
+       rather than as a badge you are permanently wearing. */
+    var total = arr.length;
+    if (total === 1)   return "You logged your first one. I saw it too. We were both here.";
+    if (total === 10)  return "Ten logged. That has stopped being an accident.";
+    if (total === 50)  return "Fifty sightings. At this point it is a practice.";
+    if (total === 100) return "One hundred. I would like it noted that I was present throughout.";
+    if (today >= 3) return pick([
+      today + " logged today already. Somebody is having a good one.",
+      today + " sightings today. The board is doing its job and so are you.",
+    ]);
+    return "";
+  }
+
   function localLines() {
     var f = (location.pathname.split("/").pop() || "").toLowerCase();
     return LOCAL[f] || null;
@@ -314,7 +768,12 @@
     try { if (saved) localStorage.setItem(PICK_KEY, saved); } catch (_) {}
     return l;
   }
+  /* mascot.js owns the names now, so the picker and the Spotted card can never
+     disagree about who somebody is. The regex stays as a fallback because the
+     two files are cache-busted independently: a browser holding an older
+     mascot.js should get "Fox" rather than a crash. */
   function nameOf(src) {
+    try { if (window.TBMascot && TBMascot.meta) return TBMascot.meta(src).name; } catch (_) {}
     var m = String(src).match(/mascot-([a-z0-9]+)\./i);
     return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : "Guide";
   }
@@ -351,18 +810,36 @@
   var clicks = 0;
   function nextLine(fromClick) {
     if (fromClick && SAY.pokes[clicks]) return pick(SAY.pokes[clicks]);
-    /* Local lines lead. They are the ones that make somebody screenshot the
-       thing, because they are about the system the reader actually rides —
-       a joke about single tracking only lands on the board where it happens.
-       The general and sung sets are the fallback, and the only set on a city
-       with no entry yet. */
-    // Best of all is a line about the thing currently on screen. Only Sky view
-    // publishes one, and only sometimes, so this is opportunistic, not a tier.
-    if (Math.random() < 0.3) { var subj = subjectLine(); if (subj) return subj; }
+    /* Roughly: things true about right now, then things true about here, then
+       the general stock. One roll drives the whole cascade, so the shares are
+       fixed rather than compounding — and a tier that has nothing to say falls
+       through to the next instead of costing a turn, which is what keeps a
+       freshly loaded board from going quiet while its feeds arrive.
+
+       Weighted towards information: roughly three lines in five now carry a
+       fact off this screen rather than a remark about it. No single tier is
+       large enough to become a habit, though, which is the point of splitting
+       the same 60% ten ways — a mascot that ALWAYS reads out the departures
+       has become a second departure display, and the board behind it is a far
+       better one. Local colour keeps the biggest single share of what is left,
+       because a joke about single tracking only lands on the board where it
+       happens, and those are the ones people screenshot. */
+    var r = Math.random(), t;
+    if (r < 0.09) { t = alertLine();   if (t) return t; }   // what is actually wrong
+    if (r < 0.20) { t = boardLine();   if (t) return t; }   // what is leaving, now
+    if (r < 0.28) { t = commuteLine(); if (t) return t; }   // your stop, your walk
+    if (r < 0.36) { t = waitLine();    if (t) return t; }   // what normal looks like here
+    if (r < 0.42) { t = skyLine();     if (t) return t; }   // where that aircraft is going
+    if (r < 0.46) { t = subjectLine(); if (t) return t; }   // whose aircraft it is
+    if (r < 0.51) { t = rareLine();    if (t) return t; }   // the day's best sighting
+    if (r < 0.55) { t = mixLine();     if (t) return t; }   // what the board is holding
+    if (r < 0.58) { t = spotLine();    if (t) return t; }   // what you have caught
+    if (r < 0.61) { t = learnedLine(); if (t) return t; }   // what it has learned here
+    var v = currentVoice();
+    if (v && v.own && r < 0.72) return pick(v.own);         // whoever is standing there
     var loc = localLines();
-    var r = Math.random();
-    if (loc && r < 0.45) return pick(loc);
-    if (r < 0.68) return pick(SAY.song);
+    if (loc && r < 0.90) return pick(loc);
+    if (r < 0.95) return pick(SAY.song);
     return pick(timeBucket());
   }
 
@@ -419,16 +896,41 @@
         "padding:6px;font:600 11px/1 'IBM Plex Sans',system-ui;color:#12101A;cursor:pointer}",
       "#tbBuddy .any:hover{border-color:#FF3D77}",
       "#tbBuddy .any.on{border-color:#FF3D77;background:rgba(255,61,119,.08)}",
+      /* Who is talking. The cast rotates on every line, and without a name the
+         three voices read as one character with an inconsistent mood. Set in
+         the utility face at caption size so it labels the line rather than
+         competing with it. */
+      "#tbBuddy .bub .nm{display:block;margin:0 0 4px;",
+        "font:700 9px/1 'IBM Plex Mono',ui-monospace,monospace;",
+        "letter-spacing:.13em;text-transform:uppercase;color:#6E6A78}",
+      /* A small jump on the beat of speaking. Across a room the bubble's text
+         is unreadable and the movement is not, so this is the only part of a
+         remark that carries at wall-display distance. */
+      "@keyframes tb-hop{0%{transform:translateY(0)}28%{transform:translateY(-7px)}",
+        "52%{transform:translateY(0)}70%{transform:translateY(-3px)}100%{transform:translateY(0)}}",
+      "#tbBuddy .fig.hop{animation:tb-hop .52s ease-out}",
+      /* Dozing: a slow breath and a zzz, no chatter. See the small-hours note. */
+      "@keyframes tb-doze{0%,100%{transform:translateY(0) scale(1)}",
+        "50%{transform:translateY(1.5px) scale(.985)}}",
+      "#tbBuddy.dozing .fig{animation:tb-doze 4.4s ease-in-out infinite;opacity:.7}",
+      "#tbBuddy .zzz{pointer-events:none;position:absolute;left:40px;bottom:56px;opacity:0;",
+        "font:700 12px/1 'IBM Plex Mono',ui-monospace,monospace;color:#FFFCF5;",
+        "text-shadow:0 2px 6px rgba(0,0,0,.65);transition:opacity .5s ease}",
+      "@keyframes tb-float{0%,100%{transform:translateY(0);opacity:.22}",
+        "50%{transform:translateY(-7px);opacity:.7}}",
+      "#tbBuddy.dozing .zzz{animation:tb-float 3.6s ease-in-out infinite}",
       "@media (max-width:600px){#tbBuddy .fig img,#tbBuddy .fig svg{width:44px;height:52px}",
         "#tbBuddy .bub{font-size:12px;max-width:62vw}}",
-      "@media (prefers-reduced-motion:reduce){#tbBuddy .fig,#tbBuddy .bub{transition:none}}",
+      "@media (prefers-reduced-motion:reduce){#tbBuddy .fig,#tbBuddy .bub{transition:none}",
+        "#tbBuddy .fig.hop,#tbBuddy.dozing .fig,#tbBuddy.dozing .zzz{animation:none}}",
       /* Printing a wall display should not print a cartoon. */
       "@media print{#tbBuddy{display:none}}",
     ].join("");
     (document.head || document.documentElement).appendChild(css);
   }
 
-  var root, figure, bubble, textEl, picker, hideTimer, idleTimer, charIndex = 0;
+  var root, figure, bubble, textEl, nameEl, zzz, picker, hideTimer, idleTimer,
+      dozeTimer, charIndex = 0;
 
   /* ---- the picker -------------------------------------------------------- */
   function buildPicker() {
@@ -483,6 +985,11 @@
     } else {
       figure.textContent = "•";          // TBMascot absent: degrade, never throw
     }
+    // Hovering should say who this one is, not only that it is clickable.
+    var nm = currentName();
+    figure.title = nm ? nm + " — say something" : "Say something";
+    figure.setAttribute("aria-label", nm ? nm + " — click for a remark"
+                                         : "Mascot — click for a remark");
   }
 
   function say(text, ms) {
@@ -492,16 +999,64 @@
        footer was 60px higher than it ended up, and the bubble sat 9px into the
        credits. Speaking is exactly the moment the position has to be right. */
     liftAboveFooter();
+    /* Name the speaker. Blank for a customer's own artwork, which has no name
+       we could honestly print — an unlabelled bubble is better than a wrong
+       one. */
+    if (nameEl) {
+      var who = currentName();
+      nameEl.textContent = who;
+      nameEl.style.display = who ? "" : "none";
+    }
     textEl.textContent = text;
     root.classList.add("talking");
+    hop();
     clearTimeout(hideTimer);
     // Long lines get longer on screen — read speed, not a fixed guess.
     hideTimer = setTimeout(hush, ms || Math.max(4200, Math.min(11000, text.length * 78)));
   }
   function hush() { if (root) root.classList.remove("talking"); }
 
+  function hop() {
+    if (!figure) return;
+    figure.classList.remove("hop");
+    void figure.offsetWidth;        // force a reflow, or a second hop is ignored
+    figure.classList.add("hop");
+  }
+
+  /* ---- the small hours ---------------------------------------------------
+     These boards run all night, and a character telling jokes at 3am to an
+     empty hallway is the thing that gets it unplugged. Between 2 and 5 it
+     dozes: no idle chatter, a slow breath, a zzz. That is manners rather than
+     power saving — and on a screen somebody walks past at night it is the one
+     behaviour they will actually notice.
+
+     Poking wakes it, and it stays awake for a few minutes afterwards, because
+     someone who came over to prod a sleeping penguin at 3am has earned a
+     reply. */
+  var lastPoke = 0;
+  function dozing() {
+    var h = new Date().getHours();
+    return h >= 2 && h < 5 && Date.now() - lastPoke > 240000;
+  }
+  function refreshDoze() {
+    if (!root) return;
+    if (dozing()) root.classList.add("dozing");
+    else root.classList.remove("dozing");
+  }
+
   function poke() {
     clicks++;
+    lastPoke = Date.now();
+    /* Tapping a sleeping mascot and having it carry on sleeping is not a
+       charming detail, it is a broken button. Waking is the whole reply — the
+       character stays the same one, because you woke THAT one. */
+    if (root && root.classList.contains("dozing")) {
+      root.classList.remove("dozing");
+      var v = currentVoice();
+      say(pick(v && v.wake ? v.wake : ["Awake. Barely."]));
+      schedule();
+      return;
+    }
     charIndex++;                         // a poke also changes who is standing there
     drawCharacter();
     say(nextLine(true));
@@ -511,7 +1066,7 @@
   function schedule() {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function tick() {
-      if (document.visibilityState === "visible" && !off()) {
+      if (document.visibilityState === "visible" && !off() && !dozing()) {
         charIndex++; drawCharacter(); say(nextLine(false));
       }
       schedule();
@@ -531,13 +1086,29 @@
     if (!f) { root.style.bottom = ""; return; }
     var r = f.getBoundingClientRect();
     if (!r.height || r.bottom < window.innerHeight - 80) { root.style.bottom = ""; return; }
-    root.style.bottom = Math.round(window.innerHeight - r.top + 8) + "px";
+    /* A footer BELOW the fold cannot be underneath anything, and the city
+       boards have one: they are fixed-height layouts that scroll inside a
+       child, so documentElement.scrollHeight equals innerHeight — `scrolls` is
+       false — while the real footer sits thousands of pixels further down. That
+       combination sent the lift the other way and parked the mascot 3,700px
+       below the screen, which is why it has not been visible on a board.
+
+       Two guards, because either alone leaves a hole: ignore a footer that
+       starts past the bottom edge, and never lift so far that the character
+       leaves the viewport by the top. A mascot in the wrong corner is a bug
+       you can see; one outside the document is a feature nobody knew shipped. */
+    if (r.top >= window.innerHeight) { root.style.bottom = ""; return; }
+    var lift = Math.round(window.innerHeight - r.top + 8);
+    root.style.bottom = Math.max(0, Math.min(lift, Math.round(window.innerHeight * 0.5))) + "px";
   }
 
   function dismiss() {
     say(pick(SAY.dismissed), 2200);
     setOff(true);
-    setTimeout(function () { if (root) root.remove(); root = null; clearTimeout(idleTimer); }, 2400);
+    setTimeout(function () {
+      if (root) root.remove();
+      root = null; clearTimeout(idleTimer); clearInterval(dozeTimer);
+    }, 2400);
   }
 
   function build() {
@@ -559,6 +1130,8 @@
        reader mid-sentence to deliver a joke about buses */
     bubble.setAttribute("role", "status");
     bubble.setAttribute("aria-live", "polite");
+    nameEl = document.createElement("span");
+    nameEl.className = "nm";
     textEl = document.createElement("span");
     var x = document.createElement("button");
     x.className = "x"; x.type = "button"; x.textContent = "×";
@@ -571,6 +1144,7 @@
     who.setAttribute("aria-label", "Choose your guide");
     who.addEventListener("click", function (e) { e.stopPropagation(); togglePicker(); });
 
+    bubble.appendChild(nameEl);
     bubble.appendChild(textEl);
     bubble.appendChild(who);
     bubble.appendChild(x);
@@ -580,7 +1154,13 @@
     picker.setAttribute("role", "group");
     picker.setAttribute("aria-label", "Choose your guide");
 
+    zzz = document.createElement("div");
+    zzz.className = "zzz";
+    zzz.textContent = "z z z";
+    zzz.setAttribute("aria-hidden", "true");   // decoration; the doze is not news
+
     root.appendChild(figure);
+    root.appendChild(zzz);
     root.appendChild(picker);
     root.appendChild(bubble);
     document.body.appendChild(root);
@@ -593,8 +1173,19 @@
     setTimeout(liftAboveFooter, 2500);
     setTimeout(liftAboveFooter, 8000);
 
-    setTimeout(function () { if (root && !off()) say(pick(SAY.hello)); }, FIRST_MS);
+    /* The greeting is the first thing anybody hears, so it is the one line
+       that should be in the speaker's own voice rather than the house one.
+       SAY.hello stays as the fallback for artwork we have no character for. */
+    setTimeout(function () {
+      if (!root || off() || dozing()) return;
+      var v = currentVoice();
+      say(pick(v && v.hello ? v.hello : SAY.hello));
+    }, FIRST_MS);
     schedule();
+    refreshDoze();
+    // Checked on a slow clock so a board left up overnight nods off and wakes
+    // again on its own, with a timer nowhere near frequent enough to matter.
+    dozeTimer = setInterval(refreshDoze, 60000);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", build);
@@ -603,7 +1194,9 @@
   window.TBBuddy = {
     say: say,
     poke: poke,
-    hide: function () { setOff(true); if (root) { root.remove(); root = null; } clearTimeout(idleTimer); },
+    hide: function () { setOff(true); if (root) { root.remove(); root = null; }
+                        clearTimeout(idleTimer); clearInterval(dozeTimer); },
+    who: currentName,
     show: function () { setOff(false); build(); },
     lines: function () { return JSON.parse(JSON.stringify(SAY)); },
   };

@@ -60,6 +60,30 @@
     "brand/mascot-fox.svg",       // pink
     "brand/mascot-owl.svg",       // teal
   ];
+  /* ---- who they are --------------------------------------------------------
+     The cast was identified by its filenames, which meant every place that
+     showed a character showed "Penguin", "Fox", "Owl" — three pictures of
+     animals rather than three characters. A name is the cheapest thing that
+     turns the second into the first, and it lives here rather than in the buddy
+     because the Spotted card and the corner character both name them: one
+     table, one spelling, everywhere.
+
+     Keyed by the slug in the filename, so brand/mascot-fox.svg and a customer's
+     own art/mascot-fox.png land on the same character. An unknown file falls
+     back to its own slug, title-cased, which is exactly what the callers did
+     before — so a board pointed at art we have never seen still reads sensibly
+     rather than showing a blank where a name should be. */
+  var NAMES = { penguin: "Pim", fox: "Vix", owl: "Otto", camel: "Hal", llama: "Bo" };
+  function slug(file) {
+    var m = String(file || "").match(/mascot-([a-z0-9]+)\./i);
+    return m ? m[1].toLowerCase() : "";
+  }
+  function meta(file) {
+    var s = slug(file);
+    return { slug: s, file: file || "",
+             name: NAMES[s] || (s ? s.charAt(0).toUpperCase() + s.slice(1) : "Guide") };
+  }
+
   function list() {
     var c = null;
     try { c = window.TB_CONFIG || null; } catch (_) {}
@@ -193,7 +217,8 @@
   }
 
   window.TBMascot = { el: el, svg: penguin, src: src, list: list,
-                      pickIndex: pickIndex, cycle: cycle, line: line };
+                      pickIndex: pickIndex, cycle: cycle, line: line,
+                      slug: slug, meta: meta };
 
   // Blink, shared by every placement. Only the placeholder has eyes to blink;
   // supplied artwork is left exactly as drawn.
