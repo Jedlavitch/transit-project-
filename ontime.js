@@ -192,6 +192,56 @@
      not how many services there were. */
   var lateHours = read(LS.lateHours, {});
 
+  /* ---- the days this screen was not on for -------------------------------
+     Everything above is what THIS browser watched, which is honest and is also
+     the whole limitation: a board that was off recorded nothing, and a fortnight
+     chart mostly reading "board was off" is a chart about the screen rather than
+     about the trains.
+
+     gen-ontime-history.py polls the same public feeds from CI every twenty
+     minutes and keeps the same six-element daily record, so the archive and the
+     browser measure the same quantity and merge by lookup rather than
+     conversion. Served off a data branch, which raw.githubusercontent hands over
+     with Access-Control-Allow-Origin:* — no Worker, no key, nothing to deploy.
+
+     Two rules keep the merge honest:
+
+       · A day this browser watched always wins. The archive fills gaps; it never
+         overwrites a first-hand reading, and the two are never averaged into one
+         day, because they poll at different rates and a blended "readings" count
+         would mean nothing.
+       · It only fills lines the board already knows about. Letting it introduce
+         its own would put forty Amtrak routes, most of them a thousand miles
+         away, into every city's picker. */
+  var ARCHIVE_URL = "https://raw.githubusercontent.com/Jedlavitch/transit-project-" +
+                    "/ontime-data/ontime-history.json";
+  var archive = null;
+
+  function loadArchive() {
+    var url = ARCHIVE_URL;
+    try { url = localStorage.getItem("tb.ontime.archiveUrl") || url; } catch (_) {}
+    if (!root.fetch) return;
+    root.fetch(url, { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.lines) return;
+        archive = j;
+        try { paint(); } catch (_) {}
+        if (dlg) { try { renderDetail(); } catch (_) {} }
+      })
+      .catch(function () { /* offline, or the branch does not exist yet */ });
+  }
+
+  /* This line's days, first-hand where there are any and archived where there
+     are not, each tagged so a tooltip can say which it is looking at. */
+  function mergedDays(id) {
+    var local = lateHist[id] || {}, out = {}, d;
+    var arch = (archive && archive.lines && archive.lines[id]) || null;
+    if (arch) for (d in arch) if (d !== "_") out[d] = { rec: arch[d], live: false };
+    for (d in local) if (d !== "_") out[d] = { rec: local[d], live: true };
+    return { days: out, meta: local._ || (arch && arch._) || null };
+  }
+
   function prune() {
     var cut = new Date(); cut.setDate(cut.getDate() - KEEP_DAYS);
     var cutKey = cut.getFullYear() + "-" + String(cut.getMonth() + 1).padStart(2, "0") + "-" + String(cut.getDate()).padStart(2, "0");
@@ -427,16 +477,15 @@
   }
 
   function lateStats(id) {
-    var days = lateHist[id] || {}, day = today();
-    var meta = days._ || [id, "", "", "", 0];
+    var m0 = mergedDays(id), byDay = m0.days, day = today();
+    var meta = m0.meta || [id, "", "", "", 0];
     var series = [], onSeries = [], band = [0, 0, 0, 0, 0], bandN = 0;
     // one entry per day, each a share of that day's classified departures
     var statusDays = [[], [], []], status = [0, 0, 0], statusN = 0;
     var worst = 0, worstDay = "", totalN = 0;
     var bN = 0, bSum = 0, bOn = 0;          // the fortnight, excluding today
-    Object.keys(days).sort().forEach(function (d) {
-      if (d === "_") return;
-      var r = days[d], n = r[0] || 0;
+    Object.keys(byDay).sort().forEach(function (d) {
+      var r = byDay[d].rec, live = byDay[d].live, n = r[0] || 0;
       if (!n) {
         // status-only day: still counts towards the three-way breakdown below
         var sr0 = r[5];
@@ -451,8 +500,8 @@
         }
         return;
       }
-      series.push({ x: d, label: dayLabel(d), avg: r[1] / n, n: n, cur: d === day });
-      onSeries.push({ x: d, label: dayLabel(d), avg: r[2] / n, n: n, cur: d === day });
+      series.push({ x: d, label: dayLabel(d), avg: r[1] / n, n: n, cur: d === day, live: live });
+      onSeries.push({ x: d, label: dayLabel(d), avg: r[2] / n, n: n, cur: d === day, live: live });
       totalN += n;
       if (r[3] > worst) { worst = r[3]; worstDay = d; }
       if (r[4]) for (var b = 0; b < 5; b++) { band[b] += r[4][b] || 0; bandN += r[4][b] || 0; }
@@ -484,9 +533,12 @@
     var worstHour = null;
     hourly.forEach(function (q) { if (q.avg != null && (!worstHour || q.avg < worstHour.avg)) worstHour = q; });
 
-    var tRec = days[day];
+    var tRec = byDay[day] && byDay[day].rec;
+    var archived = 0;
+    Object.keys(byDay).forEach(function (d) { if (!byDay[d].live) archived++; });
     return {
       id: id, label: meta[0], mode: meta[1], color: meta[2],
+      archivedDays: archived,
       hourly: hourly, hourBaseOn: hN ? hOn / hN : null, worstHour: worstHour,
       badge: meta[3] || String(meta[0]).slice(0, 4),
       /* Without this the cancelled chart would read "0% cancelled, every day"
@@ -1291,7 +1343,7 @@
         labText: ((p.cur || i === worst) && p.avg != null)
           ? (o.fmt ? o.fmt(p) : p.avg.toFixed(1).replace(/\.0$/, "")) : "",
         tip: o.tipFn ? o.tipFn(p) : (p.label + " · " + (p.avg == null
-          ? (p.n ? "only " + p.n + " readings — not enough yet" : "board was off")
+          ? (p.n ? "only " + p.n + " readings — not enough yet" : "nothing recorded that day")
           : deltaWords(p.avg, o.base, o.baseWord) + " · " + p.n + " readings")),
         cur: !!p.cur,
         axisText: (nth === 1 || d % nth === 0) ? p.label : "",
@@ -1804,7 +1856,7 @@
           : " — " + Math.round(Math.abs(d) * 100) + " points " + (d > 0 ? "better" : "worse") +
             " than usual");
         return p.label + " · " + Math.round(p.avg * 100) + "% on time" + w +
-          " · " + group(p.n) + " readings";
+          " · " + group(p.n) + (p.live === false ? " readings, archived" : " readings");
       },
     });
 
@@ -1961,7 +2013,15 @@
       (st && !st.cancelKnown
         ? " This feed publishes no cancellations, so only two of the three are shown."
         : "") +
-      "<br><br>Recorded by this screen, kept in this browser, uploaded nowhere.</p>";
+      (st && st.archivedDays
+        ? "<br><br>" + st.archivedDays + " of these days " +
+          (st.archivedDays === 1 ? "was" : "were") + " recorded while this screen was off, by the " +
+          "project's own watcher polling the same public feeds every twenty minutes. A day this " +
+          "board saw for itself always wins; the archive only fills the gaps, and the two are never " +
+          "averaged into one day."
+        : "") +
+      "<br><br>Nothing is uploaded from here. The archive is built from public feeds by a scheduled " +
+      "job and simply read back — what this screen recorded stays in this browser.</p>";
   }
 
 
@@ -2100,6 +2160,7 @@
     try {
       ensureCard();
       paint();
+      loadArchive();
       setInterval(onData, 60000);
     } catch (_) {}
   }
