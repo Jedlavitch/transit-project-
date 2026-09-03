@@ -1921,7 +1921,11 @@
           baseFmt: function (v) { return Math.round(v * 100) + "%"; },
           tipFn: function (p) {
             if (p.avg == null) {
-              return p.label + " · " + (p.n ? "only " + p.n + " readings — not enough yet" : "board was off");
+              /* The archive keeps daily totals, not an hour-by-hour breakdown, so
+                 an unwatched hour genuinely has nothing behind it — but it is
+                 the record that is empty, not the board that failed. */
+              return p.label + " · " + (p.n ? "only " + p.n + " readings — not enough yet"
+                                            : "nothing recorded that hour");
             }
             return p.label + " · " + Math.round(p.avg * 100) + "% on time" +
               (p.late != null ? ", typically " + mins(p.late) + " down" : "") +
