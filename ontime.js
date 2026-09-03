@@ -27,7 +27,7 @@
   "use strict";
 
   var LS = { hist: "tb.ontime.hist", hours: "tb.ontime.hours", late: "tb.ontime.late",
-             hide: "tb.ontime.hidden" };
+             lateHours: "tb.ontime.latehours", hide: "tb.ontime.hidden" };
   var HIDE_ID = "ontimeCard";
   var KEEP_DAYS = 14;        // two weeks: enough for a weekday baseline, small enough to stay tiny
   var MIN_SAMPLES = 8;       // below this a "typical" is noise, and is shown as "—"
@@ -183,6 +183,14 @@
   var LATE_BANDS = ["≤0", "1–5", "6–14", "15–29", "30+"];
   function lateBandOf(m) { return m <= 0 ? 0 : m <= 5 ? 1 : m <= 14 ? 2 : m <= 29 ? 3 : 4; }
   var lateHist = read(LS.late, {});
+  /* The hour-of-day twin of `hours`, and for the same reason: the fortnight
+     answers "is today worse than usual", this answers "when in the day does
+     it slip". Same halving decay, so a timetable change works its way in
+     over a week or two instead of being outvoted by the month you set the
+     board up. Only the median observations feed it — a per-departure count
+     would need its own bucket and the hour chart is about how the line runs,
+     not how many services there were. */
+  var lateHours = read(LS.lateHours, {});
 
   function prune() {
     var cut = new Date(); cut.setDate(cut.getDate() - KEEP_DAYS);
@@ -219,6 +227,7 @@
        dropped as least-observed) takes its hour buckets with it. Without this
        the profile would be the one unbounded thing left in the feature. */
     for (var h in hours) if (!hist[h]) { delete hours[h]; changed = true; }
+    for (var lh in lateHours) if (!lateHist[lh]) { delete lateHours[lh]; changed = true; }
 
     /* The lateness store keeps its own dates, so it expires on its own rather
        than following hist's key set — a board can have lateness and no wait
@@ -259,13 +268,26 @@
      still lists everything: looking up a record you recorded elsewhere is
      reasonable. Putting it on this board's card is not. */
   var seenLate = {};
-  var lastLateAt = 0;
+  var lastLateAt = 0, lateTimer = null, pendingLate = null;
+
+  /* Buffers rather than drops. The throttle used to return early, which was
+     fine while exactly one source per board called in — and became a bug the
+     moment two did: on Philadelphia the SEPTA reporter and the Amtrak sampler
+     below both report, and whichever arrived second inside the window was
+     thrown away for good. Sources cover disjoint lines, so merging by id and
+     flushing once is the same measurement, just without the loss. */
   function recordLate(rows) {
     if (!rows || !rows.length) return;
-    var now = Date.now();
-    if (now - lastLateAt < 25000) return;
+    var by = collectLate(rows, pendingLate);
+    pendingLate = by;
+    var now = Date.now(), since = now - lastLateAt;
+    if (since >= 25000) { flushLate(); return; }
+    if (lateTimer) return;
+    lateTimer = setTimeout(function () { lateTimer = null; flushLate(); }, 25000 - since);
+  }
 
-    var by = {};
+  function collectLate(rows, into) {
+    var by = into || {};
     rows.forEach(function (r) {
       if (!r || !r.id) return;
       var m = Number(r.late);
@@ -273,6 +295,7 @@
       // parsing fault, not a delay.
       if (!isFinite(m) || Math.abs(m) > 90) return;
       if (!by[r.id]) by[r.id] = { meta: [r.label || r.id, r.mode || "", r.color || "", r.badge || ""], v: [] };
+      if (by[r.id].sealed) { by[r.id].sealed = false; by[r.id].v = []; by[r.id].st = [0, 0, 0]; }
       by[r.id].v.push(Math.round(m));
     });
 
@@ -287,6 +310,7 @@
         by[r.id] = { meta: [r.label || r.id, r.mode || "", r.color || "", r.badge || ""], v: [] };
       }
       var b = by[r.id];
+      if (b.sealed) { b.sealed = false; b.v = []; b.st = [0, 0, 0]; }
       if (!b.st) b.st = [0, 0, 0];
       if (r.statusKnown) b.known = 1;
       if (r.cancelled) { b.st[2] += 1; return; }
@@ -295,6 +319,13 @@
       if (Math.round(lm) >= LATE_ON_TIME) b.st[1] += 1; else b.st[0] += 1;
     });
 
+    for (var k in by) by[k].sealed = true;    // a later call in the same window starts that id afresh
+    return by;
+  }
+
+  function flushLate() {
+    var by = pendingLate; pendingLate = null;
+    if (!by) return;
     var day = today(), any = false;
     for (var id in by) {
       var v = by[id].v.sort(function (a, b) { return a - b; });
@@ -323,6 +354,16 @@
         if (med < LATE_ON_TIME) rec[2] += 1;
         if (v[v.length - 1] > rec[3]) rec[3] = v[v.length - 1];
         rec[4][lateBandOf(med)] += 1;
+
+        var hr = String(new Date().getHours());
+        if (!lateHours[id]) lateHours[id] = {};
+        var hrec = lateHours[id][hr] || [0, 0, 0];
+        hrec[0] += 1; hrec[1] += med;
+        if (med < LATE_ON_TIME) hrec[2] += 1;
+        if (hrec[0] >= HOUR_CAP) {
+          hrec[0] = Math.round(hrec[0] / 2); hrec[1] = hrec[1] / 2; hrec[2] = Math.round(hrec[2] / 2);
+        }
+        lateHours[id][hr] = hrec;
       }
       var st = by[id].st || [0, 0, 0];
       rec[5][0] += st[0]; rec[5][1] += st[1]; rec[5][2] += st[2];
@@ -331,10 +372,53 @@
       any = true;
     }
     if (!any) return;
-    lastLateAt = now;
+    lastLateAt = Date.now();
     prune();
     write(LS.late, lateHist);
+    write(LS.lateHours, lateHours);
     paint();
+  }
+
+  /* ---- Amtrak, on every board that carries it -----------------------------
+     Eight of the twelve boards render an Amtrak card, and every one of them
+     already parks the list in `state._amtrak` for its stats strip. amtraker
+     publishes each train's scheduled and actual time per stop, and delays.js
+     already derives the minutes-late from them for the row you can see.
+
+     So the record is taken from the board's own state rather than wired into
+     eight render functions: nothing to keep in step, nothing for a new city to
+     remember, and a board that gains an Amtrak card gains its on-time history
+     with it. This is the same trick sample() uses on `state._depBy`.
+
+     Grouped by ROUTE — "Keystone", "Silver Meteor" — not by train number,
+     which is unique to one journey and could never accumulate a record. */
+  function amtrakBadge(name) {
+    var w = String(name || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
+    if (w.length > 1) return w.map(function (x) { return x[0]; }).join("").toUpperCase().slice(0, 4);
+    return (w[0] || "?").slice(0, 3).toUpperCase();
+  }
+  function amtrakRows() {
+    var st = boardState(), list = (st && st._amtrak) || [];
+    if (!list.length || typeof root.amtrakLateMin !== "function") return [];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i] && list[i].t; if (!t) continue;
+      var stops = t.stations || [], ns = null;
+      for (var j = 0; j < stops.length; j++) {
+        if (stops[j] && stops[j].status !== "Departed") { ns = stops[j]; break; }
+      }
+      var m = ns ? root.amtrakLateMin(ns) : null;
+      if (m == null) continue;
+      var name = String(t.routeName || "Amtrak").trim() || "Amtrak";
+      out.push({
+        id: "amtrak|" + name, label: name, badge: amtrakBadge(name),
+        mode: "train", color: "var(--amtrak,#3ad0c8)", late: m,
+        // amtraker drops a cancelled train from the feed rather than flagging
+        // it, so there is no cancelled share to claim here.
+        statusKnown: false,
+      });
+    }
+    return out;
   }
 
   function lateStats(id) {
@@ -379,9 +463,26 @@
       }
       if (d !== day) { bN += n; bSum += r[1]; bOn += r[2]; }
     });
+    /* Same span rule the wait hours use: first observed hour to last, gaps
+       inside it kept, because a gap in the middle of your day is a real fact
+       about when the board was on. */
+    var hrs = lateHours[id] || {}, hourly = [], hN = 0, hOn = 0;
+    var lo = 24, hi = -1, nowH = new Date().getHours();
+    for (var k in hrs) { var hi2 = +k; if (hrs[k][0] >= MIN_HOUR) { if (hi2 < lo) lo = hi2; if (hi2 > hi) hi = hi2; } }
+    for (var h = lo; h <= hi; h++) {
+      var hr2 = hrs[String(h)], ok = hr2 && hr2[0] >= MIN_HOUR;
+      hourly.push({ x: String(h), label: hourLabel(h), n: hr2 ? hr2[0] : 0, cur: h === nowH,
+                    avg: ok ? hr2[2] / hr2[0] : null,
+                    late: ok ? hr2[1] / hr2[0] : null });
+      if (ok) { hN += hr2[0]; hOn += hr2[2]; }
+    }
+    var worstHour = null;
+    hourly.forEach(function (q) { if (q.avg != null && (!worstHour || q.avg < worstHour.avg)) worstHour = q; });
+
     var tRec = days[day];
     return {
       id: id, label: meta[0], mode: meta[1], color: meta[2],
+      hourly: hourly, hourBaseOn: hN ? hOn / hN : null, worstHour: worstHour,
       badge: meta[3] || String(meta[0]).slice(0, 4),
       /* Without this the cancelled chart would read "0% cancelled, every day"
          on a feed that simply never says — which is a stronger claim than any
@@ -713,8 +814,21 @@
       "#otdBody .ot-ghost:hover{border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff)}" +
       "#otdBody .ot-ghost.danger:hover{border-color:var(--late-ink,#ff6b81);color:var(--late-ink,#ff6b81)}" +
       "#otdBody .ot-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line,#22345a)}" +
-      "@media (prefers-reduced-motion:no-preference){#otdBox{animation:otdIn .16s ease-out}" +
-        "@keyframes otdIn{from{opacity:0;transform:translateY(6px)}}}";
+      "@media (prefers-reduced-motion:no-preference){" +
+        "#otdBox{animation:otdIn .18s cubic-bezier(.22,.61,.36,1)}" +
+        "@keyframes otdIn{from{opacity:0;transform:translateY(8px)}}" +
+        /* The bar is the only thing that travels; everything else fades or
+           tints. .52s reads as a change rather than a flicker, and is over well
+           before the next minute's repaint starts another one. */
+        "#otdBody .ot-bar{transition:height .52s cubic-bezier(.22,.61,.36,1)," +
+          "background-color .3s ease,filter .18s ease}" +
+        "#otdBody .ot-chip,#otdBody .ot-more-chip{transition:border-color .18s ease," +
+          "background-color .18s ease,color .18s ease}" +
+        "#otdBody .ot-tile{transition:border-color .25s ease}" +
+        "#otdBody .ot-ghost{transition:border-color .18s ease,color .18s ease}" +
+        "#ontimeCard .ot-row{transition:border-color .18s ease}" +
+        "#ontimeCard h2 #otMoreBtn{transition:border-color .18s ease,color .18s ease}" +
+      "}";
     document.head.appendChild(st);
   }
 
@@ -1027,7 +1141,7 @@
         ? (p.n ? "only " + p.n + " readings — not enough yet" : "board was off")
         : deltaWords(p.avg, o.base, o.baseWord) + " · " + p.n + " readings"));
       return '<div class="ot-col" data-s="' + bs + (p.cur ? '" data-cur="1' : '"') +
-        ' tabindex="0" data-tip="' + esc(tip) + '">' + lab +
+        ' data-x="' + esc(p.x) + '" tabindex="0" data-tip="' + esc(tip) + '">' + lab +
         '<span class="ot-bar" style="height:' + pct.toFixed(1) + '%"></span></div>';
     }).join("");
 
@@ -1052,7 +1166,7 @@
         (show ? esc(p.label) : "") + "</span>";
     }).join("");
 
-    return '<div class="ot-plot" style="height:' + PLOT_H + 'px">' + baseEl +
+    return '<div class="ot-plot" data-fig="' + esc(o.figId || "f") + '" style="height:' + PLOT_H + 'px">' + baseEl +
       '<div class="ot-cols">' + cols + "</div></div>" +
       '<div class="ot-axis' + (wide ? " thin" : "") + '">' + axis + "</div>";
   }
@@ -1115,6 +1229,7 @@
     var body = dlg.querySelector("#otdBody");
     if (!body) return;
     var keep = body.scrollTop;
+    var prevBars = snapshotBars(body);
 
     var keys = trackedKeys();
     var lates = lateKeys();
@@ -1184,7 +1299,7 @@
     if (selKey.indexOf("~late|") === 0) {
       var lst = lateStats(selKey.slice(6));
       body.innerHTML = '<div class="ot-chips">' + chips + "</div>" + lateBody(lst);
-      afterRender(body, keep);
+      afterRender(body, keep, prevBars);
       return;
     }
 
@@ -1229,7 +1344,7 @@
         return { x: String(i), label: lbl, avg: st.band[i] / st.bandN, n: st.band[i], cur: false };
       });
       distBody = chart({
-        pts: dist,
+        pts: dist, figId: "wait-dist",
         fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
         tipFn: function (p) {
           return p.label + " min · " + Math.round(p.avg * 100) + "% of readings (" + group(p.n) + ")";
@@ -1238,7 +1353,7 @@
     }
 
     var hourBody = st.hourly.length
-      ? chart({ pts: st.hourly, base: st.hourBase, baseWord: "all hours",
+      ? chart({ pts: st.hourly, base: st.hourBase, baseWord: "all hours", figId: "wait-hour",
                 everyNth: st.hourly.length > 10 ? 3 : 1 })
       : '<div class="ot-none">Not enough of the day observed yet — an hour needs about a minute of ' +
         "the board being on before it counts.</div>";
@@ -1253,7 +1368,7 @@
       '<span>bars above the line were slower than your usual</span></div>' +
       chart({ pts: st.series, base: st.base, baseWord: "usual",
               everyNth: st.series.length > 8 ? 2 : 1,
-              narrowNth: st.series.length > 8 ? 4 : 0 }) + split + "</section>" +
+              narrowNth: st.series.length > 8 ? 4 : 0 , figId: "wait-day" }) + split + "</section>" +
 
       '<section class="ot-fig"><div class="ot-fig-h"><h4>Typical wait, by hour of day</h4>' +
       "<span>when this stop is worth leaving early for</span></div>" + hourBody + "</section>" +
@@ -1274,7 +1389,52 @@
       '<div class="ot-foot"><button type="button" id="otdWipe" class="ot-ghost danger">' +
       "Forget this history</button></div>";
 
-    afterRender(body, keep);
+    afterRender(body, keep, prevBars);
+  }
+
+  function reducedMotion() {
+    try { return !!(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+    catch (_) { return false; }
+  }
+
+  /* The dialog re-renders itself every minute, and a re-render that replaces
+     innerHTML destroys the very elements a CSS transition needs in order to
+     animate: every bar would jump to its new height, or worse grow from zero as
+     if the history had only just been recorded. So the heights are read off the
+     outgoing DOM, written back onto the incoming one, and only then released to
+     their real values — the transition has something to move FROM, and a bar
+     that did not change does not move at all.
+
+     Two nested frames rather than one: the browser has to lay out the restored
+     height before the new one is set, or it coalesces both into a single style
+     computation and there is nothing left to animate between. */
+  function snapshotBars(body) {
+    var map = {}, cols = body.querySelectorAll(".ot-col[data-x]");
+    for (var i = 0; i < cols.length; i++) {
+      var c = cols[i], bar = c.querySelector(".ot-bar");
+      var fig = c.closest && c.closest("[data-fig]");
+      if (!bar || !fig) continue;
+      map[fig.getAttribute("data-fig") + "|" + c.getAttribute("data-x")] = bar.style.height;
+    }
+    return map;
+  }
+  function replayBars(body, prev) {
+    if (!prev || reducedMotion() || !root.requestAnimationFrame) return;
+    var cols = body.querySelectorAll(".ot-col[data-x]"), moves = [];
+    for (var i = 0; i < cols.length; i++) {
+      var c = cols[i], bar = c.querySelector(".ot-bar");
+      var fig = c.closest && c.closest("[data-fig]");
+      if (!bar || !fig) continue;
+      var k = fig.getAttribute("data-fig") + "|" + c.getAttribute("data-x");
+      var from = prev[k], to = bar.style.height;
+      if (from && from !== to) { bar.style.height = from; moves.push([bar, to]); }
+    }
+    if (!moves.length) return;
+    root.requestAnimationFrame(function () {
+      root.requestAnimationFrame(function () {
+        for (var j = 0; j < moves.length; j++) moves[j][0].style.height = moves[j][1];
+      });
+    });
   }
 
   /* The two views measure different things, so the standfirst cannot describe
@@ -1290,12 +1450,13 @@
   /* Chip first, scroll position second: scrollIntoView can nudge the body
      vertically as well as the strip horizontally, and restoring the caller's
      scrollTop afterwards undoes exactly that half of it. */
-  function afterRender(body, keep) {
+  function afterRender(body, keep, prevBars) {
     var on = body.querySelector(".ot-chip.on");
     if (on && on.scrollIntoView) {
       try { on.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {}
     }
     body.scrollTop = keep;
+    replayBars(body, prevBars);
   }
 
   /* The lateness view. Same charts, opposite polarity: on a wait chart taller is
@@ -1319,8 +1480,10 @@
         st.baseLate == null ? "needs a day or so more" : "median across the line") +
       tile("Worst delay seen", st.worst ? st.worst + " min" : "—",
         st.worstDay ? "on " + dayLabel(st.worstDay) : "", st.worst >= 20 ? "ot-worse" : "") +
-      tile("Today so far", st.todayLate == null ? "—" : mins(st.todayLate),
-        "typical delay today") +
+      tile("Worst hour", st.worstHour ? st.worstHour.label : "—",
+        st.worstHour ? Math.round(st.worstHour.avg * 100) + "% on time then"
+                     : "not enough of the day yet",
+        st.worstHour && st.worstHour.avg < 0.5 ? "ot-worse" : "") +
       tile("Readings", group(st.totalN), st.since ? "since " + dayLabel(st.since) : "");
 
     /* On-time percent runs the other way from a wait: taller is better, and
@@ -1328,7 +1491,7 @@
     var TOL = 0.03;
     var onPts = st.onSeries;
     var onChart = chart({
-      pts: onPts, base: st.baseOn, baseWord: "usual", tol: TOL, invert: true,
+      pts: onPts, base: st.baseOn, baseWord: "usual", tol: TOL, invert: true, figId: "late-day",
       everyNth: onPts.length > 8 ? 2 : 1, narrowNth: onPts.length > 8 ? 4 : 0,
       fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
       baseFmt: function (v) { return Math.round(v * 100) + "%"; },
@@ -1377,7 +1540,7 @@
           return '<div class="ot-panel"><div class="ot-panel-h"><span class="ot-dot ot-t-' + tones[i] +
             '"></span>' + esc(names[i]) + '<b>' + Math.round(share(i) * 100) + "%</b></div>" +
             chart({
-              pts: st.statusDays[i], tone: tones[i], top: 1.28,
+              pts: st.statusDays[i], tone: tones[i], top: 1.28, figId: "status-" + i,
               everyNth: st.statusDays[i].length > 6 ? 3 : 1,
               fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
               tipFn: function (p) {
@@ -1392,6 +1555,24 @@
         "</section>";
     }
 
+    var hourBody = st.hourly.length
+      ? chart({
+          pts: st.hourly, base: st.hourBaseOn, baseWord: "all hours", tol: TOL, invert: true,
+          figId: "late-hour", everyNth: st.hourly.length > 10 ? 3 : 1,
+          fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
+          baseFmt: function (v) { return Math.round(v * 100) + "%"; },
+          tipFn: function (p) {
+            if (p.avg == null) {
+              return p.label + " · " + (p.n ? "only " + p.n + " readings — not enough yet" : "board was off");
+            }
+            return p.label + " · " + Math.round(p.avg * 100) + "% on time" +
+              (p.late != null ? ", typically " + mins(p.late) + " down" : "") +
+              " · " + group(p.n) + " readings";
+          },
+        })
+      : '<div class="ot-none">Not enough of the day observed yet — an hour needs about a minute of ' +
+        "the board being on before it counts.</div>";
+
     var distBody = "";
     if (st.bandN) {
       var dist = LATE_BANDS.map(function (lbl, i) {
@@ -1400,7 +1581,7 @@
       distBody = '<section class="ot-fig"><div class="ot-fig-h"><h4>How late it actually runs</h4>' +
         "<span>share of readings, by minutes behind schedule</span></div>" +
         chart({
-          pts: dist,
+          pts: dist, figId: "late-dist",
           fmt: function (p) { return Math.round(p.avg * 100) + "%"; },
           tipFn: function (p) {
             return p.label + " min late · " + Math.round(p.avg * 100) +
@@ -1414,12 +1595,16 @@
         (st.since ? " since " + dayLabel(st.since) : "") + ".") + "</div>" +
       '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, by day</h4>' +
       "<span>bars below the line were worse than its usual</span></div>" + onChart + "</section>" +
+      '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, by hour of day</h4>' +
+      "<span>when in the day this line slips</span></div>" + hourBody + "</section>" +
       statusBody +
       distBody +
       '<button type="button" id="otdNums" class="ot-ghost">' +
       (showNums ? "Hide the numbers" : "Show the numbers") + "</button>" +
       (showNums
-        ? '<div class="ot-tables">' + lateTable(st) + (st.bandN ? lateBandTable(st) : "") + "</div>"
+        ? '<div class="ot-tables">' + lateTable(st) +
+          (st.hourly.length ? lateHourTable(st) : "") +
+          (st.bandN ? lateBandTable(st) : "") + "</div>"
         : "") +
       lateExplainerHTML(st) +
       '<div class="ot-foot"><button type="button" id="otdWipe" class="ot-ghost danger">' +
@@ -1433,6 +1618,15 @@
         esc(mins(late ? late.avg : null)) + "</td><td>" + group(p.n) + "</td></tr>";
     }).join("");
     return '<table class="ot-tbl"><thead><tr><th>Day</th><td>On time</td>' +
+      "<td>Typical delay</td><td>Readings</td></tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+  function lateHourTable(st) {
+    var rows = st.hourly.map(function (p) {
+      return "<tr><th>" + esc(p.label) + "</th><td>" +
+        (p.avg == null ? "—" : Math.round(p.avg * 100) + "%") + "</td><td>" +
+        esc(mins(p.late)) + "</td><td>" + group(p.n || 0) + "</td></tr>";
+    }).join("");
+    return '<table class="ot-tbl"><thead><tr><th>Hour</th><td>On time</td>' +
       "<td>Typical delay</td><td>Readings</td></tr></thead><tbody>" + rows + "</tbody></table>";
   }
   function lateBandTable(st) {
@@ -1549,8 +1743,9 @@
       }, 4000);
       return;
     }
-    hist = {}; hours = {}; lateHist = {};
-    write(LS.hist, hist); write(LS.hours, hours); write(LS.late, lateHist);
+    hist = {}; hours = {}; lateHist = {}; lateHours = {};
+    write(LS.hist, hist); write(LS.hours, hours);
+    write(LS.late, lateHist); write(LS.lateHours, lateHours);
     selKey = null;
     renderDetail();
     paint();
@@ -1591,7 +1786,7 @@
       '<div class="sched ot-delta ' + cls + '">' + esc(dTxt) + "</div></div></div>";
   }
 
-  function onData() { try { sample(); paint(); if (dlg) renderDetail(); } catch (_) {} }
+  function onData() { try { sample(); recordLate(amtrakRows()); paint(); if (dlg) renderDetail(); } catch (_) {} }
 
   function boot() {
     try {
@@ -1612,8 +1807,9 @@
     open: openDetail,
     close: closeDetail,
     reset: function () {
-      hist = {}; hours = {}; lateHist = {};
-      write(LS.hist, hist); write(LS.hours, hours); write(LS.late, lateHist);
+      hist = {}; hours = {}; lateHist = {}; lateHours = {};
+      write(LS.hist, hist); write(LS.hours, hours);
+      write(LS.late, lateHist); write(LS.lateHours, lateHours);
       paint();
     },
   };
