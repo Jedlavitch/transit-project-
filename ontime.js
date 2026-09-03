@@ -499,8 +499,14 @@
       todayOn: tRec && tRec[0] >= MIN_SAMPLES ? tRec[2] / tRec[0] : null,
       todayLate: tRec && tRec[0] >= MIN_SAMPLES ? tRec[1] / tRec[0] : null,
       todayN: tRec ? tRec[0] : 0,
-      baseOn: bN >= MIN_SAMPLES ? bOn / bN : null,
-      baseLate: bN >= MIN_SAMPLES ? bSum / bN : null,
+      /* Same fallback as deepStats: every day it has, today included, rather
+         than nothing at all. baseSpan says which, so nothing claims a fortnight
+         it does not have. */
+      baseOn: bN >= MIN_SAMPLES ? bOn / bN
+            : (totalN >= MIN_SAMPLES ? (bOn + (tRec ? tRec[2] : 0)) / (bN + (tRec ? tRec[0] : 0)) : null),
+      baseLate: bN >= MIN_SAMPLES ? bSum / bN
+              : (totalN >= MIN_SAMPLES ? (bSum + (tRec ? tRec[1] : 0)) / (bN + (tRec ? tRec[0] : 0)) : null),
+      baseSpan: bN >= MIN_SAMPLES ? "weeks" : (totalN >= MIN_SAMPLES ? "today" : null),
       baseN: bN,
       worst: worst, worstDay: worstDay,
       totalN: totalN,
@@ -619,15 +625,22 @@
     var tRec = days[day];
     var todayN = tRec ? tRec[0] : 0, todayAvg = tRec && tRec[0] ? tRec[1] / tRec[0] : null;
     // Baseline excludes today, or a bad morning would be measured against itself.
-    var bN = 0, bSum = 0, series = [];
+    var bN = 0, bSum = 0, totalN = 0, series = [];
     Object.keys(days).sort().forEach(function (d) {
       var r = days[d];
       series.push({ d: d, avg: r[0] ? r[1] / r[0] : 0, n: r[0] });
+      totalN += r[0];
       if (d !== day) { bN += r[0]; bSum += r[1]; }
     });
     return {
       todayAvg: todayAvg, todayN: todayN,
-      baseAvg: bN >= MIN_SAMPLES ? bSum / bN : null, baseN: bN,
+      // Same first-day fallback deepStats uses: every day it has rather than
+      // nothing at all, with baseSpan saying which so no row claims a fortnight
+      // it has not lived through.
+      baseAvg: bN >= MIN_SAMPLES ? bSum / bN
+             : (totalN >= MIN_SAMPLES ? (bSum + (tRec ? tRec[1] : 0)) / (bN + todayN) : null),
+      baseSpan: bN >= MIN_SAMPLES ? "weeks" : (totalN >= MIN_SAMPLES ? "today" : null),
+      baseN: bN,
       // The full fortnight. The card's sparkline slices the last seven itself;
       // the detail view plots every day it has.
       series: series,
@@ -942,6 +955,8 @@
     var lrows = lateKeys().filter(function (st) { return seenLate[st.id]; });
 
     var withBase = rows.filter(function (r) { return r.baseAvg != null; }).length;
+    var anyWeeks = rows.some(function (r) { return r.baseSpan === "weeks"; }) ||
+                   lateKeys().some(function (r) { return r.baseSpan === "weeks"; });
     count.textContent = (withBase || lrows.length)
       ? (withBase + lrows.length) + " tracked" : "";
 
@@ -968,14 +983,18 @@
         "A typical wait needs a day or so of the board being on.</div>";
       return;
     }
-    stat.textContent = !rows.length ? "on time today vs your last 2 weeks"
-      : withBase ? "today vs your last 2 weeks" : "learning your usual waits…";
+    stat.textContent = !rows.length ? (anyWeeks ? "on time today vs your last 2 weeks"
+                                                 : "on time, from the operator's own figures")
+      : anyWeeks ? "today vs your last 2 weeks" : "how long you have been waiting today";
 
     var listHTML = rows.slice(0, 8).map(function (r) {
       var m = r.meta;
       var todayTxt = r.todayAvg != null ? r.todayAvg.toFixed(1).replace(/\.0$/, "") + " min" : "—";
-      var baseTxt = r.baseAvg != null ? "usually " + r.baseAvg.toFixed(1).replace(/\.0$/, "") : "learning…";
-      var delta = (r.todayAvg != null && r.baseAvg != null) ? r.todayAvg - r.baseAvg : null;
+      var firstDay = r.baseSpan !== "weeks";
+      var baseTxt = firstDay
+        ? group(r.todayN) + (r.todayN === 1 ? " reading today" : " readings today")
+        : "usually " + r.baseAvg.toFixed(1).replace(/\.0$/, "");
+      var delta = (!firstDay && r.todayAvg != null && r.baseAvg != null) ? r.todayAvg - r.baseAvg : null;
       var cls = delta == null ? "ot-same" : delta >= 1 ? "ot-worse" : delta <= -1 ? "ot-better" : "ot-same";
       // Under a minute either way is noise on a median wait, so it says "same"
       // rather than dressing up ±0.4 as a trend.
@@ -1128,7 +1147,18 @@
       hourBase: hN ? hSum / hN : null,
       todayAvg: tRec && tRec[0] ? tRec[1] / tRec[0] : null,
       todayN: tRec ? tRec[0] : 0,
-      base: bN >= MIN_SAMPLES ? bSum / bN : null,
+      enough: totalN >= MIN_SAMPLES,
+      /* A usual normally excludes today, or a bad morning would be measured
+         against itself. On the first day there IS no other day, and refusing to
+         answer left the whole right-hand side of the panel saying "learning…"
+         over thousands of real readings — which reads as broken, not as new.
+         So it falls back to every day it has, today included, and says so.
+         The comparison is degenerate for exactly one day (today against itself,
+         which correctly reads "about your usual") and becomes a true baseline
+         the moment a second day exists. */
+      base: bN >= MIN_SAMPLES ? bSum / bN
+          : (totalN >= MIN_SAMPLES ? (bSum + (tRec ? tRec[1] : 0)) / (bN + (tRec ? tRec[0] : 0)) : null),
+      baseSpan: bN >= MIN_SAMPLES ? "weeks" : (totalN >= MIN_SAMPLES ? "today" : null),
       baseN: bN,
       weekday: wdN >= MIN_SAMPLES ? wdSum / wdN : null,
       weekend: weN >= MIN_SAMPLES ? weSum / weN : null,
@@ -1557,11 +1587,13 @@
         dNow == null ? (st.todayN ? st.todayN + " readings" : "nothing yet today")
           : Math.abs(dNow) < 1 ? "about your usual"
           : (dNow > 0 ? "+" : "−") + Math.abs(dNow).toFixed(1).replace(/\.0$/, "") + " min vs usual", dCls) +
-      tile("Usual", st.base == null ? "learning…" : mins(st.base),
-        st.base == null ? "needs a day or so more" : "over " + st.series.length + " days") +
+      tile("Usual", st.base == null ? "—" : mins(st.base),
+        st.base == null ? "a few minutes of readings"
+          : st.baseSpan === "today" ? "from today so far"
+          : "over " + st.series.length + " days") +
       /* "How often is it bad" in the stop's own terms. */
       tile("Ran long", st.ranLong == null ? "—" : st.ranLong + " of " + st.ranLongOf + " days",
-        st.ranLong == null ? "needs a usual to compare against" : "slower than its own usual",
+        st.ranLong == null ? "needs a second day to compare" : "slower than its own usual",
         st.ranLong != null && st.ranLong * 2 > st.ranLongOf ? "ot-worse" : "") +
       /* ...and in terms anyone can compare between stops. */
       tile("Waits over 10 min", st.longShare == null ? "—" : pct(st.longShare),
@@ -1742,10 +1774,12 @@
           : Math.abs(dOn) < 0.03 ? "about its usual"
           : (dOn > 0 ? "+" : "−") + Math.round(Math.abs(dOn) * 100) + " points vs usual",
         dOn == null ? "" : dOn >= 0.03 ? "ot-better" : dOn <= -0.03 ? "ot-worse" : "") +
-      tile("On time, 2 weeks", st.baseOn == null ? "learning…" : pctI(st.baseOn),
-        st.baseOn == null ? "needs a day or so more" : "under " + LATE_ON_TIME + " min late") +
+      tile(st.baseSpan === "today" ? "On time so far" : "On time, 2 weeks",
+        st.baseOn == null ? "—" : pctI(st.baseOn),
+        st.baseOn == null ? "a few minutes of readings" : "under " + LATE_ON_TIME + " min late") +
       tile("Typical delay", st.baseLate == null ? "—" : mins(st.baseLate),
-        st.baseLate == null ? "needs a day or so more" : "median across the line") +
+        st.baseLate == null ? "a few minutes of readings"
+          : st.baseSpan === "today" ? "median so far today" : "median across the line") +
       tile("Worst delay seen", st.worst ? st.worst + " min" : "—",
         st.worstDay ? "on " + dayLabel(st.worstDay) : "", st.worst >= 20 ? "ot-worse" : "") +
       tile("Worst hour", st.worstHour ? st.worstHour.label : "—",
@@ -2039,14 +2073,16 @@
      measurements and merging their rendering is how one starts being described
      in the other's words. */
   function lateRow(st) {
-    var d = (st.todayOn != null && st.baseOn != null) ? st.todayOn - st.baseOn : null;
+    var firstDay = st.baseSpan !== "weeks";
+    // No delta on the first day: today against itself is always "same", which is
+    // a column of noise rather than a reading.
+    var d = (!firstDay && st.todayOn != null && st.baseOn != null) ? st.todayOn - st.baseOn : null;
     var cls = d == null ? "ot-same" : d >= 0.03 ? "ot-better" : d <= -0.03 ? "ot-worse" : "ot-same";
     var dTxt = d == null ? "" : Math.abs(d) < 0.03 ? "same"
       : (d > 0 ? "+" : "−") + Math.round(Math.abs(d) * 100) + " pts";
     var todayTxt = st.todayOn == null ? "—" : Math.round(st.todayOn * 100) + "%";
-    var sub = st.baseOn != null ? "usually " + Math.round(st.baseOn * 100) + "% on time"
-      : st.todayOn == null ? "learning — " + st.todayN + " so far"
-      : "learning its usual…";
+    var sub = firstDay ? group(st.todayN) + (st.todayN === 1 ? " reading today" : " readings today")
+      : "usually " + Math.round(st.baseOn * 100) + "% on time";
     return '<div class="row ot-row" tabindex="0" role="button" data-otkey="~late|' + esc(st.id) +
       '" title="See this line\u2019s on-time record">' +
       '<div class="badge" style="background:' + esc(st.color || "#556") + ';color:#fff">' +
