@@ -377,6 +377,11 @@
     write(LS.late, lateHist);
     write(LS.lateHours, lateHours);
     paint();
+    /* And the dialog, if it is open. It used to wait for the next 60-second
+       tick, so a reading that had just landed sat invisible behind an open
+       panel for up to a minute. Cheap now that a repaint patches rather than
+       rebuilds — the bars simply move to their new heights. */
+    if (dlg) { try { renderDetail(); } catch (_) {} }
   }
 
   /* ---- Amtrak, on every board that carries it -----------------------------
@@ -848,20 +853,35 @@
       "#otdBody .ot-ghost:hover{border-color:var(--accent,#4ea1ff);color:var(--text,#eef3ff)}" +
       "#otdBody .ot-ghost.danger:hover{border-color:var(--late-ink,#ff6b81);color:var(--late-ink,#ff6b81)}" +
       "#otdBody .ot-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line,#22345a)}" +
+      /* One curve and three durations for the whole feature, so nothing reads
+         as borrowed from somewhere else. The curve is a decelerate: quick to
+         leave, slow to settle, which is what makes a moving bar feel weighted
+         rather than mechanical. */
+      "#otdOverlay,#ontimeCard{--ot-ease:cubic-bezier(.22,.61,.36,1);" +
+        "--ot-quick:.16s;--ot-mid:.28s;--ot-slow:.52s}" +
       "@media (prefers-reduced-motion:no-preference){" +
-        "#otdBox{animation:otdIn .18s cubic-bezier(.22,.61,.36,1)}" +
-        "@keyframes otdIn{from{opacity:0;transform:translateY(8px)}}" +
+        "#otdBox{animation:otdIn var(--ot-mid) var(--ot-ease)}" +
+        "@keyframes otdIn{from{opacity:0;transform:translateY(8px) scale(.995)}}" +
         /* The bar is the only thing that travels; everything else fades or
-           tints. .52s reads as a change rather than a flicker, and is over well
-           before the next minute's repaint starts another one. */
-        "#otdBody .ot-bar{transition:height .52s cubic-bezier(.22,.61,.36,1)," +
-          "background-color .3s ease,filter .18s ease}" +
-        "#otdBody .ot-chip,#otdBody .ot-more-chip{transition:border-color .18s ease," +
-          "background-color .18s ease,color .18s ease}" +
-        "#otdBody .ot-tile{transition:border-color .25s ease}" +
-        "#otdBody .ot-ghost{transition:border-color .18s ease,color .18s ease}" +
-        "#ontimeCard .ot-row{transition:border-color .18s ease}" +
-        "#ontimeCard h2 #otMoreBtn{transition:border-color .18s ease,color .18s ease}" +
+           tints. --ot-slow reads as a change rather than a flicker, and is over
+           well before the next minute's repaint starts another one. */
+        "#otdBody .ot-bar{transition:height var(--ot-slow) var(--ot-ease)," +
+          "background-color var(--ot-mid) var(--ot-ease),filter var(--ot-quick) var(--ot-ease)}" +
+        "#otdBody .ot-base{transition:bottom var(--ot-slow) var(--ot-ease)}" +
+        "#otdBody .ot-plot{transition:height var(--ot-slow) var(--ot-ease)}" +
+        "#otdBody .ot-col .ot-val{transition:opacity var(--ot-mid) var(--ot-ease)}" +
+        "#otdBody .ot-chip,#otdBody .ot-more-chip{transition:border-color var(--ot-quick) var(--ot-ease)," +
+          "background-color var(--ot-quick) var(--ot-ease),color var(--ot-quick) var(--ot-ease)}" +
+        "#otdBody .ot-tile{transition:border-color var(--ot-mid) var(--ot-ease)}" +
+        "#otdBody .ot-ghost,#otdBody #otdClose{transition:border-color var(--ot-quick) var(--ot-ease)," +
+          "color var(--ot-quick) var(--ot-ease)}" +
+        "#ontimeCard .ot-row{transition:border-color var(--ot-quick) var(--ot-ease)}" +
+        "#ontimeCard h2 #otMoreBtn{transition:border-color var(--ot-quick) var(--ot-ease)," +
+          "color var(--ot-quick) var(--ot-ease)}" +
+        /* A tile whose number moved lifts once. Transform and opacity only, so
+           it composites and never touches layout. */
+        "#otdBody .ot-tile.ot-bump .ot-tv{animation:otBump .42s var(--ot-ease)}" +
+        "@keyframes otBump{0%{opacity:.45;transform:translateY(3px)}100%{opacity:1;transform:none}}" +
       "}";
     document.head.appendChild(st);
   }
@@ -951,7 +971,7 @@
     stat.textContent = !rows.length ? "on time today vs your last 2 weeks"
       : withBase ? "today vs your last 2 weeks" : "learning your usual waits…";
 
-    list.innerHTML = rows.slice(0, 8).map(function (r) {
+    var listHTML = rows.slice(0, 8).map(function (r) {
       var m = r.meta;
       var todayTxt = r.todayAvg != null ? r.todayAvg.toFixed(1).replace(/\.0$/, "") + " min" : "—";
       var baseTxt = r.baseAvg != null ? "usually " + r.baseAvg.toFixed(1).replace(/\.0$/, "") : "learning…";
@@ -970,6 +990,21 @@
         '<div class="times"><div class="live">' + esc(todayTxt) + "</div>" +
         '<div class="sched ot-delta ' + cls + '">' + esc(dTxt) + "</div></div></div>";
     }).join("") + lrows.slice(0, rows.length ? 4 : 8).map(lateRow).join("");
+
+    /* Most minutes nothing on this card moves — the same eight rows with the
+       same numbers. Writing them anyway destroys and rebuilds every row, which
+       drops any hover, any focus, and shows as a flicker on a screen somebody is
+       looking at.
+
+       Compared against a string we kept, NOT against list.innerHTML: the browser
+       re-serialises what it parsed — colours become rgb(), attribute order and
+       quoting change, the sparkline's SVG comes back normalised — so a generated
+       string never equals the DOM's version of itself and the guard would never
+       once have fired. */
+    if (list._otHTML !== listHTML) {
+      list.innerHTML = listHTML;
+      list._otHTML = listHTML;
+    }
     /* eslint-disable-next-line no-undef */
     if (typeof fitList === "function") { try { fitList(list); } catch (_) {} }
   }
@@ -1158,15 +1193,48 @@
       " recorded so far — the shape fills in as the board keeps running.</p>";
   }
 
-  function chart(o) {
-    // o: { pts, base, baseWord, everyNth, id }
+  /* ---- one model, two consumers ------------------------------------------
+     Every figure's maths lives in chartModel(). chart() turns a model into HTML
+     for a first render; chartApply() writes the same model into a plot that is
+     already on screen.
+
+     The split exists because innerHTML is a cut, not a transition. A repaint
+     that replaces the body destroys the elements a CSS transition needs, takes
+     the tooltip and the keyboard focus with it, and no easing can smooth a
+     thing that was deleted and rebuilt. Measured, the repaint itself costs 5ms
+     and the animation holds 60fps — what read as jank was never the frame
+     budget, it was the DOM being thrown away once a minute. */
+  var chartSpecs = [], tileSpecs = [], liveSpecs = {};
+
+  /* Registers a run of text that changes on a tick, so the patcher can find
+     it again without re-rendering the paragraph around it. */
+  function live(key, text) { liveSpecs[key] = String(text); return esc(text); }
+
+  /* djb2. The chip strip is markup, not a model, and it is the one part of the
+     dialog the patcher does not rewrite — so the signature has to notice any
+     change in it, not merely a change of length. Two different strips of equal
+     length would otherwise leave a stale picker on screen. */
+  function hash(str) {
+    var h = 5381;
+    for (var i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return h.toString(36);
+  }
+  function liveApply(body) {
+    var els = body.querySelectorAll("[data-live]");
+    for (var i = 0; i < els.length; i++) {
+      var k = els[i].getAttribute("data-live");
+      if (k in liveSpecs && els[i].textContent !== liveSpecs[k]) els[i].textContent = liveSpecs[k];
+    }
+  }
+
+  function chartModel(o) {
     var pts = o.pts;
-    if (!pts.length) return '<div class="ot-none">Nothing recorded yet.</div>';
+    if (!pts.length) return null;
 
     var vals = [];
     pts.forEach(function (p) { if (p.avg != null) vals.push(p.avg); });
     if (o.base != null) vals.push(o.base);
-    if (!vals.length) return '<div class="ot-none">Nothing recorded yet.</div>';
+    if (!vals.length) return null;
 
     // 1.28x headroom so the tallest bar's own label has somewhere to sit.
     var top = o.top != null ? o.top : (Math.max.apply(null, vals) * 1.28 || 1);
@@ -1176,55 +1244,139 @@
       if (o.invert ? p.avg < worstV : p.avg > worstV) { worstV = p.avg; worst = i; }
     });
 
-    var cols = pts.map(function (p, i) {
-      var bs = p.avg == null ? "none" : (o.tone || barState(p.avg, o.base, o.tol, o.invert));
-      var pct = p.avg == null ? 0 : Math.max(2, (p.avg / top) * 100);
-      // Selective labels only: the current column and the worst one. A number on
-      // every bar is unreadable and goes unread.
-      var lab = (p.cur || i === worst) && p.avg != null
-        ? '<span class="ot-val">' + esc(o.fmt ? o.fmt(p) : p.avg.toFixed(1).replace(/\.0$/, "")) + "</span>" : "";
-      var tip = o.tipFn ? o.tipFn(p) : (p.label + " · " + (p.avg == null
-        ? (p.n ? "only " + p.n + " readings — not enough yet" : "board was off")
-        : deltaWords(p.avg, o.base, o.baseWord) + " · " + p.n + " readings"));
-      return '<div class="ot-col" data-s="' + bs + (p.cur ? '" data-cur="1' : '"') +
-        ' data-x="' + esc(p.x) + '" tabindex="0" data-tip="' + esc(tip) + '">' + lab +
-        '<span class="ot-bar" style="height:' + pct.toFixed(1) + '%"></span></div>';
-    }).join("");
-
-    var basePct = o.base == null ? null : Math.min(96, (o.base / top) * 100);
-    /* Formatted INSIDE the guard: the distribution charts pass no base at all,
-       and reading .toFixed off it before checking is how this threw. */
-    var baseEl = "";
-    if (basePct != null) {
-      var baseTxt = o.baseFmt ? o.baseFmt(o.base) : o.base.toFixed(1).replace(/\.0$/, "");
-      baseEl = '<div class="ot-base" style="bottom:' + basePct.toFixed(1) + '%"><i></i><b>' +
-        esc(o.baseWord + " " + baseTxt) + "</b></div>";
-    }
-
     var nData = 0;
     pts.forEach(function (q) { if (q.avg != null) nData++; });
     var sparse = nData > 0 && nData < MIN_SHAPE;
-    var plotH = sparse ? SHORT_H : PLOT_H;
 
-    var nth = o.everyNth || 1;
-    var wide = o.narrowNth || 0;             // opt-in: halve the labels on a phone
-    var last = pts.length - 1;
-    var axis = pts.map(function (p, i) {
+    var nth = o.everyNth || 1, wide = o.narrowNth || 0, last = pts.length - 1;
+
+    var cols = pts.map(function (p, i) {
       var d = last - i;
-      var show = nth === 1 || d % nth === 0;
-      var keep = wide && d % wide === 0;
-      return "<span" + (p.cur ? ' class="cur"' : "") + (keep ? " data-n2" : "") + ">" +
-        (show ? esc(p.label) : "") + "</span>";
+      return {
+        x: String(p.x),
+        bs: p.avg == null ? "none" : (o.tone || barState(p.avg, o.base, o.tol, o.invert)),
+        pct: p.avg == null ? 0 : Math.max(2, (p.avg / top) * 100),
+        // Selective labels only: the current column and the notable extreme. A
+        // number on every bar is unreadable and goes unread.
+        labText: ((p.cur || i === worst) && p.avg != null)
+          ? (o.fmt ? o.fmt(p) : p.avg.toFixed(1).replace(/\.0$/, "")) : "",
+        tip: o.tipFn ? o.tipFn(p) : (p.label + " · " + (p.avg == null
+          ? (p.n ? "only " + p.n + " readings — not enough yet" : "board was off")
+          : deltaWords(p.avg, o.base, o.baseWord) + " · " + p.n + " readings")),
+        cur: !!p.cur,
+        axisText: (nth === 1 || d % nth === 0) ? p.label : "",
+        axisKeep: !!(wide && d % wide === 0),
+      };
+    });
+
+    return {
+      cols: cols, wide: wide, sparse: sparse, nData: nData,
+      plotH: sparse ? SHORT_H : PLOT_H,
+      basePct: o.base == null ? null : Math.min(96, (o.base / top) * 100),
+      baseTxt: o.base == null ? ""
+        : (o.baseWord || "") + " " + (o.baseFmt ? o.baseFmt(o.base) : o.base.toFixed(1).replace(/\.0$/, "")),
+      note: (sparse && o.unitName) ? sparseNote(nData, o.unitName) : "",
+    };
+  }
+
+  /* The shape a repaint must not change without a full re-render: which columns
+     exist, in what order, and whether the plot is in its short form. Anything
+     else — heights, colours, labels, the reference line — is patched in place. */
+  function chartSig(o) {
+    var m = chartModel(o);
+    if (!m) return (o.figId || "f") + ":empty";
+    return (o.figId || "f") + ":" + (m.sparse ? "s" : "f") + ":" +
+      m.cols.map(function (c) { return c.x; }).join(",");
+  }
+
+  function chart(o) {
+    chartSpecs.push(o);
+    var m = chartModel(o);
+    if (!m) return '<div class="ot-none">Nothing recorded yet.</div>';
+
+    var cols = m.cols.map(function (c) {
+      return '<div class="ot-col" data-s="' + c.bs + (c.cur ? '" data-cur="1' : '"') +
+        ' data-x="' + esc(c.x) + '" tabindex="0" data-tip="' + esc(c.tip) + '">' +
+        (c.labText ? '<span class="ot-val">' + esc(c.labText) + "</span>" : "") +
+        '<span class="ot-bar" style="height:' + c.pct.toFixed(1) + '%"></span></div>';
     }).join("");
 
-    /* Only where the caller named a unit. The three small multiples share one
-       day count, so three identical notes would be three times the noise; that
-       section carries a single one of its own. */
-    var note = (sparse && o.unitName) ? sparseNote(nData, o.unitName) : "";
+    var baseEl = m.basePct == null ? "" :
+      '<div class="ot-base" style="bottom:' + m.basePct.toFixed(1) + '%"><i></i><b>' +
+      esc(m.baseTxt) + "</b></div>";
 
-    return '<div class="ot-plot" data-fig="' + esc(o.figId || "f") + '" style="height:' + plotH + 'px">' + baseEl +
-      '<div class="ot-cols">' + cols + "</div></div>" +
-      '<div class="ot-axis' + (wide ? " thin" : "") + '">' + axis + "</div>" + note;
+    var axis = m.cols.map(function (c) {
+      return "<span" + (c.cur ? ' class="cur"' : "") + (c.axisKeep ? " data-n2" : "") + ">" +
+        esc(c.axisText) + "</span>";
+    }).join("");
+
+    return '<div class="ot-plot" data-fig="' + esc(o.figId || "f") + '" style="height:' + m.plotH + 'px">' +
+      baseEl + '<div class="ot-cols">' + cols + "</div></div>" +
+      '<div class="ot-axis' + (m.wide ? " thin" : "") + '">' + axis + "</div>" + m.note;
+  }
+
+  /* Writes a fresh model into a plot already on screen. Every assignment is
+     guarded by a comparison: setting a property to the value it already holds
+     still invalidates style, and with sixty columns that is sixty needless
+     invalidations a minute. */
+  function chartApply(body, o) {
+    var m = chartModel(o);
+    if (!m) return;
+    var plot = null, plots = body.querySelectorAll(".ot-plot[data-fig]");
+    for (var i = 0; i < plots.length; i++) {
+      if (plots[i].getAttribute("data-fig") === String(o.figId || "f")) { plot = plots[i]; break; }
+    }
+    if (!plot) return;
+
+    var hPx = m.plotH + "px";
+    if (plot.style.height !== hPx) plot.style.height = hPx;
+
+    var base = plot.querySelector(".ot-base");
+    if (base && m.basePct != null) {
+      var bPct = m.basePct.toFixed(1) + "%";
+      if (base.style.bottom !== bPct) base.style.bottom = bPct;
+      var bl = base.querySelector("b");
+      if (bl && bl.textContent !== m.baseTxt) bl.textContent = m.baseTxt;
+    }
+
+    var byX = {}, els = plot.querySelectorAll(".ot-col[data-x]");
+    for (var j = 0; j < els.length; j++) byX[els[j].getAttribute("data-x")] = els[j];
+
+    var axisEls = [];
+    var axisBox = plot.parentNode ? plot.parentNode.querySelector(".ot-axis") : null;
+    if (axisBox) axisEls = axisBox.children;
+
+    m.cols.forEach(function (c, k) {
+      var el = byX[c.x];
+      if (el) {
+        if (el.getAttribute("data-s") !== c.bs) el.setAttribute("data-s", c.bs);
+        if (c.cur) { if (!el.hasAttribute("data-cur")) el.setAttribute("data-cur", "1"); }
+        else if (el.hasAttribute("data-cur")) el.removeAttribute("data-cur");
+        if (el.getAttribute("data-tip") !== c.tip) el.setAttribute("data-tip", c.tip);
+
+        var bar = el.querySelector(".ot-bar");
+        if (bar) {
+          var hh = c.pct.toFixed(1) + "%";
+          if (bar.style.height !== hh) bar.style.height = hh;
+        }
+        var val = el.querySelector(".ot-val");
+        if (c.labText) {
+          if (!val) {
+            val = document.createElement("span");
+            val.className = "ot-val";
+            el.insertBefore(val, el.firstChild);
+          }
+          if (val.textContent !== c.labText) val.textContent = c.labText;
+        } else if (val && val.parentNode) {
+          val.parentNode.removeChild(val);
+        }
+      }
+      var ax = axisEls[k];
+      if (ax) {
+        if (ax.textContent !== c.axisText) ax.textContent = c.axisText;
+        if (c.cur !== (ax.className === "cur")) ax.className = c.cur ? "cur" : "";
+      }
+    });
   }
 
   /* The table twin. A tooltip is an enhancement; it must never be the only way
@@ -1258,9 +1410,38 @@
   var showAll = false;
 
   function tile(label, value, sub, cls) {
-    return '<div class="ot-tile"><div class="ot-tl">' + esc(label) + "</div>" +
+    tileSpecs.push({ key: label, value: String(value), sub: String(sub || ""), cls: cls || "" });
+    return '<div class="ot-tile" data-tile="' + esc(label) + '"><div class="ot-tl">' + esc(label) + "</div>" +
       '<div class="ot-tv">' + esc(value) + "</div>" +
       '<div class="ot-ts ' + (cls || "") + '">' + esc(sub || "") + "</div></div>";
+  }
+
+  /* Tiles change once a minute by a fraction of a percent. Swapping the text
+     under the reader is the smallest cut in the dialog and still a cut, so a
+     changed value gets a brief lift — enough to say "this moved" and short
+     enough not to become a tic on a screen that is on all day. */
+  function tilesApply(body) {
+    tileSpecs.forEach(function (t) {
+      var el = null, all = body.querySelectorAll(".ot-tile[data-tile]");
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].getAttribute("data-tile") === t.key) { el = all[i]; break; }
+      }
+      if (!el) return;
+      var v = el.querySelector(".ot-tv"), sb = el.querySelector(".ot-ts");
+      if (v && v.textContent !== t.value) {
+        v.textContent = t.value;
+        if (!reducedMotion()) {
+          el.classList.remove("ot-bump");
+          void el.offsetWidth;            // restart the animation rather than ignore it
+          el.classList.add("ot-bump");
+        }
+      }
+      if (sb) {
+        if (sb.textContent !== t.sub) sb.textContent = t.sub;
+        var want = "ot-ts " + t.cls;
+        if (sb.className !== want.trim()) sb.className = want.trim();
+      }
+    });
   }
 
   /* Which stop to open on. The same answer the card gives: the one that is most
@@ -1286,13 +1467,18 @@
     if (!body) return;
     var keep = body.scrollTop;
     var prevBars = snapshotBars(body);
+    chartSpecs = []; tileSpecs = []; liveSpecs = {};
 
     var keys = trackedKeys();
     var lates = lateKeys();
     if (!keys.length && !lates.length) {
-      body.innerHTML = '<div class="ot-none">Nothing recorded yet. The board notes how long the next ' +
+      var emptyHtml = '<div class="ot-none">Nothing recorded yet. The board notes how long the next ' +
         "vehicle is away each time it refreshes; leave it running and a day or so from now this will " +
         "have something to show.</div>" + explainerHTML();
+      if (body.getAttribute("data-sig") !== "empty") {
+        body.innerHTML = emptyHtml;
+        body.setAttribute("data-sig", "empty");
+      }
       return;
     }
     var found = false;
@@ -1354,8 +1540,8 @@
 
     if (selKey.indexOf("~late|") === 0) {
       var lst = lateStats(selKey.slice(6));
-      body.innerHTML = '<div class="ot-chips">' + chips + "</div>" + lateBody(lst);
-      afterRender(body, keep, prevBars);
+      commit(body, '<div class="ot-chips">' + chips + "</div>" + lateBody(lst),
+             "late:" + selKey, chips, keep, prevBars);
       return;
     }
 
@@ -1414,10 +1600,10 @@
       : '<div class="ot-none">Not enough of the day observed yet — an hour needs about a minute of ' +
         "the board being on before it counts.</div>";
 
-    body.innerHTML =
+    var html =
       '<div class="ot-chips">' + chips + "</div>" +
       '<div class="ot-tiles">' + tiles + "</div>" +
-      '<div class="ot-since">' + esc(group(st.totalN) + " readings" +
+      '<div class="ot-since" data-live="since">' + live("since", group(st.totalN) + " readings" +
         (st.since ? " since " + dayLabel(st.since) : "") + ", taken every time the board refreshed.") + "</div>" +
 
       '<section class="ot-fig"><div class="ot-fig-h"><h4>Typical wait, by day</h4>' +
@@ -1445,7 +1631,29 @@
       '<div class="ot-foot"><button type="button" id="otdWipe" class="ot-ghost danger">' +
       "Forget this history</button></div>";
 
-    afterRender(body, keep, prevBars);
+    commit(body, html, "wait:" + selKey, chips, keep, prevBars);
+  }
+
+  /* The whole point of the split. If the shape on screen still matches the shape
+     the model wants — same view, same columns, same toggles — nothing is
+     replaced: the values are written into the elements already there, so the
+     transitions run, the tooltip stays up and the keyboard focus survives. Only
+     a real structural change (a different line, a new day, the tables opening)
+     rebuilds, and only then does the scroll position need restoring. */
+  function commit(body, html, kind, chips, keep, prevBars) {
+    var sig = [kind, showNums ? "n" : "-", hash(chips),
+               chartSpecs.map(chartSig).join(";"),
+               tileSpecs.map(function (t) { return t.key; }).join(",")].join("|");
+    if (body.getAttribute("data-sig") === sig) {
+      chartSpecs.forEach(function (o) { chartApply(body, o); });
+      tilesApply(body);
+      liveApply(body);
+      return;
+    }
+    var had = !!body.getAttribute("data-sig");
+    body.innerHTML = html;
+    body.setAttribute("data-sig", sig);
+    afterRender(body, keep, prevBars, had);
   }
 
   function reducedMotion() {
@@ -1506,10 +1714,14 @@
   /* Chip first, scroll position second: scrollIntoView can nudge the body
      vertically as well as the strip horizontally, and restoring the caller's
      scrollTop afterwards undoes exactly that half of it. */
-  function afterRender(body, keep, prevBars) {
+  function afterRender(body, keep, prevBars, glide) {
     var on = body.querySelector(".ot-chip.on");
     if (on && on.scrollIntoView) {
-      try { on.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) {}
+      var how = { block: "nearest", inline: "nearest" };
+      // Smooth only when the strip was already on screen. Gliding into position
+      // on the very first paint is an animation of nothing.
+      if (glide && !reducedMotion()) how.behavior = "smooth";
+      try { on.scrollIntoView(how); } catch (_) {}
     }
     body.scrollTop = keep;
     replayBars(body, prevBars);
@@ -1591,11 +1803,12 @@
       statusBody =
         '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, delayed or cancelled</h4>' +
         "<span>every departure this board saw, over the fortnight</span></div>" +
-        '<div class="ot-together">' + esc(together) + "</div>" +
+        '<div class="ot-together" data-live="together">' + live("together", together) + "</div>" +
         '<div class="ot-multiples">' +
         panels.map(function (i) {
           return '<div class="ot-panel"><div class="ot-panel-h"><span class="ot-dot ot-t-' + tones[i] +
-            '"></span>' + esc(names[i]) + '<b>' + Math.round(share(i) * 100) + "%</b></div>" +
+            '"></span>' + esc(names[i]) + '<b data-live="panel-' + i + '">' +
+            live("panel-" + i, Math.round(share(i) * 100) + "%") + "</b></div>" +
             chart({
               pts: st.statusDays[i], tone: tones[i], top: 1.28, figId: "status-" + i,
               everyNth: st.statusDays[i].length > 6 ? 3 : 1,
@@ -1650,8 +1863,8 @@
     }
 
     return '<div class="ot-tiles">' + tiles + "</div>" +
-      '<div class="ot-since">' + esc(st.label + " — " + group(st.totalN) + " readings" +
-        (st.since ? " since " + dayLabel(st.since) : "") + ".") + "</div>" +
+      '<div class="ot-since" data-live="since">' + live("since", st.label + " — " + group(st.totalN) +
+        " readings" + (st.since ? " since " + dayLabel(st.since) : "") + ".") + "</div>" +
       '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, by day</h4>' +
       "<span>bars below the line were worse than its usual</span></div>" + onChart + "</section>" +
       '<section class="ot-fig"><div class="ot-fig-h"><h4>On time, by hour of day</h4>' +
