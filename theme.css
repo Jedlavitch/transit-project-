@@ -226,6 +226,14 @@ body{ font-family:var(--body); }
    scroll horizontally, so it could be read but never tapped. Wide screens never
    reach the wrap point, so nothing above a phone changes. */
 .view-links{ display:flex; flex-wrap:wrap; gap:8px; row-gap:6px; }
+
+/* Tap target. buy, activate, signin, profile and leaderboard each style `.back`
+   as a bare 13px text link, which measures ~15px tall — far under any touch
+   guideline, and on the licence pages it is the only way back. Padding it out
+   costs nothing under a mouse and makes it a real target under a thumb.
+   `a.back` outranks each page's own `.back` on specificity, so this holds
+   without editing five files and without fighting their margins. */
+a.back{ display:inline-block; padding-top:9px; padding-bottom:9px; }
 .view-links a{ background:var(--panel); color:var(--text); border:1px solid var(--line);
   border-radius:10px; padding:8px 12px; font-size:13px; font-weight:600;
   text-decoration:none; white-space:nowrap; }
