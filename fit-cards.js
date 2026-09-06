@@ -214,6 +214,48 @@
    applied -- the layout would pump on every tick instead of settling. */
 body .card h2, body .statline{flex:none}
 
+/* ---- the board as a grid of identical tiles ------------------------------
+   Switched on by sizeCompactCards() once it has worked out a tile size that
+   tessellates the screen; see the long note there for why uniform beat
+   content-sized. Everything here is driven by the four variables it sets, so
+   the CSS has no opinion about the numbers -- only about the shape. */
+:root.tb-grid body .cards{
+  display:grid;
+  grid-template-columns:repeat(var(--tb-card-cols, 3), minmax(0, 1fr));
+  grid-auto-rows:var(--tb-card-h, 150px);
+  gap:var(--tb-card-gap, 12px);
+  align-content:start;
+  column-width:auto; column-count:auto;
+}
+:root.tb-grid body .card{ margin:0; height:100%; min-height:0; max-height:none }
+/* Whole rows only. The leftover sits under the last one, inside the card. */
+:root.tb-grid body .card .list{ max-height:var(--tb-list-h, none) }
+/* A collapsed card keeps its own height and sits at the top of its cell --
+   the hole under it is the one thing multi-column was better at, and it is
+   only ever seen by someone who has just collapsed something. */
+:root.tb-grid body .card.mini{ height:auto; align-self:start }
+:root.tb-grid body .cards.all-mini{ grid-auto-rows:min-content }
+
+/* ---- the strip the iOS clock lives on ------------------------------------
+   Every board sets viewport-fit=cover, and it has to: without it a notched
+   phone letterboxes the board in black bars. What no board ever did was claim
+   the strip back, so running one as an installed app on an iPad puts the
+   system clock and battery directly on top of the wordmark -- which is the
+   first thing anyone sees. The insets are 0 on a desktop, a TV and in an
+   ordinary browser tab, so this costs those nothing.
+
+   Restated per tier because CSS cannot add to a value it does not know: the
+   base padding is the board's own 14px, this file's tablet band sets 8px, and
+   each board's phone breakpoint sets 10px. */
+body header{ padding-top:calc(14px + env(safe-area-inset-top, 0px)) }
+body footer{ padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px)) }
+@media (min-width:481px) and (max-width:1220px){
+  body header{ padding-top:calc(8px + env(safe-area-inset-top, 0px)) }
+}
+@media (max-width:480px){
+  body header{ padding-top:calc(10px + env(safe-area-inset-top, 0px)) }
+}
+
 /* ---- a badge names the row; it is not allowed to become the row ----------
    The route badge is a label. On New York's LIRR card it carries the branch
    name, and "Greenport Service" measured 149px of a 326px row -- on a card
@@ -569,6 +611,10 @@ body .card.tb-tight .statline{display:none}
       root.classList.remove("tb-cards-tight");
       root.classList.remove("tb-rail-tight");
       root.classList.remove("tb-cols-forced");
+      root.classList.remove("tb-grid");
+      root.style.removeProperty("--tb-card-h");
+      root.style.removeProperty("--tb-list-h");
+      root.style.removeProperty("--tb-card-gap");
       clearCardHeights();
     };
     /* Below 481px the phone layout takes over -- a genuinely different,
@@ -615,6 +661,9 @@ body .card.tb-tight .statline{display:none}
       root.style.removeProperty("--tb-card-cols");
       root.classList.remove("tb-cards-tight");
       root.classList.remove("tb-cols-forced");
+      root.classList.remove("tb-grid");
+      root.style.removeProperty("--tb-card-h");
+      root.style.removeProperty("--tb-list-h");
       clearCardHeights();
       return;
     }
@@ -681,167 +730,125 @@ body .card.tb-tight .statline{display:none}
       }
     }
 
-    const mb=parseFloat(getComputedStyle(cards[0]).marginBottom)||12;
-    /* Above this a card is comfortable rather than merely legible, so it is
-       the most any card may CLAIM as its unrefusable minimum. Deliberately
-       just over the ~130px where a heading, a statline and two rows stop
-       fitting: a floor is the "still worth showing" line, not a target. The
-       low cap is the same line drawn at one row instead of two. */
-    const FLOOR_CAP=140, FLOOR_CAP_LOW=104;
-    /* A collapsed card is not in the auction -- it is its own heading and
-       nothing else, and theme.css already sizes it. It still occupies room in
-       a column, so its height comes off the top of the budget. */
-    const open=[], want=[], floorHi=[], floorLo=[];
-    let taken=0;
+    /* ---- one uniform tile, sized so a whole number of them fills the screen
+
+       WHY THIS IS UNIFORM AGAIN. Sizing each card to its own content is the
+       right answer on a page you scroll and the wrong one on a board, and a
+       photograph of a real iPad settled it. Thirteen cards of thirteen
+       different heights flow into columns that end wherever they happen to
+       end, so the bottom of the screen cuts the last card of every column
+       through the middle of a departure row: four half-rows across the foot of
+       the board. It reads as a rendering fault however good the arithmetic
+       above it was, because the eye reads the ragged edge and not the
+       reasoning.
+
+       So: every box the same size, and that size chosen so that a whole number
+       of them exactly fills the height available. The bottom edge comes out
+       flush, the scroll boundary falls between two rows instead of through
+       one, and the thing looks like a board.
+
+       HOW THE SIZE IS CHOSEN. Take the most tile-rows that still leaves each
+       tile room for two departures; failing that, one. Fewer, fuller tiles
+       beat more, emptier ones -- two departures is the least a box can show
+       and still be worth its own heading -- but not at the cost of pushing
+       half the board off the screen, which is why it starts from the number of
+       rows the cards actually need and comes down rather than up.
+
+       A CSS grid, not the multi-column flow. theme.css moved these cards to
+       multi-column so that collapsing one would not leave a hole in its row,
+       which is a real cost -- but it is a cost paid only by someone who
+       collapses a card, and it buys away a defect that everybody sees all of
+       the time. */
+    const gap=parseFloat(getComputedStyle(cards[0]).marginBottom)||12;
+
+    /* Measured across the whole board, because the tile is uniform: whatever
+       the bulkiest furniture is, every tile has to be able to hold it, or the
+       card that has it is the one that comes out sliced.
+
+       The row height is the MEDIAN of the real departure rows, not the tallest
+       thing any list happens to start with. Spotted opens with a 62px mascot
+       block and the alerts card with a three-line notice; sizing every tile on
+       the board to those would be letting the two cards nobody is looking at
+       decide how much room the trains get. */
+    let wantMax=0;
+    const chromes=[], open=[];
     for(const c of cards){
-      if(c.classList.contains("mini")){
-        c.style.removeProperty("max-height");
-        c.style.removeProperty("min-height");
-        c.classList.remove("tb-tight");
-        taken+=c.getBoundingClientRect().height+mb;
-        continue;
-      }
-      const list=c.querySelector(".list");
-      const chrome=chromeOf(c, list);
-      const content=list ? contentH(list) : 0;
-      const row=list ? firstRowH(list) : 0;
-      const need=Math.max(chrome, Math.min(chrome+content, H));
+      if(c.classList.contains("mini")) continue;    // collapsed: sizes itself
       open.push(c);
-      want.push(need);
-      /* Two floors, because there are two different questions. The generous
-         one is two of whatever this card shows -- comfortable, what a box is
-         worth at rest. The bare one is a single row: not comfortable, but a
-         card that shows one departure is still telling you something, and a
-         card that shows none is furniture.
-
-         Neither may exceed what the card actually needs -- a floor above the
-         need reserves empty space and takes it from a card that had a use for
-         it -- nor the caps, because a floor is a claim that cannot be refused
-         and some cards' "two rows" are enormous. Spotted's first child is a
-         62px mascot block, so two of it asked for 183px and got it, while
-         Metrorail -- the reason anyone is looking -- was held to 125px by its
-         own modest 34px rows. A floor is meant to stop a card being useless,
-         not to let the bulkiest one win. */
-      floorHi.push(Math.min(need, chrome+Math.min(content, row*2+6), FLOOR_CAP));
-      floorLo.push(Math.min(need, chrome+Math.min(content, row+6), FLOOR_CAP_LOW));
+      /* Only cards with a departure list get a vote on the tile size. Without
+         this guard chromeOf() counts a listless card's WHOLE body as
+         furniture -- the commute card's prompt and button came to 117px of
+         "chrome" against a real card's 54 -- and every tile on the board was
+         then sized to hold it, which is 63px of dead space in each of them
+         and two fewer departures in the cards anyone is reading. A card with
+         no list has no rows to protect; it just lives inside whatever tile
+         the rest of the board settles on. */
+      const list=c.querySelector(".list");
+      if(!list) continue;
+      const chrome=chromeOf(c, list);
+      chromes.push(chrome);
+      const content=contentH(list);
+      if(chrome+content>wantMax) wantMax=chrome+content;
     }
+    /* The MEDIAN card's furniture, not the bulkiest card's. Sizing every tile
+       on the board so that the one card with a wrapped heading or an extra
+       line of statline still gets two rows costs every other card a row: one
+       117px outlier against a typical 54 put 63px of dead space in all
+       thirteen tiles and took New York's subway card from three departures to
+       two. The outlier keeps its furniture -- the heading and statline are
+       flex:none and cannot be sliced -- it just shows one fewer row than its
+       neighbours, which is the right card to spend it on. */
+    chromes.sort((a,b)=>a-b);
+    const chromeMax=chromes.length ? chromes[Math.floor(chromes.length/2)] : 54;
     if(!open.length) return;
+    const rowHs=[...box.querySelectorAll(".list .row")]
+      .map(r=>r.getBoundingClientRect().height).filter(x=>x>0).sort((a,b)=>a-b);
+    const rowH=rowHs.length ? rowHs[Math.floor(rowHs.length/2)] : 34;
+    const listGap=parseFloat(getComputedStyle(open[0].querySelector(".list")||open[0]).rowGap)||2;
 
-    /* ---- what will fit, and what it costs -------------------------------
-       There are two levers, and only one of them is worth pulling.
+    const rowsNeeded=Math.ceil(cards.length/cols);
+    const tileFor=kk=>(H+gap)/kk-gap;                       // exact fill for kk rows
+    const rowsIn=hh=>Math.floor((hh-chromeMax+listGap)/(rowH+listGap));
+    let k=0;
+    for(let kk=rowsNeeded; kk>=1; kk--){ if(rowsIn(tileFor(kk))>=2){ k=kk; break; } }
+    if(!k) for(let kk=rowsNeeded; kk>=1; kk--){ if(rowsIn(tileFor(kk))>=1){ k=kk; break; } }
+    if(!k) k=1;
 
-       COLUMNS ARE NOT IT, and this is worth writing down because it is the
-       obvious idea and it is wrong. A tablet is short of height and not of
-       width, so buying an extra, narrower column to give every card more of
-       the height looks like the free move -- the widescreen branch above
-       makes exactly that trade. It was built, and then measured on New York
-       at 1180x820, where the stylesheet's 280px suggestion works out at
-       floor(1160 / 292) = 3 columns by four hundredths of a column and a
-       fourth would still be 278px wide:
+    let tile=tileFor(k);
+    /* When every card is already on screen there is no scroll boundary to line
+       up with, so stop the tiles growing past what the fullest card can even
+       use: a 400px box around one departure is dead space, not generosity.
+       When it does NOT all fit, the exact figure is the whole point. */
+    if(k>=rowsNeeded) tile=Math.min(tile, Math.max(chromeMax+rowH*2+listGap, wantMax));
+    tile=Math.round(tile);
 
-         3 columns, 375px cards: median destination 166px, 100% of the name.
-         4 columns, 278px cards: median destination  69px,  48% of the name.
-                                 "Approaching Inwood-207" in 69px of 159.
+    /* And quantise the list inside the tile to whole rows, or the slicing just
+       moves indoors: a tile with room for 1.7 rows shows one departure and the
+       top 30% of another, which is the same defect in a smaller frame. The few
+       pixels left over sit under the last row, inside the card, where they
+       read as padding. */
+    const r=Math.max(1, rowsIn(tile));
+    const listH=Math.round(r*rowH+(r-1)*listGap);
 
-       The fourth column costs half of every destination on the board, because
-       theme.css gives the time block min-width:max-content and .dest's
-       minmax(0,1fr) track is the only one that can give. Half a destination is
-       not a departure board. So the column count is left exactly where the
-       stylesheet puts it, and the height is found elsewhere.
-
-       THE FLOOR IS IT. If two rows a card will not fit, ask for one. A box
-       showing a single departure is still telling you something; the state
-       this whole pass exists to end is the box that shows NONE -- a heading
-       over a sliver, which is what a shared 85px ceiling produced on an iPad,
-       twelve times over.
-
-       And if one row each will not fit either -- thirteen boxes on a screen
-       that is also carrying a map genuinely cannot -- then stop bargaining:
-       hand every card the comfortable floor and let the column scroll. A
-       board that scrolls is worth more than one nobody can read, and the fade
-       at the foot of the column says that there is more. Both ways out are
-       the reader's, and both are one tap: Settings -> Map -> Hidden gives the
-       boxes the map's whole height, and any box can be dismissed outright. */
-    const sumOf=f=>f.reduce((a,b)=>a+b,0)+open.length*mb+taken;
-    let floor=floorHi, fits=true;
-    if(sumOf(floorHi)>cols*H){
-      floor=floorLo;
-      if(sumOf(floorLo)>cols*H){ floor=floorHi; fits=false; }
-    }
-    /* Every column is H tall and each card carries its bottom margin. The 4%
-       is a first guess at packing slack -- a card cannot be split across a
-       column break, so the flow always leaves a little unused at the foot of
-       a column -- and the corrective pass below measures the rest. */
-    const budget=Math.max(0, (cols*H-taken)*0.96 - open.length*mb);
-
-    /* Water-filling, smallest need first. A card that wants less than an even
-       share takes only what it wants and the remainder is re-divided among
-       the rest, so the surplus from the sparse cards is exactly what pays for
-       the trains card being tall. */
-    const order=open.map((_,i)=>i).sort((a,b)=>want[a]-want[b]);
-    const give=new Array(open.length);
-    let rest=budget, left=order.length;
-    for(const i of order){
-      const share=left>0 ? rest/left : 0;
-      const h=Math.min(want[i], Math.max(floor[i], share));
-      give[i]=h; rest=Math.max(0, rest-h); left--;
-    }
-
-    const setHeights=(scale,fscale)=>{
-      let changed=false;
-      open.forEach((c,i)=>{
-        const h=Math.round(Math.max(floor[i]*fscale, Math.min(want[i], give[i]*scale)));
-        /* Guard every assignment: setting a property to the value it already
-           holds still invalidates style, and this runs on every data tick. */
-        const px=h+"px";
-        if(c.style.maxHeight!==px){ c.style.maxHeight=px; changed=true; }
-        if(c.style.minHeight!=="0px") c.style.minHeight="0px";
-        /* Whether a card can afford its own chrome is a question about the room
-           THAT CARD got, not about the viewport width and no longer about a
-           single number for the whole board: on the same screen the trains card
-           can be 240px and the commute card 70px, and only one of them has to
-           give up its statline. 130px is about where a heading, a statline and
-           two rows stop fitting. */
-        c.classList.toggle("tb-tight", h<130);
-      });
-      return changed;
-    };
-    setHeights(1,1);
-
-    /* Then correct against what the flow actually did with them. Sharing the
-       height out arithmetically assumes a column can be filled to the pixel,
-       and multi-column cannot: a card is unbreakable, so every column stops on
-       a card boundary and the flow overshoots the ideal share by however much
-       the last card in the tallest column happens to be. Measured on DC with
-       the map hidden, that was 10% -- 632px of flow into a 573px column, so
-       the board scrolled by one card's worth after an allocation that fitted
-       on paper. Any fixed slack factor big enough to cover that is wasted
-       space on the boards it does not happen to, so measure it instead: the
-       overshoot ratio is exactly the correction, and one pass is normally
-       enough. Skipped entirely when the floors already exceed the screen --
-       there is no scaling that fits twelve boxes onto a tablet still showing
-       a map, and the column is going to scroll whatever we do here. */
-    if(fits) for(let pass=0, scale=1; pass<3; pass++){
-      if(col.scrollHeight<=col.clientHeight+4) break;
-      const k=col.clientHeight/col.scrollHeight;
-      if(!(k>0.05 && k<1)) break;
-      scale*=k;
-      /* The floors bend here, down to 85% and no further, because the last
-         few per cent of the overshoot is usually all that stands between a
-         board that fits and one that scrolls -- New York at 1180x820 came out
-         29px over a 393px column, one card's worth, with every card already
-         sitting on its floor and nothing left for the scaling above to take.
-         A floor is the line below which a box says nothing; it is a strong
-         preference, not a law, and 15% of it is worth a whole card staying on
-         screen. Past that the board scrolls and the fade says so. */
-      if(!setHeights(scale, Math.max(0.85, scale))) break;
-    }
+    const set=(name,val)=>{ if(root.style.getPropertyValue(name)!==val) root.style.setProperty(name,val); };
+    set("--tb-card-cols", String(cols));
+    set("--tb-card-h", tile+"px");
+    set("--tb-card-gap", gap+"px");
+    set("--tb-list-h", listH+"px");
+    root.classList.add("tb-grid");
     root.style.removeProperty("--tb-card-max");
     root.classList.remove("tb-cards-tight");
-    /* Say so when the boxes did not all fit. Twelve cards on a 768px tablet
-       that is also carrying a map cannot each show two departures, and the
-       column scrolls -- which, with no sign of itself, reads as a rendering
-       fault rather than as more content: the bottom row looks sliced off. */
+    clearCardHeights();
+    /* Whether a tile can afford its own chrome is a question about the tile,
+       and every tile is the same now. ~130px is where a heading, a statline
+       and two rows stop fitting. */
+    const tight=tile<130;
+    open.forEach(c=>c.classList.toggle("tb-tight", tight));
+
+    /* Say so when the boxes did not all fit. The cut now lands between two
+       rows rather than through one, which is most of the fix -- but a screen
+       that simply stops, with nothing to say there is more below it, still
+       reads as the end of the board. */
     const over=col.scrollHeight>col.clientHeight+4;
     col.classList.toggle("tb-scrolls", over);
     if(over && !col._tbScroll){
@@ -1047,6 +1054,28 @@ body .card.tb-tight .statline{display:none}
     pinZoom();
     sizeCompactCards();
   }
+  /* Each board's balanceCards() writes gridTemplateRows onto .cards. It leaves
+     early when .cards is not a grid, which since theme.css's multi-column pass
+     has been always -- but the tile layout above makes it a grid again, and
+     the very next thing the board does after this file sizes the tiles is call
+     its own balancer, which would overwrite grid-auto-rows with rows of its
+     own devising. It has no way to know about the tiles, so it is told to
+     stand down while they are in force. */
+  function hookBalance(){
+    if (typeof window.balanceCards !== "function" || window.balanceCards.__tbFit) return false;
+    const orig = window.balanceCards;
+    const wrapped = function () {
+      if (document.documentElement.classList.contains("tb-grid")) {
+        const box = document.querySelector(".cards");
+        if (box && box.style.gridTemplateRows) box.style.gridTemplateRows = "";
+        return;
+      }
+      return orig.apply(this, arguments);
+    };
+    wrapped.__tbFit = true;
+    window.balanceCards = wrapped;
+    return true;
+  }
   function hookFitAll(){
     if (typeof window.fitAll !== "function" || window.fitAll.__tbFit) return false;
     const orig = window.fitAll;
@@ -1074,6 +1103,7 @@ body .card.tb-tight .statline{display:none}
 
   function start(){
     hookFitAll();
+    hookBalance();
     registerStrayCards();
     addCardCloseButtons();
     buildMapRow();
@@ -1086,7 +1116,7 @@ body .card.tb-tight .statline{display:none}
   // nothing and save depending on script order across eleven files.
   let tries = 0;
   const t = setInterval(() => {
-    hookFitAll(); registerStrayCards(); addCardCloseButtons(); buildMapRow(); refit();
+    hookFitAll(); hookBalance(); registerStrayCards(); addCardCloseButtons(); buildMapRow(); refit();
     if (++tries >= 10) clearInterval(t);
   }, 300);
 })();
