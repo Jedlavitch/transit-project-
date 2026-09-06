@@ -219,7 +219,13 @@ body{ font-family:var(--body); }
 .city-tabs .active{ background:var(--accent); color:#04101f; }
 
 /* View links (Sky, Board) beside the city tabs */
-.view-links{ display:flex; gap:8px; }
+/* wrap:wrap is load-bearing, not tidiness. Seven links plus their gaps measure
+   377px, and with the header's 14px padding either side a phone needs 405px to
+   show them all. On a 375px iPhone the last one — Account, which is where the
+   licence and the profile live — sat 16px off the right edge with nothing to
+   scroll horizontally, so it could be read but never tapped. Wide screens never
+   reach the wrap point, so nothing above a phone changes. */
+.view-links{ display:flex; flex-wrap:wrap; gap:8px; row-gap:6px; }
 .view-links a{ background:var(--panel); color:var(--text); border:1px solid var(--line);
   border-radius:10px; padding:8px 12px; font-size:13px; font-weight:600;
   text-decoration:none; white-space:nowrap; }
