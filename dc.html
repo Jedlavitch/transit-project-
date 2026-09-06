@@ -38,7 +38,7 @@
 <script src="mascot-buddy.js?v=7" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="fit-cards.js?v=5" defer></script>
+<script src="fit-cards.js?v=18" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=13" defer></script>
@@ -1593,6 +1593,18 @@ function groupDepsByDirection(deps, perDir=2, maxDirs=2){
    rows to lose, and one that gains data flips back to 1fr on the next pass. */
 function balanceCards(){
   const box=document.querySelector(".cards"); if(!box) return;
+  /* .cards stopped being a CSS Grid when theme.css moved it to a multi-column
+     flow (and Atlas to a flex rail), so on every board, at every width, none
+     of the work below reaches the screen any more: gridTemplateRows is inert
+     on a block box, and the column count read on the next line tokenises the
+     SPECIFIED `repeat(auto-fit, minmax(min(320px,100%),1fr))` string into four
+     "columns" that do not exist -- which then grouped twelve cards into three
+     rows of four that are nowhere on the page. Everything past here is
+     measurement and forced layout in service of a property nothing reads, on
+     every data tick. Kept rather than deleted because the grid is still the
+     right answer if a board ever goes back to one; it just has to be a grid
+     for this to mean anything. */
+  if(getComputedStyle(box).display!=="grid"){ box.style.gridTemplateRows=""; return; }
   const cols=(getComputedStyle(box).gridTemplateColumns.match(/\S+/g)||["1fr","1fr"]).length;
   const cards=[...box.children].filter(c=>c.classList.contains("card")
     && !c.classList.contains("user-hidden") && c.style.display!=="none");
@@ -1647,10 +1659,22 @@ function fitList(box){
   if(card && card.classList.contains("mini")) return;   // don't disturb a collapse
   const kids=box.children;
   let content=0;
-  if(kids.length){
-    const first=kids[0].getBoundingClientRect(), last=kids[kids.length-1].getBoundingClientRect();
-    content=Math.ceil(last.bottom-first.top);
+  /* Only children that actually RENDER get a vote. A zero-height node -- an
+     empty .stop-label, a wrapper with nothing in it yet -- returns an all-zero
+     rect, and a `top` of 0 does not mean "the top of the list", it means the
+     top of the VIEWPORT. Taking it as the span's start measured the distance
+     from the top of the window down to the last row instead of the height of
+     the rows: #railList reported 987px of content for 424px of departures, so
+     the card claimed more than twice the room it needed and starved every
+     other card sharing the screen with it. Span the rendered children only. */
+  let top=Infinity, bottom=-Infinity;
+  for(const k of kids){
+    const r=k.getBoundingClientRect();
+    if(!r.height && !r.width) continue;
+    if(r.top<top) top=r.top;
+    if(r.bottom>bottom) bottom=r.bottom;
   }
+  if(bottom>top) content=Math.ceil(bottom-top);
   box.dataset.want=String(content);
 }
 /* re-fit every card immediately (e.g. on resize) so nothing clips or scrolls */
