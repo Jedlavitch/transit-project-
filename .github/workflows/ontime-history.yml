@@ -1,0 +1,80 @@
+# Keeps the on-time record going while every screen is off.
+#
+# WHY
+#   ontime.js records what a BOARD watched, in that browser. A screen that was
+#   off recorded nothing, so a fortnight chart came out mostly empty — a chart
+#   about the screen rather than about the trains. This polls the same public
+#   feeds on a schedule and keeps the same daily record, and the boards read it
+#   back to fill the days they missed.
+#
+# WHERE IT WRITES, AND WHY NOT main
+#   A branch called `ontime-data`, which nothing deploys. A poll every twenty
+#   minutes is ~72 commits a day; on main that would bury the history and kick
+#   off a Pages deploy each time. Boards fetch the file from
+#   raw.githubusercontent.com, which serves Access-Control-Allow-Origin:* — no
+#   Worker, no key, nothing to deploy.
+#
+# COST
+#   Free. No secrets, no API keys: amtraker and SEPTA both answer unauthenticated
+#   and neither needs CORS server-side. The file is a few KB a day and is pruned
+#   to 90 days by the script.
+#
+# TO CHANGE HOW OFTEN
+#   Edit the cron below. GitHub's floor is every 5 minutes and its scheduled runs
+#   are best-effort — regularly 5-15 minutes late when GitHub is busy, which for
+#   a daily aggregate does not matter.
+
+name: On-time history
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}        # run it by hand from the Actions tab to test
+
+concurrency:
+  group: ontime-history
+  cancel-in-progress: false    # a skipped poll is a lost reading, so let it finish
+
+permissions:
+  contents: write              # to push the data branch
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Poll the feeds and fold today's readings in
+        run: |
+          set -euo pipefail
+          # Start from whatever the archive already holds, if the branch exists.
+          if git fetch --depth=1 origin ontime-data 2>/dev/null; then
+            git show FETCH_HEAD:ontime-history.json > ontime-history.json || true
+            PARENT=$(git rev-parse FETCH_HEAD)
+          else
+            echo "no ontime-data branch yet — starting the archive"
+            PARENT=""
+          fi
+          echo "PARENT=$PARENT" >> "$GITHUB_ENV"
+          python3 gen-ontime-history.py --out ontime-history.json
+
+      - name: Commit it to the data branch
+        run: |
+          set -euo pipefail
+          # Built with plumbing rather than a checkout: the branch holds one file
+          # and has nothing to do with the working tree this job checked out.
+          BLOB=$(git hash-object -w ontime-history.json)
+          TREE=$(printf '100644 blob %s\tontime-history.json\n' "$BLOB" | git mktree)
+          MSG="On-time readings $(date -u '+%Y-%m-%d %H:%M UTC')"
+          if [ -n "${PARENT:-}" ]; then
+            COMMIT=$(git -c user.name=github-actions[bot] \
+                         -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+                         commit-tree "$TREE" -p "$PARENT" -m "$MSG")
+          else
+            COMMIT=$(git -c user.name=github-actions[bot] \
+                         -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+                         commit-tree "$TREE" -m "$MSG")
+          fi
+          git push origin "$COMMIT:refs/heads/ontime-data"
+          echo "pushed $COMMIT"
