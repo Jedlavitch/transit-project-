@@ -820,7 +820,11 @@ body .card.tb-tight .statline{display:none}
        use: a 400px box around one departure is dead space, not generosity.
        When it does NOT all fit, the exact figure is the whole point. */
     if(k>=rowsNeeded) tile=Math.min(tile, Math.max(chromeMax+rowH*2+listGap, wantMax));
-    tile=Math.round(tile);
+    /* Floor, never round. Rounding 194.5 up to 195 makes two tiles plus their
+       gap 402px in a 401px column, and the second row is then one pixel past
+       the fold -- which is a scrollbar, a fade, and a row of cards reported as
+       clipped, for half a pixel of nothing. */
+    tile=Math.floor(tile);
 
     /* And quantise the list inside the tile to whole rows, or the slicing just
        moves indoors: a tile with room for 1.7 rows shows one departure and the
