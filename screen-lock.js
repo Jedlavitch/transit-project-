@@ -5,8 +5,8 @@
    "Account", on a footer link, or a back-swipe from the edge, and the thing
    somebody set up as a departure board is showing a sign-in form instead. This
    makes leaving deliberate: while the lock is on, every link and the city
-   picker are inert, the back gesture goes nowhere, and closing the tab asks
-   first. Turning it off is the same control that turned it on.
+   picker are inert and the back gesture goes nowhere. Turning it off is the
+   same control that turned it on.
 
    WHAT IT CANNOT DO, so nobody is surprised: no web page can stop the home
    button, an app switch, or the browser's own address bar and tab controls.
@@ -29,7 +29,6 @@
 
   var KEY = "tb.screenLock";
   var locked = false;
-  var allowUnload = false;
   var root = document.documentElement;
   var FS_OK = !!(root.requestFullscreen || root.webkitRequestFullscreen);
 
@@ -123,24 +122,17 @@
     nudge();
   }, true);
 
-  addEventListener("beforeunload", function (e) {
-    if (!locked || allowUnload) return;
-    e.preventDefault();
-    e.returnValue = "";
-    return "";
-  });
-
-  /* The board reloads itself on purpose -- kiosk-reload.js on a schedule,
-     gate.js after a licence unlocks, pair-tv.js after pairing. Those must not
-     meet a "leave site?" dialog and stop, so the lock exempts a reload it can
-     see coming rather than each of those files having to know about it. */
-  try {
-    var origReload = Location.prototype.reload;
-    Location.prototype.reload = function () {
-      allowUnload = true;
-      return origReload.apply(this, arguments);
-    };
-  } catch (_) {}
+  /* NO beforeunload GUARD, deliberately. It is the obvious way to make leaving
+     hard and it is the wrong one here. On the target -- an installed board on
+     an iPad -- iOS ignores it outright, so it buys nothing; everywhere else it
+     buys a modal dialog, and a modal dialog on a board nobody is standing in
+     front of is not a lock, it is the freeze this whole day of work started
+     from. It also stops the board's own scheduled reload dead. The guards
+     below cover every way OUT of the page that the page itself can see, which
+     is the part that actually goes wrong when somebody walks past a table.
+     What is left -- the address bar, the tab strip, the home button -- no web
+     page can hold on to, and pretending otherwise with a dialog just makes the
+     board worse at being a board. */
 
   function setLocked(on) {
     on = !!on;
@@ -155,28 +147,24 @@
     if (!FS_OK) { try { localStorage.setItem(KEY, locked ? "1" : "0"); } catch (_) {} }
   }
 
+  function bindButton() {
+    var b = document.getElementById("fsBtn");
+    if (!b || b._tbLock) return false;
+    b._tbLock = 1;
+    /* Listening on the button rather than replacing its onclick leaves the
+       board's own handler -- and its licence check, and its "full screen is
+       blocked here" hint -- exactly as it was. This only adds the lock beside
+       it. */
+    b.addEventListener("click", function () { setLocked(!locked); });
+    return true;
+  }
+
   function start() {
     injectCss();
-    if (FS_OK) {
-      /* Mirror full screen, both ways. Escape and the button are then the same
-         thing, which is the only version of this that is not a trap. */
-      ["fullscreenchange", "webkitfullscreenchange"].forEach(function (ev) {
-        document.addEventListener(ev, function () { setLocked(fsOn()); });
-      });
-      setLocked(fsOn());
-      return;
-    }
-    /* No Fullscreen API: the button is the switch. Listening on the button
-       rather than replacing its onclick leaves the board's own handler (and
-       its licence check, and its "full screen is blocked here" hint) exactly
-       as it was -- this only adds the lock beside it. */
-    var b = document.getElementById("fsBtn");
-    if (b && !b._tbLock) {
-      b._tbLock = 1;
-      b.addEventListener("click", function () { setLocked(!locked); });
-    }
+    bindButton();
     /* F is the board's own shortcut for the same button, so it has to mean the
-       same thing here. Same guards the boards use: not while typing. */
+       same thing here. Same guard the boards use: not while somebody is
+       typing. */
     addEventListener("keydown", function (e) {
       if (e.key !== "f" && e.key !== "F") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -184,9 +172,31 @@
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       setLocked(!locked);
     });
-    var saved = "0";
-    try { saved = localStorage.getItem(KEY) || "0"; } catch (_) {}
-    if (saved === "1") { locked = false; setLocked(true); }
+
+    /* Where full screen really works, mirror it as well -- both ways, which is
+       the point. Escape leaves full screen without going near the button, and
+       a lock you can enter with the button but cannot leave with Escape is a
+       trap; the boards' own code already says trapping somebody in full screen
+       is a bug, not a sale.
+
+       This sits ALONGSIDE the button handler rather than instead of it, and
+       the two cannot fight: the click sets the lock and the fullscreenchange
+       that follows sets it to the same value, which setLocked() drops as a
+       no-op. It also means the iPad path -- no Fullscreen API at all, button
+       only -- is the same code everywhere else runs, rather than a second
+       branch that only ever gets tested on the device it was written for. */
+    if (FS_OK) {
+      ["fullscreenchange", "webkitfullscreenchange"].forEach(function (ev) {
+        document.addEventListener(ev, function () { setLocked(fsOn()); });
+      });
+    } else {
+      /* No full screen to remember it for us, so remember it ourselves: a
+         kiosk that reboots should come back locked. Where the API does work,
+         a reload leaves full screen anyway, so there is nothing to restore. */
+      var saved = "0";
+      try { saved = localStorage.getItem(KEY) || "0"; } catch (_) {}
+      if (saved === "1") setLocked(true);
+    }
   }
 
   if (document.readyState === "loading") addEventListener("DOMContentLoaded", start);
@@ -195,16 +205,12 @@
      after this one. A few short retries cost nothing. */
   var tries = 0;
   var t = setInterval(function () {
-    if (!FS_OK) {
-      var b = document.getElementById("fsBtn");
-      if (b && !b._tbLock) { b._tbLock = 1; b.addEventListener("click", function () { setLocked(!locked); }); }
-    }
+    bindButton();
     if (++tries >= 8) clearInterval(t);
   }, 300);
 
   window.TBLock = {
     get locked() { return locked; },
-    set: setLocked,
-    allowUnload: function () { allowUnload = true; }
+    set: setLocked
   };
 })();
