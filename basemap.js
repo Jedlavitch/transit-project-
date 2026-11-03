@@ -41,7 +41,8 @@
     }
   };
 
-  var PANE = "tbBasemap";
+  var PANE = "tbBasemap";      // the canvas: roads, water, landuse
+  var PANE_REF = "tbBasemapRef";   // Esri's separate place-name layer
 
   /* "day" is the only light board theme; "dark" and "black" both want the dark
      canvas, and are separated below by how hard the filter pushes it. */
@@ -61,20 +62,37 @@
      Injected here rather than in theme.css so the correction travels with the
      provider it corrects — whoever swaps the URLs next finds this in the same
      file, not in a 70KB stylesheet. */
+  /* THE CANVAS AND THE NAMES ARE DARKENED SEPARATELY, and that is the whole
+     point of having two panes.
+
+     One filter over both was the original approach and it is why the map read
+     as a black void. Esri's dark canvas renders mid-grey, so taking the land
+     down to board-black means roughly halving its brightness — but the place
+     names live in a *separate transparent layer* drawn over it, and halving
+     those too left "Potomac" and "North Bethesda" as barely-there smudges.
+     Every city lost its geography: the river, the coastline, the names that
+     tell you which city you are looking at.
+
+     So the land is pushed down hard and the names are left nearly alone. The
+     result is the tone the boards are built around with the map still legible
+     underneath it, which is what a transit map is for. */
   function injectStyle() {
     if (document.getElementById("tb-basemap-style")) return;
     var s = document.createElement("style");
     s.id = "tb-basemap-style";
     s.textContent =
-      /* Brightness alone just greys everything out — the roads and place names
-         go with the background. Pairing it with contrast pushes the landmass
-         down toward black while pulling roads and labels back up, which is the
-         shape of Dark Matter's palette rather than a dimmed version of Esri's. */
-      ".tb-basemap-pane{filter:brightness(.6) contrast(1.4) saturate(.85)}" +
-      /* Black is the dimmed wall-display theme — push it further down. */
-      '[data-theme="black"] .tb-basemap-pane{filter:brightness(.45) contrast(1.5) saturate(.7)}' +
-      /* Day is already a light map on a light board; leave it alone. */
-      '[data-theme="day"] .tb-basemap-pane{filter:none}';
+      /* Brightness alone just greys everything out — the roads go with the
+         background. Pairing it with contrast pushes the landmass toward black
+         while pulling roads back up, which is the shape of Dark Matter's
+         palette rather than a dimmed version of Esri's. */
+      ".tb-basemap-pane{filter:brightness(.52) contrast(1.22) saturate(.75)}" +
+      ".tb-basemap-ref{filter:brightness(.95) contrast(1.05)}" +
+      /* Black is the dimmed wall-display theme — push the land further down,
+         and the names only a little, or the city stops being identifiable. */
+      '[data-theme="black"] .tb-basemap-pane{filter:brightness(.38) contrast(1.3) saturate(.6)}' +
+      '[data-theme="black"] .tb-basemap-ref{filter:brightness(.82) contrast(1.05)}' +
+      /* Day is already a light map on a light board; leave both alone. */
+      '[data-theme="day"] .tb-basemap-pane,[data-theme="day"] .tb-basemap-ref{filter:none}';
     (document.head || document.documentElement).appendChild(s);
   }
 
@@ -92,21 +110,29 @@
        so a board passing maxZoom:19 must still stop fetching at 16. */
     o.maxNativeZoom = 16;
 
-    /* Below Leaflet's own tilePane (200) so any tile overlay a board adds
+    /* Both below Leaflet's own tilePane (200) so any tile overlay a board adds
        later still draws on top of the basemap, exactly as it did when the
-       basemap was the first layer added. */
+       basemap was the first layer added. Two panes rather than one because
+       each takes a different filter — see injectStyle. */
     if (!map.getPane(PANE)) {
       var p = map.createPane(PANE);
-      p.style.zIndex = 190;
+      p.style.zIndex = 188;
       p.classList.add("tb-basemap-pane");
     }
-    o.pane = PANE;
+    if (!map.getPane(PANE_REF)) {
+      var pr = map.createPane(PANE_REF);
+      pr.style.zIndex = 189;      // names sit above the canvas they name
+      pr.classList.add("tb-basemap-ref");
+    }
+
+    var baseOpts = {}, refOpts = {};
+    for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) { baseOpts[k] = o[k]; refOpts[k] = o[k]; }
+    baseOpts.pane = PANE;
+    refOpts.pane = PANE_REF;
 
     var set = setFor(theme);
-    var base = global.L.tileLayer(set.base, o).addTo(map);
-    var ref  = global.L.tileLayer(set.ref, o).addTo(map);
-    base.setZIndex(1);
-    ref.setZIndex(2);   // place names sit above the canvas they name
+    var base = global.L.tileLayer(set.base, baseOpts).addTo(map);
+    var ref  = global.L.tileLayer(set.ref, refOpts).addTo(map);
 
     return {
       base: base,

@@ -938,7 +938,13 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 :root[data-style="atlas"] body #map{
   border:0 !important; border-radius:0; height:100%; min-height:0;
 }
-:root[data-style="atlas"] .leaflet-tile-pane{ filter:var(--atlas-tile) }
+/* Retargeted from .leaflet-tile-pane, which stopped holding the basemap when
+   basemap.js moved it into panes of its own — so Atlas had quietly been showing
+   an untinted map ever since, losing the muted look the whole style is built
+   around. The names take a gentler version for the same reason basemap.js
+   splits them: tint the land, keep the city readable. */
+:root[data-style="atlas"] .tb-basemap-pane{ filter:var(--atlas-tile) }
+:root[data-style="atlas"] .tb-basemap-ref{ filter:saturate(.3) brightness(.92) }
 
 /* ---- 4. the scrim, INSIDE the map column --------------------------------
    Not on main::after. That would sit above the whole column and bury
@@ -959,6 +965,34 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
     linear-gradient(0deg,   rgba(255,255,255,.88) 0%, rgba(255,255,255,.45) 55%, rgba(255,255,255,0) 100%) bottom/100% 120px no-repeat,
     radial-gradient(125% 105% at 46% 46%, rgba(255,255,255,0) 42%, rgba(190,205,235,.40) 100%);
 }
+/* ---- the zoom control --------------------------------------------------
+   Leaflet ships it white with a black border and 30px buttons, which on a dark
+   wall board is the one piece of furniture that announces it is a web page —
+   and 30px is under the touch guideline on the phone layout besides. Dressed
+   as the panels around it, at 34px, on every board and every city at once. */
+.leaflet-bar{ border:0 !important; box-shadow:0 2px 10px rgba(0,0,0,.35) !important; }
+/* .leaflet-touch is in the selector because Leaflet sets the size through
+   `.leaflet-touch .leaflet-bar a`, which outranks a bare `.leaflet-bar a` and
+   silently kept the buttons at 30px while every other property here applied. */
+.leaflet-bar a,
+.leaflet-touch .leaflet-bar a,
+.leaflet-bar a:hover{
+  width:34px; height:34px; line-height:34px;
+  background:var(--panel); color:var(--muted);
+  border:1px solid var(--line); border-bottom-width:0;
+  font-weight:700;
+}
+.leaflet-bar a:first-child{ border-radius:9px 9px 0 0 }
+.leaflet-bar a:last-child{ border-radius:0 0 9px 9px; border-bottom-width:1px }
+.leaflet-bar a:hover{ background:var(--panel2); color:var(--text); border-color:var(--accent) }
+.leaflet-bar a.leaflet-disabled{ background:var(--panel); color:var(--line) }
+/* Leaflet's own attribution flag, on the boards that leave it on. */
+.leaflet-control-attribution{
+  background:rgba(8,14,26,.6) !important; color:var(--muted) !important;
+}
+.leaflet-control-attribution a{ color:var(--sched-b) !important }
+:root[data-theme="day"] .leaflet-control-attribution{ background:rgba(255,255,255,.7) !important }
+
 /* Map furniture bottom-left, so nothing depends on the rail's width. */
 :root[data-style="atlas"] body .legend{
   position:absolute; left:26px; right:auto; top:auto; bottom:14px;
