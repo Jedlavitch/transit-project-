@@ -17,6 +17,7 @@
 <!-- Keep the screen on. A launcher you drive from a couch is exactly the page
      that sits untouched long enough for a display to dim. -->
 <script src="wake.js?v=1"></script>
+<script src="paywall.js"></script>
 <style>
   /* tv.html — a 10-foot launcher. Everything here is sized for a couch, not a
      desk, and driven by the four arrow keys + OK that every TV remote has. */
@@ -311,7 +312,7 @@
   <span><kbd>1</kbd>–<kbd>9</kbd> jump straight to a board</span>
   <span><kbd>F</kbd> full screen</span>
   <span><kbd>C</kbd> cast to TV</span>
-  <span><kbd>U</kbd> unlock this screen</span>
+  <span id="unlockHint"><kbd>U</kbd> unlock this screen</span>
   <span id="hint"></span>
 </footer>
 
@@ -411,6 +412,8 @@ CITIES.forEach(function(c, i){
 });
 
 var viewWrap = document.getElementById("views");
+/* Free right now: there is nothing to unlock, so the tile does not offer to. */
+if (window.TB_PAYWALL === false) VIEWS = VIEWS.filter(function(v){ return v.action !== "pair"; });
 VIEWS.forEach(function(v, i){
   /* Views used to be numbered 9-12, which was right when there were 8 cities.
      With 11 they collided with city badges 9, 10 and 11 — two tiles showing the
@@ -503,7 +506,7 @@ document.addEventListener("keydown", function(e){
     return;
   }
   if (k === "c" || k === "C"){ toggleCast(); e.preventDefault(); return; }
-  if (k === "u" || k === "U"){ openPair(); e.preventDefault(); return; }
+  if ((k === "u" || k === "U") && window.TB_PAYWALL !== false){ openPair(); e.preventDefault(); return; }
   if (k === "ArrowRight"){ move(1,0); e.preventDefault(); }
   else if (k === "ArrowLeft"){ move(-1,0); e.preventDefault(); }
   else if (k === "ArrowDown"){ move(0,1); e.preventDefault(); }
@@ -689,6 +692,7 @@ function loadPair(cb){
    this page to answer, but these are the exact values it writes, and the same
    fourteen-day offline grace gate.js honours. */
 function screenLicensed(){
+  if (window.TB_PAYWALL === false) return true;
   try{
     var DAY = 86400000;
     if (Number(localStorage.getItem("tb.license.okUntil") || 0) > Date.now()) return true;
@@ -700,6 +704,11 @@ function screenLicensed(){
 function paintPairBtn(){
   var b = document.getElementById("pairBtn");
   if (!b) return;
+  if (window.TB_PAYWALL === false) {
+    b.style.display = "none";
+    document.getElementById("unlockHint").style.display = "none";
+    return;
+  }
   var on = screenLicensed();
   if (on) b.classList.add("done"); else b.classList.remove("done");
   b.querySelector(".lbl").textContent = on ? "Screen is licensed" : "Unlock this screen";

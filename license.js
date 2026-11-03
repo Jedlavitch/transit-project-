@@ -32,8 +32,10 @@
   let workerUrl = "";
   try { workerUrl = (localStorage.getItem(LS.url) || cfg.workerUrl || "").trim().replace(/\/+$/, ""); } catch (_) {}
 
-  // Not configured -> licensing system entirely dormant (boards act licensed).
-  if (!workerUrl) { window.TBLicense = { configured: false, licensed: true }; return; }
+  // Not configured, or paywall.js says it is free -> licensing system entirely
+  // dormant (boards act licensed). Stored keys are not touched, so they still
+  // work the moment the paywall comes back.
+  if (!workerUrl || window.TB_PAYWALL === false) { window.TBLicense = { configured: false, licensed: true }; return; }
 
   const get = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };

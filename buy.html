@@ -9,6 +9,12 @@
 <meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Transit Project — Get a License</title>
+<!-- While it is free there is nothing to sell, and this page must not take $19
+     for something the boards give away. Every buy link in the site lands here,
+     so this one redirect covers them all. activate.html stays reachable for
+     keys people already hold. -->
+<script src="paywall.js"></script>
+<script>if (window.TB_PAYWALL === false) location.replace("index.html");</script>
 <link rel="stylesheet" href="theme.css?v=31" />
 <style>
   /* SELLER SETUP (see SELLING.md):

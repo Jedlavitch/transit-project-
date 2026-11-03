@@ -45,7 +45,8 @@ var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accen
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="delays.js?v=2"></script>
-<script src="license.js?v=2" defer></script>
+<script src="paywall.js"></script>
+<script src="license.js?v=3" defer></script>
 <!-- Loaded so the page can tell whether you are signed in.
 
      paintOwnerCtas() has been asking `window.TBAccount` this whole time and
@@ -561,7 +562,7 @@ var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accen
           sync the Spotter, the sightings you chose to log are stored so they reach your other
           devices — and a sighting records where you saw it. Nothing syncs unless you sign in.</div>
       </details>
-      <details>
+      <details id="faqCovers">
         <summary>What does the licence actually cover?</summary>
         <div class="a">One payment of $19, up to five devices, no renewal. It covers every city
           board including ones added later, the sky view, the split-flap departure board, the
@@ -668,7 +669,8 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
       '</div>' +
       '<div>' +
         '<div class="nm">More coming soon!</div>' +
-        '<div class="ds">A licence covers every city added later, at no extra cost.</div>' +
+        '<div class="ds">' + (window.TB_PAYWALL === false ? 'New cities show up here as they are added.'
+          : 'A licence covers every city added later, at no extra cost.') + '</div>' +
       '</div>';
     g.appendChild(s);
   })();
@@ -722,8 +724,10 @@ function paintTrialAnswer(){
       "enough to judge it properly on your own screen, with live data and every card working. " +
       "Full screen and the sky view need a licence, because leaving it up on a wall is the " +
       "thing being sold."
-    : "Yes \u2014 open any city above and see for yourself. <b>Nothing is locked at the " +
-      "moment</b>: every board, view and feature on this site is currently open.";
+    : "No. <b>Transit Project is free right now</b>: every board, view and feature on this " +
+      "site is open, with no licence and no time limit.";
+  el.parentNode.querySelector("summary").textContent = on
+    ? "Can I try it before paying?" : "Does it cost anything?";
 }
 /* license.js is DEFERRED, so it has not run yet while this inline script is
    being parsed -- reading TBLicense here answered "not configured" even after
@@ -746,7 +750,16 @@ setTimeout(paintTrialAnswer, 1500);
    moment — the same trap paintTrialAnswer already documents, and getting it
    wrong here would show a paying customer a buy button. */
 function paintOwnerCtas(){
-  var licensed = !!(window.TBLicense && TBLicense.configured && TBLicense.licensed);
+  /* Free counts as owning it: the page has nothing to sell, so it stops selling
+     and the same calls to action just take you to a board. */
+  var free = window.TB_PAYWALL === false;
+  var licensed = free || !!(window.TBLicense && TBLicense.configured && TBLicense.licensed);
+  if(free){
+    var pricing = document.getElementById("pricing");
+    if(pricing) pricing.hidden = true;
+    var covers = document.getElementById("faqCovers");
+    if(covers) covers.hidden = true;
+  }
   var signedIn = !!(window.TBAccount && TBAccount.signedIn && TBAccount.signedIn());
   if(!licensed && !signedIn) return;               // still a prospect: leave the page selling
 
@@ -770,7 +783,7 @@ function paintOwnerCtas(){
 
   /* "I have a licence key" is noise once the key is in. */
   var have = document.getElementById("haveKey");
-  if(have) have.hidden = true;
+  if(have) have.style.display = "none";   // .btn sets display, which beats the hidden attribute
 }
 if (document.readyState === "loading")
   document.addEventListener("DOMContentLoaded", paintOwnerCtas);

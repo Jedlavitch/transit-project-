@@ -95,6 +95,17 @@ Also before launch: write a simple terms-of-service + refund policy page and lin
 from `buy.html`. None of this document is legal advice — read each provider's terms
 yourself.
 
+## Turning the paywall off and on
+
+`paywall.js` is the one switch: `window.TB_PAYWALL = false` makes everything free,
+`true` brings the licence back. Push it and every board follows within about ten
+minutes. Nothing else needs touching; the Worker, Stripe and customers' keys are
+left running either way, and keys already on a device re-verify by themselves.
+
+The Stripe Payment Link itself stays live while it is free. The site no longer links
+to it, but anyone holding the URL could still pay, so archive it in Stripe if the
+free stretch will be long.
+
 ## Ideas once it's earning
 
 - Hard gate: move feed fetches behind the Worker and require a valid key server-side

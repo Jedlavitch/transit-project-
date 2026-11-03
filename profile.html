@@ -15,7 +15,8 @@
 var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
 var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
 <script src="config.js?v=2"></script>
-<script src="license.js?v=2"></script>
+<script src="paywall.js"></script>
+<script src="license.js?v=3"></script>
 <script src="account.js?v=2"></script>
 <style>
   *{box-sizing:border-box}
@@ -404,7 +405,9 @@ async function paintLicence(){
   if (!L || !L.configured) {
     $("#licStatus").innerHTML = '<span class="pill off">Not in use</span>';
     $("#licDevRow").classList.add("hide");
-    $("#licNote").textContent = "No licence server is configured, so every board runs unlocked.";
+    $("#enterKeyBtn").classList.add("hide");   // enterKey does not exist while dormant
+    $("#licEnter").classList.add("hide");
+    $("#licNote").textContent = "Every board is free to use right now, so no licence is needed.";
     return;
   }
   $("#licStatus").innerHTML = L.licensed
