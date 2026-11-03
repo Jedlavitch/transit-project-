@@ -11,6 +11,19 @@ The live board also has a **Travel advisories** card. Choose **Edit** to pin off
 
 In **Settings → Display → Board style**, choose **Paper** for quiet editorial panels or **Signal** for a ruled station timetable. Classic and Atlas remain available. Styles combine with Dark, Black, and Day. Under **Appearance scope**, choose **This city only** to keep this city's theme, accent, row density, and design separate. **Shared look** uses the existing shared defaults; switching back to **This city only** restores the city's last local look. Agency route colours, live/scheduled labels, delay bands, and display-size controls retain their meaning.
 
+## Smart board
+
+Tablet and desktop boards default to **Smart board**, which keeps the map open and fits the currently selected panels on one screen. When there are more useful panels than fit comfortably, they rotate every 20 seconds. Use the arrows or **Pause** above the departures; hovering or focusing a panel also holds rotation. Phone widths keep their existing readable, scrolling layout.
+
+**Customize → Board layout** lets you choose **All panels** or keep up to two panels permanently visible for this city. Existing Show on board choices still win. The rules use data already loaded by the board:
+
+- Active service alerts stay visible. Lift outages at watched DC stations and commutes with ten minutes or less to leave also stay visible.
+- A commute joins the rotation within thirty minutes of leaving. Planes appear when aircraft are in range; Spotted appears for a logged vehicle passing nearby or on a watched route.
+- Today's best appears for a notable find (score 60 or higher). Pinned advisory links and connection notes join the rotation.
+- Departure panels without rows rest while waiting for data. If no transport panel has data, one status panel remains. Missing data is not an all-clear; **Why panels are resting** explains the hidden panels, and **All panels** exposes their full feed status.
+
+The map, feeds, and hidden panels continue updating. Rotation pauses while settings or City tools are open, while the browser tab is hidden, and while a panel has keyboard focus. Extra departures remain accessible inside each card. Smart mode prevents scrolling the overall tablet/desktop board; it does not discard the rest of a feed.
+
 ## Development and compatibility
 
 There is no new package, build step, API key, or background transit request. Run the project as usual with `python3 feedback-server.py 4173` or a static HTTP server.
@@ -20,12 +33,16 @@ There is no new package, build step, API key, or background transit request. Run
 - `board-designs.css`: styles scoped to `data-style="paper"` and `data-style="signal"`, plus the expanded style picker. `theme.css` remains the existing palette source for Classic and Atlas.
 - `city-board.js` / `city-board.css`: optional advisory card and its city-specific checklist. Reuses the toolkit's location and routing actions, registers with existing card visibility/collapse controls, and marks its list as scrollable so Atlas keeps all pinned links reachable.
 - `city-preferences.js`: synchronous appearance adapter loaded before pre-paint. Shared mode uses the original `tb.theme`, `tb.accent`, `tb.rows`, and `tb.style` keys; local mode reads and writes a separate city look.
+- `smart-board.js` / `smart-board.css`: conditional visibility, pagination, pause and per-city pins. The `sb-resting` class is separate from `user-hidden`; no feed configuration or stored card-visibility keys are changed.
+- `fit-cards.js`: accounts for space used by section headings/rotation controls and normalizes measurements for CSS zoom. Smart mode fits its selected set rather than adding off-screen rows of panels. The dismiss button now uses the current board's declared hidden-card key, fixing a cross-city bug caused by choosing the first matching storage key.
 - `settings-ui.js`: extends the existing style picker and adds appearance scope; no replacement settings system.
 - City HTML edits load the new assets and route appearance reads/writes through the adapter. Existing per-city legacy keys and location/feed logic remain intact. The stencil loads the new designs; a new city needs a profile and the city assets to enable the toolkit and local preferences.
 
 Bookmarks use `tb.cityShortcuts.<page-basename>.places`, separate from all existing keys. Invalid stored entries are ignored. If browser storage is unavailable, bookmarks work for the current visit and the UI says so.
 
 Advisory choices use `tb.cityBoard.<page-basename>.v1`; local appearance uses `tb.cityLook.<page-basename>`. Advisory choices are always per city. Local appearance is opt-in and does not overwrite shared defaults or another city's saved look. No account or server sync is added.
+
+Smart board preferences use `tb.smartBoard.<page-basename>.v1` for mode, two optional pinned panel IDs, and pause state. Eligibility is determined locally; no AI service or additional network calls are involved.
 
 The original `.claude/` configuration, launch setup, project dependencies, deployment workflow, and existing generated schedule formats are unchanged. Development was performed in an isolated checkout; the original Claude checkout contains independent uncommitted work and must not be replaced wholesale. Apply the small patch or merge its branch through the normal Git workflow.
 

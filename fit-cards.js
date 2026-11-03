@@ -526,7 +526,7 @@ body .card.tb-tight .statline{display:none}
      two elements guarantees: if squeezing a card could squeeze its heading,
      the measurement that decides how far to squeeze it would move every time
      it was applied, and the layout would pump instead of settle. */
-  function chromeOf(card, list){
+  function chromeOf(card, list, scale){
     const cs=getComputedStyle(card);
     let h=parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom)+
           parseFloat(cs.borderTopWidth)+parseFloat(cs.borderBottomWidth);
@@ -535,7 +535,7 @@ body .card.tb-tight .statline{display:none}
       const r=el.getBoundingClientRect();
       if(!r.height) continue;
       const es=getComputedStyle(el);
-      h+=r.height+(parseFloat(es.marginTop)||0)+(parseFloat(es.marginBottom)||0);
+      h+=r.height/(scale||1)+(parseFloat(es.marginTop)||0)+(parseFloat(es.marginBottom)||0);
     }
     return Math.ceil(h);
   }
@@ -545,7 +545,7 @@ body .card.tb-tight .statline{display:none}
      manage their own), and this has to work for all of them. A larger
      data-want wins: a card that renders to fit its box measures small by
      definition, so its own claim is the honest one. */
-  function contentH(list){
+  function contentH(list, scale){
     let top=Infinity, bottom=-Infinity;
     for(const k of list.children){
       const r=k.getBoundingClientRect();
@@ -554,7 +554,7 @@ body .card.tb-tight .statline{display:none}
       if(r.bottom>bottom) bottom=r.bottom;
     }
     const span=bottom>top ? Math.ceil(bottom-top) : 0;
-    return Math.max(span, Number(list.dataset.want)||0);
+    return Math.max(span, Number(list.dataset.want)||0)/(scale||1);
   }
   /* One of whatever this card shows -- a departure row, an alert, a chip. Used
      for the floor, so "at least two of them" means two of the right thing
@@ -624,7 +624,14 @@ body .card.tb-tight .statline{display:none}
     const cards=[...box.children].filter(c=>c.classList.contains("card")
       && !c.classList.contains("user-hidden") && getComputedStyle(c).display!=="none");
     if(!cards.length){ reset(); return; }
-    const H=col.clientHeight; if(!(H>0)) return;
+    // Budget from the cards' actual start, after section headings and the
+    // Smart board controls. Rects include CSS zoom; client sizes do not.
+    const rect=box.getBoundingClientRect(), colRect=col.getBoundingClientRect();
+    const scale=rect.width/box.offsetWidth || 1;
+    const H=Math.floor((colRect.bottom-rect.top)/scale-col.scrollTop-
+      (parseFloat(getComputedStyle(col).paddingBottom)||0));
+    if(!(H>0)) return;
+    const smart=root.getAttribute("data-board-layout")==="smart";
 
     /* Past 1220px the board is a different design, not a wider one: theme.css's
        Atlas block (itself wrapped in @media (min-width:1221px), which is why
@@ -785,9 +792,9 @@ body .card.tb-tight .statline{display:none}
          the rest of the board settles on. */
       const list=c.querySelector(".list");
       if(!list) continue;
-      const chrome=chromeOf(c, list);
+      const chrome=chromeOf(c, list, scale);
       chromes.push(chrome);
-      const content=contentH(list);
+      const content=contentH(list, scale);
       if(chrome+content>wantMax) wantMax=chrome+content;
     }
     /* The MEDIAN card's furniture, not the bulkiest card's. Sizing every tile
@@ -802,7 +809,7 @@ body .card.tb-tight .statline{display:none}
     const chromeMax=chromes.length ? chromes[Math.floor(chromes.length/2)] : 54;
     if(!open.length) return;
     const rowHs=[...box.querySelectorAll(".list .row")]
-      .map(r=>r.getBoundingClientRect().height).filter(x=>x>0).sort((a,b)=>a-b);
+      .map(r=>r.getBoundingClientRect().height/scale).filter(x=>x>0).sort((a,b)=>a-b);
     const rowH=rowHs.length ? rowHs[Math.floor(rowHs.length/2)] : 34;
     const listGap=parseFloat(getComputedStyle(open[0].querySelector(".list")||open[0]).rowGap)||2;
 
@@ -813,6 +820,9 @@ body .card.tb-tight .statline{display:none}
     for(let kk=rowsNeeded; kk>=1; kk--){ if(rowsIn(tileFor(kk))>=2){ k=kk; break; } }
     if(!k) for(let kk=rowsNeeded; kk>=1; kk--){ if(rowsIn(tileFor(kk))>=1){ k=kk; break; } }
     if(!k) k=1;
+    // Smart board already limits the visible set and rotates the remainder.
+    // Do not grow tiles until one of those selected panels falls off-screen.
+    if(smart) k=rowsNeeded;
 
     let tile=tileFor(k);
     /* When every card is already on screen there is no scroll boundary to line
@@ -901,20 +911,14 @@ body .card.tb-tight .statline{display:none}
        every board's CARD_DEFS already read. */
     return s.split(/\s+[—–-]\s+/)[0].trim() || card.id;
   }
-  /* The board's own hidden-cards list. Its key is namespaced per board
-     (transitboard.hiddenCards, transitboardphl.hiddenCards, ...) and is found
-     rather than guessed, so a city added later cannot end up writing into
-     another board's settings. */
+  /* Use this board's declared key, never the first matching localStorage
+     entry: after a city switch that entry may belong to the previous city. */
   function boardHiddenKey(){
     try{
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i);
-        if(/^transitboard[a-z]*\.hiddenCards$/.test(k)) return k;
-      }
-      for(let i=0;i<localStorage.length;i++){
-        const m=/^(transitboard[a-z]*)\./.exec(localStorage.key(i));
-        if(m) return m[1]+".hiddenCards";
-      }
+      if(typeof LS!=="undefined" && typeof LS.hidden==="string") return LS.hidden;
+      const city=location.pathname.split("/").pop().replace(/\.html$/, "");
+      const legacy={dc:"transitboard",philadelphia:"transitboardphl",nyc:"transitboardnyc"};
+      if(legacy[city]) return legacy[city]+".hiddenCards";
     }catch(_){}
     return "";
   }
