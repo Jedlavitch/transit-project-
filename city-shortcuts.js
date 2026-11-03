@@ -106,7 +106,7 @@
     updateTravelLinks();
   }
   function focusables() {
-    return [].slice.call(panel.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),[tabindex="0"]'))
+    return [].slice.call(panel.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),summary,[tabindex="0"]'))
       .filter(function (el) { return el.getClientRects().length; });
   }
   function open() {
@@ -278,6 +278,13 @@
     window.addEventListener("storage", function (e) {
       if (e.key === key || e.key === null) { saved = readPlaces(); if (!overlay.hidden) renderPlaces(); }
     });
+    // Shared board controls reuse these actions, including the current origin
+    // and temporary-location safeguards, instead of implementing a second path.
+    window.TBCityToolkit = {
+      open: open, close: close,
+      watch: function (id) { var p = profile.places.filter(function (p) { return p.id === id; })[0]; if (p) watch(p); },
+      planUrl: function (id) { var p = profile.places.filter(function (p) { return p.id === id; })[0]; return p ? transitUrl(p) : "#"; }
+    };
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

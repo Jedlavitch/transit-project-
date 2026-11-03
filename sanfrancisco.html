@@ -14,10 +14,13 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=34" />
 <link rel="stylesheet" href="board-designs.css?v=1" />
-<link rel="stylesheet" href="city-shortcuts.css?v=1" />
+<link rel="stylesheet" href="city-shortcuts.css?v=2" />
+<link rel="stylesheet" href="city-board.css?v=1" />
+<script src="city-preferences.js?v=1"></script>
 <script src="city-shortcuts-data.js?v=1" defer></script>
-<script src="city-shortcuts.js?v=1" defer></script>
-<script src="settings-ui.js?v=16" defer></script>
+<script src="city-shortcuts.js?v=2" defer></script>
+<script src="city-board.js?v=1" defer></script>
+<script src="settings-ui.js?v=17" defer></script>
 <script src="clock-faces.js?v=1" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
@@ -57,7 +60,7 @@
 <script src="ontime-tile.js?v=1" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
-(function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
+(function(){try{var g=function(k){return /^tb\.(theme|accent|rows|style)$/.test(k)?TBBoardPreferences.get(k.slice(3)):localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboardsf.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
 var a=g("tb.accent")||g("transitboardsf.accent");if(a)d.style.setProperty("--accent",a);
 var r=g("tb.rows")||g("transitboardsf.rows");if(r&&r!=="normal")d.setAttribute("data-rows",r);
@@ -2620,21 +2623,21 @@ function setMapFull(on){
 function setBoardAccent(hex){
   document.documentElement.style.setProperty("--accent", hex);
   drawRangeRings();   // rings are stroked in the accent color
-  localStorage.setItem(LS.accent, hex); localStorage.setItem("tb.accent", hex);
+  localStorage.setItem(LS.accent, hex); TBBoardPreferences.set("accent", hex);
   document.querySelectorAll("#accentSwatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
 }
 function buildAccentSwatches(){
   const wrap=document.getElementById("accentSwatches"); if(!wrap) return; wrap.innerHTML="";
   ACCENTS.forEach(hex=>{ const b=document.createElement("button"); b.className="sw"; b.dataset.hex=hex; b.style.background=hex; b.title=hex; b.onclick=()=>setBoardAccent(hex); wrap.appendChild(b); });
   const c=document.createElement("label"); c.className="sw custom"; c.title="Custom color";
-  const inp=document.createElement("input"); inp.type="color"; inp.value=localStorage.getItem("tb.accent")||localStorage.getItem(LS.accent)||"#4ea1ff";
+  const inp=document.createElement("input"); inp.type="color"; inp.value=TBBoardPreferences.get("accent")||localStorage.getItem(LS.accent)||"#4ea1ff";
   inp.oninput=()=>setBoardAccent(inp.value); c.appendChild(inp); wrap.appendChild(c);
 }
 
 /* ---------- theme (dark / black / day) ---------- */
 function setBoardTheme(mode){
   document.documentElement.setAttribute("data-theme", mode);
-  localStorage.setItem(LS.theme, mode); localStorage.setItem("tb.theme", mode);
+  localStorage.setItem(LS.theme, mode); TBBoardPreferences.set("theme", mode);
   document.querySelectorAll("#themeRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.theme===mode));
   if(state.tileLayer) state.tileLayer.setTheme(mode);
 }
@@ -2650,7 +2653,7 @@ function buildThemeButtons(){
 function setBoardRows(mode){
   const changed = document.documentElement.getAttribute("data-rows")!==mode;
   document.documentElement.setAttribute("data-rows", mode);
-  localStorage.setItem(LS.rows, mode); localStorage.setItem("tb.rows", mode);
+  localStorage.setItem(LS.rows, mode); TBBoardPreferences.set("rows", mode);
   document.querySelectorAll("#rowsRow .theme-btn").forEach(el=>el.classList.toggle("active", el.dataset.rows===mode));
   if(changed && state.map) refreshEverythingForNewLocation();
   else fitAll();
@@ -3142,9 +3145,9 @@ async function refreshAlertTicker(){
 
 /* ---------- boot ---------- */
 function boot(){
-  setBoardAccent(localStorage.getItem("tb.accent")||localStorage.getItem(LS.accent)||"#4ea1ff"); buildAccentSwatches();
-  setBoardTheme(localStorage.getItem("tb.theme")||localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
-  setBoardRows(localStorage.getItem("tb.rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
+  setBoardAccent(TBBoardPreferences.get("accent")||localStorage.getItem(LS.accent)||"#4ea1ff"); buildAccentSwatches();
+  setBoardTheme(TBBoardPreferences.get("theme")||localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
+  setBoardRows(TBBoardPreferences.get("rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();
   setLegend(localStorage.getItem("tb.legend")||"off"); buildLegendButtons();
   setVehIcons(localStorage.getItem("tb.vehIcons")||"shapes"); buildVehIconButtons();

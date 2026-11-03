@@ -542,7 +542,10 @@
        that has never heard of this feature is byte-for-byte unchanged. */
     if (mode === "classic") d.removeAttribute("data-style");
     else d.setAttribute("data-style", mode);
-    try { localStorage.setItem("tb.style", mode); } catch (e) {}
+    try {
+      if (window.TBBoardPreferences) TBBoardPreferences.set("style", mode);
+      else localStorage.setItem("tb.style", mode);
+    } catch (e) {}
 
     var btns = document.querySelectorAll("#styleRow .theme-btn");
     for (var i = 0; i < btns.length; i++) {
@@ -582,7 +585,7 @@
     row.setAttribute("aria-label", "Board style");
 
     var saved = "classic";
-    try { saved = localStorage.getItem("tb.style") || "classic"; } catch (e) {}
+    try { saved = (window.TBBoardPreferences ? TBBoardPreferences.get("style") : localStorage.getItem("tb.style")) || "classic"; } catch (e) {}
 
     BOARD_STYLES.forEach(function (style) {
       var b = document.createElement("button");
@@ -604,6 +607,7 @@
     });
 
     var hint = document.createElement("div");
+    hint.id = "tbStyleHint";
     hint.style.cssText = "font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.5";
     hint.textContent = "Mix any style with Dark, Black or Day. Your choice follows you between cities.";
 
@@ -612,6 +616,50 @@
     themeRow.parentNode.insertBefore(hint, themeRow.nextSibling);
     themeRow.parentNode.insertBefore(row, hint);
     themeRow.parentNode.insertBefore(lbl, row);
+    addLookScope(panel, lbl);
+  }
+
+  function addLookScope(panel, before) {
+    var prefs = window.TBBoardPreferences;
+    if (!prefs || panel.querySelector("#cityLookScope")) return;
+    var profile = (window.TBCityShortcutsData || {})[prefs.city];
+    if (!profile) return;
+    var label = document.createElement("div"); label.className = "accent-lbl";
+    label.textContent = "Appearance scope";
+    var row = document.createElement("div"); row.className = "theme-row"; row.id = "cityLookScope";
+    row.setAttribute("role", "group"); row.setAttribute("aria-label", "Appearance scope");
+    var message = document.createElement("p"); message.id = "cityLookMessage";
+    message.style.cssText = "font-size:11px;color:var(--muted);line-height:1.5;margin:6px 0";
+    message.setAttribute("role", "status");
+    function paint() {
+      var local = prefs.isLocal();
+      [].slice.call(row.children).forEach(function (button) {
+        var on = (button.getAttribute("data-scope") === "city") === local;
+        button.classList.toggle("active", on); button.setAttribute("aria-pressed", String(on));
+      });
+      message.textContent = local ? "Theme, accent, row density and design are saved just for " + profile.name + "." : "Theme, accent, row density and design follow the shared look.";
+      var hint = panel.querySelector("#tbStyleHint");
+      if (hint) hint.textContent = "Mix any style with Dark, Black or Day. " + (local ? "Saved for " + profile.name + "." : "Shared with cities using the shared look.");
+    }
+    [["shared", "Shared look"], ["city", "This city only"]].forEach(function (option) {
+      var button = document.createElement("button"); button.type = "button"; button.className = "theme-btn";
+      button.textContent = option[1]; button.setAttribute("data-scope", option[0]);
+      button.onclick = function () {
+        var stored = prefs.useLocal(option[0] === "city");
+        if (typeof setBoardTheme === "function") setBoardTheme(prefs.get("theme") || "dark");
+        if (typeof setBoardAccent === "function") setBoardAccent(prefs.get("accent") || "#4ea1ff");
+        if (typeof setBoardRows === "function") setBoardRows(prefs.get("rows") || "normal");
+        setBoardStyle(prefs.get("style") || "classic");
+        if (typeof buildAccentSwatches === "function") buildAccentSwatches();
+        paint();
+        if (!stored) message.textContent += " Browser storage is unavailable; this choice lasts for this visit.";
+      };
+      row.appendChild(button);
+    });
+    before.parentNode.insertBefore(label, before);
+    before.parentNode.insertBefore(row, before);
+    before.parentNode.insertBefore(message, before);
+    paint();
   }
 
   function run() {
@@ -720,6 +768,9 @@
             ? Math.min(bottom, list.getBoundingClientRect().bottom)
             : bottom,
           rows = card.querySelectorAll(".list > *, .list .row");
+      // An explicitly scrollable utility card keeps its links reachable. The
+      // list's overflow handles its boundary; departure rows still trim below.
+      if (list && list.hasAttribute("data-scroll-list")) continue;
       for (var r = 0; r < rows.length; r++) {
         /* 1px of slack: sub-pixel layout should not hide a row that fits. */
         if (rows[r].getBoundingClientRect().bottom > rowBottom + 1) hide(rows[r]);
