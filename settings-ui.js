@@ -81,9 +81,11 @@
     var lbl = function (pre) {
       return HEAD.split(",").map(function (c) { return sel(pre + c); }).join(",");
     };
-    /* The segmented-control containers, minus the two that only look like one. */
+    /* Style choices have their own two-column gallery in board-designs.css;
+       treating that gallery as a segmented control forces its buttons onto
+       one line and lets their labels overlap neighbouring hit targets. */
     var seg = function (suffix) {
-      return sel(".theme-row:not(#cardToggles)" + suffix) + "," +
+      return sel(".theme-row:not(#cardToggles):not(#styleRow)" + suffix) + "," +
              sel(".seg:not(.swatches)" + suffix);
     };
     return [
@@ -508,7 +510,7 @@
   }
 
   /* ---- Board style ---------------------------------------------------------
-     Adds the Classic / Atlas picker to the settings panel.
+     Adds the shared style picker to the settings panel.
 
      HERE RATHER THAN IN TWELVE BOARD FILES because this script already owns
      #setup and already moves nodes around inside it. Twelve hand-edits is
@@ -526,7 +528,15 @@
      one: Atlas restyles `main > .col + .col`, the map-and-cards structure only
      those twelve have. Offering it where it cannot apply would be a setting
      that does nothing. */
+  var BOARD_STYLES = [
+    { id: "classic", name: "Classic", detail: "Original dashboard" },
+    { id: "atlas", name: "Atlas", detail: "Map-first · wide screens" },
+    { id: "paper", name: "Paper", detail: "Quiet, editorial panels" },
+    { id: "signal", name: "Signal", detail: "Crisp, ruled timetables" }
+  ];
+
   function setBoardStyle(mode) {
+    if (!BOARD_STYLES.some(function (style) { return style.id === mode; })) return;
     var d = document.documentElement;
     /* Classic is the ABSENCE of the attribute, not a value of it, so a board
        that has never heard of this feature is byte-for-byte unchanged. */
@@ -535,16 +545,24 @@
     try { localStorage.setItem("tb.style", mode); } catch (e) {}
 
     var btns = document.querySelectorAll("#styleRow .theme-btn");
-    for (var i = 0; i < btns.length; i++)
-      btns[i].classList.toggle("active", btns[i].getAttribute("data-style") === mode);
+    for (var i = 0; i < btns.length; i++) {
+      var active = btns[i].getAttribute("data-style") === mode;
+      btns[i].classList.toggle("active", active);
+      btns[i].setAttribute("aria-pressed", String(active));
+    }
 
     /* The map's box just moved. Same 120ms + invalidateSize + fitAll the
        legend toggle uses for the identical problem — belt and braces, since
        the ResizeObserver on #map fires on its own too. Both guarded: `state`
        is a top-level const on the boards, so window.state may be undefined. */
     setTimeout(function () {
-      try { if (window.state && window.state.map) window.state.map.invalidateSize(); } catch (e) {}
+      try {
+        /* The boards' top-level `let state` is lexical, not window.state. */
+        var board = typeof state !== "undefined" ? state : window.state;
+        if (board && board.map) board.map.invalidateSize();
+      } catch (e) {}
       try { if (typeof window.fitAll === "function") window.fitAll(); } catch (e) {}
+      window.dispatchEvent(new Event("resize"));
     }, 120);
   }
 
@@ -560,23 +578,34 @@
     var row = document.createElement("div");
     row.className = "theme-row";
     row.id = "styleRow";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", "Board style");
 
     var saved = "classic";
     try { saved = localStorage.getItem("tb.style") || "classic"; } catch (e) {}
 
-    [["classic", "Classic"], ["atlas", "Atlas"]].forEach(function (pair) {
+    BOARD_STYLES.forEach(function (style) {
       var b = document.createElement("button");
       b.type = "button";
-      b.className = "theme-btn" + (pair[0] === saved ? " active" : "");
-      b.setAttribute("data-style", pair[0]);
-      b.textContent = pair[1];
-      b.addEventListener("click", function () { setBoardStyle(pair[0]); });
+      b.className = "theme-btn" + (style.id === saved ? " active" : "");
+      b.setAttribute("data-style", style.id);
+      b.setAttribute("aria-pressed", String(style.id === saved));
+      b.title = style.detail;
+      var name = document.createElement("span");
+      name.className = "tbstyle-name";
+      name.textContent = style.name;
+      var detail = document.createElement("small");
+      detail.className = "tbstyle-detail";
+      detail.textContent = style.detail;
+      b.appendChild(name);
+      b.appendChild(detail);
+      b.addEventListener("click", function () { setBoardStyle(style.id); });
       row.appendChild(b);
     });
 
     var hint = document.createElement("div");
     hint.style.cssText = "font-size:11px;color:var(--muted);margin:4px 0 0;line-height:1.5";
-    hint.textContent = "Atlas puts the map full-screen and stands the departures on it. Wide screens only.";
+    hint.textContent = "Mix any style with Dark, Black or Day. Your choice follows you between cities.";
 
     /* Immediately after Theme: they are the same kind of decision, and it puts
        the two look-and-feel controls together at the top of Display. */

@@ -1,0 +1,88 @@
+/* Kept outside theme.css so the existing boards and Claude's palette remain
+   independent. All selectors are scoped to this optional city toolkit. */
+#cityToolkitBtn.ct-launch{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;min-height:36px;white-space:nowrap;font-size:12px}
+.ct-overlay[hidden],.ct-watch-dock[hidden]{display:none!important}
+.ct-overlay{position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--scrim,rgba(5,10,22,.86));backdrop-filter:blur(12px);font-family:var(--body,system-ui,sans-serif);color:var(--text,#eef3ff);box-sizing:border-box}
+.ct-overlay *,.ct-watch-dock *{box-sizing:border-box}
+.ct-panel{display:flex;flex-direction:column;width:min(880px,100%);max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);background:var(--panel,#111d36);border:1px solid var(--line,#22345a);border-radius:20px;box-shadow:0 30px 100px #0006;overflow:hidden}
+.ct-panel .ct-heading{display:flex;flex-wrap:nowrap;gap:24px;align-items:flex-start;padding:26px 30px 22px;background:var(--panel,#111d36);border:0;border-bottom:1px solid var(--line,#22345a);flex:none}
+.ct-heading>div{flex:1;min-width:0}
+.ct-eyebrow{font-family:var(--mono,monospace);font-size:10px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--accent-ink,#7cc0ff);margin-bottom:10px}
+.ct-heading h2{font-family:var(--body,system-ui,sans-serif);font-size:26px;line-height:1.2;letter-spacing:-.035em;font-weight:600;margin:0 0 8px;color:var(--text)}
+.ct-heading p{font-size:13px;line-height:1.55;color:var(--muted,#93a5cf);margin:0;max-width:610px}
+.ct-panel button,.ct-watch-dock button{font:inherit;cursor:pointer;border:1px solid var(--line,#22345a);border-radius:8px;background:transparent;color:var(--text,#eef3ff);padding:9px 12px;min-height:38px;line-height:1.3}
+.ct-panel .ct-close{flex:none;margin-left:auto;min-height:36px;width:36px;padding:3px;line-height:1;font-size:24px;color:var(--muted);background:var(--panel2,#0c1628)}
+.ct-scroll{overflow:auto;padding:22px 30px 0;overscroll-behavior:contain;min-height:0;scrollbar-width:thin}
+.ct-origin{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 20px}
+.ct-origin strong{font-weight:600;color:var(--text)}
+.ct-origin>span{display:block;font-size:11px}
+.ct-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.ct-panel .ct-filters button{font-size:12px;border-radius:999px;padding:7px 14px;min-height:34px;color:var(--muted)}
+.ct-panel .ct-filters button[aria-pressed=true]{color:var(--text);background:var(--row-bg,#0d1830);border-color:var(--accent-ink,#7cc0ff)}
+.ct-search-row{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.ct-panel input{font:inherit;background:var(--panel2,#0c1628);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:40px;min-width:0}
+.ct-panel input::placeholder{color:var(--muted);opacity:1}
+.ct-search-row input{font-size:12px;flex:1}
+#ctResultCount{font-family:var(--mono,monospace);font-size:10px;color:var(--muted);white-space:nowrap}
+.ct-places{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+.ct-place{padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel2,#0c1628);min-width:0;display:flex;flex-direction:column}
+.ct-place-top{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:12px}
+.ct-kind{font:10px var(--mono,monospace);text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.ct-panel a{color:var(--accent-ink,#7cc0ff);text-decoration:none}
+.ct-panel a:hover{text-decoration:underline}
+.ct-panel a.ct-source{font-size:10px;white-space:nowrap}
+.ct-panel h3{font-size:17px;font-weight:600;line-height:1.3;letter-spacing:-.02em;margin:0 0 8px;color:var(--text)}
+.ct-place p{font-size:12px;line-height:1.6;color:var(--muted);margin:0 0 18px}
+.ct-place-actions{margin-top:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ct-place-actions .ct-plan{display:inline-flex;align-items:center;min-height:36px;padding:8px 12px;border-radius:7px;background:var(--text);color:var(--panel,#111d36);font-size:11px;font-weight:600}
+.ct-place-actions button{font-size:11px;min-height:36px;padding:8px 11px}
+.ct-place-actions .ct-remove{margin-left:auto;font-size:10px;padding:6px;border-color:transparent;color:var(--muted)}
+.ct-empty{grid-column:1/-1;text-align:center;border:1px dashed var(--line);border-radius:12px;padding:32px 20px;font-size:13px;line-height:1.8;color:var(--muted)}
+.ct-save{padding:20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;gap:20px;align-items:center}
+.ct-save>div{flex:1;min-width:0}
+.ct-save h3,.ct-help h3{font-size:14px;margin:0 0 6px}
+.ct-save p{font-size:11px;line-height:1.5;margin:0;color:var(--muted)}
+.ct-save strong{font-weight:500;color:var(--text)}
+.ct-save form{display:flex;gap:6px;flex:1;min-width:0}
+.ct-save input{width:100%;font-size:12px;flex:1}
+.ct-save button{font-size:11px;white-space:nowrap}
+.ct-help{padding:22px 0 0}
+.ct-section-head{display:flex;gap:10px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
+.ct-section-head>span{font-size:10px;color:var(--muted)}
+.ct-help-links{display:flex;gap:8px;flex-wrap:wrap}
+.ct-help-links a{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid var(--line);padding:10px 12px;border-radius:8px;font-size:11px;flex:1;min-width:160px}
+.ct-help-links a span{font-size:14px}
+.ct-message{min-height:18px;font-size:12px;color:var(--accent-ink);line-height:1.5;margin:12px 0}
+.ct-panel .ct-foot{display:block;flex:none;padding:14px 30px;background:var(--panel2,#0c1628);border:0;border-top:1px solid var(--line);font-family:var(--body,system-ui,sans-serif);font-size:10px;line-height:1.65;color:var(--muted);text-align:left}
+.ct-panel :is(button,a,input):focus-visible,.ct-watch-dock button:focus-visible,#cityToolkitBtn:focus-visible{outline:2px solid var(--accent-ink,#7cc0ff);outline-offset:3px}
+.ct-panel button:hover,.ct-watch-dock button:hover{border-color:var(--accent-ink)}
+.ct-panel button:disabled{opacity:.5;cursor:wait}
+.ct-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ct-watch-dock{position:fixed;z-index:9500;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:14px;align-items:center;max-width:calc(100vw - 24px);padding:12px 14px 12px 18px;border:1px solid var(--line,#22345a);border-radius:14px;background:var(--panel,#111d36);color:var(--text,#eef3ff);box-shadow:0 8px 40px #0005;font-family:var(--body,system-ui,sans-serif)}
+.ct-watch-dock>div{min-width:0}
+.ct-watch-dock strong{display:block;font-size:12px;line-height:1.4;font-weight:600}
+.ct-watch-dock span{display:block;color:var(--muted);font-size:10px;line-height:1.6}
+.ct-watch-dock button{font-size:11px;white-space:nowrap;flex:none}
+#ctReopen{display:flex;align-items:center;padding:8px}
+@media(max-width:720px){
+  #cityToolkitBtn.ct-launch{padding:6px 8px;min-width:34px}
+  #cityToolkitBtn.ct-launch>span{display:none}
+  .ct-overlay{padding:10px}
+  .ct-panel{max-height:calc(100vh - 20px);max-height:calc(100dvh - 20px);border-radius:14px}
+  .ct-panel .ct-heading{padding:20px;gap:12px}
+  .ct-heading h2{font-size:22px}
+  .ct-scroll{padding:18px 20px 0}
+  .ct-places{grid-template-columns:1fr}
+  .ct-place{padding:16px}
+  .ct-save{align-items:stretch;flex-direction:column;gap:12px}
+  .ct-panel .ct-foot{padding:12px 20px}
+  .ct-watch-dock{gap:8px;padding:10px 12px;width:calc(100vw - 24px)}
+  .ct-watch-dock>div{flex:1}
+  .ct-watch-dock span{display:none}
+  .ct-watch-dock strong{font-size:11px}
+  .ct-watch-dock button{font-size:10px;padding:8px}
+}
+@media(prefers-reduced-motion:no-preference){
+  .ct-panel{animation:ct-in .16s ease-out}
+  @keyframes ct-in{from{transform:translateY(8px);opacity:.5}to{transform:translateY(0);opacity:1}}
+}

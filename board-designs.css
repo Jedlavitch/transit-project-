@@ -1,0 +1,138 @@
+/* Optional board designs. Loaded after theme.css. Classic and Atlas keep their
+   existing rules; these selectors apply only to an explicit style choice.
+   Themes, density, agency colours, collapse and measured card heights remain
+   owned by the existing board code. No filters are applied to transit overlays. */
+
+/* Four choices stay readable on a phone and reachable with a TV remote. */
+#setup.tbset #styleRow{
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  width:100%; max-width:360px; gap:6px; overflow:visible;
+  border:0; border-radius:0; background:transparent;
+}
+#setup.tbset #styleRow .theme-btn{
+  display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+  gap:3px; min-width:0; min-height:58px; margin:0; padding:9px 12px;
+  border:1px solid var(--line); border-radius:9px;
+  background:var(--panel2); color:var(--text); text-align:left; white-space:normal;
+}
+#setup.tbset #styleRow .theme-btn.active{
+  border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent);
+  background:var(--panel); color:var(--text);
+}
+#setup.tbset #styleRow .theme-btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+#setup.tbset #styleRow .tbstyle-name{font-size:13px; line-height:1.2; font-weight:700}
+#setup.tbset #styleRow .tbstyle-detail{font-size:10.5px; line-height:1.3; font-weight:400; color:var(--muted)}
+
+/* PAPER — quiet warm neutrals, generous corners and an editorial hierarchy.
+   Paper is a treatment, rather than a forced light theme: Black stays black. */
+:root[data-style="paper"]{
+  --bg:#14151a; --panel:#202127; --panel2:#191a20; --row-bg:#202127;
+  --line:#393a42; --row-line:#383940; --bg-glow:#14151a;
+  --text:#f6f3ed; --muted:#b8b3ab; --sched-b:#d0cdc7;
+  --blue-bright:#c1d8f7; --blue-deep:#232a34;
+}
+:root[data-style="paper"][data-theme="day"]{
+  --bg:#f2eee5; --panel:#fffcf5; --panel2:#f7f3eb; --row-bg:#fffcf5;
+  --line:#d8d1c4; --row-line:#e2dbcf; --bg-glow:#f2eee5;
+  --text:#24231f; --muted:#686258; --sched-b:#4e5660;
+  --blue-bright:#295a91; --blue-deep:#e6e9e9;
+}
+:root[data-style="paper"][data-theme="black"]{
+  --bg:#000; --panel:#090a0c; --panel2:#030405; --row-bg:#090a0c;
+  --line:#2a2b2d; --row-line:#252629; --bg-glow:#000;
+}
+:root[data-style="paper"] body{background:var(--bg)}
+:root[data-style="paper"] body::before{display:none}
+:root[data-style="paper"] body header{
+  background:var(--panel); border-bottom:1px solid var(--line); box-shadow:none;
+}
+:root[data-style="paper"] body #statStrip,
+:root[data-style="paper"] body footer{background:transparent; border-color:var(--line)}
+:root[data-style="paper"] body .card{
+  background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:none;
+}
+:root[data-style="paper"] body .card h2{
+  color:var(--text); opacity:1; text-transform:none; letter-spacing:0; font-family:var(--body);
+}
+:root[data-style="paper"] body .card h2 .t,
+:root[data-style="paper"] body .stat .s-value{
+  background:none; -webkit-text-fill-color:currentColor; color:var(--text); filter:none;
+}
+:root[data-style="paper"] body .card h2::before{border-radius:50%; width:6px; height:6px}
+:root[data-style="paper"] body .statline{opacity:1; color:var(--muted)}
+:root[data-style="paper"] body .list .row{
+  background:transparent; border:0; border-bottom:1px solid var(--row-line);
+  border-radius:0; box-shadow:none;
+}
+:root[data-style="paper"] body .list .row:last-child{border-bottom-color:transparent}
+:root[data-style="paper"] body .list .row .dest{font-family:var(--body); font-weight:600}
+:root[data-style="paper"] body .list .row .badge{border-radius:5px}
+:root[data-style="paper"] body .card.mini{background:var(--panel2); border-color:var(--line)}
+:root[data-style="paper"] body #map{border-radius:12px; border-color:var(--line)}
+
+/* SIGNAL — a flat station timetable: crisp rules, square plates, strong type.
+   Agency badges and all live / scheduled / delay semantics keep their colours. */
+:root[data-style="signal"]{
+  --bg:#0b1217; --panel:#101e25; --panel2:#0d181e; --row-bg:#101e25;
+  --line:#344952; --row-line:#2c424c; --bg-glow:#0b1217;
+  --text:#f1f7fa; --muted:#a6bac2; --sched-b:#d0dfe5;
+  --blue-bright:#acd5eb; --blue-deep:#152932;
+}
+:root[data-style="signal"][data-theme="day"]{
+  --bg:#eaf0f0; --panel:#fbfdfc; --panel2:#eff4f3; --row-bg:#fbfdfc;
+  --line:#b9cbce; --row-line:#cfdddd; --bg-glow:#eaf0f0;
+  --text:#162b33; --muted:#52666e; --sched-b:#3c5663;
+  --blue-bright:#215b79; --blue-deep:#dfebed;
+}
+:root[data-style="signal"][data-theme="black"]{
+  --bg:#000; --panel:#050a0d; --panel2:#000; --row-bg:#050a0d;
+  --line:#293e47; --row-line:#20353e; --bg-glow:#000;
+}
+:root[data-style="signal"] body{background:var(--bg)}
+:root[data-style="signal"] body::before{display:none}
+:root[data-style="signal"] body header{
+  background:var(--panel); border-bottom:2px solid var(--line); box-shadow:none;
+}
+:root[data-style="signal"] body #statStrip{
+  background:var(--panel2); border-bottom:1px solid var(--line);
+}
+:root[data-style="signal"] body footer{background:var(--panel2); border-color:var(--line)}
+:root[data-style="signal"] body .card{
+  background:var(--panel); border:1px solid var(--line); border-radius:2px; box-shadow:none;
+}
+:root[data-style="signal"] body .card h2{
+  color:var(--text); opacity:1; letter-spacing:.08em; font-family:var(--body);
+}
+:root[data-style="signal"] body .card h2 .t,
+:root[data-style="signal"] body .stat .s-value{
+  background:none; -webkit-text-fill-color:currentColor; color:var(--text); filter:none;
+}
+:root[data-style="signal"] body .card h2::before{width:4px; border-radius:0}
+:root[data-style="signal"] body .statline{opacity:1; color:var(--muted)}
+:root[data-style="signal"] body .list .row{
+  background:transparent; border:0; border-bottom:1px solid var(--row-line);
+  border-radius:0; box-shadow:none;
+}
+:root[data-style="signal"] body .list .row:last-child{border-bottom-color:transparent}
+:root[data-style="signal"] body .list .row .badge{border-radius:1px; font-family:var(--mono)}
+:root[data-style="signal"] body .list .row .dest{font-family:var(--body); font-weight:700}
+:root[data-style="signal"] body .list .row .times{font-family:var(--mono); font-variant-numeric:tabular-nums}
+:root[data-style="signal"] body .card.mini{background:var(--panel2); border-color:var(--line)}
+:root[data-style="signal"] body #map{border-radius:2px; border-color:var(--line)}
+
+/* Fitters continue to own the rows and card heights. The desktop split alone
+   changes: Paper gives the map more room; Signal prioritises departures. */
+@media (min-width:1221px){
+  :root[data-style="paper"]:not([data-map="off"]) body:not(.map-full) main{grid-template-columns:1.05fr 1fr}
+  :root[data-style="signal"]:not([data-map="off"]) body:not(.map-full) main{grid-template-columns:.72fr 1.28fr}
+  :root[data-style="paper"] body .list .row .live,
+  :root[data-style="paper"] body .list .row .live-eta{font-size:calc(var(--live-fs) * 1.08)}
+  :root[data-style="signal"] body .list .row .live,
+  :root[data-style="signal"] body .list .row .live-eta{font-size:calc(var(--live-fs) * 1.16)}
+}
+@media (max-width:480px){
+  #setup.tbset #styleRow{max-width:none}
+  #setup.tbset #styleRow .theme-btn{padding:9px; min-height:60px}
+  #setup.tbset #styleRow .tbstyle-detail{font-size:10px}
+  :root[data-style="paper"] body .card{border-radius:10px}
+}
