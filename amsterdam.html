@@ -8,7 +8,6 @@
 <link rel="apple-touch-icon" href="brand/icon-dark-180.png">
 <meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#081020" />
 <title>Amsterdam Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -569,6 +568,9 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
       });
     });
 }catch(e){}})();</script>
+<!-- Default branded board; feeds and the card fitter remain independent. -->
+<link rel="stylesheet" href="board-home.css?v=1" />
+<script src="board-home.js?v=1" defer></script>
 </head>
 <body>
 <div id="app">
@@ -843,7 +845,7 @@ const LS = {
   liveUrl:   `transitboard${CITY_ID}.liveUrl`,   // optional ovapi-worker.js URL
 };
 // Oranje first -- the Dutch default; the rest match the other boards.
-const ACCENTS=["#ff5a5a","#ff7a1a","#fb923c","#ffb454","#ffd166","#fde047","#d9e021","#a3e635","#5ad17a","#34d399","#2dd4bf","#3ad0c8","#22d3ee","#38bdf8","#4ea1ff","#60a5fa","#818cf8","#a78bfa","#b39dff","#c084fc","#e879f9","#f0abfc","#ff8fab","#ff7a8f","#cbd5e1","#94a3b8"];
+const ACCENTS=["#ff3d77","#00e0c6","#2f7bff","#ff5a5a","#ff7a1a","#fb923c","#ffb454","#ffd166","#fde047","#d9e021","#a3e635","#5ad17a","#34d399","#2dd4bf","#3ad0c8","#22d3ee","#38bdf8","#4ea1ff","#60a5fa","#818cf8","#a78bfa","#b39dff","#c084fc","#e879f9","#f0abfc","#ff8fab","#ff7a8f","#cbd5e1","#94a3b8"];
 
 let state = {
   loc: CFG.defaultLoc,
@@ -3118,7 +3120,7 @@ async function refreshAlertTicker(){
 
 /* ---------- boot ---------- */
 function boot(){
-  setBoardAccent(TBBoardPreferences.get("accent")||localStorage.getItem(LS.accent)||"#ff7a1a"); buildAccentSwatches();   // oranje default
+  setBoardAccent(TBBoardPreferences.get("accent")||localStorage.getItem(LS.accent)||getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#ff7a1a"); buildAccentSwatches();   // oranje default
   setBoardTheme(TBBoardPreferences.get("theme")||localStorage.getItem(LS.theme)||"dark"); buildThemeButtons();
   setBoardRows(TBBoardPreferences.get("rows")||localStorage.getItem(LS.rows)||"normal"); buildRowsButtons(); buildBigStopButtons();
   applyDisplay(curZoom(), curPad()); buildDisplayButtons();

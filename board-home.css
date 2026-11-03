@@ -1,0 +1,278 @@
+/* Transit Project's default board. Presentation only: the existing fitter,
+   feeds, agency colours, density settings and alternative designs own their
+   behaviour. Literal tokens also work on older TV browsers. */
+:root:not([data-style]){
+  --bg:#12101A; --bg-glow:#12101A;
+  --panel:#1D1A26; --panel2:#17141F; --row-bg:#1D1A26;
+  --line:#373140; --row-line:#332D3D;
+  --text:#FFFCF5; --muted:#B7B0C2; --sched-b:#D6D0DF;
+  --accent:#FF3D77; --accent-ink:#FF91B1;
+  --blue-bright:#9BBCFF; --blue-deep:#12101A;
+  --tb-brand-live:#00E0C6;
+}
+:root:not([data-style])[data-theme="black"]{
+  --bg:#000; --bg-glow:#000; --panel:#101014; --panel2:#07070A;
+  --row-bg:#101014; --line:#303037; --row-line:#28282F;
+  --blue-deep:#000;
+}
+:root:not([data-style])[data-theme="day"]{
+  --bg:#F4F0E8; --bg-glow:#F4F0E8;
+  --panel:#FFFCF5; --panel2:#F2EDE3; --row-bg:#FFFCF5;
+  --line:#DCD5C9; --row-line:#E7E1D4;
+  --text:#12101A; --muted:#665F70; --sched-b:#51495E;
+  --accent-ink:#B5194A; --blue-bright:#2453AA; --blue-deep:#F4F0E8;
+  --tb-brand-live:#00695D;
+}
+
+/* New chrome disappears when one of the optional board designs is selected. */
+.tb-board-kicker,.tb-board-city,.tb-section-heading{display:none}
+.tb-board-views{display:contents}
+.tb-board-views > summary{display:none}
+
+:root:not([data-style]) body{background:var(--bg)}
+:root:not([data-style]) body::before{display:none}
+:root:not([data-style]) body #app > header{
+  position:relative; z-index:10; flex-wrap:wrap;
+  gap:10px 14px; padding:16px 22px;
+  padding-top:calc(16px + env(safe-area-inset-top, 0px));
+  background:var(--bg); border:0; border-bottom:1px solid var(--line);
+  border-image:none; box-shadow:none;
+}
+:root:not([data-style]) body #app > header::before{
+  content:""; position:absolute; left:22px; top:0; width:104px; height:3px;
+  background:linear-gradient(90deg,#FF3D77 0%,#FF3D77 33.333%,#00E0C6 33.333%,#00E0C6 66.666%,#2F7BFF 66.666%);
+}
+:root:not([data-style]) header .brandmark--sm{
+  width:34px; height:34px; margin:5px;
+}
+:root:not([data-style]) header .title{
+  flex:1 1 240px; min-width:0; line-height:1.15; letter-spacing:0;
+}
+:root:not([data-style]) .tb-board-kicker{
+  display:block; color:var(--muted); font:500 9px/1.3 var(--mono);
+  letter-spacing:.13em; margin-bottom:5px;
+}
+:root:not([data-style]) header .title .t-grad{display:none}
+:root:not([data-style]) header .tb-board-city{
+  display:block; color:var(--text); font:800 26px/1.05 var(--display);
+  letter-spacing:-.035em; text-transform:uppercase;
+}
+:root:not([data-style]) header .title small{
+  display:block; margin:5px 0 0; color:var(--muted); font:400 11px/1.3 var(--body);
+}
+:root:not([data-style]) #tbLocBtn{color:var(--muted); font-weight:400}
+:root:not([data-style]) .city-picker select{
+  background-color:var(--panel); border:1px solid var(--line);
+  border-radius:8px; padding:10px 30px 10px 12px; font-size:12px;
+}
+:root:not([data-style]) header button,
+:root:not([data-style]) .tb-board-views > summary{
+  min-height:36px; border-radius:8px; background:var(--panel);
+  border:1px solid var(--line); color:var(--text); box-shadow:none;
+}
+:root:not([data-style]) #settingsBtn{
+  background:var(--brand-pink)!important; color:#12101A!important;
+  border-color:var(--brand-pink)!important; font-weight:700;
+}
+:root:not([data-style]) #settingsBtn::after{color:inherit}
+:root:not([data-style]) #settingsBtn:hover{filter:brightness(1.08); color:#12101A!important}
+:root:not([data-style]) header .clock{margin-left:8px; flex:0 0 auto}
+:root:not([data-style]) header .clock .time{
+  background:none; -webkit-text-fill-color:currentColor; color:var(--text);
+  font:500 26px/1.15 var(--mono); letter-spacing:-.045em;
+}
+:root:not([data-style]) header .clock .meta{
+  font:400 9px/1.4 var(--mono); letter-spacing:0; margin-top:5px;
+}
+
+/* Native disclosure keeps every view and account link one keyboard action away. */
+:root:not([data-style]) .tb-board-views{display:block; position:relative; flex:0 0 auto}
+:root:not([data-style]) .tb-board-views > summary{
+  display:flex; align-items:center; gap:14px; padding:8px 12px;
+  font:600 12px/1.2 var(--body); list-style:none; cursor:pointer;
+}
+.tb-board-views > summary::-webkit-details-marker{display:none}
+:root:not([data-style]) .tb-board-views > summary::after{content:"⌄"; color:var(--muted)}
+:root:not([data-style]) .tb-board-views[open] > summary{border-color:var(--accent)}
+:root:not([data-style]) .tb-board-views .view-links{
+  display:none; position:absolute; top:calc(100% + 9px); right:0;
+  width:182px; padding:7px; gap:2px; margin:0;
+  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  box-shadow:0 14px 35px #0005; z-index:1200;
+}
+:root:not([data-style]) .tb-board-views[open] .view-links{display:flex; flex-direction:column}
+:root:not([data-style]) .tb-board-views .view-links a{
+  display:block; width:100%; padding:9px 11px; margin:0; border:0;
+  border-radius:5px; color:var(--text); font:500 13px/1.25 var(--body);
+}
+:root:not([data-style]) .tb-board-views .view-links a:hover{background:var(--panel2)}
+
+/* Summary numbers read as one strip instead of competing coloured tiles. */
+:root:not([data-style]) body #statStrip{
+  padding:13px 22px; gap:8px 0; background:var(--bg);
+  border-bottom:1px solid var(--line);
+}
+:root:not([data-style]) body #statStrip .stat{
+  background:none; border:0; border-radius:0; box-shadow:none;
+  padding:0 22px; border-left:1px solid var(--line);
+  display:flex; align-items:baseline; gap:9px;
+}
+:root:not([data-style]) body #statStrip .stat:first-of-type{padding-left:0; border-left:0}
+:root:not([data-style]) body #statStrip .s-label{
+  display:flex; order:2; font:500 9px/1.3 var(--mono); letter-spacing:.07em;
+  color:var(--muted); white-space:nowrap; opacity:1;
+}
+:root:not([data-style]) body #statStrip .s-glyph{display:none}
+:root:not([data-style]) body #statStrip .s-value{
+  order:1; background:none; -webkit-text-fill-color:currentColor; filter:none;
+  color:var(--text); font:500 24px/1.1 var(--mono); letter-spacing:-.045em; margin:0;
+}
+:root:not([data-style]) body #statStrip #stTotal{color:var(--brand-pink)}
+:root:not([data-style]) body #statStrip #stG1{color:var(--tb-brand-live)}
+:root:not([data-style])[data-theme="day"] body #statStrip #stTotal{color:var(--accent-ink)}
+:root:not([data-style]) body #statStrip .s-sub{display:none}
+:root:not([data-style]) #statsToggle{
+  top:0; right:18px; background:var(--panel); color:var(--muted);
+  border-color:var(--line); box-shadow:none;
+}
+:root:not([data-style]) body.stats-min #statStrip{padding-top:5px; padding-bottom:5px}
+:root:not([data-style]) body.stats-min #statStrip .s-label{display:none}
+:root:not([data-style]) body.stats-min #statStrip .s-value{font-size:16px}
+
+/* Fit-cards continues to allocate all heights and columns. */
+:root:not([data-style]) body main{gap:18px; padding:16px 22px 12px}
+:root:not([data-style]) body main > .col{gap:10px}
+:root:not([data-style]) .tb-section-heading{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  flex:none; margin:0; color:var(--text); font:600 13px/1.2 var(--body);
+  letter-spacing:0; text-transform:none;
+}
+:root:not([data-style]) .tb-section-heading span{
+  color:var(--muted); font:400 8px/1.4 var(--mono); letter-spacing:.08em;
+}
+:root:not([data-style]) body #map{
+  border:1px solid var(--line); border-radius:12px; box-shadow:none;
+}
+:root:not([data-style]) body:not(.map-full) #map{z-index:0}
+:root:not([data-style]) body.map-full #map{border:0; border-radius:0}
+:root:not([data-style]) body .legend{font-family:var(--body); font-size:10px}
+:root:not([data-style]) body .card{
+  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:11px 13px; box-shadow:none;
+}
+:root:not([data-style]) body .card::after{display:none}
+:root:not([data-style]) body .card h2{
+  margin:0 0 7px; gap:7px; color:var(--text); font:600 12px/1.25 var(--body);
+  text-transform:none; letter-spacing:0; flex:none; opacity:1;
+}
+:root:not([data-style]) body .card h2 .t{
+  color:var(--text); background:none; -webkit-text-fill-color:currentColor; filter:none;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;
+}
+:root:not([data-style]) body .card h2::before{
+  width:3px; height:12px; background:var(--sys,var(--accent)); border-radius:2px;
+}
+:root:not([data-style]) body .card h2 .count{
+  color:var(--muted); font:400 9px/1.3 var(--mono); letter-spacing:0; opacity:1;
+}
+:root:not([data-style]) body .card .statline{
+  color:var(--muted); opacity:1; font:400 9px/1.4 var(--mono); margin:0 0 6px;
+}
+:root:not([data-style]) body .card .statline b{color:var(--text); filter:none; font-weight:500}
+:root:not([data-style]) body .card .mini-btn{
+  border:0; color:var(--muted); background:transparent; border-radius:4px; margin-left:0;
+}
+:root:not([data-style]) body .card .mini-btn:hover{background:var(--panel2); color:var(--text)}
+:root:not([data-style]) body .card.mini{background:var(--panel2)}
+:root:not([data-style]) body .card.mini h2{margin-bottom:0}
+:root:not([data-style]) body .list .row{
+  background:transparent; border:0; border-bottom:1px solid var(--row-line);
+  border-radius:0; padding:5px 0; box-shadow:none;
+}
+:root:not([data-style]) body .list .row:last-child{border-bottom-color:transparent}
+:root:not([data-style]) body .list .row .dest{
+  font-family:var(--body); font-weight:600; font-size:var(--dest-fs); line-height:1.2;
+}
+:root:not([data-style]) body .list .row .sub{line-height:1.3}
+:root:not([data-style]) body .list .row .badge{border-radius:5px}
+:root:not([data-style]) body .list .row .live,
+:root:not([data-style]) body .list .row .live-eta{font-weight:500; letter-spacing:-.03em}
+:root:not([data-style]) body .list .row .sched{font-size:9px; opacity:1}
+:root:not([data-style]) body .list .stop-label{
+  color:var(--muted); opacity:1; font:500 9px/1.3 var(--mono); margin:4px 0 2px;
+}
+:root:not([data-style]) body .list .row:hover{background:var(--panel2)}
+:root:not([data-style]) body .alert-row{
+  background:var(--panel2); border:0; border-left:2px solid var(--sev,var(--accent));
+  border-radius:0 5px 5px 0;
+}
+:root:not([data-style]) body footer{
+  background:var(--bg); border-color:var(--line); color:var(--muted);
+  font:400 9px/1.3 var(--mono); padding:7px 22px;
+  padding-bottom:calc(7px + env(safe-area-inset-bottom, 0px));
+}
+:root:not([data-style]) body footer .dot{box-shadow:none}
+:root:not([data-style]) :focus-visible{outline:2px solid var(--accent-ink); outline-offset:3px}
+:root:not([data-style])[data-map="off"] .tb-map-heading,
+:root:not([data-style]) body.map-full .tb-section-heading{display:none}
+
+/* The fitter's compact and phone layouts retain their existing height budget. */
+@media(min-width:481px) and (max-width:1220px){
+  :root:not([data-style]) body #app > header{padding:9px 14px; gap:8px 10px}
+  :root:not([data-style]) body #app > header{padding-top:calc(9px + env(safe-area-inset-top, 0px))}
+  :root:not([data-style]) header .brandmark--sm{width:26px; height:26px; margin:2px}
+  :root:not([data-style]) header .title{flex-basis:170px}
+  :root:not([data-style]) header .homelink{order:-3}
+  :root:not([data-style]) header .title{order:-2; flex-basis:calc(100% - 280px)}
+  :root:not([data-style]) header .clock{order:-1; margin-left:auto}
+  :root:not([data-style]) header .tb-board-city{font-size:24px}
+  :root:not([data-style]) .tb-board-kicker{font-size:8px; margin-bottom:3px}
+  :root:not([data-style]) header .clock .time{font-size:20px}
+  :root:not([data-style]) header .clock .meta{font-size:8px; margin-top:3px}
+  :root:not([data-style]) body #statStrip{padding:9px 14px}
+  :root:not([data-style]) body #statStrip .stat{padding:0 12px; gap:6px}
+  :root:not([data-style]) body #statStrip .s-value{font-size:19px}
+  :root:not([data-style]) body #statStrip .s-label{font-size:8px}
+  :root:not([data-style]) body main{padding:10px 14px; gap:12px}
+  :root:not([data-style]) body main > .col{gap:7px}
+  :root:not([data-style]) body .card{padding:7px 9px}
+  :root:not([data-style]) body .card h2{font-size:11px; margin-bottom:4px}
+  :root:not([data-style]) body .card .statline{font-size:9px; margin-bottom:3px}
+  :root:not([data-style]) body .list .row{padding:3px 0}
+}
+@media(max-width:767px){
+  :root:not([data-style]) header .clock{margin-left:auto}
+  :root:not([data-style]) .tb-section-heading span{display:none}
+  :root:not([data-style]) .tb-section-heading{font-size:12px}
+  :root:not([data-style]) body #statStrip .stat{padding:0 10px}
+  :root:not([data-style]) body #statStrip .s-label{font-size:7px}
+  :root:not([data-style]) .city-picker select{padding:8px 25px 8px 9px; font-size:11px}
+}
+@media(max-width:480px){
+  :root:not([data-style]) body #app > header{padding:13px 14px; gap:10px 6px}
+  :root:not([data-style]) body #app > header{padding-top:calc(13px + env(safe-area-inset-top, 0px))}
+  :root:not([data-style]) header .brandmark--sm{width:28px; height:28px; margin:2px}
+  :root:not([data-style]) header .title{flex:1 1 calc(100% - 50px)}
+  :root:not([data-style]) header .tb-board-city{font-size:26px}
+  :root:not([data-style]) header .title small{font-size:11px}
+  :root:not([data-style]) header .clock{display:none}
+  :root:not([data-style]) body #statStrip{display:none}
+  :root:not([data-style]) .city-picker select{width:106px; padding:8px 23px 8px 8px; font-size:10px}
+  :root:not([data-style]) header button{min-height:36px}
+  :root:not([data-style]) #fsBtn,
+  :root:not([data-style]) #minAllBtn,
+  :root:not([data-style]) #cityToolkitBtn,
+  :root:not([data-style]) #settingsBtn{width:36px; height:36px; padding:0!important; justify-content:center}
+  :root:not([data-style]) .tb-board-views > summary{min-height:36px; width:65px; padding:8px; gap:7px; font-size:11px}
+  :root:not([data-style]) .tb-board-views .view-links{right:auto; left:0}
+  :root:not([data-style]) body main{padding:14px; gap:20px}
+  :root:not([data-style]) body .card{padding:13px 14px; border-radius:11px}
+  :root:not([data-style]) body .card h2{font-size:14px; margin-bottom:9px}
+  :root:not([data-style]) body .list .row{padding:8px 0}
+  :root:not([data-style]) body .card .statline{font-size:10px}
+  :root:not([data-style]) body footer{padding:12px 14px; flex-wrap:wrap}
+  :root:not([data-style]) body footer{padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px))}
+}
+@media(prefers-reduced-motion:reduce){
+  :root:not([data-style]) body .card,:root:not([data-style]) body header button{transition:none}
+}
