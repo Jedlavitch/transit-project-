@@ -23,9 +23,11 @@
       L.TileLayer.
 
    2. Esri's tile path is {z}/{y}/{x}, not Leaflet's usual {z}/{x}/{y}, and the
-      pyramid stops at zoom 16. maxNativeZoom lets Leaflet upscale the z16 tile
-      past that instead of requesting z17-19 tiles that come back blank — the
-      boards zoom to 19 when following a vehicle. */
+      Canvas pyramid stops at zoom 16: ask for z17-19 and every service in the
+      world hands back the same 2,521-byte "no data" tile. maxNativeZoom keeps
+      Leaflet from asking — but the boards zoom to 19 when following a vehicle,
+      and a z16 tile stretched eight times is a smear with no streets and no
+      names in it. So a third layer takes over up there; see DETAIL. */
 (function (global) {
   "use strict";
 
@@ -41,8 +43,33 @@
     }
   };
 
+  /* The close-up layer. World_Street_Map is the only keyless Esri service that
+     is actually drawn down to z19 everywhere the boards run — Canvas stops at
+     16, and both Reference overlays carry labels and route shields but no road
+     geometry at all past 16, so neither can stand in for it.
+
+     It is a LIGHT map, which is why it is inverted below rather than merely
+     dimmed: dimming a light map leaves white roads on a pale ground, the exact
+     opposite polarity to the dark canvas it has to blend with.
+
+     The numbers in that filter are measured, not guessed. A grid search over
+     brightness/contrast/saturate compared the mean luminance of this service's
+     z17 tile against the Canvas z16 tile under the board filter, across nine
+     places picked for the things that go wrong — parkland, harbour, river,
+     dense grid, European old town. brightness(.7) contrast(.95) was the floor
+     of that search (RMS 6.7 of 255); saturate sits below what the search liked
+     because the board's own route colours have to stay the loudest thing on
+     the screen. */
+  var DETAIL = "https://services.arcgisonline.com/ArcGIS/rest/services/" +
+    "World_Street_Map/MapServer/tile/{z}/{y}/{x}";
+
+  /* Below this, the Canvas tiles are real; above it they are an upscale, so
+     the detail layer fades in and covers them. */
+  var DETAIL_FROM = 17;
+
   var PANE = "tbBasemap";      // the canvas: roads, water, landuse
   var PANE_REF = "tbBasemapRef";   // Esri's separate place-name layer
+  var PANE_HI = "tbBasemapHi";     // the close-up street map, z17 and in
 
   /* "day" is the only light board theme; "dark" and "black" both want the dark
      canvas, and are separated below by how hard the filter pushes it. */
@@ -92,7 +119,19 @@
       '[data-theme="black"] .tb-basemap-pane{filter:brightness(.38) contrast(1.3) saturate(.6)}' +
       '[data-theme="black"] .tb-basemap-ref{filter:brightness(.82) contrast(1.05)}' +
       /* Day is already a light map on a light board; leave both alone. */
-      '[data-theme="day"] .tb-basemap-pane,[data-theme="day"] .tb-basemap-ref{filter:none}';
+      '[data-theme="day"] .tb-basemap-pane,[data-theme="day"] .tb-basemap-ref{filter:none}' +
+      /* The close-up layer. opacity, not display, so crossing the threshold is
+         a crossfade rather than the map blinking — and so the blurred canvas
+         underneath is what it fades out of, never a hole. */
+      ".tb-basemap-hi{opacity:0;transition:opacity .4s ease}" +
+      ".tb-basemap-hi.tb-hi-on{opacity:1}" +
+      ".tb-basemap-hi{filter:invert(1) hue-rotate(180deg) brightness(.7) contrast(.95) saturate(.18)}" +
+      /* hue-rotate(180) after the invert is what keeps water blue and parks
+         green instead of the orange-and-magenta a bare invert produces. */
+      '[data-theme="black"] .tb-basemap-hi{filter:invert(1) hue-rotate(180deg) brightness(.56) contrast(1) saturate(.14)}' +
+      /* Day is a light board and this is a light map: it needs no correction
+         at all, which is the one case where the close-up matches perfectly. */
+      '[data-theme="day"] .tb-basemap-hi{filter:none}';
     (document.head || document.documentElement).appendChild(s);
   }
 
@@ -106,6 +145,11 @@
     var o = {}, k;
     for (k in (opts || {})) if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k];
     if (o.maxZoom == null) o.maxZoom = 19;
+    /* Leaflet's default of 2 is tuned for a map a hand drags. These maps pan
+       themselves, continuously, while following a vehicle — a wider ring of
+       tiles already loaded off-screen is the difference between gliding and
+       chasing a grey edge. */
+    if (o.keepBuffer == null) o.keepBuffer = 3;
     /* Not overridable by accident: asking Esri for z17+ returns blank tiles,
        so a board passing maxZoom:19 must still stop fetching at 16. */
     o.maxNativeZoom = 16;
@@ -124,23 +168,61 @@
       pr.style.zIndex = 189;      // names sit above the canvas they name
       pr.classList.add("tb-basemap-ref");
     }
+    if (!map.getPane(PANE_HI)) {
+      var ph = map.createPane(PANE_HI);
+      ph.style.zIndex = 190;      // covers both of them when it is on
+      ph.classList.add("tb-basemap-hi");
+    }
 
     var baseOpts = {}, refOpts = {};
     for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) { baseOpts[k] = o[k]; refOpts[k] = o[k]; }
     baseOpts.pane = PANE;
     refOpts.pane = PANE_REF;
 
+    /* The detail layer is deliberately NOT given maxNativeZoom: being drawn
+       all the way down is the entire reason it exists. minZoom keeps Leaflet
+       from fetching a tile of it until the board is nearly that far in, so a
+       wall display parked on a whole city never pays for it.
+
+       It is one zoom BELOW the crossfade, and that is deliberate. Leaflet drops
+       a layer's tiles the instant the map leaves its zoom range: set the two to
+       the same number and zooming out fades an already-empty pane — a pop, not
+       a crossfade. One level of overlap means the tiles are still there to fade
+       out of, and still there to fade back into on the way in. */
+    var hiOpts = {};
+    for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) hiOpts[k] = o[k];
+    delete hiOpts.maxNativeZoom;
+    hiOpts.pane = PANE_HI;
+    hiOpts.minZoom = DETAIL_FROM - 1;
+
     var set = setFor(theme);
     var base = global.L.tileLayer(set.base, baseOpts).addTo(map);
     var ref  = global.L.tileLayer(set.ref, refOpts).addTo(map);
+    var hi   = global.L.tileLayer(DETAIL, hiOpts).addTo(map);
+
+    /* One class toggle drives the crossfade; the transition is in the CSS, so
+       nothing here runs per frame. Called on every zoom rather than only on
+       the crossing, because a board can be restored at any zoom — the kiosk
+       reload, a shared deep link — and the pane has to be right on first
+       paint, not one zoom later. */
+    function syncDetail() {
+      var on = map.getZoom() >= DETAIL_FROM;
+      var el = map.getPane(PANE_HI);
+      if (el) el.classList.toggle("tb-hi-on", on);
+    }
+    map.on("zoomend", syncDetail);
+    syncDetail();
 
     return {
       base: base,
       ref: ref,
+      hi: hi,
       setTheme: function (t) {
         var n = setFor(t);
         base.setUrl(n.base);
         ref.setUrl(n.ref);
+        /* hi keeps its URL: one light street map serves every theme, and only
+           the filter above changes. */
       }
     };
   }

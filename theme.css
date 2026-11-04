@@ -880,16 +880,25 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
   --atlas-feather:104px;
   --atlas-plate:rgba(6,12,26,.94);
   --atlas-tile:saturate(.26) brightness(.58) contrast(1.08);
+  /* The close-up street map basemap.js fades in past z16 is a LIGHT map, so
+     Atlas's tint cannot simply be reused on it — it has to be inverted first
+     or the whole screen turns white under a followed vehicle. Atlas runs it
+     flatter than the boards do: the rail and the scrim are already carrying
+     colour, and the map is meant to recede behind them. */
+  --atlas-hi:invert(1) hue-rotate(180deg) brightness(.72) contrast(.95) saturate(.1);
   --atlas-hair:rgba(160,190,255,.16);
   --atlas-ink-shadow:0 1px 3px rgba(0,0,0,.85);
 }
 :root[data-style="atlas"][data-theme="black"]{
   --atlas-plate:rgba(0,0,0,.95);
   --atlas-tile:saturate(.2) brightness(.5) contrast(1.1);
+  --atlas-hi:invert(1) hue-rotate(180deg) brightness(.6) contrast(1) saturate(.08);
 }
 :root[data-style="atlas"][data-theme="day"]{
   --atlas-plate:rgba(252,253,255,.95);
   --atlas-tile:saturate(.2) brightness(1.05) contrast(.92);
+  /* Light board, light map: no inversion, just the same flattening. */
+  --atlas-hi:saturate(.2) brightness(1.02) contrast(.92);
   --atlas-hair:rgba(30,55,110,.16);
   --atlas-ink-shadow:0 1px 2px rgba(255,255,255,.9);
 }
@@ -945,6 +954,7 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
    splits them: tint the land, keep the city readable. */
 :root[data-style="atlas"] .tb-basemap-pane{ filter:var(--atlas-tile) }
 :root[data-style="atlas"] .tb-basemap-ref{ filter:saturate(.3) brightness(.92) }
+:root[data-style="atlas"] .tb-basemap-hi{ filter:var(--atlas-hi) }
 
 /* ---- 4. the scrim, INSIDE the map column --------------------------------
    Not on main::after. That would sit above the whole column and bury
