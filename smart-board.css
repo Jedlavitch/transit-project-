@@ -1,0 +1,20 @@
+/* Visibility is independent of the user's existing Show on board choices. */
+.cards .card.sb-resting{display:none!important}
+.sb-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;min-height:28px;color:var(--muted);font:11px/1.4 var(--body)}
+.sb-bar[hidden]{display:none}
+.sb-controls{display:flex;gap:4px;align-items:center;flex:none}
+.sb-bar button{border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--text);padding:4px 7px;font:11px/1.3 var(--body);cursor:pointer;min-height:26px}
+.sb-bar button:disabled{opacity:.4;cursor:default}
+.sb-bar button:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+#smartBoardSettings{border-top:1px solid var(--line);padding-top:12px;margin:10px 0 16px}
+#smartBoardSettings p{font:11px/1.6 var(--body);color:var(--muted);margin:8px 0}
+#smartBoardSettings summary{font:600 12px/1.5 var(--body);cursor:pointer;padding:7px 0}
+#smartBoardSettings .sb-pins{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#smartBoardSettings .sb-pins label{display:flex;align-items:center;gap:7px;font:11px/1.5 var(--body);color:var(--text)}
+#smartBoardSettings input[type=checkbox]{appearance:auto;width:15px;height:15px;margin:0;min-height:0;padding:0;accent-color:var(--accent)}
+@media(min-width:481px){
+ :root[data-board-layout="smart"] .cards .sb-alert:not(.sb-resting):not(.user-hidden){display:flex}
+ :root[data-board-layout="smart"] .cards{scrollbar-width:none}
+ :root[data-board-layout="smart"] main>.col:last-child::after{display:none}
+}
+@media(max-width:600px){.sb-status{max-width:160px;font-size:10px}.sb-bar button{padding:4px 6px;font-size:10px}}
