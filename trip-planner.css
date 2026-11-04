@@ -1,0 +1,92 @@
+/* Journey tools stay outside the fitted departure grid. */
+#tripPlannerBtn{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+#tripPlannerBtn svg{width:17px;height:17px;flex:none}
+#tripPlanner[hidden],.jp-dock[hidden],#tripPlanner [hidden]{display:none!important}
+#tripPlanner{position:fixed;inset:0;z-index:12000;background:#080610b8;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(9px);color:var(--text,#eef3ff);font-family:inherit;box-sizing:border-box}
+#tripPlanner *{box-sizing:border-box}
+.jp-panel{width:min(100%,1080px);max-height:calc(100dvh - 40px);display:flex;flex-direction:column;overflow:hidden;background:var(--bg,#12101a);border:1px solid var(--line,#393243);border-radius:22px;box-shadow:0 28px 110px #0009}
+.jp-header{display:flex;align-items:center;gap:16px;padding:25px 28px 21px;border-bottom:1px solid var(--line)}
+.jp-kicker{color:#ff3d77;font-size:10px;font-weight:800;letter-spacing:1.7px;margin-bottom:7px}
+.jp-header h2{font-size:27px;letter-spacing:-.8px;margin:0;line-height:1.15;font-weight:800}
+.jp-header p{font-size:12px;color:var(--muted);margin:8px 0 0}
+#tripPlanner button,#tripPlanner input,#tripPlanner select{font:inherit;color:inherit}
+#tripPlanner button,#tripPlanner a{touch-action:manipulation}
+#tripPlanner button{cursor:pointer}
+#tripPlanner button:disabled{opacity:.45;cursor:default}
+#tripPlanner button:focus-visible,#tripPlanner a:focus-visible,#tripPlanner input:focus-visible,#tripPlanner select:focus-visible{outline:2px solid #00e0c6;outline-offset:3px}
+#tripPlanner button{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 13px;font-weight:700;font-size:12px}
+#tripPlanner .jp-close{margin-left:auto;font-size:23px;padding:3px 11px;background:transparent;align-self:flex-start}
+.jp-body{display:grid;grid-template-columns:350px minmax(0,1fr);overflow:auto;min-height:0}
+.jp-sidebar{padding:22px;border-right:1px solid var(--line);min-width:0}
+.jp-content{padding:24px 26px;min-width:0;min-height:340px}
+.jp-field{margin-bottom:14px}
+.jp-field>label,.jp-save-label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:800;color:var(--muted);margin-bottom:7px}
+.jp-inputrow{display:flex;gap:6px}
+#tripPlanner input,#tripPlanner select{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2);min-width:0;width:100%;font-size:13px}
+#tripPlanner input::placeholder{color:var(--muted)}
+#tripPlanner .jp-search{padding:8px 11px}
+.jp-under{display:flex;align-items:center;gap:8px;justify-content:space-between;margin:7px 0 0}
+#tripPlanner .jp-textbtn{padding:2px 0;background:transparent;border:0;border-radius:2px;font-size:11px;color:var(--muted);text-align:left}
+#tripPlanner .jp-textbtn:hover{color:var(--text);text-decoration:underline}
+.jp-results{list-style:none;padding:4px;margin:7px 0 0;border:1px solid var(--line);border-radius:10px;max-height:225px;overflow:auto;background:var(--panel)}
+#tripPlanner .jp-results button{display:block;text-align:left;width:100%;border:0;border-radius:6px;background:transparent;padding:10px}
+.jp-results button:hover{background:var(--panel2)!important}
+.jp-results small{display:block;color:var(--muted);font-weight:400;margin-top:4px}
+.jp-time{display:grid;grid-template-columns:1fr;gap:7px;margin-bottom:6px}
+.jp-time-note{font-size:10px;line-height:1.5;color:var(--muted);margin:7px 0 14px;overflow-wrap:anywhere}
+#tripPlanner .jp-primary{background:#ff3d77;color:#180813;border:1px solid #ff3d77;padding:12px 16px;font-weight:800}
+#jpPlan{width:100%;font-size:13px!important}
+.jp-message{font-size:12px;line-height:1.6;margin:13px 0;color:var(--muted);overflow-wrap:anywhere}
+.jp-message:empty{display:none}
+.jp-saved{margin-top:25px;border-top:1px solid var(--line);padding-top:18px}
+.jp-sectionlabel{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;color:var(--muted);margin:0 0 11px}
+.jp-chips{display:flex;gap:7px;flex-wrap:wrap}
+#tripPlanner .jp-chip{padding:8px 11px;border-radius:8px;font-size:11px}
+.jp-place{display:flex;gap:5px;align-items:center;margin-bottom:7px;min-width:0}
+#tripPlanner .jp-place-main{flex:1;text-align:left;min-width:0;padding:10px 12px}
+.jp-place-main span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jp-place-main small{display:block;color:var(--muted);font-size:10px;font-weight:400;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tripPlanner .jp-delete{background:transparent;color:var(--muted);padding:9px;font-size:15px;border:0}
+.jp-save-editor{margin-top:15px}
+.jp-save-editor summary{font-size:11px;color:var(--muted);cursor:pointer;font-weight:700}
+.jp-save-editor input{margin:10px 0 8px}
+.jp-save-note{font-size:10px;color:var(--muted);line-height:1.6;margin:10px 0 0}
+.jp-empty{padding:35px 6px;max-width:420px}
+.jp-empty-symbol{width:54px;height:54px;background:#00e0c615;color:#00e0c6;border:1px solid #00e0c636;border-radius:16px;display:grid;place-items:center;font-size:26px;margin-bottom:20px}
+.jp-empty h3{font-size:23px;letter-spacing:-.5px;margin:0 0 12px}
+.jp-empty p{font-size:13px;line-height:1.8;color:var(--muted);margin:0 0 20px}
+.jp-labelrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.jp-labelrow h3{font-size:15px;margin:0}
+#jpSort{width:auto;font-size:11px;padding:7px;max-width:165px}
+.jp-option{border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:11px;background:var(--panel)}
+.jp-option:first-of-type{border-color:#00e0c670}
+.jp-option-top{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.jp-option-top strong{font-size:21px;letter-spacing:-.5px;white-space:nowrap}
+.jp-option-meta{font-size:11px;color:var(--muted);margin:9px 0 13px;line-height:1.6}
+.jp-routes{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:13px;font-size:11px}
+.jp-route{padding:5px 8px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);font-weight:800}
+.jp-separator{color:var(--muted)}
+.jp-option-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:13px}
+.jp-option details{margin-top:13px;font-size:12px}
+.jp-option summary{cursor:pointer;color:var(--muted)}
+.jp-timeline{list-style:none;padding:0;margin:16px 0 0}
+.jp-timeline li{border-left:2px solid var(--line);padding:0 0 19px 15px;margin-left:4px;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.jp-timeline li:last-child{padding-bottom:0}
+.jp-timeline small{display:block;color:var(--muted);margin-top:4px}
+.jp-guidance{border:1px solid #00e0c65c;background:var(--panel);border-radius:16px;padding:22px}
+.jp-step-kicker{font-size:10px;color:#00e0c6;font-weight:800;text-transform:uppercase;letter-spacing:1px}
+.jp-guidance h3{font-size:25px;line-height:1.2;letter-spacing:-.7px;margin:16px 0 10px;overflow-wrap:anywhere}
+.jp-guide-to{font-size:13px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.jp-countdown{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:15px 0;margin:18px 0;font-size:13px;line-height:1.6;font-variant-numeric:tabular-nums}
+.jp-countdown strong{font-size:20px;display:block;color:var(--text)}
+.jp-guide-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+.jp-location-note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:13px}
+.jp-warning{color:var(--late,#ff8e99)}
+.jp-footer{padding:13px 25px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;gap:6px 16px;flex-wrap:wrap;line-height:1.5}
+.jp-footer a,.jp-fallback{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.jp-fallback{font-size:11px;display:inline-block;margin-top:10px;line-height:1.6}
+.jp-dock{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:7500;padding:10px 12px;display:flex;align-items:center;gap:12px;border:1px solid #00e0c66b;border-radius:13px;background:var(--panel,#12101a);box-shadow:0 8px 32px #0006;color:var(--text);max-width:calc(100% - 24px)}
+.jp-dock span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jp-dock button{border:0;border-radius:8px;padding:9px 11px;background:#00e0c6;color:#0b1915;white-space:nowrap;font-weight:800;cursor:pointer}
+@media(max-width:760px){#tripPlanner{padding:0;align-items:stretch}.jp-panel{border:0;border-radius:0;max-height:100dvh}.jp-header{padding:20px}.jp-header h2{font-size:24px}.jp-body{display:block}.jp-sidebar{border-right:0;border-bottom:1px solid var(--line);padding:20px}.jp-content{padding:20px;min-height:0}.jp-footer{padding:12px 20px}.jp-empty{padding:6px}.jp-empty-symbol{display:none}.jp-empty h3{font-size:19px}.jp-saved{margin-top:19px;padding-top:15px}#tripPlannerBtn{gap:4px;padding-left:9px;padding-right:9px}.jp-option-top{font-size:12px}.jp-option-top strong{font-size:19px}.jp-guidance{padding:18px}}
+@media(prefers-reduced-motion:reduce){#tripPlanner{backdrop-filter:none}}
