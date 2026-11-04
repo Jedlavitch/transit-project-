@@ -23,7 +23,7 @@
 <script src="city-discovery-data.js?v=2" defer></script>
 <script src="city-discovery.js?v=2" defer></script>
 <link rel="stylesheet" href="smart-board.css?v=1" />
-<script src="smart-board.js?v=2" defer></script>
+<script src="smart-board.js?v=3" defer></script>
 <script src="settings-ui.js?v=17" defer></script>
 <script src="clock-faces.js?v=1" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
@@ -47,7 +47,7 @@
 <script src="mascot-buddy.js?v=9" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="fit-cards.js?v=24" defer></script>
+<script src="fit-cards.js?v=25" defer></script>
 <script src="screen-lock.js?v=2" defer></script>
 <script src="atlasrows.js?v=1" defer></script>
 <script src="locpicker.js?v=1" defer></script>
@@ -805,7 +805,9 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="basemap.js?v=3"></script>
+<link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
+<link rel="stylesheet" href="transit-map.css?v=1" />
+<script src="transit-map.js?v=1"></script>
 <script>
 "use strict";
 /* =========================================================================
