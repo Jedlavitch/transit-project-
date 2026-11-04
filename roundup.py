@@ -99,6 +99,7 @@ CITY_BUNDLES = {
     "zurich":    [],
     "cologne":   [],
     "stuttgart": [],
+    "rome":      [],
 }
 
 # The proxy returns empty for rapid successive calls. Measured: nine back-to-back

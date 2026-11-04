@@ -44,7 +44,7 @@
   }
   function distanceLabel(p) {
     var km=distance(p);if(km===null)return "City pick";
-    var metric=["amsterdam","zurich","cologne","stuttgart"].indexOf(city)>=0, n=metric?km:km/1.609344;
+    var metric=["amsterdam","zurich","cologne","stuttgart","rome"].indexOf(city)>=0, n=metric?km:km/1.609344;
     return "≈ "+(n<10?n.toFixed(1):Math.round(n))+ (metric?" km":" mi")+" away";
   }
   function route(p, mode, fromId) {

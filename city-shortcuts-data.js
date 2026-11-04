@@ -2,7 +2,7 @@
    Coordinates point to named transit access points, not aircraft/runway centres.
    Connection notes link to their official source and are not live travel advice;
    the linked operators hold current timetables, disruptions and accessibility.
-   Reviewed 2026-11-03. No fares, frequencies or journey times are baked in. */
+   Reviewed 2026-11-04. No fares, frequencies or journey times are baked in. */
 window.TBCityShortcutsData = {
   dc: {
     name: "Washington, DC",
@@ -237,6 +237,32 @@ window.TBCityShortcutsData = {
       { label: "VVS service & lift disruptions", url: "https://www.vvs.de/verbindungen-und-mobilitaet/aktuelle-meldungen" },
       { label: "VVS accessible travel", url: "https://www.vvs.de/service/barrierefreiheit" },
       { label: "VVS journey planner", url: "https://www.vvs.de/" }
+    ]
+  },
+  rome: {
+    name: "Rome",
+    tagline: "Two airports, three metro lines and the stations that join them.",
+    places: [
+      { id: "fco", label: "Fiumicino Aeroporto · rail", lat: 41.7936, lon: 12.2517, kind: "airport",
+        note: "The rail station adjoins the terminals by covered walkway. The Leonardo Express runs to Termini; the FL1 serves Trastevere, Ostiense and Tiburtina.",
+        source: "https://www.adr.it/web/aeroporti-di-roma-en/" },
+      { id: "cia", label: "Ciampino Airport · bus", lat: 41.7991, lon: 12.5905, kind: "airport",
+        note: "No rail or metro at the terminal: take a bus to Ciampino station or to Anagnina on Metro A.",
+        source: "https://www.adr.it/web/aeroporti-di-roma-en/" },
+      { id: "termini", label: "Roma Termini", lat: 41.9012, lon: 12.5017, kind: "station",
+        note: "Metro A and B cross beneath the station; allow time for the walk from the far platforms.",
+        source: "https://www.rfi.it/en/stations.html" },
+      { id: "tiburtina", label: "Roma Tiburtina", lat: 41.9108, lon: 12.5307, kind: "station",
+        note: "High-speed and regional trains, with Metro B at the Tiburtina F.S. stop.",
+        source: "https://www.rfi.it/en/stations.html" },
+      { id: "ostiense", label: "Roma Ostiense", lat: 41.8725, lon: 12.4839, kind: "station",
+        note: "Connected to Piramide on Metro B; check the walking route between the two.",
+        source: "https://www.rfi.it/en/stations.html" }
+    ],
+    resources: [
+      { label: "ATAC service & lift status", url: "https://www.atac.roma.it/en" },
+      { label: "Roma Mobilità traffic and transit news", url: "https://romamobilita.it/en/" },
+      { label: "Trenitalia journey planner", url: "https://www.trenitalia.com/en.html" }
     ]
   }
 };

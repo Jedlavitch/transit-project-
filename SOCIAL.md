@@ -243,10 +243,10 @@ GTFS bundles (on disk)  ─┘                      └────────�
 
 | | source | delays? |
 |---|---|---|
-| Aircraft, all 11 cities | your ADS-B proxy | n/a |
+| Aircraft, all 12 cities | your ADS-B proxy | n/a |
 | Amtrak, the 7 US cities | amtraker, live | **yes** |
 | Metro, tram, regional rail | GTFS bundles in this repo | **no** |
-| Zurich, Cologne, Stuttgart rail | *nothing* — those boards use live transitous, which has no bundle | — |
+| Zurich, Cologne, Stuttgart, Rome rail | *nothing* — those boards use live transitous, which has no bundle | — |
 
 Be clear-eyed about the bottom two rows. A bundled timetable carries no delays and
 no vehicle identity, so those trains are scored on which line and destination is

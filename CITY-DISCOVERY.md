@@ -1,6 +1,6 @@
 # City discovery and passport
 
-Choose **Explore** in any city board's header, or open its **Explore [city]** card. The first collection includes 33 places across eleven cities: three places and one two-stop outing per city.
+Choose **Explore** in any city board's header, or open its **Explore [city]** card. The first collection includes 36 places across twelve cities: three places and one two-stop outing per city.
 
 - Browse food, culture, and outdoor picks, search by name or description, and keep a Saved list.
 - **Go by transit** and **Walk** open Google Maps using the board's current pin as the origin. The second outing leg starts at the first destination. Distances are approximate straight-line distances, not walking times or transit estimates.
@@ -16,7 +16,7 @@ The board card participates in Smart board rotation and supports the existing hi
 
 `city-discovery-data.js` contains the catalogue and official source URLs. Keep each place's ID stable: saved places, stamps, and shared links refer to it. Each place requires `id`, `name`, `kind` (`outdoors`, `culture`, or `food`), approximate coordinates, a specific address, a short description, an exploration prompt, and an official HTTPS URL. Outing stop IDs must exist in the same city's catalogue. Names and addresses, rather than approximate coordinates, identify destinations in Google Maps links.
 
-`city-discovery.js` and `city-discovery.css` provide the interface. Load them after the existing city profile data and before `smart-board.js`. The eleven city HTML files only add asset imports and update the Smart board cache version. New cities need an entry in both `TBCityShortcutsData` and `TBCityDiscoveryData` before loading this feature; the blank stencil has no discovery catalogue.
+`city-discovery.js` and `city-discovery.css` provide the interface. Load them after the existing city profile data and before `smart-board.js`. The twelve city HTML files only add asset imports and update the Smart board cache version. New cities need an entry in both `TBCityShortcutsData` and `TBCityDiscoveryData` before loading this feature; the blank stencil has no discovery catalogue.
 
 Preferences use `tb.discovery.<city>.v1`, containing `saved` (known place IDs) and `visits` (known IDs mapped to ISO timestamps). Unknown IDs and invalid dates are discarded. No account sync is provided. Blocked storage falls back to memory with a visible message. Progress is local to this browser and origin; clearing site data removes it.
 

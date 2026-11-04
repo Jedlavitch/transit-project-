@@ -62,6 +62,7 @@ GENERATORS = {
     "ams-ferry-schedule.json":      "gen-amsterdam-schedule.py",
     "ams-intl-schedule.json":       "gen-amsterdam-schedule.py",
     "rideon-schedule.json":         "gen-rideon-schedule.py",
+    "rome-metro-schedule.json":     "gen-rome-metro-schedule.py",
     "marc-schedule.json":           "gen-marc-schedule.py",
     "patco-schedule.json":          "gen-patco-schedule.py",
     "path-schedule.json":           "gen-path-schedule.py",

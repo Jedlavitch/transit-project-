@@ -52,6 +52,7 @@ window.TB_CONFIG = {
   njtPass:      "",
   sfLiveUrl:    "https://restless-frog-f414.jacklemonade2.workers.dev",  // sf511-worker.js
   amsLiveUrl:   "",       // ovapi-worker.js
+  romeLiveUrl:  "",       // rome-worker.js
 
   /* ---- shared spotter feed --------------------------------------------- */
   spotBlob:     "",       // share code from the phone app

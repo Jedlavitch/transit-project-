@@ -106,7 +106,8 @@
     { file: "sanfrancisco.html", id: "sf",        label: "San Francisco" },
     { file: "zurich.html",       id: "zurich",    label: "Zurich"        },
     { file: "cologne.html",      id: "cologne",   label: "Cologne"       },
-    { file: "stuttgart.html",    id: "stuttgart", label: "Stuttgart"     }
+    { file: "stuttgart.html",    id: "stuttgart", label: "Stuttgart"     },
+    { file: "rome.html",         id: "rome",      label: "Rome"          }
   ];
 
   /* ---- which city is this? ------------------------------------------------

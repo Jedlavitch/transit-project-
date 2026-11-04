@@ -1,5 +1,5 @@
 /* ============================================================================
-   transitous.js — departures for the European boards (Zurich, Cologne, Stuttgart).
+   transitous.js — departures for the European boards (Zurich, Cologne, Stuttgart, Rome).
 
    One source for all three: api.transitous.org, a community-run MOTIS instance
    that aggregates Europe's public GTFS and GTFS-Realtime feeds. Free, no
@@ -68,7 +68,49 @@
     const m = r.match(/^(ICE|IC|EC|RE|RB|EN|NJ|TGV|RJ|FLX)\s*\d/) ||
               r.match(/^(ICE|IC|EC|RJX|RJ|TGV|EST|THA|NJ|EN)\b/);
     if (m) return m[1];
+    /* Trenitalia and Italo write their category on the front of the number, and
+       none of them is what the mode would caption it: a Frecciarossa fell through
+       to HIGHSPEED_RAIL and read "ICE", a regional train "RB". */
+    const it = r.match(/^(FR|FA|FB|ITA|REG|RV)\b/);
+    if (it) return IT_CATEGORY[it[1]];
     return MODE_LABEL[mode] || mode;
+  }
+  const IT_CATEGORY = { FR:"Frecciarossa", FA:"Frecciargento", FB:"Frecciabianca", ITA:"Italo",
+                        REG:"Regionale", RV:"Regionale Veloce" };
+
+  /* Italy's feeds. Their ids carry the feed name, either leading ("it-Lazio-Rome_AD12")
+     or inside a trip id ("20261104_17:15_it-Lazio-Rome_0#4651-21"), and that is
+     what scopes the two fixes below to Italian data and leaves every other city
+     byte-identical. */
+  function isItalian(id) { return /(^|_)it-/.test(String(id || "")); }
+
+  /* A caption left over from the German defaults in MODE_LABEL: Rome has a metro,
+     not a U-Bahn, whatever the rest of the table says. */
+  const IT_MODE_WORD = { "U-Bahn":"Metro", "S-Bahn":"Treno", "ICE":"Alta velocità", "RB":"Regionale", "RE":"Regionale" };
+  function italianLabel(label) { return IT_MODE_WORD[label] || label; }
+
+  /* ATAC and Trenitalia publish names in capitals ("STAZ.NE METRO CIPRO (MA)",
+     "ROMA TERMINI") and COTRAL appends an internal code ("Roma | Porta Maggiore
+     # f00067"). Shouting forty bus stops at a wall display is the one thing none of
+     the other boards do. Bracketed interchange notes stay in capitals, because MA
+     and FS are initials; so do Roman numerals, which are how XX Settembre is written. */
+  const IT_LOWER = new Set(["di","da","del","dello","della","dei","degli","delle","e","a","al","allo","alla","ai","agli","alle","in","su","per","la","le","lo","il"]);
+  function tidyItalianName(name) {
+    const raw = String(name || "").replace(/\s*#\s*\S+\s*$/, "").replace(/^ROMA\s*\|\s*/i, "").trim();
+    if (/[a-zà-ú]/.test(raw.replace(/\([^)]*\)/g, ""))) return raw;   // already mixed case
+    return raw.split(/(\([^)]*\))/).map(part => {
+      if (part[0] === "(") return part;
+      return part.split(" ").map((w, i) => {
+        if (/^[IVXLCDM]+$/.test(w) && !IT_LOWER.has(w.toLowerCase())) return w;
+        if (w === "FS") return w;
+        const low = w.toLowerCase();
+        if (i > 0 && IT_LOWER.has(low)) return low;
+        /* After a dot: S.PIETRO is an initial and a name, P.ZA and STAZ.NE are one
+           abbreviated word. Two letters or fewer after the dot means the latter. */
+        return low.replace(/(^|[.'’\/-])([a-zà-ú]+)/g, (_, sep, rest) =>
+          (sep === "." && rest.length <= 2) ? sep + rest : sep + rest[0].toUpperCase() + rest.slice(1));
+      }).join(" ");
+    }).join("").replace(/\s+/g, " ").trim();
   }
 
   /* German feeds append the train number: "RB27 (12345)". That is operational
@@ -76,6 +118,15 @@
      string — "RB27 (". The line is what a passenger looks for. */
   function cleanRoute(route) {
     const r = String(route || "").replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+    /* Rome's metro lines arrive as MEA/MEB/MEB1/MEC; a rider knows them as A, B, B1, C. */
+    const me = r.match(/^ME([ABC]\d?)$/i);
+    if (me) return me[1].toUpperCase();
+    /* An Italian regional's number changes every train and overflows the seven-
+       character badge: "REG 12741" would be cut to "REG 127". The category is the
+       thing a passenger reads. Long-distance keeps its number, since FR 9641 is
+       how that train is named on the ticket. */
+    const reg = r.match(/^(REG|RV)\s+\d+$/i);
+    if (reg) return reg[1].toUpperCase();
     // the feed sends a literal "?" when it has no line name; that is not a line
     return (r === "?" || r === "-") ? "" : r;
   }
@@ -166,10 +217,15 @@
     const seen = new Set(), out = [];
     (Array.isArray(raw) ? raw : []).forEach(s => {
       if (!s || !s.name || s.type !== "STOP") return;
-      const key = String(s.name).toLowerCase().replace(/\s+/g, " ").trim();
+      /* A stop no mode serves has no departures and only costs a slot of the few
+         this list is cut to. Bolzano's feed lists "Roma, Stazione di Roma Termini",
+         which pushed the metro at Termini off the end. */
+      if (Array.isArray(s.modes) && !s.modes.length) return;
+      const name = isItalian(s.id) ? tidyItalianName(s.name) : s.name;
+      const key = String(name).toLowerCase().replace(/\s+/g, " ").trim();
       if (seen.has(key)) return;
       seen.add(key);
-      out.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, country: s.country || "" });
+      out.push({ id: s.id, name: name, lat: s.lat, lon: s.lon, country: s.country || "", modes: s.modes || [] });
     });
     return out.slice(0, limit || 6);
   }
@@ -185,14 +241,27 @@
       const real = t.place && (t.place.departure || t.place.arrival);
       const schedMs = sched ? Date.parse(sched) : null;
       const realMs = real ? Date.parse(real) : null;
+      const italian = isItalian(t.tripId);
+      const named = x => (italian && x && x.name) ? Object.assign({}, x, { name: tidyItalianName(x.name) }) : x;
+      const family = familyOf(mode, t.routeShortName || t.tripShortName);
+      const label = labelFor(mode, t.routeShortName || t.tripShortName);
+      let headsign = (t.headsign || "").trim();
+      if (italian) {
+        headsign = tidyItalianName(headsign);
+        /* "Anagnina (MA)" on a Metro A row only says the A stops at the end of the A. */
+        if (family === "metro") headsign = headsign.replace(/\s*\(M[ABC]\d?\)$/, "");
+      }
       return {
         mode,
         group: MODE_GROUP[mode] || "bus",
-        family: familyOf(mode, t.routeShortName || t.tripShortName),
+        family,
         // the human-facing line number ("S1", "U6", "17"), when the feed has one
         route: cleanRoute(t.routeShortName || t.tripShortName),
-        label: labelFor(mode, t.routeShortName || t.tripShortName),
-        headsign: (t.headsign || "").trim(),
+        /* cleanRoute drops a regional's number from the badge, but it is the one
+           thing that ties this row to Trenitalia's own live record of the train. */
+        trainNo: italian ? (/\b(\d{3,6})\b/.exec(String(t.routeShortName || t.tripShortName || "")) || [])[1] || "" : "",
+        label: italian ? italianLabel(label) : label,
+        headsign,
         when: realMs || schedMs,
         scheduled: schedMs,
         // only a real minutes-late figure, never a made-up zero
@@ -214,15 +283,21 @@
            IANA zone. That zone is what tells the international card a train is
            leaving the country — see isInternational(). Kept as the raw objects
            because the name is worth showing and the coordinates worth drawing. */
-        tripFrom: t.tripFrom || null,
-        tripTo: t.tripTo || null,
+        tripFrom: named(t.tripFrom) || null,
+        tripTo: named(t.tripTo) || null,
         /* Only set when the caller asked for `both`: a row the train ARRIVES on
            rather than leaves on. Those are the services already underway, which
            is what puts a moving train on the map — a departure an hour out has
            not started yet and has no position worth drawing. */
         arrival: !!(t.place && !t.place.departure && t.place.arrival),
       };
-    }).filter(x => x.when).sort((a, b) => a.when - b.when);
+    }).filter(x => x.when).sort((a, b) => a.when - b.when).filter((x, i, all) => {
+      /* Trenitalia publishes some long-distance trains twice under two trip ids
+         (FR 8526 to Bolzano listed itself twice at Termini). Identical line,
+         destination and minute is one train as far as a passenger can tell. */
+      if (!isItalian(x.tripId)) return true;
+      return !all.slice(0, i).some(y => y.route === x.route && y.headsign === x.headsign && y.when === x.when);
+    });
   }
   async function departures(stopId, n) {
     return mapStopTimes(await get("/stoptimes", { stopId: stopId, n: n || 8 }));
@@ -242,10 +317,42 @@
     if (stationCache[name] !== undefined) return stationCache[name];
     try {
       const g = await get("/geocode", { text: name });
-      const hit = (Array.isArray(g) ? g : []).find(x => x && x.type === "STOP");
-      stationCache[name] = hit ? { id: hit.id, name: hit.name, lat: hit.lat, lon: hit.lon } : null;
+      const hit = (Array.isArray(g) ? g : []).find(x => x && x.type === "STOP" &&
+        !(Array.isArray(x.modes) && !x.modes.length));
+      stationCache[name] = hit ? { id: hit.id, name: isItalian(hit.id) ? tidyItalianName(hit.name) : hit.name,
+        lat: hit.lat, lon: hit.lon, modes: hit.modes || [] } : null;
     } catch (_) { stationCache[name] = null; }
     return stationCache[name];
+  }
+
+  /* Nearest stop of each mode the nearby list missed.
+     Rome is thousands of bus stops and comparatively few metro stations, so the
+     handful nearest a point in the centre can easily all be buses: Piazza Venezia
+     and Trastevere would have shown a city with no metro. Opt-in through
+     `ensureModes`, because a dense U-Bahn network never has this problem and the
+     box query is a request those boards have no need to spend. Cached per place,
+     since stops do not move between refreshes. */
+  const modeStopCache = {};
+  async function stopsForMissingModes(lat, lon, stops, modes) {
+    const missing = modes.filter(m => !stops.some(s => (s.modes || []).indexOf(m) >= 0));
+    if (!missing.length) return [];
+    const key = lat.toFixed(3) + "," + lon.toFixed(3) + "|" + missing.join();
+    if (!modeStopCache[key]) {
+      const d = 0.015;   // about 1.5 km each way
+      const raw = await get("/map/stops", { min: (lat + d) + "," + (lon - d), max: (lat - d) + "," + (lon + d), zoom: 18 });
+      const here = { lat, lon };
+      modeStopCache[key] = missing.map(m => {
+        let best = null, bd = Infinity;
+        (Array.isArray(raw) ? raw : []).forEach(s => {
+          if (!s || !s.stopId || (s.modes || []).indexOf(m) < 0) return;
+          const km = kmBetween(here, s);
+          if (km < bd) { bd = km; best = s; }
+        });
+        return best && { id: best.stopId, name: isItalian(best.stopId) ? tidyItalianName(best.name) : best.name,
+                         lat: best.lat, lon: best.lon, modes: best.modes };
+      }).filter(Boolean);
+    }
+    return modeStopCache[key];
   }
 
   async function board(lat, lon, opts) {
@@ -255,6 +362,12 @@
       const st = await findStation(o.mainStation);
       if (st && !stops.some(x => x.id === st.id)) stops = [st].concat(stops).slice(0, (o.stops || 4) + 1);
     }
+    if (o.ensureModes) {
+      try {
+        const extra = await stopsForMissingModes(lat, lon, stops, o.ensureModes);
+        extra.forEach(s => { if (!stops.some(x => x.id === s.id || x.name === s.name)) stops.push(s); });
+      } catch (_) { /* the stops already found are still a board */ }
+    }
     let failed = 0;
     const withDeps = await Promise.all(stops.map(async s => {
       try { return Object.assign({}, s, { deps: await departures(s.id, o.perStop || 12) }); }
@@ -263,6 +376,27 @@
     /* Every stop failing is an outage or a rate limit, not an empty city. Returned as
        [], the board cleared its cards and said nothing was leaving. */
     if (stops.length && failed === stops.length) throw new Error("no stop answered");
+    /* A stop can serve a mode and still list none of it: the next fourteen from
+       Termini's forecourt are all buses, though trams leave from it. So a mode
+       still absent gets one query filtered to it, at the stop that carries it. */
+    if (o.ensureModes) {
+      await Promise.all(o.ensureModes.map(async m => {
+        if (withDeps.some(s => s.deps.some(d => d.mode === m))) return;
+        const at = withDeps.find(s => (s.modes || []).indexOf(m) >= 0);
+        if (!at) return;
+        try {
+          const more = mapStopTimes(await get("/stoptimes", { stopId: at.id, n: 6, mode: m }));
+          at.deps = at.deps.concat(more.filter(d => !at.deps.some(x => x.tripId === d.tripId)));
+        } catch (_) { /* the rest of the board is still good */ }
+      }));
+    }
+    /* A departure this far out is not a service, it is a line that is suspended.
+       Rome's trams 5 and 14 are off for track work, and the filtered query above
+       will find their return however many days away it is. Opt-in via maxAheadMs. */
+    if (o.maxAheadMs) {
+      const limit = Date.now() + o.maxAheadMs;
+      withDeps.forEach(s => { s.deps = s.deps.filter(d => d.when <= limit); });
+    }
     return withDeps.filter(s => s.deps.length);
   }
 
@@ -444,12 +578,16 @@
           sched: Date.parse(leg.to.scheduledArrival || leg.to.arrival || leg.endTime),
           t: Date.parse(leg.to.arrival || leg.to.scheduledArrival || leg.endTime) });
         const stops = pts.filter(x => x.t);
+        if (isItalian(tripId)) stops.forEach(x => { x.name = tidyItalianName(x.name); });
         if (stops.length >= 2) {
           trip = { id: tripId,          // callers key map markers off this
                    stops, from: stops[0], to: stops[stops.length - 1],
                    start: stops[0].t, end: stops[stops.length - 1].t,
                    route: cleanRoute(leg.routeShortName || leg.tripShortName),
-                   label: labelFor(leg.mode || "OTHER", leg.routeShortName || leg.tripShortName),
+                   label: (function () {
+                     const l = labelFor(leg.mode || "OTHER", leg.routeShortName || leg.tripShortName);
+                     return isItalian(tripId) ? italianLabel(l) : l;
+                   })(),
                    mode: leg.mode || "OTHER", agency: leg.agencyName || "",
                    realTime: !!leg.realTime,
                    delayMin: (leg.realTime && stops[0].sched) ? Math.round((stops[0].t - stops[0].sched) / 60000) : null };
@@ -595,6 +733,9 @@
     const best = {};
     (Array.isArray(raw) ? raw : []).forEach(seg => {
       if (!seg || !seg.from || !seg.to) return;
+      /* The feed carries scheduled flights too, and familyOf files an unknown mode
+         as a bus. Aircraft have their own live card and layer on every board. */
+      if (seg.mode === "AIRPLANE") return;
       const dep = Date.parse(seg.departure), arr = Date.parse(seg.arrival);
       if (!(arr > dep)) return;         // a zero-length hop places nothing
       let line = null;
@@ -619,10 +760,11 @@
      Am Ring" when it terminates somewhere else entirely would be a confident
      lie. The next stop still reaches the tooltip, where it is labelled as one. */
   function areaTrip(t, seg, dep, arr, line, live) {
+    const stopName = n => isItalian(t.tripId) ? tidyItalianName(n) : n;
     const stops = [
-      { name: seg.from.name, lat: seg.from.lat, lon: seg.from.lon, tz: seg.from.tz || "",
+      { name: stopName(seg.from.name), lat: seg.from.lat, lon: seg.from.lon, tz: seg.from.tz || "",
         t: dep, sched: Date.parse(seg.scheduledDeparture || seg.departure), idx: null },
-      { name: seg.to.name, lat: seg.to.lat, lon: seg.to.lon, tz: seg.to.tz || "",
+      { name: stopName(seg.to.name), lat: seg.to.lat, lon: seg.to.lon, tz: seg.to.tz || "",
         t: arr, sched: Date.parse(seg.scheduledArrival || seg.arrival), idx: null },
     ];
     const mode = seg.mode || "OTHER";

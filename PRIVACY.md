@@ -234,7 +234,7 @@ it takes effect.
    through a company, that company is the controller and §"Who is responsible"
    must say so.
 2. **The EU/UK transfer wording claims Standard Contractual Clauses, so go and
-   accept them.** You ship Amsterdam, Cologne and Stuttgart boards, so EU
+   accept them.** You ship Amsterdam, Cologne, Stuttgart and Rome boards, so EU
    customers are the target rather than a hypothetical. Accept Cloudflare's DPA
    (dashboard → account settings) and Resend's; both incorporate the SCCs. Until
    you do, that paragraph describes something that is not true.

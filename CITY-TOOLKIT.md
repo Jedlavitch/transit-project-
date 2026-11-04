@@ -1,6 +1,6 @@
 # City toolkit and board designs
 
-Open **City tools** beside Settings on any of the eleven city boards.
+Open **City tools** beside Settings on any of the twelve city boards.
 
 - **Plan transit** opens Google Maps with the board's location as the origin and the selected airport or station as the destination. When watching another place temporarily, the original location remains the trip origin.
 - **Watch here** temporarily moves the board's pin and refreshes its existing feeds. **Back to my location** restores the original pin and map view. Reloading also returns to the board's normal location. A later GPS or Settings location choice takes precedence.
@@ -28,7 +28,7 @@ The map, feeds, and hidden panels continue updating. Rotation pauses while setti
 
 There is no new package, build step, API key, or background transit request. Run the project as usual with `python3 feedback-server.py 4173` or a static HTTP server.
 
-- `city-shortcuts-data.js`: eleven city profiles. Every curated destination has a named access point, coordinates, a short connection note, and an official source. Keep fares, frequencies, live disruptions, and guaranteed travel times out of this static data.
+- `city-shortcuts-data.js`: twelve city profiles. Every curated destination has a named access point, coordinates, a short connection note, and an official source. Keep fares, frequencies, live disruptions, and guaranteed travel times out of this static data.
 - `city-shortcuts.js` / `city-shortcuts.css`: the optional toolkit. It calls existing `applyLoc`, `refreshEverythingForNewLocation`, and map APIs, and stops vehicle follow while switching places. It does not write existing location, commute, licensing, feed, or account settings.
 - `board-designs.css`: styles scoped to `data-style="paper"` and `data-style="signal"`, plus the expanded style picker. `theme.css` remains the existing palette source for Classic and Atlas.
 - `city-board.js` / `city-board.css`: optional advisory card and its city-specific checklist. Reuses the toolkit's location and routing actions, registers with existing card visibility/collapse controls, and marks its list as scrollable so Atlas keeps all pinned links reachable.

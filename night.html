@@ -33,7 +33,7 @@
 <script src="kiosk-reload.js?v=1" defer></script>
 <script src="gate.js?v=3" defer></script>
 <script src="delays.js?v=2"></script>
-<script src="transitous.js?v=5"></script>
+<script src="transitous.js?v=6"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <style>
@@ -431,7 +431,7 @@
     <script>/* set the back-link from ?city= immediately, before any other JS can fail */
     (function(){try{var m={dc:"dc.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
-      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html"};
+      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html",rome:"rome.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
       if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
@@ -611,6 +611,14 @@ const CITY_CONFIG = {
      there is nothing to point busSchedule or a live-Worker key at — planes are
      the subject that works, and they work anywhere. Train and bus modes fall
      back rather than pretending; see the note in produceTrain/produceBus. */
+  rome: { defaultLoc:{ lat:41.9009, lon:12.5015, label:"Roma Termini" },
+    lsLoc:"transitboardrome.loc", lsManual:"transitboardrome.locManual", board:"rome.html",
+    busSchedule:null, busTag:"Nearest bus", busRange:"",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
+    localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
+    transitSource:"", mainStation:"Roma Termini",
+    tz:"Europe/Rome", clock24:true,
+    cityLabel:"Rome" },
   stuttgart: { defaultLoc:{ lat:48.7838, lon:9.1817, label:"Stuttgart Hauptbahnhof" },
     lsLoc:"transitboardstuttgart.loc", lsManual:"transitboardstuttgart.locManual", board:"stuttgart.html",
     busSchedule:null, busTag:"Nearest bus", busRange:"",
@@ -3419,6 +3427,6 @@ function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retry
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=8" defer></script>
+<script src="mascot-buddy.js?v=9" defer></script>
 </body>
 </html>

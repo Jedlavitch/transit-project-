@@ -101,5 +101,14 @@ window.TBCityDiscoveryData = {
       {id:"library",name:"Stuttgart City Library",kind:"culture",lat:48.7902,lon:9.1827,address:"Mailänder Platz 1, Stuttgart, Germany",blurb:"Make an architecture-and-books stop at the city’s central library.",prompt:"Find a new perspective on the library’s interior.",url:"https://www.stuttgart.de/en/tourismus/sehenswuerdigkeiten/stadtbibliothek"},
       {id:"markthalle",name:"Stuttgart Markthalle",kind:"food",lat:48.7764,lon:9.1795,address:"Dorotheenstrasse 4, Stuttgart, Germany",blurb:"Browse regional and international specialties inside an Art Nouveau market hall.",prompt:"Choose one flavor to take into the rest of your day.",url:"https://www.markthalle-stuttgart.de/en/"}
     ]
+  },
+  rome: {
+    edition:"Ancient stones, long gardens, a market lunch.",
+    adventure:{name:"The Colosseum, then lunch",note:"See the amphitheatre, then ride Metro B from Colosseo to Piramide and walk to the Testaccio market.",stops:["colosseum","testaccio"]},
+    places:[
+      {id:"colosseum",name:"Colosseum",kind:"culture",lat:41.8902,lon:12.4922,address:"Piazza del Colosseo 1, Rome, Italy",blurb:"Stand inside the amphitheatre at the heart of the archaeological park.",prompt:"Find a place where you can see how the arena floor was built.",url:"https://colosseo.it/en/"},
+      {id:"borghese",name:"Villa Borghese",kind:"outdoors",lat:41.9144,lon:12.4848,address:"Villa Borghese, Rome, Italy",blurb:"Trade the traffic for shaded avenues, a small lake and long views over the city.",prompt:"Walk until you can no longer hear the road.",url:"https://www.turismoroma.it/en/places/villa-borghese"},
+      {id:"testaccio",name:"Testaccio Market",kind:"food",lat:41.8776,lon:12.4734,address:"Via Aldo Manuzio, Rome, Italy",blurb:"Browse the neighbourhood's covered market of food stalls and everyday shopping.",prompt:"Order something you cannot name, and then find out what it was.",url:"https://www.mercatoditestaccio.it/"}
+    ]
   }
 };

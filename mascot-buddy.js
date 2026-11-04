@@ -338,6 +338,15 @@
       "During Karneval the timetable becomes folklore.",
       "Half this network is underground and the other half is in the middle of the road.",
     ],
+    "rome.html": [
+      "Every time they dig a new metro station they find an emperor's kitchen.",
+      "Line C reached the Colosseum eventually. It had a lot of history to get through.",
+      "♪ A, B, C — it is not many lines, but they were dug through two thousand years ♪",
+      "Termini is where the A and the B cross. That is the whole interchange map.",
+      "The 8 tram runs from Trastevere up to Piazza Venezia. Good views, no hurry.",
+      "The 64 goes to the Vatican. Hold on to your bag.",
+      "All roads lead here, and so do most of the buses.",
+    ],
     "stuttgart.html": [
       "They have been rebuilding the station since before this board existed.",
       "The S-Bahn goes underground here and comes back up a different mood.",

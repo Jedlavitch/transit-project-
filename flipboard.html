@@ -450,7 +450,7 @@
     <a id="boardBtn" href="dc.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
     <script>(function(){try{var m={dc:"dc.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
-      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html"};
+      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html",rome:"rome.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
       if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
@@ -497,7 +497,7 @@
     <span id="updated">—</span>
   </footer>
 
-<script src="transitous.js?v=5"></script>
+<script src="transitous.js?v=6"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <script>
@@ -527,6 +527,13 @@ const CITY_CONFIG = {
     lsWmataKey:null, lsHidden:"transitboardstuttgart.hiddenCards",
     transitSource:"", mainStation:"Stuttgart Hauptbahnhof",
     tz:"Europe/Berlin", clock24:true,
+  },
+  rome: {
+    defaultLoc:{ lat:41.9009, lon:12.5015, label:"Roma Termini" },
+    lsLoc:"transitboardrome.loc", board:"rome.html", cityLabel:"Rome",
+    lsWmataKey:null, lsHidden:"transitboardrome.hiddenCards",
+    transitSource:"", mainStation:"Roma Termini", ensureModes:["SUBWAY","TRAM"], maxAheadMs:24*3600*1000,
+    tz:"Europe/Rome", clock24:true,
   },
   dc: {
     defaultLoc:{ lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" },
@@ -1015,7 +1022,7 @@ async function collectTransitousAll(){
   _tousCache.p = (async()=>{
     try{
       const stops=await TBTransitous.cityBoard(loc.lat, loc.lon,
-        {stops:4, perStop:14, source:CITY_CFG.transitSource, mainStation:CITY_CFG.mainStation});
+        {stops:4, perStop:14, source:CITY_CFG.transitSource, mainStation:CITY_CFG.mainStation, ensureModes:CITY_CFG.ensureModes, maxAheadMs:CITY_CFG.maxAheadMs});
       const all=[]; stops.forEach(st=>st.deps.forEach(d=>all.push(d)));
       /* Long-distance asked for separately, mode-filtered: at a big station the
          next departures are all trams and the ICEs never make the list. */
@@ -1093,6 +1100,14 @@ const SYSTEM_DEFS_BY_CITY = {
     {id:"ld", logo:"RAIL", label:"Long-distance", collect:()=>collectTransitousRows("longdistance",6)},
     {id:"regio", logo:"REGIO", label:"Regional & S-Bahn", collect:()=>collectTransitousRows("regional",6)},
     {id:"metro", logo:"U-BAHN", label:"U-Bahn", collect:()=>collectTransitousRows("metro",5)},
+    {id:"tram", logo:"TRAM", label:"Trams", collect:()=>collectTransitousRows("tram",5)},
+    {id:"bus", logo:"BUS", label:"Buses", collect:()=>collectTransitousRows("bus",5)},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
+  rome: [
+    {id:"ld", logo:"RAIL", label:"Long-distance", collect:()=>collectTransitousRows("longdistance",6)},
+    {id:"regio", logo:"REGIO", label:"Regional rail", collect:()=>collectTransitousRows("regional",6)},
+    {id:"metro", logo:"METRO", label:"Metro", collect:()=>collectTransitousRows("metro",5)},
     {id:"tram", logo:"TRAM", label:"Trams", collect:()=>collectTransitousRows("tram",5)},
     {id:"bus", logo:"BUS", label:"Buses", collect:()=>collectTransitousRows("bus",5)},
     {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
@@ -1478,6 +1493,10 @@ const METRO_SKINS = {
                lines:{ } },
   stuttgart: { op:"SSB",       ink:"#fbf4de", bg:"#12100a", bullet:"tab",
                lines:{ } },
+  /* No lines listed, like Cologne and Stuttgart: ATAC's feed publishes real
+     colours for the metro (A e27439, B 0570b5, C 008456). */
+  rome:      { op:"ATAC",      ink:"#fdf0e4", bg:"#150d09", bullet:"tab",
+               lines:{ } },
 };
 
 /* ---------- SEPTA Regional Rail, the Center City LED matrix ------------------
@@ -1653,7 +1672,7 @@ function renderSepta(rows){
 }
 function esc(x){ return String(x==null?"":x).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
-const EURO_CITIES = new Set(["zurich","cologne","stuttgart","amsterdam"]);
+const EURO_CITIES = new Set(["zurich","cologne","stuttgart","amsterdam","rome"]);
 const LS_STYLE = "flipboard.style";
 function resolveStyle(pref){
   if (pref && pref !== "auto") return pref;
@@ -1682,7 +1701,9 @@ const STYLE_COLS = {
 const STYLE_HEADS = {
   septa: [],
   /* Bilingual, as they are on the real thing. */
-  euro:  ["Zeit <i>Time</i>","Zug <i>Train</i>","Ziel <i>Destination</i>","Gleis <i>Pl.</i>","Hinweis <i>Note</i>"],
+  euro:  CITY==="rome"
+    ? ["Ora <i>Time</i>","Treno <i>Train</i>","Destinazione <i>Destination</i>","Binario <i>Pl.</i>","Avvisi <i>Note</i>"]
+    : ["Zeit <i>Time</i>","Zug <i>Train</i>","Ziel <i>Destination</i>","Gleis <i>Pl.</i>","Hinweis <i>Note</i>"],
   usa:   ["TIME","DESTINATION","OPERATOR","VIA","STATUS"],
   metro: ["LINE","DESTINATION","MIN"],
 };
@@ -1854,7 +1875,7 @@ function renderRows(rows){
          entirely when this column became the platform, which left the board
          unable to say the one thing it exists to say. */
       const late = /^\+(\d+)/.exec(r.status||"");
-      f.via.setText(r.statusKind==="bad" ? "FÄLLT AUS"
+      f.via.setText(r.statusKind==="bad" ? (CITY==="rome" ? "SOPPRESSO" : "FÄLLT AUS")
                    : late ? `+${late[1]} MIN` : "");
       f.el.classList.toggle("late", !!late);
       f.el.classList.toggle("gone", r.statusKind==="bad");

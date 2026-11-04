@@ -474,7 +474,7 @@ $("#openSpotBtn").onclick = () => { window.location.href = "spot.html"; };
    cities, so a board added later shows up here without this page changing. */
 const CITY_NAMES = { "": "Washington DC", phl:"Philadelphia", nyc:"New York", boston:"Boston",
   sf:"San Francisco", la:"Los Angeles", ams:"Amsterdam", nj:"New Jersey",
-  zurich:"Zurich", cologne:"Cologne", stuttgart:"Stuttgart", mycity:"Stencil" };
+  zurich:"Zurich", cologne:"Cologne", stuttgart:"Stuttgart", rome:"Rome", mycity:"Stencil" };
 function paintPrefs(){
   $("#prefTheme").textContent = get(LS.theme) || "Dark (default)";
   const a = get(LS.accent);

@@ -48,7 +48,7 @@ const ALLOWED_HOSTS = new Set([
      European cities -- most of the product, ungated. */
   "api-v3.mbta.com",            // Boston live rail + bus
   "api.bart.gov",               // SF BART
-  "api.transitous.org",         // Zurich / Cologne / Stuttgart
+  "api.transitous.org",         // Zurich / Cologne / Stuttgart / Rome
   "transport.opendata.ch",      // Swiss rail
   "rtt.metrolinktrains.com",    // LA Metrolink
   "api.wheretheiss.at",         // ISS, in the sky view

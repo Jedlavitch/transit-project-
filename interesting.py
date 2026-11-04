@@ -121,6 +121,7 @@ CITIES = [
     {"id": "zurich",    "label": "Zurich",         "lat": 47.3779, "lon":   8.5403, "tz": "Europe/Zurich"},
     {"id": "cologne",   "label": "Cologne",        "lat": 50.9430, "lon":   6.9588, "tz": "Europe/Berlin"},
     {"id": "stuttgart", "label": "Stuttgart",      "lat": 48.7838, "lon":   9.1817, "tz": "Europe/Berlin"},
+    {"id": "rome",      "label": "Rome",           "lat": 41.9009, "lon":  12.5015, "tz": "Europe/Rome"},
 ]
 
 CITY_BY_ID = {c["id"]: c for c in CITIES}

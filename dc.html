@@ -16,12 +16,12 @@
 <link rel="stylesheet" href="city-shortcuts.css?v=2" />
 <link rel="stylesheet" href="city-board.css?v=1" />
 <script src="city-preferences.js?v=1"></script>
-<script src="city-shortcuts-data.js?v=1" defer></script>
+<script src="city-shortcuts-data.js?v=2" defer></script>
 <script src="city-shortcuts.js?v=2" defer></script>
 <script src="city-board.js?v=1" defer></script>
 <link rel="stylesheet" href="city-discovery.css?v=1" />
-<script src="city-discovery-data.js?v=1" defer></script>
-<script src="city-discovery.js?v=1" defer></script>
+<script src="city-discovery-data.js?v=2" defer></script>
+<script src="city-discovery.js?v=2" defer></script>
 <link rel="stylesheet" href="smart-board.css?v=1" />
 <script src="smart-board.js?v=2" defer></script>
 <script src="settings-ui.js?v=17" defer></script>
@@ -47,7 +47,7 @@
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=8" defer></script>
+<script src="mascot-buddy.js?v=9" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
 <script src="fit-cards.js?v=24" defer></script>
@@ -60,7 +60,7 @@
 <script src="ontime.js?v=27" defer></script>
 <script src="ontime-tile.js?v=2" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
-<script src="interesting.js?v=2" defer></script>
+<script src="interesting.js?v=3" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return /^tb\.(theme|accent|rows|style)$/.test(k)?TBBoardPreferences.get(k.slice(3)):localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboard.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -604,6 +604,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         <option value="zurich.html">Zurich</option>
         <option value="cologne.html">Cologne</option>
         <option value="stuttgart.html">Stuttgart</option>
+        <option value="rome.html">Rome</option>
       </select>
     </nav>
     <nav class="view-links">
