@@ -22,6 +22,8 @@
    API SHAPE (v1)
      GET /api/v1/reverse-geocode?place=<lat>,<lon>&type=STOP   -> nearby stops
      GET /api/v1/stoptimes?stopId=<id>&n=<count>               -> departures
+     GET /api/v1/map/trips?min=&max=&startTime=&endTime=       -> everything moving
+                                                                  in a box (see areaTrips)
    ============================================================================ */
 (function () {
   "use strict";
@@ -534,6 +536,123 @@
     return pos;
   }
 
+
+  /* ---- every vehicle inside a rectangle, in ONE request --------------------
+
+     The rest of this module answers "what is leaving this stop", which is what
+     a departures card needs. The map needs the opposite question — "what is
+     moving out there" — and answering it from departures was the reason the
+     European maps only ever showed a fraction of the city.
+
+     The old route went: take the ~6 stops nearest the board, read their next
+     few departures, then spend one /trip call per trip to find out where it is.
+     Two limits fell out of that. A service that does not call at one of those
+     six stops was never discovered at all, however plainly it crosses the
+     screen; and of the ones that were, only a budget's worth could be placed,
+     because /trip is per-trip and the endpoint answers 429 under a burst.
+     Zurich could locate 76 trips and drew 45 of them. Measured against this
+     endpoint, 486 were actually running inside the same rectangle.
+
+     MOTIS answers the map's question directly: /map/trips takes a bounding box
+     and a time window and returns every trip operating inside it, each with the
+     piece of track it is on right now and the times at both ends of that piece.
+     One request, no per-trip lookups, and nothing to discover — if it is in the
+     box, it is in the answer.
+
+     Two things worth knowing before editing:
+
+     1. `zoom` is a MODE filter, not a detail setting. Below about 10 the server
+        returns long-distance only, and the full set of trams and buses appears
+        at 10 and above. Pass the map's real zoom: it keeps a zoomed-out board
+        from pulling four hundred bus hops it could not draw legibly anyway.
+
+     2. A returned segment runs between two stops the server considers worth
+        showing, which for a tram is the next stop a minute away and for an ICE
+        can be an hour down the line. So the polyline is the piece BETWEEN those
+        two, not the whole route — positions interpolate along it exactly, but
+        it is not a route line, and the boards still draw those separately.
+
+     `precision` trims the polylines: 5 is metre-level and the default, 4 is
+     about ten metres and a fifth off the response for a city-sized box. */
+  async function areaTrips(bounds, opts) {
+    const o = opts || {};
+    const prec = o.precision == null ? 5 : o.precision;
+    const now = Date.now();
+    // MOTIS rejects the fractional seconds toISOString() puts in
+    const iso = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+    const raw = await get("/map/trips", {
+      zoom: Math.round(o.zoom == null ? 13 : o.zoom),
+      min: bounds.minLat + "," + bounds.minLon,
+      max: bounds.maxLat + "," + bounds.maxLon,
+      startTime: iso(now),
+      endTime: iso(now + (o.windowMs || 60000)),
+      precision: prec,
+    }, o.timeout || 25000);
+
+    /* One entry per trip. A trip can appear as more than one segment inside a
+       single window — a bus that changes hop halfway through it — so the hop
+       the clock is actually inside wins, and failing that the earliest. */
+    const best = {};
+    (Array.isArray(raw) ? raw : []).forEach(seg => {
+      if (!seg || !seg.from || !seg.to) return;
+      const dep = Date.parse(seg.departure), arr = Date.parse(seg.arrival);
+      if (!(arr > dep)) return;         // a zero-length hop places nothing
+      let line = null;
+      (seg.trips || []).forEach(t => {
+        if (!t || !t.tripId) return;
+        const live = now >= dep && now <= arr;
+        const prev = best[t.tripId];
+        if (prev && (prev.live || (!live && prev.start <= dep))) return;
+        if (line === null) line = seg.polyline ? decodePolyline(seg.polyline, prec) : [];
+        best[t.tripId] = areaTrip(t, seg, dep, arr, line, live);
+      });
+    });
+    return Object.keys(best).map(k => best[k]);
+  }
+
+  /* Shaped exactly like what tripDetail() returns, so positionOnTrip() and every
+     caller downstream cannot tell the two apart — the difference is that this
+     one has two stops rather than the whole sequence.
+
+     `headsign` is deliberately empty. `to` here is the far end of the current
+     hop, not where the service is going, and captioning a 12 as "12 → Dübendorf,
+     Am Ring" when it terminates somewhere else entirely would be a confident
+     lie. The next stop still reaches the tooltip, where it is labelled as one. */
+  function areaTrip(t, seg, dep, arr, line, live) {
+    const stops = [
+      { name: seg.from.name, lat: seg.from.lat, lon: seg.from.lon, tz: seg.from.tz || "",
+        t: dep, sched: Date.parse(seg.scheduledDeparture || seg.departure), idx: null },
+      { name: seg.to.name, lat: seg.to.lat, lon: seg.to.lon, tz: seg.to.tz || "",
+        t: arr, sched: Date.parse(seg.scheduledArrival || seg.arrival), idx: null },
+    ];
+    const mode = seg.mode || "OTHER";
+    const trip = {
+      id: t.tripId, stops: stops, from: stops[0], to: stops[1],
+      start: dep, end: arr, live: !!live,
+      route: cleanRoute(t.routeShortName), mode: mode,
+      label: isItalianId(t.tripId) ? italianLabelOf(labelFor(mode, t.routeShortName))
+                                   : labelFor(mode, t.routeShortName),
+      family: familyOf(mode, t.routeShortName),
+      headsign: "",
+      agency: "", realTime: !!seg.realTime,
+      delayMin: (seg.realTime && stops[0].sched) ? Math.round((dep - stops[0].sched) / 60000) : null,
+    };
+    if (line && line.length >= 2) {
+      const cum = [0];
+      for (let i = 1; i < line.length; i++) cum.push(cum[i - 1] + kmBetween(
+        { lat: line[i - 1][0], lon: line[i - 1][1] }, { lat: line[i][0], lon: line[i][1] }));
+      trip.line = line; trip.cum = cum;
+      stops[0].idx = 0; stops[1].idx = line.length - 1;
+    }
+    return trip;
+  }
+
+
+  /* Rome's two tidy-ups live in this file only when the Rome board does; both
+     helpers degrade to identity so areaTrips stays one version for every city. */
+  function isItalianId(id) { return typeof isItalian === "function" ? isItalian(id) : false; }
+  function italianLabelOf(l) { return typeof italianLabel === "function" ? italianLabel(l) : l; }
+
   const R_KM = 6371;
   function kmBetween(a, b) {
     const rad = Math.PI / 180;
@@ -819,7 +938,7 @@
 
   window.TBTransitous = {
     cityBoard, chBoard, chDepartures, chStops, longDistanceAt,
-    nearestVehicle, tripDetail, positionOnTrip, nearbyStops, departures, board, findStation, familyOf,
+    nearestVehicle, tripDetail, positionOnTrip, areaTrips, nearbyStops, departures, board, findStation, familyOf,
     intlBoard, isInternational, isOutbound, decodePolyline, kmBetween,
                           FAMILIES, MODE_GROUP, MODE_LABEL, INTL_MODES, BASE };
 })();

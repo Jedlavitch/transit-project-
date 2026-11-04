@@ -54,7 +54,7 @@
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
-<script src="transitous.js?v=3"></script>
+<script src="transitous.js?v=5"></script>
 <script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=2" defer></script>
 <script src="departures.js?v=2" defer></script>
@@ -1032,6 +1032,10 @@ function initMap(){
   // labels are positioned in screen space, so any pan or zoom invalidates the
   // collision result — and every fleet repaint adds new ones to test
   state.map.on("zoomend moveend", scheduleDeclutter);
+  /* Vehicles come from a box around the map, so panning or zooming away from it
+     has to ask for the new one -- otherwise the city you moved to is empty. */
+  state.map.on("moveend zoomend", ()=>{ clearTimeout(state._areaT);
+    state._areaT=setTimeout(maybeRefetchArea, 600); });
   /* Vehicles glide continuously between position updates, so labels drift apart
      and back together between passes. A slow periodic re-check catches that; the
      pass is a few thousand rect comparisons, far too cheap to be worth tying to
@@ -1908,6 +1912,9 @@ const FAMILY_COL = {intl:"#1D4E9E", ld:"#e2504f", regio:"#3ad0c8", metro:"#4ea1f
    a corridor and a palette stop looking like the same vehicle. */
 const FAMILY_MODE = {intl:"train", ld:"train", regio:"train", metro:"metro",
                      tram:"tram", busx:"bus", ferry:"ferry"};
+/* family name -> the key its card, layer and fleet are filed under. The map
+   gets its vehicles from a feed that reports families, not card keys. */
+const FAMILY_KEY = {}; FAMILY_CARDS.forEach(([k,f])=>{ FAMILY_KEY[f]=k; });
 function transitMinutes(ms){ return Math.round((ms - Date.now())/60000); }
 /* Past about an hour a countdown stops being useful and starts being unreadable.
    The lake boats finish for the evening, so the next sailing rendered as "in
@@ -2130,6 +2137,9 @@ function drawTransitStops(stops){
    what makes the movement continuous between the 45-second departure refreshes.
 */
 const VEHICLE_TICK_MS = 5000;      // how often positions are recomputed (no network)
+/* These three now budget the ROUTE LINES only. Vehicles stopped going through
+   /trip when refreshVehiclePositions started asking for the whole box at once,
+   so a 429 here costs a few lines on a cold board and never a vehicle. */
 const VEHICLE_PER_FAMILY = 10;     // trips looked up per family per refresh
 const VEHICLE_LOOKUP_CAP = 45;     // ...and no more than this many in total
 const VEHICLE_CONCURRENCY = 4;     // the public endpoint rate-limits; stay under it
@@ -2200,7 +2210,77 @@ async function locatableDepartures(){
 }
 
 async function refreshTransitVehicles(){
-  if(!window.TBTransitous || !TBTransitous.tripDetail) return;
+  if(!window.TBTransitous) return;
+  refreshVehiclePositions();        // everything moving, in one request
+  refreshRouteLines();              // the network behind it, from cached trips
+}
+
+/* EVERY vehicle inside the map, not a budget's worth.
+
+   This used to share the route-line lookups below: a trip was discovered from
+   the departures of the nearest few stops, then placed with its own /trip call,
+   and both halves were capped because that call is per-trip against a public
+   endpoint that answers 429 under a burst. Zurich could discover 76 trips and
+   draw 45. There were 486 running.
+
+   TBTransitous.areaTrips asks the map's own question instead -- what is moving
+   inside this rectangle -- and answers it in a single request, so the cap and
+   the discovery problem both go away at once. The rectangle is the map's own
+   bounds, which means panning somewhere else shows what is there, and zooming
+   out costs the server less rather than more (see areaTrips on the zoom). */
+async function refreshVehiclePositions(){
+  if(!TBTransitous.areaTrips || !state.map) return;
+  const b=state.map.getBounds().pad(0.25);
+  let trips;
+  try{
+    trips=await TBTransitous.areaTrips(
+      {minLat:b.getSouth(), minLon:b.getWest(), maxLat:b.getNorth(), maxLon:b.getEast()},
+      {zoom:state.map.getZoom(), precision:4});
+  }catch(e){ return; }     // keep the last good paint; a blank map is worse
+  state._areaBox=b;        // what the current set covers, see maybeRefetchArea
+
+  /* The cards already know a few of these trips by id, and they know two things
+     the area feed cannot: where the service terminates, and whether it leaves
+     the country -- "international" is decided from the journey's end timezone,
+     and a single hop between two stops has no end to look at. So a known
+     departure wins where there is one, and the area feed fills in the rest. */
+  const known=new Map();
+  (state._transit||[]).forEach(s=>(s.deps||[]).forEach(d=>{ if(d.tripId) known.set(d.tripId,d); }));
+  (state._extraDeps||[]).forEach(d=>{ if(d.tripId) known.set(d.tripId,d); });
+
+  const moving={}; FAMILY_CARDS.forEach(([key])=>{ moving[key]=[]; });
+  trips.forEach(t=>{
+    const k=known.get(t.id);
+    const key=FAMILY_KEY[(k&&k.family)||t.family];
+    if(!key || !moving[key]) return;
+    moving[key].push({trip:t, dep: k || {tripId:t.id, route:t.route, label:t.label,
+      headsign:"", realTime:t.realTime, delayMin:t.delayMin, when:t.start}});
+  });
+  FAMILY_CARDS.forEach(([key])=>{ state._trips[key]=moving[key]; });
+  tickTransitVehicles();
+}
+
+/* Refetch only when the map has moved off what the last request covered. The
+   bounds are padded by a quarter, so an idle board and the small corrections
+   follow mode makes both stay inside it and cost nothing. */
+function maybeRefetchArea(){
+  if(!state.map) return;
+  if(state._areaBox && state._areaBox.contains(state.map.getBounds())) return;
+  refreshVehiclePositions();
+}
+
+/* ---- the route lines ------------------------------------------------------
+   Still the old path, and deliberately: a line is the whole route, and the area
+   feed returns only the hop a vehicle is on. Full geometry comes from /trip,
+   which is immutable and cached, so the budget below is a cold-start cost
+   rather than a running one.
+
+   Two different questions, so two different sets. A route LINE is a fact about
+   the network and stays drawn whether or not something is on it right now --
+   the lake boat runs every half hour, and blanking its line between sailings
+   would be odd when every other board draws lines from the timetable. */
+async function refreshRouteLines(){
+  if(!TBTransitous.tripDetail) return;
   // one entry per trip, however many nearby stops it was seen departing from
   const byFam={};
   (await locatableDepartures()).forEach(d=>{
@@ -2209,64 +2289,55 @@ async function refreshTransitVehicles(){
   });
   /* Soonest first within each family, then a global cap and a concurrency
      limit over the whole set: a cold board otherwise fires every lookup at
-     once and the endpoint answers 429, which costs every vehicle on the map.
+     once and the endpoint answers 429.
 
      The families are interleaved before the cap bites. Taking the first N in
      card order spent the whole budget on the trains at the front of the list
      and left the buses and boats at the end permanently empty. */
-  const queues=FAMILY_CARDS.map(([key,fam])=>
-    (byFam[fam]||[]).sort((a,b)=>a.when-b.when).slice(0, VEHICLE_PER_FAMILY)
-      .map(dep=>({key, dep})));
+  /* One lookup per LINE, not per run. drawFamilyRoutes keeps a single polyline
+     per route name regardless, so looking up three trams on the 11 spent three
+     slots of the budget to draw the same line once -- and that is what used to
+     leave whole routes undrawn while the 11 was fetched over and over. */
+  const queues=FAMILY_CARDS.map(([key,fam])=>{
+    const seen=new Set(), out=[];
+    (byFam[fam]||[]).sort((a,b)=>a.when-b.when).forEach(dep=>{
+      const name=dep.route||dep.label||"";
+      if(name && seen.has(name)) return;
+      seen.add(name); out.push({key, dep});
+    });
+    return out.slice(0, VEHICLE_PER_FAMILY);
+  });
   const picks=[];
   for(let i=0; picks.length<VEHICLE_LOOKUP_CAP; i++){
     const before=picks.length;
     queues.forEach(q=>{ if(i<q.length && picks.length<VEHICLE_LOOKUP_CAP) picks.push(q[i]); });
     if(picks.length===before) break;      // every queue exhausted
   }
-  /* Paint from whatever has resolved so far. Pulled out of the await below
-     so it can run repeatedly while the lookups are still streaming in: the
-     lookups are gated to VEHICLE_CONCURRENCY against a rate-limited public
-     endpoint, so a cold board needs ~9s to finish all of them, and waiting
-     for the last one left the map completely empty for that whole time even
-     though most vehicles were known within the first second. Every step here
-     rebuilds from `rows` rather than appending, so calling it with a growing
-     set is idempotent -- drawFamilyRoutes clears its layer and updateFleet
-     glides markers that already exist rather than duplicating them. */
+  /* Draw from whatever has resolved so far, repeatedly, while the rest are
+     still streaming in: the lookups are gated to VEHICLE_CONCURRENCY against a
+     rate-limited endpoint, so a cold board needs ~9s to finish all of them.
+     drawFamilyRoutes clears its layer and redraws, so calling it with a growing
+     set is idempotent. */
   const paint = rows => {
-    /* Two different questions, so two different sets. A route LINE is a fact
-       about the network and stays drawn whether or not something is on it
-       right now -- the lake boat runs every half hour, and blanking its line
-       between sailings would be odd when every other board draws lines from
-       the timetable. A VEHICLE marker is a claim that something is out there,
-       so it is held to the stricter test below. */
-    const now=Date.now(), moving={}, lines={};
-    FAMILY_CARDS.forEach(([key])=>{ moving[key]=[]; lines[key]=[]; });
+    const lines={};
+    FAMILY_CARDS.forEach(([key])=>{ lines[key]=[]; });
     rows.filter(Boolean).forEach(({key,dep,trip})=>{
-      if(!lines[key]) return;
-      lines[key].push({dep, trip});
-      if(now>trip.end) return;                     // the run has finished
-      /* International services are kept from the moment they set off,
-         wherever that was: half the interest in the 15:43 to Brussels is
-         watching it come in from Frankfurt first. The rest are only drawn
-         while underway, since parking a tram on its origin terminus would be
-         inventing a position. */
-      if(key!=="intl" && now<trip.start) return;
-      moving[key].push({dep, trip});
+      if(lines[key]) lines[key].push({dep, trip});
     });
-    FAMILY_CARDS.forEach(([key])=>{
-      state._trips[key]=moving[key];
-      drawFamilyRoutes(key, lines[key]);
-    });
-    tickTransitVehicles();
+    FAMILY_CARDS.forEach(([key])=>{ drawFamilyRoutes(key, lines[key]); });
   };
 
   /* Throttled, because each paint clears and rebuilds every route layer --
-     doing that once per resolved trip would be ~45 full rebuilds in a burst.
-     At 400ms the map visibly fills in while staying smooth. */
+     doing that once per resolved trip would be ~45 full rebuilds in a burst. */
   let lastPaint=0;
   const detailed=await mapLimited(picks, VEHICLE_CONCURRENCY,
     async p=>{
-      const trip=await TBTransitous.tripDetail(p.dep.tripId).catch(()=>null);
+      /* Six hours, not the three minutes tripDetail defaults to. That default
+         exists to keep a vehicle's TIMES fresh, and vehicles stopped coming
+         from here -- a line only needs the geometry, which never changes. So
+         after the first pass over a city's routes this costs no network at
+         all, which is what stops the cold-start burst recurring every 45s. */
+      const trip=await TBTransitous.tripDetail(p.dep.tripId, 21600000).catch(()=>null);
       return trip ? {key:p.key, dep:p.dep, trip} : null;
     },
     rows=>{
@@ -2309,7 +2380,11 @@ function tickTransitVehicles(){
       try{ pos=TBTransitous.positionOnTrip(trip); }catch(e){ pos=null; }
       if(!pos || typeof pos.lat!=="number" || typeof pos.lon!=="number") return;
       const line=dep.route||dep.label||trip.route||"";
-      const dest=dep.headsign||(trip.to&&trip.to.name)||"";
+      /* No fallback to the trip's far end any more. For an area trip that is
+         the next stop, not the destination, and "12 → Am Ring" on a tram bound
+         somewhere else reads as a statement of fact. The next stop is in the
+         tooltip, where it is labelled as one. */
+      const dest=dep.headsign||"";
       const label=[line,dest].filter(Boolean).join(" → ");
       const next=pos.next&&pos.next.name;
       /* Live times move the whole timetable, but the position between stops is
