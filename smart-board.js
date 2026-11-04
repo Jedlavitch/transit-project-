@@ -37,6 +37,7 @@
     if (c.id === "leaderCard") return {show:[].slice.call(c.querySelectorAll(".pts")).some(function(n){return Number(n.textContent)>=60;}), why:"Shown for a notable find"};
     if (c.id === "cityAdvisoryCard") return {show:!!c.querySelector(".cab-resource,.cab-note"), why:"Your pinned city guidance"};
     if (c.id === "cityDiscoveryCard") return {show:true, why:"City outings and your passport"};
+    if (c.id === "ontimeCard") return {show:!!c.querySelector(".list .row"), why:"Reliability history"};
     if (c.id === "planeCard") return {show:!!c.querySelector(".list .row"), why:"Shown when aircraft are in range"};
     return {show:!!c.querySelector(".list .row"), departure:true, why:"Waiting for departures or feed data"};
   }
@@ -45,6 +46,10 @@
     var col = box.parentElement, cr = col.getBoundingClientRect(), br = box.getBoundingClientRect();
     var scale = br.width / box.offsetWidth || 1;
     var h = Math.max(0, (cr.bottom - br.top) / scale - col.scrollTop - (parseFloat(getComputedStyle(col).paddingBottom) || 0));
+    if(document.documentElement.getAttribute("data-tv-layout")==="true"){
+      var columns=box.clientWidth>=650?2:1;
+      return columns*Math.max(1,Math.min(2,Math.floor(h/200)));
+    }
     var rail = getComputedStyle(box).display === "flex";
     var cols = rail ? 1 : Math.max(1, Math.floor((box.clientWidth + 12) / (280 / scale + 12)));
     return Math.max(2, Math.min(6, cols * Math.max(1, Math.floor((h + 8) / (155 / scale + 8)))));
@@ -92,6 +97,11 @@
     // A missing feed is never an all-clear: retain one status panel when no
     // transport has data, and make every resting reason available in Settings.
     if(!eligible.concat(fixed).some(function(c){return activity(c).departure || c.id==="planeCard";}) && waiting.length){eligible.unshift(waiting[0]);delete reasons[waiting[0].id];}
+    // Keep a real departure panel visible while TV extras rotate.
+    if(document.documentElement.getAttribute("data-tv-layout")==="true" && !fixed.some(function(c){return activity(c).departure;})){
+      var anchor=eligible.find(function(c){return activity(c).departure;});
+      if(anchor){fixed.push(anchor);eligible.splice(eligible.indexOf(anchor),1);}
+    }
     var slots=Math.max(1,capacity()-fixed.length);
     var nextSig=fixed.map(function(c){return c.id;}).join(",")+"|"+eligible.map(function(c){return c.id;}).join(",")+"|"+slots;
     if(signature!==nextSig){signature=nextSig;page=0;lastTurn=Date.now();}
@@ -125,7 +135,7 @@
     bar.onclick=function(e){var b=e.target.closest("button");if(!b)return;if(b.hasAttribute("data-sb-turn"))turn(Number(b.dataset.sbTurn));else if(b.classList.contains("sb-pause")){prefs.paused=!prefs.paused;save();lastTurn=Date.now();update();}else if(b.classList.contains("sb-customize")){document.getElementById("settingsBtn").click();var tab=document.querySelector('#setup [data-tab="display"]');if(tab)tab.click();if(settings){settings.scrollIntoView({block:"center"});settings.querySelector("button").focus();}}};
     box.addEventListener("pointerenter",function(){busy=true;});box.addEventListener("pointerleave",function(){busy=false;lastTurn=Date.now();});
     new MutationObserver(queue).observe(box,{childList:true,subtree:true,characterData:true});
-    new MutationObserver(queue).observe(document.documentElement,{attributes:true,attributeFilter:["data-style","data-map","data-rows"]});
+    new MutationObserver(queue).observe(document.documentElement,{attributes:true,attributeFilter:["data-style","data-map","data-rows","data-tv-layout"]});
     addEventListener("resize",queue);
     document.addEventListener("change",queue);document.addEventListener("click",function(e){if(e.target.closest(".card-x,.mini-btn"))queue();},true);
     addEventListener("storage",function(e){if(e.key===key || e.key===null){prefs=read();update();}});

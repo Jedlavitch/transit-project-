@@ -462,6 +462,67 @@ body .card.tb-tight .statline{display:none}
     min-height:min(clamp(96px,12dvh,150px), var(--tb-card-max, 150px));
     max-height:var(--tb-card-max, 360px)}
 }
+/* TV browsers often expose a 960x540 or 1280x720 viewport. Keep the map
+   beside the departures regardless of the tablet media-query breakpoint. */
+:root[data-tv-layout="true"] body #app{display:flex;flex-direction:column;zoom:var(--ui-zoom);width:var(--tv-app-w);height:var(--tv-app-h);min-height:0;overflow:hidden}
+:root[data-tv-layout="true"] body #app > header{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;padding:10px 14px;min-height:66px;flex:none;pointer-events:auto}
+:root[data-tv-layout="true"] body header .homelink{order:0;flex:none}
+:root[data-tv-layout="true"] body header .brandmark--sm{width:28px;height:28px;margin:0}
+:root[data-tv-layout="true"] body header .title{order:0;flex:1 1 160px;min-width:0;font-size:20px;line-height:1.1}
+:root[data-tv-layout="true"] body header .tb-board-kicker{font-size:8px;margin:0 0 3px}
+:root[data-tv-layout="true"] body header .tb-board-city{font-size:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:root[data-tv-layout="true"] body header .title small{display:block;font-size:12px;margin:4px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:root[data-tv-layout="true"] body header #tbLocBtn{font-size:12px}
+:root[data-tv-layout="true"] body header .clock{order:0;flex:none;margin-left:8px;max-width:175px}
+:root[data-tv-layout="true"] body header .clock .time{font-size:25px;white-space:nowrap}
+:root[data-tv-layout="true"] body header .clock .meta{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:175px}
+:root[data-tv-layout="true"] body header .city-picker select{width:110px;max-width:110px;padding:8px 22px 8px 8px;font-size:11px}
+:root[data-tv-layout="true"] body header button,:root[data-tv-layout="true"] body header .tb-board-views > summary{min-height:32px;height:32px;padding:6px 9px;font-size:11px;white-space:nowrap}
+:root[data-tv-layout="true"] body header .tb-board-views{display:block;position:relative;flex:none}
+:root[data-tv-layout="true"] body header .tb-board-views > summary{display:flex;align-items:center;gap:8px;cursor:pointer;border:1px solid var(--line);border-radius:7px;background:var(--panel);list-style:none}
+:root[data-tv-layout="true"] body header .tb-board-views .view-links{display:none;position:absolute;top:40px;right:0;width:185px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:8px;z-index:1200}
+:root[data-tv-layout="true"] body header .tb-board-views[open] .view-links{display:flex;flex-direction:column}
+:root[data-tv-layout="true"] body header .tb-board-views .view-links a{display:block;font-size:13px;padding:8px}
+:root[data-tv-layout="true"] body #statStrip{display:flex;flex:none;align-items:center;gap:0;padding:7px 14px;min-height:34px;pointer-events:auto}
+:root[data-tv-layout="true"] body #statStrip .stat{display:flex;align-items:baseline;flex:1 1 0;min-width:0;gap:6px;padding:0 10px;background:none;border:0;border-left:1px solid var(--line);box-shadow:none}
+:root[data-tv-layout="true"] body #statStrip .stat:first-of-type{border-left:0;padding-left:0}
+:root[data-tv-layout="true"] body #statStrip .s-value{order:0;font-size:20px;line-height:1.1;margin:0}
+:root[data-tv-layout="true"] body #statStrip .s-label{order:1;font-size:8px;white-space:nowrap;letter-spacing:0}
+:root[data-tv-layout="true"] body #statStrip .s-sub,:root[data-tv-layout="true"] body #statStrip .s-glyph{display:none}
+:root[data-tv-layout="true"] body #app > main{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);grid-template-rows:minmax(0,1fr);flex:1 1 0;gap:14px;padding:10px 14px;min-height:0;overflow:hidden}
+:root[data-tv-layout="true"] body #app > main > .col{grid-column:auto;grid-row:auto;display:flex;flex-direction:column;gap:8px;width:auto;min-width:0;max-width:none;min-height:0;padding:0;justify-self:stretch;background:none}
+:root[data-tv-layout="true"] body #app > main > .col:first-child::after{display:none}
+:root[data-tv-layout="true"] body #app > main > .col:last-child{overflow:auto}
+:root[data-tv-layout="true"][data-board-layout="smart"] body #app > main > .col:last-child{overflow:hidden}
+:root[data-tv-layout="true"][data-map="off"] body #app > main{grid-template-columns:minmax(0,1fr)}
+:root[data-tv-layout="true"][data-map="off"] body #app > main > .col:first-child{display:none}
+:root[data-tv-layout="true"] body:not(.map-full) #map{flex:1 1 0;height:auto;min-height:0;border-radius:10px}
+:root[data-tv-layout="true"] body .tb-section-heading{font-size:14px;margin:0;flex:none}
+:root[data-tv-layout="true"] body .tb-section-heading span{display:none}
+:root[data-tv-layout="true"] body .legend{font-size:10px;gap:7px}
+:root[data-tv-layout="true"] body .cards{display:grid;grid-template-columns:repeat(var(--tb-card-cols,2),minmax(0,1fr));grid-auto-rows:var(--tb-card-h,210px);gap:10px;column-width:auto;min-height:0;align-content:start}
+:root[data-tv-layout="true"] body .cards .card{flex:none;min-height:0;max-height:none;margin:0;padding:12px;height:100%;border-radius:10px}
+:root[data-tv-layout="true"] body .cards .card.mini{height:auto}
+:root[data-tv-layout="true"] body .card h2{font-size:15px;line-height:1.25;letter-spacing:0;gap:6px;margin:0 0 8px;text-transform:none;white-space:nowrap}
+:root[data-tv-layout="true"] body .card h2 .count{font-size:10px}
+:root[data-tv-layout="true"] body .card .statline{font-size:10px;line-height:1.3;margin:0 0 6px}
+:root[data-tv-layout="true"] body .list .row{padding:6px 0;gap:7px;grid-template-columns:auto minmax(0,1fr) auto auto}
+:root[data-tv-layout="true"] body .list .row .dest{font-size:16px;line-height:1.2}
+:root[data-tv-layout="true"] body .list .row .sub{display:block;font-size:11px;line-height:1.3}
+:root[data-tv-layout="true"] body .list .row .live,:root[data-tv-layout="true"] body .list .row .live-eta{font-size:19px;line-height:1.2}
+:root[data-tv-layout="true"] body .list .row .sched{display:block;font-size:10px}
+:root[data-tv-layout="true"] body .list .row .badge{font-size:12px;min-width:29px;height:24px;line-height:24px;padding:0 5px}
+:root[data-tv-layout="true"] body .list .stop-label{font-size:10px;line-height:1.3;margin:4px 0}
+:root[data-tv-layout="true"] body .sb-bar{font-size:10px;min-height:26px;gap:6px}
+:root[data-tv-layout="true"] body .sb-bar button{font-size:10px;min-height:26px;padding:4px 6px}
+:root[data-tv-layout="true"] body #app > footer{flex:none;display:flex;flex-wrap:nowrap;align-items:center;gap:12px;min-height:24px;padding:6px 14px;font-size:8px;line-height:1.2;pointer-events:auto}
+:root[data-tv-layout="true"] body footer > *{min-width:0}
+:root[data-tv-layout="true"] body footer > :first-child{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:root[data-tv-layout="true"] body footer > :last-child{flex:none;max-width:170px;white-space:nowrap}
+/* Credits sit on their own plate, not across the footer text. */
+:root[data-tv-layout="true"] #tbMapCredit{position:absolute!important;bottom:3px!important;left:4px!important;font-size:8px!important;max-width:95%;background:var(--bg);padding:2px 4px}
+:root[data-tv-layout="true"] #tbAdsbCredit{font-size:8px!important;bottom:2px!important;max-width:40vw;background:var(--bg);padding:1px 4px}
+
 `;
 
   /* ---- inject ------------------------------------------------------------
@@ -492,7 +553,51 @@ body .card.tb-tight .statline{display:none}
   function isTv(){
     try { return typeof looksLikeTv === "function" && looksLikeTv(); } catch (_) { return false; }
   }
+  // A TV gets a measured landscape frame, including overscan. Scaling a
+  // tablet layout only made the header larger and its departure area shorter.
+  function tvFrame(manual, padChoice){
+    var ua=navigator.userAgent||'';
+    var identified=/smart-?tv|googletv|android ?tv|appletv|crkey|web0s|webos|tizen|netcast|viera|bravia|hbbtv|\baft[a-z]{1,3}\b|large screen/i.test(ua);
+    if(!isTv() || (!identified&&/iPad|iPhone|Mobile|Tablet/i.test(ua)) || innerWidth<800 || innerWidth<=innerHeight)return null;
+    var w=typeof viewportW==='function'?viewportW():innerWidth;
+    var h=typeof viewportH==='function'?viewportH():innerHeight;
+    var pad=padChoice, saved=null;
+    try{if(pad==null)pad=parseFloat(localStorage.getItem('tb.safePad'));if(manual)saved=parseFloat(localStorage.getItem('tb.uiZoom'));}catch(_){}
+    if(!isFinite(pad))pad=2.5;pad=Math.max(0,Math.min(5,pad));
+    var inset=Math.min(w,h)*pad/100, availableW=w-inset*2,availableH=h-inset*2;
+    var automatic=Math.min(availableW/1280,availableH/720);
+    // Respect a chosen size up to the point where a usable TV frame fits.
+    var z=Math.min(isFinite(saved)&&saved>0?saved:automatic,availableW/1080,availableH/620);
+    return {z:z,pad:pad,w:availableW/z,h:availableH/z,preferred:saved};
+  }
+  function fitTv(){
+    var root=document.documentElement, frame=tvFrame(true);
+    var active=!!frame, before=root.getAttribute('data-tv-layout')==='true';
+    if(active!==before){if(active)root.setAttribute('data-tv-layout','true');else root.removeAttribute('data-tv-layout');}
+    if(!frame)return;
+    function set(k,v){if(root.style.getPropertyValue(k)!==v)root.style.setProperty(k,v);}
+    set('--ui-zoom',String(frame.z));set('--safe-pad',frame.pad+'vmin');
+    set('--tv-app-w',frame.w+'px');set('--tv-app-h',frame.h+'px');
+    var map=document.getElementById('map'),credit=document.getElementById('tbMapCredit');
+    if(map&&credit&&credit.parentElement!==map)map.appendChild(credit);
+    var hint=document.getElementById('zoomAuto');
+    if(hint){var text='TV fit: '+Math.round(frame.z*100)+'% · map and departures side by side.';
+      if(frame.preferred&&frame.preferred>frame.z+.01)text+=' Your saved size is limited to keep the board on screen.';
+      if(hint.textContent!==text)hint.textContent=text;}
+  }
+  function hookTvDisplay(){
+    if(typeof window.autoDisplay==='function'&&!window.autoDisplay.__tbTv){
+      var original=window.autoDisplay;
+      window.autoDisplay=function(){var f=tvFrame(false);return f?{z:f.z,pad:f.pad}:original.apply(this,arguments);};window.autoDisplay.__tbTv=true;
+    }
+    if(typeof window.applyDisplay==='function'&&!window.applyDisplay.__tbTv){
+      var apply=window.applyDisplay;
+      window.applyDisplay=function(){var result=apply.apply(this,arguments);fitTv();return result;};window.applyDisplay.__tbTv=true;
+    }
+  }
+
   function pinZoom(){
+    hookTvDisplay();fitTv();
     const w = innerWidth, root = document.documentElement;
     if (w >= 481 && w <= 1220 && !isTv()) root.style.setProperty("--ui-zoom", "1");
   }
@@ -705,7 +810,11 @@ body .card.tb-tight .statline{display:none}
     const bcs=getComputedStyle(box);
     const cgap=parseFloat(bcs.columnGap)||12;
     let cols;
-    if(w>1220){
+    if(root.getAttribute("data-tv-layout")==="true"){
+      cols=box.clientWidth>=650?2:1;
+      root.style.setProperty("--tb-card-cols",String(cols));
+      root.classList.add("tb-cols-forced");
+    }else if(w>1220){
       /* Non-Atlas widescreen (the masonry layout, if the Atlas style is off):
          width is spare and height is the constraint, so spend the width on
          MORE columns to keep cards tall. column-width has to go to auto for
@@ -829,7 +938,7 @@ body .card.tb-tight .statline{display:none}
        up with, so stop the tiles growing past what the fullest card can even
        use: a 400px box around one departure is dead space, not generosity.
        When it does NOT all fit, the exact figure is the whole point. */
-    if(k>=rowsNeeded) tile=Math.min(tile, Math.max(chromeMax+rowH*2+listGap, wantMax));
+    if(k>=rowsNeeded && root.getAttribute("data-tv-layout")!=="true") tile=Math.min(tile, Math.max(chromeMax+rowH*2+listGap, wantMax));
     /* Floor, never round. Rounding 194.5 up to 195 makes two tiles plus their
        gap 402px in a 401px column, and the second row is then one pixel past
        the fold -- which is a scrollbar, a fade, and a row of cards reported as

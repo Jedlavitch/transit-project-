@@ -1,0 +1,457 @@
+{
+  "cities": {
+    "philadelphia": {
+      "bounds": [
+        39.35,
+        -76.15,
+        40.65,
+        -74.45
+      ],
+      "feeds": [
+        "septa",
+        "patco",
+        "njtrail",
+        "amtrak"
+      ]
+    },
+    "dc": {
+      "bounds": [
+        38.2,
+        -77.9,
+        39.75,
+        -76.25
+      ],
+      "feeds": [
+        "marc",
+        "vre",
+        "rideon",
+        "amtrak"
+      ],
+      "geoSources": [
+        "dc-58",
+        "dc-51",
+        "dc-59"
+      ]
+    },
+    "nyc": {
+      "bounds": [
+        40.35,
+        -74.65,
+        41.65,
+        -72.85
+      ],
+      "feeds": [
+        "mta",
+        "lirr",
+        "mnr",
+        "path",
+        "njtrail",
+        "nycbus",
+        "nyc-bx",
+        "nyc-b",
+        "nyc-m",
+        "nyc-q",
+        "nyc-si",
+        "amtrak"
+      ]
+    },
+    "boston": {
+      "bounds": [
+        41.65,
+        -72.1,
+        42.85,
+        -70.45
+      ],
+      "feeds": [
+        "mbta",
+        "amtrak"
+      ]
+    },
+    "newjersey": {
+      "bounds": [
+        38.85,
+        -75.65,
+        41.4,
+        -73.85
+      ],
+      "feeds": [
+        "njtrail",
+        "njtbus",
+        "path",
+        "patco",
+        "amtrak"
+      ]
+    },
+    "sanfrancisco": {
+      "bounds": [
+        37.0,
+        -123.0,
+        38.5,
+        -121.35
+      ],
+      "feeds": [
+        "bart",
+        "muni",
+        "caltrain",
+        "amtrak"
+      ]
+    },
+    "losangeles": {
+      "bounds": [
+        33.35,
+        -119.3,
+        34.85,
+        -116.95
+      ],
+      "feeds": [
+        "larail",
+        "labus",
+        "metrolink",
+        "amtrak"
+      ],
+      "geoSources": [
+        "metrolink-gis"
+      ]
+    },
+    "amsterdam": {
+      "bounds": [
+        52.05,
+        4.35,
+        52.8,
+        5.4
+      ],
+      "feeds": [
+        "nl"
+      ]
+    },
+    "zurich": {
+      "bounds": [
+        47.0,
+        8.0,
+        47.75,
+        9.1
+      ],
+      "feeds": [
+        "zvv"
+      ],
+      "geoSources": [
+        "zvv-sbahn"
+      ]
+    },
+    "cologne": {
+      "bounds": [
+        50.35,
+        6.25,
+        51.35,
+        7.65
+      ],
+      "feeds": [
+        "vrs"
+      ]
+    },
+    "stuttgart": {
+      "bounds": [
+        48.35,
+        8.5,
+        49.25,
+        10.0
+      ],
+      "feeds": [
+        "vvs"
+      ]
+    }
+  },
+  "feeds": {
+    "septa": {
+      "name": "SEPTA",
+      "url": "https://www3.septa.org/developer/gtfs_public.zip",
+      "busLimit": 25
+    },
+    "patco": {
+      "name": "PATCO",
+      "url": "https://rapid.nationalrtap.org/GTFSFileManagement/UserUploadFiles/13562/PATCO_GTFS.zip"
+    },
+    "njtrail": {
+      "name": "NJ TRANSIT Rail",
+      "url": "https://www.njtransit.com/rail_data.zip"
+    },
+    "njtbus": {
+      "name": "NJ TRANSIT Bus",
+      "url": "https://www.njtransit.com/bus_data.zip",
+      "busLimit": 20
+    },
+    "marc": {
+      "name": "MARC",
+      "url": "https://feeds.mta.maryland.gov/gtfs/marc"
+    },
+    "vre": {
+      "name": "VRE",
+      "url": "https://gtfs.vre.org/containercdngtfsupload/google_transit.zip"
+    },
+    "rideon": {
+      "name": "Ride On",
+      "url": "https://www.montgomerycountymd.gov/DOT-Transit/Resources/Files/GTFS/RideOnGTFS.zip",
+      "busLimit": 10,
+      "rapidRefs": [
+        "FLASH"
+      ]
+    },
+    "mta": {
+      "name": "MTA Subway",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip"
+    },
+    "lirr": {
+      "name": "Long Island Rail Road",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfslirr.zip"
+    },
+    "mnr": {
+      "name": "Metro-North",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfsmnr.zip"
+    },
+    "path": {
+      "name": "PATH",
+      "url": "https://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip"
+    },
+    "nycbus": {
+      "name": "MTA Bus Company",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_busco.zip",
+      "busLimit": 8
+    },
+    "mbta": {
+      "name": "MBTA",
+      "url": "https://cdn.mbta.com/MBTA_GTFS.zip",
+      "busLimit": 20,
+      "rapidRefs": [
+        "SL1",
+        "SL2",
+        "SL3",
+        "SL4",
+        "SL5",
+        "SLW"
+      ]
+    },
+    "bart": {
+      "name": "BART",
+      "url": "https://www.bart.gov/dev/schedules/google_transit.zip"
+    },
+    "muni": {
+      "name": "SFMTA",
+      "url": "https://data.sfgov.org/download/dni7-qpv3/application%2Fx-zip-compressed",
+      "busLimit": 20,
+      "rapidRefs": [
+        "49"
+      ]
+    },
+    "caltrain": {
+      "name": "Caltrain",
+      "url": "https://data.trilliumtransit.com/gtfs/caltrain-ca-us/caltrain-ca-us.zip"
+    },
+    "larail": {
+      "name": "LA Metro Rail",
+      "url": "https://gitlab.com/LACMTA/gtfs_rail/-/raw/master/gtfs_rail.zip"
+    },
+    "labus": {
+      "name": "LA Metro Bus",
+      "url": "https://gitlab.com/LACMTA/gtfs_bus/-/raw/master/gtfs_bus.zip",
+      "busLimit": 25,
+      "rapidRefs": [
+        "Metro G Line (Orange) 901",
+        "Metro J Line (Silver) 910/950"
+      ],
+      "displayRefs": {
+        "Metro G Line (Orange) 901": "G",
+        "Metro J Line (Silver) 910/950": "J"
+      }
+    },
+    "metrolink": {
+      "name": "Metrolink",
+      "url": "https://metrolinktrains.com/globalassets/about/gtfs/gtfs.zip"
+    },
+    "amtrak": {
+      "name": "Amtrak",
+      "url": "https://content.amtrak.com/content/gtfs/GTFS.zip",
+      "excludeBus": true,
+      "excludeNames": [
+        "Commuter Rail",
+        "Thruway Connecting Service"
+      ]
+    },
+    "nl": {
+      "name": "OVapi / NDOV",
+      "url": "https://gtfs.ovapi.nl/nl/gtfs-nl.zip",
+      "busLimit": 25
+    },
+    "zvv": {
+      "name": "ZVV / Open Data Z\u00fcrich",
+      "url": "https://data.stadt-zuerich.ch/dataset/vbz_fahrplandaten_gtfs/download/2026_google_transit.zip",
+      "busLimit": 20
+    },
+    "vrs": {
+      "name": "VRS / go.Rheinland",
+      "url": "https://download.vrs.de/gtfs/google_transit_goR.zip",
+      "busLimit": 20
+    },
+    "vvs": {
+      "name": "VVS",
+      "url": "https://download.vvs.de/gtfs_realtime.zip",
+      "busLimit": 20
+    },
+    "nyc-bx": {
+      "name": "MTA Bronx Bus",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_bx.zip",
+      "busLimit": 8
+    },
+    "nyc-b": {
+      "name": "MTA Brooklyn Bus",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_b.zip",
+      "busLimit": 8
+    },
+    "nyc-m": {
+      "name": "MTA Manhattan Bus",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_m.zip",
+      "busLimit": 8
+    },
+    "nyc-q": {
+      "name": "MTA Queens Bus",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_q.zip",
+      "busLimit": 8
+    },
+    "nyc-si": {
+      "name": "MTA Staten Island Bus",
+      "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_si.zip",
+      "busLimit": 8
+    }
+  },
+  "geoSources": {
+    "dc-58": {
+      "name": "WMATA Metrorail / Open Data DC",
+      "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Transportation_Rail_Bus_WebMercator/MapServer/58/query?where=1%3D1&outFields=*&outSR=4326&f=geojson",
+      "mode": "metro",
+      "refField": "NAME",
+      "nameFields": [
+        "NAME"
+      ],
+      "colors": {
+        "blue": "#1679bd",
+        "red": "#d23b40",
+        "orange": "#e59026",
+        "green": "#289b59",
+        "silver": "#85929e",
+        "yellow": "#d4a800"
+      },
+      "serviceDate": "Open Data DC network"
+    },
+    "dc-51": {
+      "name": "WMATA stations / Open Data DC",
+      "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Transportation_Rail_Bus_WebMercator/MapServer/51/query?where=1%3D1&outFields=*&outSR=4326&f=geojson",
+      "mode": "station",
+      "nameFields": [
+        "NAME"
+      ],
+      "serviceDate": "Open Data DC network",
+      "stationModes": [
+        "metro"
+      ]
+    },
+    "dc-59": {
+      "name": "WMATA frequent buses / Open Data DC",
+      "url": "https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Transportation_Rail_Bus_WebMercator/MapServer/59/query?where=1%3D1&outFields=*&outSR=4326&f=geojson",
+      "mode": "bus",
+      "refField": "ROUTE",
+      "nameFields": [
+        "DESCRIPTION"
+      ],
+      "serviceDate": "2026-09-13 geometry; agency frequent-route map selection",
+      "selectionUrl": "https://www.wmata.com/ride/maps.html",
+      "selectRefs": [
+        "C11",
+        "C13",
+        "C15",
+        "C21",
+        "C29",
+        "C31",
+        "C37",
+        "C41",
+        "C51",
+        "C53",
+        "C61",
+        "C75",
+        "C81",
+        "D10",
+        "D1X",
+        "D20",
+        "D30",
+        "D32",
+        "D36",
+        "D40",
+        "D44",
+        "D4X",
+        "D50",
+        "D5X",
+        "D60",
+        "D6X",
+        "D70",
+        "D72",
+        "D74",
+        "D80",
+        "M12",
+        "M20",
+        "M42",
+        "M44",
+        "M52",
+        "M54",
+        "M60",
+        "M70",
+        "P1X",
+        "P30",
+        "P40",
+        "P41",
+        "P60",
+        "P93",
+        "P94",
+        "A1X",
+        "A40",
+        "A58",
+        "A70",
+        "F1X",
+        "F20",
+        "F23",
+        "F24",
+        "F60",
+        "F61"
+      ]
+    },
+    "metrolink-gis": {
+      "name": "Metrolink / SCAG official line geometry",
+      "url": "https://maps.scag.ca.gov/scaggis/rest/services/OpenData/Metrolinklinescag/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson",
+      "mode": "rail",
+      "refField": "Name",
+      "nameFields": [
+        "Name"
+      ],
+      "serviceDate": "2025 agency geometry",
+      "replacesMissingFeed": "metrolink",
+      "refs": {
+        "Inland Empire-Orange County Line": "IE-OC Line",
+        "Antelope Valley Line": "AV Line",
+        "91/Perris Valley Line": "91-PV Line",
+        "San Bernardino Line": "SB Line",
+        "Riverside Line": "RIV Line",
+        "Ventura County Line": "VC Line",
+        "Orange County Line": "OC Line"
+      }
+    },
+    "zvv-sbahn": {
+      "name": "ZVV S-Bahn / Canton Z\u00fcrich",
+      "url": "https://maps.zh.ch/wfs/OGDZHWFS?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ms:ogd-0108_giszhpub_zvv_s_bahn_linien_l&OUTPUTFORMAT=application/json&SRSNAME=EPSG:4326",
+      "mode": "rail",
+      "refField": "liniesbahn",
+      "nameFields": [
+        "anfanghaltestelle",
+        "endhaltestelle"
+      ],
+      "serviceDate": "2025-12-14 catalog edition",
+      "color": "#3972ae"
+    }
+  }
+}
