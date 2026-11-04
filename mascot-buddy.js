@@ -157,7 +157,7 @@
     penguin: {
       hello: [
         "Pim here. I have read today's timetable. It is an optimistic document.",
-        "Pim. Everything below is scheduled. Scheduled is not the same as happening.",
+        "Pim. Anything below marked scheduled is only that. Scheduled is not the same as happening.",
       ],
       own: [
         "I have the timetable memorised. It has disappointed me every day this week.",

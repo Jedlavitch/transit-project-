@@ -9,13 +9,15 @@
 <title>Transit Project — Today's most interesting</title>
 
 <!-- Link previews. The auto-poster puts this URL in front of people who have
-     never seen the site, and a bare link with no card looks like spam. The
-     image is the one the workflow commits each morning, so a shared link shows
-     the same card that was posted. -->
+     never seen the site, and a bare link with no card looks like spam. Absolute,
+     because crawlers do not resolve a relative image; and a screenshot that is in
+     the repo, because shots/leaderboard-latest.png is only committed once the
+     daily post is switched on, and until then this card pointed at a 404. -->
 <meta property="og:title" content="Today's most interesting plane or train" />
 <meta property="og:description" content="Every day, eleven live transit boards score what passes over and through them. The strangest thing wins." />
 <meta property="og:type" content="website" />
-<meta property="og:image" content="shots/leaderboard-latest.png" />
+<meta property="og:image" content="https://transitproject.online/shots/board-dc.jpg" />
+<meta property="og:url" content="https://transitproject.online/leaderboard.html" />
 <meta name="twitter:card" content="summary_large_image" />
 
 <link rel="stylesheet" href="theme.css?v=35" />
@@ -121,6 +123,8 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .empty{color:var(--muted); font-size:13.5px; line-height:1.7}
   .ok{color:var(--good-ink)}
   .bad{color:var(--late-ink)}
+  /* thumb-sized on a phone: these were 28-30px tall */
+  @media (max-width:700px){ .tab, .seg button{ min-height:40px; } }
 </style>
 </head>
 <body>
@@ -252,6 +256,38 @@ function prettyDay(s) {
   return isFinite(d) ? d.toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" }) : s;
 }
 
+/* ---- everything from the share code is hostile until proven otherwise ------
+   The list behind a share code is a public jsonblob: whoever holds the code can
+   rewrite it, and it is rendered here. esc() covered the text, but score, reason
+   weights and kind were written into innerHTML raw, so a crafted list could run
+   script in this page. Coerce every field to the type the page expects, and cap
+   the sizes so a huge list cannot freeze a screen. Same rule as spotlog.js. */
+const MAX_REMOTE_PER_CITY = 40;
+const str = (v, n) => (typeof v === "string" ? v : "").slice(0, n || 160);
+const fin = v => (typeof v === "number" && isFinite(v)) ? Math.round(v) : 0;
+function cleanEntry(e, city) {
+  if (!e || typeof e !== "object" || typeof e.id !== "string" || !e.id) return null;
+  return {
+    id: str(e.id, 200), score: fin(e.score), kind: e.kind === "plane" ? "plane" : "train",
+    title: str(e.title), sub: str(e.sub), detail: str(e.detail), city,
+    cityLabel: cityLabel(city),
+    hex: /^[0-9a-f]{6}$/i.test(e.hex || "") ? e.hex.toLowerCase() : "",
+    photoQuery: str(e.photoQuery),
+    reasons: (Array.isArray(e.reasons) ? e.reasons : []).slice(0, 4)
+      .filter(r => r && typeof r === "object").map(r => ({ w: fin(r.w), t: str(r.t) }))
+  };
+}
+function cleanRemote(d) {
+  if (!d || typeof d !== "object" || !d.cities || typeof d.cities !== "object") return null;
+  const cities = {};
+  CITIES.forEach(c => {                 // known ids only: "__proto__" is not a city
+    const list = d.cities[c.id];
+    if (!Array.isArray(list)) return;
+    cities[c.id] = list.slice(0, MAX_REMOTE_PER_CITY).map(e => cleanEntry(e, c.id)).filter(Boolean);
+  });
+  return { day: str(d.day, 10), cities };
+}
+
 /* ---- data ---------------------------------------------------------------
    Local first, then anything a share code brings in. Remote entries are merged
    per city and de-duplicated by id, keeping the higher score — two screens
@@ -296,13 +332,39 @@ function scopeList(scope) {
   return (box.cities[scope] || []).slice();
 }
 
+/* A device whose boards are all closed never rolls its own day over, because only
+   a running board does that. So the morning after, yesterday's list is still
+   sitting in storage and the page said no winners had been archived yet. */
+function archiveList() {
+  const arch = read(LS.archive, []);
+  const list = Array.isArray(arch) ? arch.filter(a => a && a.entry && a.day) : [];
+  const box = read(LS.leaders, null);
+  if (box && box.day && box.day !== todayStr() && box.cities) {
+    Object.keys(box.cities).forEach(c => {
+      const top = (box.cities[c] || [])[0];
+      if (top) list.unshift({ day: box.day, city: c, entry: top });
+    });
+  }
+  const seen = new Set();
+  return list.filter(a => {
+    const k = a.day + "|" + a.city;
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  }).sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
+}
+
 function citiesWithData() {
   const box = merged();
   return CITIES.filter(c => (box.cities[c.id] || []).length);
 }
 
 /* ---- view ---------------------------------------------------------------- */
-let scope = new URLSearchParams(location.search).get("city") || "all";
+/* Only ids that exist: this indexes an object, and ?city=__proto__ threw before
+   anything rendered. */
+let scope = (() => {
+  const c = new URLSearchParams(location.search).get("city");
+  return CITIES.some(x => x.id === c) ? c : "all";
+})();
 
 function renderTabs() {
   const have = citiesWithData();
@@ -383,7 +445,7 @@ function renderRest() {
 }
 
 function renderArchive() {
-  const arch = read(LS.archive, []).filter(a => scope === "all" || a.city === scope).slice(0, 8);
+  const arch = archiveList().filter(a => scope === "all" || a.city === scope).slice(0, 8);
   const box = $("#archive");
   if (!arch.length) { box.innerHTML = `<p class="empty">Yesterday's winners show up here once this
     has been running for more than a day.</p>`; return; }
@@ -412,7 +474,18 @@ function renderArchive() {
    (The daily poster has no CORS to worry about and uses the exact airframe.) */
 const PHOTO_CACHE_KEY = "nightmode.photos";
 const photoCache = (() => { try { return JSON.parse(localStorage.getItem(PHOTO_CACHE_KEY) || "{}"); } catch (_) { return {}; } })();
-const savePhotoCache = () => { try { localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify(photoCache)); } catch (_) {} };
+/* Shared with Sky mode and nothing ever removed from it, so on a long-running
+   device it grew until it filled the origin's quota, and then the boards' own
+   writes (today's leaders, the Spotter's log) were the ones that failed. */
+const PHOTO_CACHE_MAX = 150;
+const savePhotoCache = () => {
+  const keys = Object.keys(photoCache);
+  if (keys.length > PHOTO_CACHE_MAX) {
+    keys.sort((a, b) => ((photoCache[a] || {}).t || 0) - ((photoCache[b] || {}).t || 0))
+        .slice(0, keys.length - PHOTO_CACHE_MAX).forEach(k => { delete photoCache[k]; });
+  }
+  try { localStorage.setItem(PHOTO_CACHE_KEY, JSON.stringify(photoCache)); } catch (_) {}
+};
 
 async function getJSON(url, ms = 12000) {
   const ctl = new AbortController();
@@ -431,7 +504,7 @@ async function exactPlanePhoto(hex) {
     v = (d && d.photos ? d.photos : []).slice(0, 6)
       .map(p => ({ src: (p.thumbnail_large || p.thumbnail || {}).src || "", link: p.link || "", cred: p.photographer || "" }))
       .filter(p => p.src);
-  } catch (_) {}
+  } catch (_) { return null; }     // a failed request says nothing about the aircraft: ask again next time
   photoCache[key] = { t: Date.now(), v }; savePhotoCache();
   return v[0] || null;
 }
@@ -440,7 +513,7 @@ async function exactPlanePhoto(hex) {
    which look wrong on a photo panel — filtered out by file type and title. */
 async function commonsPhoto(query) {
   if (!query) return null;
-  const key = "wikiN:" + query, hit = photoCache[key];
+  const key = "wikiR:" + query, hit = photoCache[key];
   if (hit && Date.now() - hit.t < 30 * 864e5) return (hit.v || [])[0] || null;
   let v = [];
   try {
@@ -458,9 +531,19 @@ async function commonsPhoto(query) {
         if (!/\.(jpe?g|png|webp)$/i.test(title)) return null;
         if (/\b(map|diagram|logo|icon|seal|chart|schematic|timetable|sign|ticket)\b/i.test(title)) return null;
         const artist = (((info.extmetadata || {}).Artist || {}).value || "").replace(/<[^>]+>/g, "").trim();
-        return { src: info.thumburl || info.url, link: info.descriptionurl || "", cred: artist };
+        return { src: info.thumburl || info.url, link: info.descriptionurl || "", cred: artist, title };
       }).filter(Boolean);
-  } catch (_) {}
+    /* Commons ranks loosely, so a search for a United 737 could come back with a
+       Southwest one, which on a card about a United flight is simply wrong. Prefer
+       the files whose own name has the most of the words asked for: the airline
+       first, since it is the first word of the query. */
+    const words = String(query).toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const fit = p => {
+      const t = p.title.toLowerCase();
+      return words.reduce((n, w, i) => n + (t.includes(w) ? (i === 0 ? 3 : 1) : 0), 0);
+    };
+    v = v.map((p, i) => [fit(p), i, p]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map(x => x[2]);
+  } catch (_) { return null; }     // this one is cached for 30 days, so one dropped request cost a month of photo
   photoCache[key] = { t: Date.now(), v }; savePhotoCache();
   return v[0] || null;
 }
@@ -496,12 +579,28 @@ let heroPhoto = null;     // shown on the page: the exact airframe when there is
 let cardImage = null;     // drawn on the canvas: CORS-safe, so the export works
 let cardCredit = "";
 
-async function loadPhotos() {
-  const win = scopeList(scope)[0];
-  const box = $("#heroPhoto");
-  if (!win) { if (box) box.innerHTML = ""; heroPhoto = null; cardImage = null; drawCard(); return; }
+/* Each lookup is a network round-trip, and the tabs can be switched while one is
+   out. Without this a slow answer for Washington landed after you had moved on,
+   and New York's winner was shown with Washington's aeroplane. A pass that has
+   been overtaken simply stops. */
+let photoPass = 0;
+let photoFor_ = "";          // which entry the photos on screen belong to
 
-  heroPhoto = await photoFor(win);
+async function loadPhotos() {
+  const pass = ++photoPass, win = scopeList(scope)[0];
+  const box = $("#heroPhoto");
+  if (!win) {
+    if (box) box.innerHTML = "";
+    heroPhoto = null; cardImage = null; cardCredit = ""; photoFor_ = ""; drawCard(); return;
+  }
+  if (photoFor_ !== win.id) {  // a different winner: never leave the old one's picture up
+    heroPhoto = null; cardImage = null; cardCredit = ""; photoFor_ = win.id;
+    paintHeroPhoto(); drawCard();
+  }
+
+  const shown = await photoFor(win);
+  if (pass !== photoPass) return;
+  heroPhoto = shown;
   paintHeroPhoto();
 
   /* The canvas needs a CORS-open source. For a train that is the same Commons
@@ -511,9 +610,12 @@ async function loadPhotos() {
   if (!safe) {
     const q = win.photoQuery || (win.kind === "plane" ? win.title : win.title + " train");
     const p = await commonsPhoto(q);
+    if (pass !== photoPass) return;
     if (p) safe = Object.assign({ exact: false }, p);
   }
-  cardImage = await loadCorsImage(safe && safe.src);
+  const im = await loadCorsImage(safe && safe.src);
+  if (pass !== photoPass) return;
+  cardImage = im;
   cardCredit = safe && safe.cred ? "photo: " + safe.cred.slice(0, 46) : "";
   drawCard();
 }
@@ -535,7 +637,7 @@ function paintHeroPhoto() {
     ? "This aircraft · " + (heroPhoto.cred ? "photo © " + esc(heroPhoto.cred) + " · " : "") + "planespotters.net"
     : "Representative photo" + (heroPhoto.cred ? " · " + esc(heroPhoto.cred) : "") + " · Wikimedia Commons";
   box.innerHTML =
-    `<a href="${esc(heroPhoto.link || "#")}" target="_blank" rel="noopener noreferrer">
+    `<a href="${esc(/^https:\/\//.test(heroPhoto.link || "") ? heroPhoto.link : "#")}" target="_blank" rel="noopener noreferrer">
        <img src="${esc(heroPhoto.src)}" alt="${esc(win_alt())}" />
      </a><div class="cred">${cred}</div>`;
 }
@@ -638,10 +740,11 @@ function drawCard() {
     g.fillStyle = "#93a5cf"; g.font = '400 26px "IBM Plex Sans", sans-serif';
     g.fillText("Leave a board running and check back.", pad, y + 140);
     footer(g, W, H, pad);
+    bakeCard();
     return;
   }
 
-  y += photoH ? 62 : (fmt === "square" ? 86 : 66);
+  y += photoH ? (fmt === "square" ? 78 : 66) : (fmt === "square" ? 86 : 66);
   const nameMax = W - pad * 2 - (fmt === "square" ? 0 : 210);
   const nameSize = photoH ? (fmt === "square" ? 74 : 60) : (fmt === "square" ? 92 : 74);
   const nm = layout(g, win.title, "800 {S}px Archivo, sans-serif", nameSize, nameMax, fmt === "square" ? 3 : 2);
@@ -719,6 +822,7 @@ function drawCard() {
   g.textAlign = "left";
 
   footer(g, W, H, pad);
+  bakeCard();
 }
 
 function fitOne(g, text, x, y, maxW) {
@@ -761,12 +865,21 @@ function buildCaption() {
 function canvasBlob() {
   return new Promise(res => $("#shot").toBlob(res, "image/png"));
 }
+/* The PNG is made ahead of the tap. Safari only allows navigator.share() inside
+   the tap itself, and waiting on toBlob() first can spend that permission, which
+   is why the share sheet could fail on an iPhone with no message at all. */
+let cardBlob = null;
+function bakeCard() {
+  cardBlob = null;
+  canvasBlob().then(b => { cardBlob = b; }).catch(() => {});
+}
 function shotName() {
   return "transit-" + (scope === "all" ? "all" : scope) + "-" + todayStr() + ".png";
 }
 
 $("#dlBtn").onclick = async () => {
-  const b = await canvasBlob();
+  const b = cardBlob || await canvasBlob();
+  if (!b) { note("Couldn't make the image — try again in a moment.", false); return; }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(b); a.download = shotName();
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -781,13 +894,18 @@ $("#copyCap").onclick = async () => {
    the Instagram or X composer on a phone. Desktop browsers mostly cannot, so
    the fallback says what to do rather than failing silently. */
 $("#shareBtn").onclick = async () => {
-  const blob = await canvasBlob();
-  const file = new File([blob], shotName(), { type: "image/png" });
+  const blob = cardBlob || await canvasBlob();
+  const file = blob ? new File([blob], shotName(), { type: "image/png" }) : null;
   const text = $("#caption").value;
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text }); return; } catch (_) { return; }
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    /* Backing out of the sheet is an answer, not a failure. Anything else falls
+       through to the download rather than the button appearing to do nothing. */
+    try { await navigator.share({ files: [file], text }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  } else if (navigator.share) {
+    try { await navigator.share({ text }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
   }
-  if (navigator.share) { try { await navigator.share({ text }); return; } catch (_) {} }
   $("#dlBtn").click();
   note("This browser can't open a share sheet — image downloaded and caption ready to copy.", false);
 };
@@ -830,8 +948,8 @@ function paintScope() {
   $("#scopeAirline").classList.toggle("on", v === "airline");
   $("#scopeAll").classList.toggle("on", v === "all");
   $("#scopeNote").textContent = v === "airline"
-    ? "Scheduled airline flights, plus anything remarkable in its own right — a warbird, a heavy-lift Antonov, an emergency squawk. Routine helicopters, private jets and survey aircraft are left out."
-    : "Everything the boards can see, including the everyday helicopters, private jets and survey aircraft.";
+    ? "Scheduled airline flights, plus anything remarkable in its own right — a warbird, a heavy-lift Antonov, an emergency squawk. Routine helicopters, private jets and survey aircraft are left out. Changes apply from the next scoring pass; what's already on today's list stays."
+    : "Everything the boards can see, including the everyday helicopters, private jets and survey aircraft. Changes apply from the next scoring pass; what's already on today's list stays.";
 }
 $("#scopeAirline").onclick = () => setPlaneScope("airline");
 $("#scopeAll").onclick = () => setPlaneScope("all");
@@ -845,6 +963,16 @@ function parseBlobId(v) {
 function blobNote(msg, cls) { const n = $("#blobNote"); n.textContent = msg; n.className = "note " + (cls || ""); }
 
 $("#blobSave").onclick = () => {
+  /* The note above says to leave this empty to keep everything on this device, so
+     an empty box has to be a way of doing that. It used to be an error, and there
+     was no other way to stop publishing. */
+  if (!$("#blobIn").value.trim()) {
+    try { localStorage.removeItem(LS.blob); } catch (_) {}
+    remote = null;
+    blobNote("Share code removed. Nothing leaves this device now.", "ok");
+    renderAll();
+    return;
+  }
   const id = parseBlobId($("#blobIn").value);
   if (!id) { blobNote("That doesn't look like a share code — it's a uuid, 36 characters with dashes.", "bad"); return; }
   try { localStorage.setItem(LS.blob, id); } catch (_) {}
@@ -853,6 +981,7 @@ $("#blobSave").onclick = () => {
 };
 
 $("#blobNew").onclick = async () => {
+  if (blobId() && !confirm("This device already has a share code. Replace it with a new, empty list? Your other screens and the daily post will keep using the old one until you change them too.")) return;
   blobNote("Creating…");
   try {
     const r = await fetch(BLOB_API, { method:"POST", headers:{ "Content-Type":"application/json" },
@@ -876,23 +1005,54 @@ async function pull(loud) {
   try {
     const r = await fetch(BLOB_API + id, { cache: "no-store" });
     if (!r.ok) throw new Error(r.status);
-    remote = await r.json();
-    renderAll();
-    if (loud) blobNote("Pulled " + Object.keys((remote && remote.cities) || {}).length + " cities from the shared list.", "ok");
+    remote = cleanRemote(await r.json());
+    refresh();
+    if (loud) {
+      const n = Object.keys((remote && remote.cities) || {}).length;
+      blobNote(remote && remote.day && remote.day !== todayStr()
+        ? "That list was last written on " + remote.day + ", so it has nothing for today yet."
+        : "Pulled " + n + " cit" + (n === 1 ? "y" : "ies") + " from the shared list.", "ok");
+    }
   } catch (e) {
     if (loud) blobNote("Couldn't read that code (" + e.message + ").", "bad");
   }
 }
 
 /* ---- boot ---------------------------------------------------------------- */
+/* The caption box is there to be edited before posting, so a background update
+   must not wipe it. It follows the data again once the winner changes. */
+let captionBase = "";
+function paintCaption() {
+  const box = $("#caption"), next = buildCaption();
+  if (box.value === captionBase || !captionBase) box.value = next;
+  captionBase = next;
+}
+
 function renderAll() {
+  lastSig = sigNow();
   renderTabs(); renderHero(); renderRest(); renderArchive();
-  $("#caption").value = buildCaption();
+  paintCaption();
   drawCard();
   /* Photos are a network round-trip, so the card is drawn once without one and
      redrawn when it lands — the page is useful immediately either way. */
   loadPhotos();
 }
+
+/* This page read everything once and never again, so a leaderboard left open on
+   a screen sat on whatever it found at load, past midnight included. Redrawn only
+   when the data actually changed, so the photo is not re-fetched and the table
+   does not jump every tick. */
+let lastSig = "";
+function sigNow() {
+  return todayStr() + "|" + scope + "|" + JSON.stringify(scopeList(scope).map(e => [e.id, e.score])) +
+         "|" + archiveList().length;
+}
+function refresh() {
+  if (sigNow() !== lastSig) renderAll();
+}
+window.addEventListener("storage", e => {
+  if (e.key === LS.leaders || e.key === LS.archive) refresh();
+});
 
 (function boot() {
   const from = new URLSearchParams(location.search).get("from");
@@ -902,6 +1062,8 @@ function renderAll() {
   setFmt(fmt);
   renderAll();
   if (blobId()) pull();
+  setInterval(refresh, 30000);
+  setInterval(() => { if (blobId() && document.visibilityState === "visible") pull(); }, 300000);
   /* Web fonts arrive after first paint, and a card drawn before they land uses
      the fallback face — which looks wrong next to the page around it. */
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawCard);

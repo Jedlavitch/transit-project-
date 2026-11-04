@@ -111,6 +111,9 @@ def live_now(lat, lon, radius_nm):
                     continue
                 if ident(t.get("trainNum")):
                     out["train"].add(ident(t.get("trainNum")))
+                    # one-tap logging saves the label, "Northeast Regional 171",
+                    # so the bare number alone would never match what was logged
+                    out["train"].add(ident(f'{t.get("routeName") or "Amtrak"} {t.get("trainNum")}'))
     except Exception as e:                                   # noqa: BLE001
         print(f"  ! amtraker: {e}", file=sys.stderr)
     return out
@@ -169,8 +172,13 @@ def run_once(blob_id):
     # drop stale dedupe entries so the blob can't grow without bound
     seen = {k: t for k, t in seen.items() if now - float(t or 0) < COOLDOWN_S * 4}
     if fired or seen != (blob.get("notified") or {}):
-        blob["notified"] = seen
+        # Re-read first. The feeds above can take half a minute, and writing back the
+        # copy from the top of this pass would erase anything the phone published
+        # in the meantime -- a sighting logged while this ran would just vanish
+        # from the boards until the next one.
         try:
+            blob = get_json(url)
+            blob["notified"] = seen
             put_json(url, blob)
         except Exception as e:                               # noqa: BLE001
             print(f"  ! could not save dedupe state: {e}", file=sys.stderr)

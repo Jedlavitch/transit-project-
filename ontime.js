@@ -76,18 +76,22 @@
     return false;
   }
   var REGISTERED = registerCardToggle();
+  /* The key this board's own loadHiddenCards() reads, found by watching it read.
+     All the boards share one origin, so "the first transitboard*.hiddenCards in
+     localStorage" was usually ANOTHER city's list: on a device that had opened two
+     boards the × overwrote that city's choices, and came back here on reload. */
   function boardHiddenKey() {
+    var found = "", proto = Storage.prototype, real = proto.getItem;
     try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (/^transitboard[a-z]*\.hiddenCards$/.test(k)) return k;
-      }
-      for (var j = 0; j < localStorage.length; j++) {
-        var m = /^(transitboard[a-z]*)\./.exec(localStorage.key(j));
-        if (m) return m[1] + ".hiddenCards";
-      }
-    } catch (_) {}
-    return "";
+      proto.getItem = function (k) {
+        if (/hiddenCards$/.test(String(k))) found = String(k);
+        return real.apply(this, arguments);
+      };
+      /* eslint-disable-next-line no-undef */
+      if (typeof loadHiddenCards === "function") loadHiddenCards();
+    } catch (_) {
+    } finally { proto.getItem = real; }
+    return found;
   }
   function hiddenNow() {
     try { /* eslint-disable-next-line no-undef */
@@ -237,7 +241,11 @@
   function mergedDays(id) {
     var local = lateHist[id] || {}, out = {}, d;
     var arch = (archive && archive.lines && archive.lines[id]) || null;
-    if (arch) for (d in arch) if (d !== "_") out[d] = { rec: arch[d], live: false };
+    /* The archive keeps ninety days; this view is a fortnight, and says so. Unfiltered,
+       "On time, 2 weeks" was a three-month average and the by-day chart had sixty bars. */
+    var cut = new Date(); cut.setDate(cut.getDate() - KEEP_DAYS);
+    var cutKey = cut.getFullYear() + "-" + String(cut.getMonth() + 1).padStart(2, "0") + "-" + String(cut.getDate()).padStart(2, "0");
+    if (arch) for (d in arch) if (d !== "_" && d >= cutKey) out[d] = { rec: arch[d], live: false };
     for (d in local) if (d !== "_") out[d] = { rec: local[d], live: true };
     return { days: out, meta: local._ || (arch && arch._) || null };
   }
@@ -964,7 +972,7 @@
       var bh = Math.max(1.5, (s.avg / max) * h);
       return '<rect x="' + (i * (bw + 1.5)).toFixed(1) + '" y="' + (h - bh).toFixed(1) +
         '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1" fill="' +
-        (s.d === day ? color : "currentColor") + '" opacity="' + (s.d === day ? "1" : ".38") + '"/>';
+        ((s.d || s.x) === day ? color : "currentColor") + '" opacity="' + ((s.d || s.x) === day ? "1" : ".38") + '"/>';
     }).join("");
     return '<svg class="ot-spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h +
       '" style="color:var(--muted,#93a5cf)">' + bars + "</svg>";
@@ -1033,6 +1041,7 @@
       stat.textContent = "";
       list.innerHTML = '<div class="empty" style="text-align:left">Watching how long you wait at these stops. ' +
         "A typical wait needs a day or so of the board being on.</div>";
+      list._otHTML = null;      // or the same rows coming back later would count as "unchanged"
       return;
     }
     stat.textContent = !rows.length ? (anyWeeks ? "on time today vs your last 2 weeks"

@@ -27,7 +27,7 @@
      network anyway, so caching the library would only buy a blank grey box. -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="account.js?v=2" defer></script>
+<script src="account.js?v=3" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
 <script src="basemap.js?v=3"></script>
@@ -49,11 +49,12 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   h1 small{display:block; font-size:11px; color:var(--muted); font-weight:600;
     font-family:var(--mono); letter-spacing:.06em; text-transform:uppercase; margin-top:3px}
   .iconbtn{background:var(--panel); border:1px solid var(--line); color:var(--text);
-    border-radius:10px; width:38px; height:38px; font-size:16px; cursor:pointer; flex:none}
+    border-radius:10px; min-width:38px; height:38px; padding:0 8px; font-size:13px; font-weight:600; cursor:pointer; flex:none}
   /* five buttons now share the header — shrink them before the title has to wrap */
   @media (max-width:420px){
-    .iconbtn{width:33px; height:33px; font-size:14px}
-    .hrow{gap:6px}
+    /* words now, not icons, so they get the width they need and may wrap to a second row */
+    .iconbtn{min-width:33px; height:36px; padding:0 7px; font-size:12px}
+    .hrow{gap:6px; flex-wrap:wrap}
   }
   .iconbtn:active{border-color:var(--accent)}
 
@@ -518,8 +519,12 @@ const MODE_GLYPH = { plane:"AIR", train:"RAIL", bus:"BUS" };
 let mode = "plane", loc = null, near = [];
 
 /* ---------- storage ---------- */
-function loadSpots(){ try{ return JSON.parse(localStorage.getItem(LS.spots)||"[]"); }catch(e){ return []; } }
-function saveSpots(a){ try{ localStorage.setItem(LS.spots, JSON.stringify(a.slice(0,500))); }catch(e){} }
+function loadSpots(){ try{ const v=JSON.parse(localStorage.getItem(LS.spots)||"[]"); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+/* A log is the one thing here that cannot be re-fetched. It used to keep the
+   newest 500 and silently delete the rest, and a write that failed on a full
+   quota still toasted "Logged". Returns whether it stuck, so callers can say so. */
+const SPOTS_MAX=5000;
+function saveSpots(a){ try{ localStorage.setItem(LS.spots, JSON.stringify(a.slice(0,SPOTS_MAX))); return true; }catch(e){ return false; } }
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const feedUrl = () => (localStorage.getItem(LS.feed)||"").trim().replace(/\/+$/,"");
 
@@ -535,31 +540,50 @@ document.querySelectorAll("#modes .mode").forEach(b=>{
     document.querySelectorAll("#modes .mode").forEach(x=>x.classList.toggle("on", x===b));
     $("#routeLbl").textContent = mode==="plane" ? "Flight / route" : mode==="train" ? "Line / train #" : "Route";
     $("#route").placeholder = mode==="plane" ? "e.g. UAL123" : mode==="train" ? "e.g. Red Line, Acela 2151" : "e.g. 29, M15";
+    nearLoading=!!loc;                  // this mode's timetables are not in yet: don't claim nothing's here
     renderNear();                       // instant redraw from what's already loaded
     if(loc) fetchNear();                // then pull the bundles this mode needs
   };
 });
 
 /* ---------- location ---------- */
+/* Followed, not read once: this gets opened on a platform and carried onto the
+   train, and a single fix left "near you" and the coordinates on every sighting
+   stuck wherever you first opened it. A timeout indoors also used to report
+   "location is off" for good; only an actual refusal says that now, and
+   watchPosition keeps trying through the rest. */
+let locState="wait", locWatch=null;       // wait | on | off | none
+let lastFetchAt=null, placeAt=null;
+function onFix(p){
+  loc={lat:p.coords.latitude, lon:p.coords.longitude}; locState="on";
+  $("#hsub").textContent=
+    `${Math.abs(loc.lat).toFixed(3)}°${loc.lat>=0?"N":"S"} ${Math.abs(loc.lon).toFixed(3)}°${loc.lon>=0?"E":"W"}`;
+  // the 30s poll picks up small moves; only a real move is worth refetching for now
+  if(!lastFetchAt || distMi(lastFetchAt,loc)>0.25){ lastFetchAt=loc; nearLoading=true; renderNear(); fetchNear(); }
+  // a suggested place goes stale as you travel; one you typed never gets touched
+  if(!placeAt || distMi(placeAt,loc)>0.3){ placeAt=loc; namePlace(); }
+}
+function onFixError(err){
+  if(err && err.code===1){ locState="off"; $("#hsub").textContent="location off"; }
+  else if(!loc){ $("#hsub").textContent="finding you…"; }
+  renderNear();
+}
 function initLoc(){
-  if(!navigator.geolocation){ $("#nearHint").textContent="This browser can't share your location — enter sightings by hand."; return; }
-  navigator.geolocation.getCurrentPosition(
-    p => { loc={lat:p.coords.latitude, lon:p.coords.longitude}; $("#hsub").textContent=
-             `${Math.abs(loc.lat).toFixed(3)}°${loc.lat>=0?"N":"S"} ${Math.abs(loc.lon).toFixed(3)}°${loc.lon>=0?"E":"W"}`;
-           fetchNear(); namePlace(); },
-    _ => { $("#nearHint").textContent="Location is off, so one-tap logging is unavailable — enter sightings by hand.";
-           $("#hsub").textContent="location off"; },
-    { enableHighAccuracy:false, timeout:9000, maximumAge:120000 }
-  );
+  if(!navigator.geolocation){ locState="none"; renderNear(); return; }
+  if(locWatch!=null) navigator.geolocation.clearWatch(locWatch);
+  locState = loc ? "on" : "wait";
+  locWatch=navigator.geolocation.watchPosition(onFix, onFixError,
+    { enableHighAccuracy:false, timeout:15000, maximumAge:60000 });
 }
 /* Name where you are, so "Where" doesn't have to be typed every time. Nominatim
    is the same free, keyless, CORS-open geocoder the boards use for address
    lookup. Only ever fills a field the user hasn't touched, and only suggests —
    typing over it wins, and the typed value is what gets logged. */
 let placeTouched=false;
-$("#place").addEventListener("input", ()=>{ placeTouched=true; });
+$("#place").addEventListener("input", ()=>{ placeTouched=true; delete $("#place").dataset.auto; });
 async function namePlace(){
-  if(!loc || placeTouched || $("#place").value.trim()) return;
+  const placeEl=$("#place");
+  if(!loc || placeTouched || (placeEl.value.trim() && !placeEl.dataset.auto)) return;
   try{
     const j=await getJSON(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=18`+
       `&lat=${loc.lat.toFixed(5)}&lon=${loc.lon.toFixed(5)}`, 8000);
@@ -569,9 +593,9 @@ async function namePlace(){
                 a.amenity,a.building,a.attraction].find(Boolean);
     const area=[a.neighbourhood,a.suburb,a.city,a.town,a.village,a.hamlet].find(Boolean);
     const label=[spot, spot?area:(a.road?`${a.road}${area?", "+area:""}`:area)].filter(Boolean).join(", ");
-    if(label && !placeTouched && !$("#place").value.trim()){
-      $("#place").value=label;
-      $("#place").dataset.auto="1";
+    if(label && !placeTouched && (!placeEl.value.trim() || placeEl.dataset.auto)){
+      placeEl.value=label;
+      placeEl.dataset.auto="1";
     }
   }catch(e){ /* a name is a nicety — never block logging on it */ }
 }
@@ -696,19 +720,27 @@ function bundleActiveServices(s, parts){
   const act=new Set();
   for(const id in s.svc){ const v=s.svc[id];
     if(parts.y>=v.start && parts.y<=v.end && v.dow[parts.dow]) act.add(id); }
-  const ex=s.exc[parts.y];
+  const ex=(s.exc||{})[parts.y];
   if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
   return act;
+}
+/* The same calendar for the day before: a trip running at 00:30 Saturday belongs
+   to FRIDAY's service. Checking it against today's put Saturday's timetable on the
+   road on a Friday night, and dropped the real one on Sunday morning. */
+function dayBefore(parts){
+  const d=new Date(Date.UTC(+parts.y.slice(0,4), +parts.y.slice(4,6)-1, +parts.y.slice(6,8)-1));
+  return { y:d.getUTCFullYear()+String(d.getUTCMonth()+1).padStart(2,"0")+String(d.getUTCDate()).padStart(2,"0"),
+           dow:(parts.dow+6)%7, min:parts.min };
 }
 /* Every trip running right now, placed between the two stops its timetable puts
    it between. Checks now and now+1440 so trips that started before midnight and
    are still going are not missed. */
 function scheduledNearby(s, feed, parts){
-  const act=bundleActiveServices(s,parts), out=[];
+  const act=bundleActiveServices(s,parts), prev=bundleActiveServices(s,dayBefore(parts)), out=[];
   s.trips.forEach(tr=>{
-    if(!act.has(tr.s)) return;
     const seq=tr.st; if(!seq || seq.length<2) return;
     for(const now of [parts.min, parts.min+1440]){
+      if(!(now===parts.min ? act : prev).has(tr.s)) continue;
       if(now<seq[0][1] || now>seq[seq.length-1][1]) continue;
       let k=0; while(k<seq.length-1 && seq[k+1][1]<=now) k++;
       const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
@@ -719,7 +751,7 @@ function scheduledNearby(s, feed, parts){
       if(mi<=SCHED_RADIUS_MI){
         const line=tr.line||feed.label;
         const mins=Math.max(0,Math.round(b[1]-now));
-        out.push({ mode:feed.mode, key:String(line).slice(0,7),
+        out.push({ mode:feed.mode, key:String(line).slice(0,7), line:String(line),
           label: feed.mode==="bus" ? `Route ${line}` : String(line),
           sub:`${feed.label} → ${tr.hs||"?"} · ${cb[2]||"next stop"} in ${mins} min · scheduled`,
           vehicle:"", color: feed.mode==="bus" ? "#6aa9ff" : "#3ad0c8", d:mi, scheduled:true,
@@ -730,6 +762,47 @@ function scheduledNearby(s, feed, parts){
   });
   return out;
 }
+/* Washington has real live data, and the keyless timetables above only cover MARC
+   and Ride On there, so standing on a Metro platform in the one city this project
+   started in offered nothing to tap. Uses the key config.js ships to every board. */
+const WM_COLOR={RD:"#BF0D3E",BL:"#009CDE",YL:"#FFD100",OR:"#ED8B00",GR:"#00B140",SV:"#919D9D"};
+const WM_NAME={RD:"Red Line",BL:"Blue Line",YL:"Yellow Line",OR:"Orange Line",GR:"Green Line",SV:"Silver Line"};
+const wmataKey=()=>{ try{ return (localStorage.getItem("transitboard.wmataKey")||"").trim() || ((window.TB_CONFIG||{}).wmataKey||""); }catch(_){ return ""; } };
+let wmStations=null;
+async function fetchWmataNear(forMode){
+  const key=wmataKey(); if(!key || !loc) return [];
+  const q=`api_key=${encodeURIComponent(key)}`, out=[];
+  if(forMode==="bus"){
+    const d=await getJSON(`https://api.wmata.com/Bus.svc/json/jBusPositions?Lat=${loc.lat}&Lon=${loc.lon}&Radius=${Math.round(SCHED_RADIUS_MI*1609)}&${q}`);
+    (d.BusPositions||[]).forEach(v=>{
+      if(v.Lat==null||v.Lon==null||!v.RouteID) return;
+      out.push({ mode:"bus", key:String(v.RouteID).slice(0,7), line:String(v.RouteID), label:`Route ${v.RouteID}`,
+        sub:`Metrobus → ${v.TripHeadsign||"?"} · ${distMi(loc,{lat:v.Lat,lon:v.Lon}).toFixed(1)} mi`,
+        vehicle:v.VehicleID?String(v.VehicleID):"", color:"#6aa9ff", d:distMi(loc,{lat:v.Lat,lon:v.Lon}),
+        lat:v.Lat, lon:v.Lon, hdg:null });
+    });
+    return out;
+  }
+  if(forMode!=="train") return [];
+  if(!wmStations) wmStations=(await getJSON(`https://api.wmata.com/Rail.svc/json/jStations?${q}`)).Stations||[];
+  const here=wmStations.map(s=>({s, d:distMi(loc,{lat:s.Lat,lon:s.Lon})})).filter(x=>x.d<=SCHED_RADIUS_MI)
+    .sort((a,b)=>a.d-b.d).slice(0,3);
+  if(!here.length) return [];
+  const byCode={};
+  here.forEach(x=>{ byCode[x.s.Code]=x; if(x.s.StationTogether1) byCode[x.s.StationTogether1]=x; });
+  const d=await getJSON(`https://api.wmata.com/StationPrediction.svc/json/GetPrediction/${Object.keys(byCode).join(",")}?${q}`);
+  (d.Trains||[]).forEach(t=>{
+    const name=WM_NAME[t.Line], at=byCode[t.LocationCode];
+    if(!name || !at || /^(no passenger|train|ssenger)$/i.test((t.DestinationName||"").trim())) return;
+    const when=(t.Min==="BRD"||t.Min==="ARR")?"at the platform":`in ${t.Min} min`;
+    out.push({ mode:"train", key:t.Line, line:name, label:name,
+      sub:`→ ${t.DestinationName||"?"} · ${at.s.Name} ${when}`,
+      vehicle:"", color:WM_COLOR[t.Line], ink:(t.Line==="YL"||t.Line==="SV")?"#04101f":"",
+      d:at.d, lat:at.s.Lat, lon:at.s.Lon, hdg:null });
+  });
+  return out;
+}
+
 async function fetchScheduled(onPartial){
   const city=nearestCity(); cityForLoc=city;
   if(!city) return [];
@@ -808,6 +881,17 @@ async function fireNote(title, body, tag){
     new Notification(title, {body, tag, icon:"spot-icon-192.png"});
   }catch(_){ /* a failed notification must never disturb the app */ }
 }
+/* What a log entry was logged AS is not what a feed calls it: one-tap writes
+   "Route 29" and the "Northeast Regional 171" label, the feeds say "29" and "171".
+   Comparing them raw meant anything logged by tapping could never match again,
+   which is nearly every sighting. */
+function routeIdents(sp){
+  const r=String(sp.route||"").trim().toUpperCase();
+  const out=new Set(); if(!r) return out;
+  out.add(r);
+  out.add(r.replace(/^(ROUTE|LINE|BUS)\s+/,""));
+  return out;
+}
 function checkNotify(){
   if(!notifyOn() || !("Notification" in window) || Notification.permission!=="granted") return;
   if(!near.length) return;
@@ -822,22 +906,24 @@ function checkNotify(){
   near.forEach(n=>{
     const b=byMode[n.mode]; if(!b) return;
     const add=(set,v)=>{ const t=String(v==null?"":v).trim().toUpperCase(); if(t) set.add(t); };
-    if(n.scheduled) add(b.route, n.key);
-    else { add(b.exact, n.key); add(b.exact, n.vehicle); }
+    if(n.scheduled || n.line){ add(b.route, n.line||n.key); add(b.route, n.label); }
+    else { add(b.exact, n.key); add(b.exact, n.label); add(b.exact, n.vehicle); }
+    if(n.vehicle) add(b.exact, n.vehicle);
   });
   const seen=notifySeen(), now=Date.now(); let changed=false;
   log.forEach(sp=>{
     const b=byMode[sp.mode]; if(!b) return;
     const r=String(sp.route||"").trim().toUpperCase();
     const v=String(sp.vehicle||"").trim().toUpperCase();
-    const exact = (r&&b.exact.has(r)) || (v&&b.exact.has(v));
-    const byRoute = !exact && r && b.route.has(r);
+    const ids=[...routeIdents(sp)];
+    const exact = ids.some(x=>b.exact.has(x)) || (v&&b.exact.has(v));
+    const byRoute = !exact && ids.some(x=>b.route.has(x));
     if(!exact && !byRoute) return;
     const tag=(sp.mode||"")+":"+(r||v);
     if(seen[tag] && now-seen[tag] < NOTIFY_COOLDOWN) return;   // don't nag on every 30s poll
     seen[tag]=now; changed=true;
     fireNote(
-      exact ? `${sp.route} is passing you now` : `A ${sp.route} is due near you`,
+      exact ? `${sp.route} is passing you now` : `${sp.route} is due near you`,
       exact ? `The ${sp.mode} you logged${sp.ridden?" and rode":""} is nearby right now.`
             : `A ${sp.route} you've logged before is coming past.`,
       tag);
@@ -894,21 +980,35 @@ function adsbRequire(){
   if(!b) throw new Error("no aircraft feed configured (see AIRCRAFT-FEED.md)");
   return b;
 }
+/* Each source owns its own rows, and a refresh replaces them when its answer lands.
+   The list used to be emptied first and refilled, so every 30 seconds it collapsed
+   and rebuilt under your thumb; and two overlapping refreshes (a poll and a mode
+   tap) both pushed into the same list, which is how a train appeared twice. A
+   source that fails keeps what it last had. */
+let nearSrc={}, nearGen=0, nearLoading=false;
+function setNear(src, rows){ nearSrc[src]=rows; near=[].concat(...Object.values(nearSrc)); paintNear(); }
+const oneRowPerLine = rows => { const best={};
+  rows.forEach(n=>{ if(!best[n.label] || n.d<best[n.label].d) best[n.label]=n; });
+  return Object.values(best); };
 async function fetchNear(){
   if(!loc) return;
-  near=[];
-  const jobs=[];
+  const gen=++nearGen, forMode=mode, jobs=[];
+  const live=()=>gen===nearGen;
   // local trains/buses from this site's own bundled timetables — no key needed
-  jobs.push(fetchScheduled(rows=>{ near.push(...rows); paintNear(); })
-    .then(all=>{                       // final pass: one row per line, nearest wins
-      const best={};
-      near.filter(n=>n.scheduled).forEach(n=>{ if(!best[n.label] || n.d<best[n.label].d) best[n.label]=n; });
-      near = near.filter(n=>!n.scheduled).concat(Object.values(best));
-      paintNear();
-    }).catch(()=>{}));
-  // planes overhead (adsb.lol — keyless, CORS-open, same feed the boards use)
-  jobs.push(getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
-    .then(d=>{ (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
+  let partial=[];
+  jobs.push(fetchScheduled(rows=>{ if(!live()) return; partial=partial.concat(rows); setNear("sched",oneRowPerLine(partial)); })
+    .then(all=>{ if(live()) setNear("sched",all); }).catch(()=>{}));
+  // Washington's live Metro and Metrobus
+  if(nearestCity() && nearestCity().code==="dc"){
+    jobs.push(fetchWmataNear(forMode).then(rows=>{ if(live()) setNear("wmata",oneRowPerLine(rows)); }).catch(()=>{}));
+  } else if(nearSrc.wmata) setNear("wmata",[]);
+  /* Planes overhead, from the operator's own feed. adsbRequire() throws when there
+     isn't one, and it used to throw right here, outside any promise: that aborted
+     this whole function, so nobody without an aircraft feed ever got Amtrak either. */
+  if(adsbBase()){
+    jobs.push(getJSON(`${adsbBase()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`)
+      .then(d=>{ if(!live()) return; const rows=[];
+        (d.ac||[]).filter(a=>a.lat&&a.lon&&a.alt_baro!=="ground").forEach(a=>{
         /* Some transponders broadcast a placeholder callsign — all zeros, a
            single repeated character, or punctuation — which showed up in the
            list as "00000000". Prefer the flight number, fall back to the tail
@@ -920,38 +1020,54 @@ async function fetchNear(){
         const alt=typeof a.alt_baro==="number"?a.alt_baro:null;
         const climb=typeof a.baro_rate==="number"&&Math.abs(a.baro_rate)>=200
           ? (a.baro_rate>0?"climbing":"descending") : null;
-        near.push({ mode:"plane", key:ident,
+        rows.push({ mode:"plane", key:ident,
           label:ident,
           sub:[`${a.desc||a.t||"aircraft"}`, a.ownOp, alt!=null?`${alt.toLocaleString()} ft`:null,
                a.gs?`${Math.round(a.gs)} kt`:null, climb, `${nm.toFixed(1)} nm`].filter(Boolean).join(" · "),
           vehicle:(a.r||"").trim(), color:"#ffd166", d:nm,
           lat:a.lat, lon:a.lon, hdg:typeof a.track==="number"?a.track:null });
-      }); paintNear(); }).catch(()=>{}));
+      }); setNear("plane",rows); }).catch(()=>{}));
+  }
   // Amtrak (amtraker — keyless, CORS-open)
   jobs.push(getJSON("https://api-v3.amtraker.com/v3/trains", 11000)
-    .then(d=>{ const seen={};
+    .then(d=>{ if(!live()) return; const seen={}, rows=[];
       for(const arr of Object.values(d||{})) for(const t of (arr||[])){
         if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
         if(t.trainState && t.trainState!=="Active") continue;
         const mi=distMi(loc,{lat:t.lat,lon:t.lon}); if(mi>25) continue;
         if(seen[t.trainNum] && seen[t.trainNum]<=mi) continue; seen[t.trainNum]=mi;
         const late=(t.trainTimely||"").trim();
-        near.push({ mode:"train", key:String(t.trainNum||""),
+        rows.push({ mode:"train", key:String(t.trainNum||""),
           label:`${t.routeName||"Amtrak"} ${t.trainNum||""}`.trim(),
           sub:[`→ ${t.destName||"?"}`, t.velocity?`${Math.round(t.velocity)} mph`:null,
                late||null, `${mi.toFixed(1)} mi`].filter(Boolean).join(" · "),
           vehicle:"", color:"#3ad0c8", d:mi,
           lat:t.lat, lon:t.lon, hdg:typeof t.heading==="number"?t.heading:null, late:late });
-      } paintNear(); }).catch(()=>{}));
+      } setNear("amtrak",rows); }).catch(()=>{}));
   await Promise.allSettled(jobs);
-  paintNear();                       // final pass once every source is in
+  if(live()){ nearLoading=false; paintNear(); }   // final pass once every source is in
 }
 
 function renderNear(){
   const box=$("#nearBox"), list=near.filter(n=>n.mode===mode).slice(0,6);
   box.innerHTML="";
-  if(!loc){ box.innerHTML=`<div class="hint" id="nearHint">Finding your location…</div>`; return; }
+  if(!loc){
+    box.innerHTML=`<div class="hint" id="nearHint">${
+      locState==="off"  ? "Location is off, so one-tap logging is unavailable — enter sightings by hand." :
+      locState==="none" ? "This browser can't share your location — enter sightings by hand." :
+                          "Finding your location…"}</div>`;
+    return;
+  }
   if(!list.length){
+    if(nearLoading){ box.innerHTML=`<div class="hint">Looking for ${mode}s near you…</div>`; return; }
+    /* A plane list with no feed behind it is unconfigured, not empty. "No planes
+       near you" under a jet you can hear is just wrong. */
+    if(mode==="plane" && !adsbBase()){
+      box.innerHTML=`<div class="hint">Aircraft detection isn't set up on this device, so planes are
+        entered by hand below. To turn it on, add an aircraft feed in a board's
+        <b>⚙ Settings → Aircraft feed</b>.</div>`;
+      return;
+    }
     const where = cityForLoc ? cityForLoc.name : null;
     box.innerHTML=`<div class="hint">No ${mode}s near you right now.` +
       (where ? ` Checked live feeds and ${esc(where)}'s timetables.`
@@ -962,11 +1078,10 @@ function renderNear(){
   }
   list.forEach(n=>{
     const b=document.createElement("button"); b.className="sug";
-    b.innerHTML=`<span class="badge" style="background:${n.color}">${esc(n.key.slice(0,7)||"—")}</span>
+    b.innerHTML=`<span class="badge" style="background:${n.color}${n.ink?`;color:${n.ink}`:""}">${esc(n.key.slice(0,7)||"—")}</span>
       <span class="t"><b>${esc(n.label)}${n.scheduled?`<i class="schedtag">sched</i>`:""}</b>
         <span>${esc(n.sub)}</span></span><span class="plus">＋</span>`;
-    b.onclick=()=>{ $("#route").value=n.label; $("#vehicle").value=n.vehicle||"";
-      logIt({ route:n.label, vehicle:n.vehicle||"", source:n.scheduled?"schedule":"nearby" }); };
+    b.onclick=()=>logIt({ route:n.label, vehicle:n.vehicle||"", mode:n.mode, source:n.scheduled?"schedule":"nearby" });
     box.appendChild(b);
   });
 }
@@ -978,7 +1093,7 @@ function logIt(over){
   if(!route){ toast("Add a route or flight first"); $("#route").focus(); return; }
   const s={
     id: Date.now().toString(36)+Math.random().toString(36).slice(2,7),
-    ts: Date.now(), mode,
+    ts: Date.now(), mode: o.mode||mode,
     route, vehicle:(o.vehicle!=null?o.vehicle:$("#vehicle").value).trim(),
     place: $("#place").value.trim(), note: $("#note").value.trim(),
     ridden: $("#ridden").checked,
@@ -992,13 +1107,23 @@ function logIt(over){
   const all=loadSpots();
   // first time this route has ever appeared in the log?
   s.first = !all.some(x=>routeKey(x)===routeKey(s));
-  all.unshift(s); saveSpots(all);
+  all.unshift(s);
+  if(!saveSpots(all)){
+    // say so while it's still on screen, and keep what they typed
+    toast("Couldn't save — this device's storage is full. Export your log, then try again.");
+    return;
+  }
   $("#route").value=""; $("#vehicle").value=""; $("#note").value=""; $("#ridden").checked=false;
   render();
   toSheet(s);
-  if(window.TBAccount && TBAccount.signedIn()) TBAccount.sync().then(render).catch(()=>{});
+  logChanged();
   toast(s.first ? `New one! ${s.route}` : (s.ridden ? `Logged a ride: ${s.route}` : `Logged: ${s.route}`));
   push(s);
+}
+/* Anything that changes the log, not just adding to it: an edit or a delete used
+   to stay on this phone, so the board kept showing what you had just removed. */
+function logChanged(){
+  if(window.TBAccount && TBAccount.signedIn()) TBAccount.sync().then(render).catch(()=>{});
   resyncShare();      // boards see it on their next poll
 }
 
@@ -1052,35 +1177,66 @@ async function publishLog(){
     return o;
   })};
   const topic=alertTopic();
-  // `loc` is declared further down, so reading it from here throws if publishing
-  // ever happens before boot finishes. Publishing without a location is fine --
-  // the watcher just waits for one -- so never let that kill the publish.
-  let at=null; try{ at=loc; }catch(_){}
+  /* Publishing without a location is fine: the watcher just waits for one. This
+     used to read `loc` while the function below declared its own `const loc` for
+     the response header, which shadowed it. The read therefore always threw, was
+     caught, and the location was always null, so the background watcher never had
+     anywhere to watch and closed-app alerts could not fire for anyone. */
+  const at=loc;
   if(topic) payload.push={topic, lat:at?coarse(+at.lat):null,
                           lon:at?coarse(+at.lon):null, radiusNm:15};
-  const body=JSON.stringify(payload);
   const id=blobId();
+  /* The watcher keeps its "already told you" list in this same blob, and writing
+     over it made every new sighting re-send alerts that had just gone out. */
+  if(id){
+    try{
+      const was=await fetch(BLOB_API+"/"+id,{cache:"no-store"});
+      if(was.ok){ const j=await was.json(); if(j && j.notified) payload.notified=j.notified; }
+    }catch(_){}
+  }
+  const body=JSON.stringify(payload);
   if(id){
     const r=await fetch(BLOB_API+"/"+id,{method:"PUT",headers:{"content-type":"application/json"},body});
-    if(r.ok) return id;
+    if(r.ok){ shareDirty(false); return id; }
     if(r.status!==404) throw new Error("HTTP "+r.status);   // 404 => blob expired, make a new one
   }
   const r=await fetch(BLOB_API,{method:"POST",headers:{"content-type":"application/json"},body});
   if(!r.ok) throw new Error("HTTP "+r.status);
-  const loc=r.headers.get("Location")||"";
-  const m=loc.match(/[0-9a-f-]{36}/i);
+  const where=r.headers.get("Location")||"";
+  const m=where.match(/[0-9a-f-]{36}/i);
   if(!m) throw new Error("no share code returned");
   localStorage.setItem("tb.spotBlob", m[0]);
+  shareDirty(false);
   return m[0];
 }
-// keep an already-published log current, quietly
-function resyncShare(){ if(blobId()) publishLog().catch(()=>{}); }
+/* A publish that fails (underground, on a plane, which is when this app gets used)
+   was simply lost, so the board stayed behind until the next sighting. Remember it
+   owes one, and pay it when the connection comes back. Also coalesced: several
+   edits in a row produce one upload. */
+function shareDirty(v){ try{ if(v) localStorage.setItem("tb.spotShareDirty","1"); else localStorage.removeItem("tb.spotShareDirty"); }catch(_){} }
+let shareTimer=null;
+function resyncShare(){
+  if(!blobId()) return;
+  shareDirty(true);
+  clearTimeout(shareTimer);
+  shareTimer=setTimeout(()=>{ publishLog().catch(()=>{}); }, 800);
+}
+function payShareDebt(){
+  let owed=false; try{ owed=localStorage.getItem("tb.spotShareDirty")==="1"; }catch(_){}
+  if(owed && blobId()) publishLog().catch(()=>{});
+}
 
+/* A Worker with FEED_SECRET set refuses a post without ?s=. The boards send it when
+   reading, but nothing here ever did, so posts were refused and queued forever. */
+function feedLogUrl(){
+  let sec=""; try{ sec=(localStorage.getItem("tb.spotFeedSecret")||"").trim(); }catch(_){}
+  return feedUrl()+"/log"+(sec?"?s="+encodeURIComponent(sec):"");
+}
 // Optional shared feed: fire-and-forget, queued if offline so nothing is lost.
 async function push(s){
   const url=feedUrl(); if(!url) return;
   try{
-    const r=await fetch(url+"/log",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(s)});
+    const r=await fetch(feedLogUrl(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(s)});
     if(!r.ok) throw 0;
   }catch(e){
     try{ const q=JSON.parse(localStorage.getItem("tb.spotQueue")||"[]"); q.push(s);
@@ -1093,15 +1249,11 @@ async function flushQueue(){
   if(!q.length) return;
   const left=[];
   for(const s of q){
-    try{ const r=await fetch(url+"/log",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(s)});
+    try{ const r=await fetch(feedLogUrl(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(s)});
          if(!r.ok) throw 0; }catch(e){ left.push(s); }
   }
   localStorage.setItem("tb.spotQueue", JSON.stringify(left));
   if(q.length && !left.length) toast(`Synced ${q.length} queued sighting${q.length>1?"s":""}`);
-}
-
-function delSpot(id){
-  saveSpots(loadSpots().filter(s=>s.id!==id)); render();
 }
 
 /* ---------- search / filter ---------- */
@@ -1121,7 +1273,7 @@ function render(){
   const all=loadSpots(), box=$("#log");
   $("#stAll").textContent=all.length;
   $("#stRode").textContent=all.filter(s=>s.ridden).length;
-  $("#stRoutes").textContent=new Set(all.map(s=>(s.route||"").toLowerCase())).size;
+  $("#stRoutes").textContent=new Set(all.map(routeKey).filter(Boolean)).size;
   $("#stDays").textContent=new Set(all.map(s=>new Date(s.ts).toDateString())).size;
   box.innerHTML="";
   if(!all.length){
@@ -1136,7 +1288,9 @@ function render(){
     renderMap(); renderColl(); return;
   }
   let day="";
-  list.slice(0,120).forEach(s=>{
+  /* Past this the phone starts to lag, but the rest must not look lost. */
+  const LOG_ROWS=120;
+  list.slice(0,LOG_ROWS).forEach(s=>{
     const dk=dayKey(s.ts);
     if(dk!==day){ day=dk; const h=document.createElement("div"); h.className="daygrp"; h.textContent=dk; box.appendChild(h); }
     const e=document.createElement("div"); e.className="entry";
@@ -1147,9 +1301,14 @@ function render(){
       <span class="r">
         <time>${new Date(s.ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</time>
         ${s.ridden?`<span class="rode">rode</span>`:""}
-        <button class="edit" title="Edit" data-id="${s.id}">✎</button></span>`;
+        <button class="edit" title="Edit" data-id="${esc(s.id)}">✎</button></span>`;
     box.appendChild(e);
   });
+  if(list.length>LOG_ROWS){
+    const more=document.createElement("div"); more.className="empty";
+    more.textContent=`Showing your latest ${LOG_ROWS} of ${list.length}. Search above to find older ones.`;
+    box.appendChild(more);
+  }
   box.querySelectorAll(".edit").forEach(b=>{ b.onclick=()=>openEdit(b.dataset.id); });
   renderMap(); renderColl();
 }
@@ -1176,15 +1335,23 @@ $("#eSave").onclick=()=>{
   s.edited=Date.now();
   /* Renaming a route can change which sighting was the FIRST of its kind, so
      recompute the badges over the whole log rather than leaving a stale one. */
-  saveSpots(recomputeFirsts(all)); closeEdit(); render(); toast("Sighting updated");
+  const saved=saveSpots(recomputeFirsts(all)); closeEdit(); render();
+  if(saved) logChanged();
+  toast(saved ? "Sighting updated" : "Couldn't save — this device's storage is full");
 };
 $("#eDelete").onclick=()=>{
-  const all=loadSpots().filter(x=>x.id!==editId);
-  saveSpots(recomputeFirsts(all)); closeEdit(); render(); toast("Sighting deleted");
+  const id=editId, all=loadSpots().filter(x=>x.id!==id);
+  /* Remembered so a sync cannot bring it back from the server: see account.js. */
+  if(window.TBAccount && TBAccount.forget) TBAccount.forget(id);
+  const saved=saveSpots(recomputeFirsts(all)); closeEdit(); render();
+  if(saved) logChanged();
+  toast(saved ? "Sighting deleted" : "Couldn't save — this device's storage is full");
 };
 
 /* ---------- "new for you" ---------- */
-const routeKey=s=>(s.route||"").trim().toLowerCase();
+/* "Route 29" from a tap and "29" typed by hand are the same route. They used to
+   count as two in the stats and the collection, and each earned its own NEW badge. */
+const routeKey=s=>String(s.route||"").trim().toLowerCase().replace(/^(route|bus)\s+/,"").replace(/\s+/g," ");
 /* The first time a route appears is the oldest sighting of it, so walk the log
    oldest-first and flag the one that introduced each route. */
 function recomputeFirsts(all){
@@ -1240,18 +1407,18 @@ function renderMap(){
    Same markers the "near you" list is built from — planes overhead, Amtrak, and
    schedule-interpolated local transit — plotted so you can see WHERE to look
    rather than just how far away it is. Tapping a marker logs it. */
-let mapLayer="log";
+let mapLayer="log", liveFitted=false;
 function renderLiveMap(){
   const hint=$("#mapHint");
   const rows=near.filter(n=>typeof n.lat==="number" && typeof n.lon==="number");
   if(loc){
-    L.circleMarker([loc.lat,loc.lon],{radius:6,color:"var(--accent-ink)",weight:2,
+    L.circleMarker([loc.lat,loc.lon],{radius:6,color:"#4ea1ff",weight:2,
       fillColor:"#fff",fillOpacity:1}).bindPopup("You are here").addTo(sMarkers);
   }
   if(!rows.length){
     hint.textContent = loc ? "Nothing trackable within range right now."
                            : "Location is off, so there's nothing to track.";
-    if(loc) sMap.setView([loc.lat,loc.lon],13);
+    if(loc && !liveFitted){ sMap.setView([loc.lat,loc.lon],13); liveFitted=true; }
     return;
   }
   const pts = loc ? [[loc.lat,loc.lon]] : [];
@@ -1271,14 +1438,17 @@ function renderLiveMap(){
   rows.forEach(n=>{ byMode[n.mode]=(byMode[n.mode]||0)+1; });
   const parts=Object.keys(byMode).map(m=>`${MODE_GLYPH[m]||"•"} ${byMode[m]}`);
   hint.textContent = `${rows.length} trackable right now · ${parts.join("  ")}`;
-  sMap.fitBounds(L.latLngBounds(pts).pad(0.3), {maxZoom:14});
+  /* Once per opening. This refreshes every 30 seconds, and re-fitting each time
+     threw away wherever you had just panned or zoomed to. */
+  if(!liveFitted){ sMap.fitBounds(L.latLngBounds(pts).pad(0.3), {maxZoom:14}); liveFitted=true; }
 }
 /* popup links are created per render, so catch the tap at the map container */
 document.addEventListener("click", e=>{
   const a=e.target.closest("a[data-log]"); if(!a) return;
   e.preventDefault();
   const n=near.find(x=>x.label===a.dataset.log); if(!n) return;
-  logIt({ route:n.label, vehicle:n.vehicle||"", source:n.scheduled?"schedule":"nearby" });
+  // this map shows every mode at once, so the row's own mode counts, not the selected one
+  logIt({ route:n.label, vehicle:n.vehicle||"", mode:n.mode, source:n.scheduled?"schedule":"nearby" });
   sMap.closePopup();
 });
 
@@ -1286,19 +1456,11 @@ document.addEventListener("click", e=>{
 /* Which systems can be checked against a real route list. Each bundle is a
    timetable this site already ships; loaded ONLY when picked, since some are
    megabytes and this is a phone. */
-const COLL_SYS=[
-  {id:"septa-bus-schedule.json",      label:"SEPTA Bus (3, 4, 16)"},
-  {id:"septa-rail-schedule.json",     label:"SEPTA Regional Rail"},
-  {id:"septa-subway-schedule.json",   label:"SEPTA Subway"},
-  {id:"patco-schedule.json",          label:"PATCO"},
-  {id:"marc-schedule.json",           label:"MARC"},
-  {id:"rideon-schedule.json",         label:"Ride On (23, 29)"},
-  {id:"mta-subway-schedule.json",     label:"NYC Subway"},
-  {id:"lirr-schedule.json",           label:"LIRR"},
-  {id:"path-schedule.json",           label:"PATH"},
-  {id:"sf-bart-schedule.json",        label:"BART"},
-  {id:"mbta-subway-schedule.json",    label:"MBTA Subway"},
-];
+/* Built from the same list "near you" uses. A hand-kept copy here had drifted: it
+   offered eleven of the thirty-odd systems, and described two with route lists that
+   have since grown. */
+const COLL_SYS=[];
+SPOT_CITIES.forEach(c=>c.feeds.forEach(f=>COLL_SYS.push({id:f.file, mode:f.mode, label:`${c.name} — ${f.label}`})));
 function renderColl(){
   const all=loadSpots();
   const by={};
@@ -1325,10 +1487,17 @@ function initCollSys(){
     if(!id){ box.innerHTML=""; return; }
     box.innerHTML=`<div class="hint">Loading that system's timetable…</div>`;
     try{
-      const d=await getJSON(id);
-      const routes=[...new Set((d.trips||[]).map(t=>String(t.line||"").trim()).filter(Boolean))].sort();
+      /* The loader, not a bare fetch: two of these bundles are pattern-compressed and
+         only the loader expands them, and the largest take longer than getJSON's
+         9-second limit on a phone connection. */
+      const sys=COLL_SYS.find(x=>x.id===id);
+      const d=await loadBundle(id);
+      if(sel.value!==id) return;      // they picked another while this one loaded
+      const routes=[...new Set((d.trips||[]).map(t=>String(t.line||"").trim()).filter(Boolean))]
+        .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
       if(!routes.length){ box.innerHTML=`<div class="hint">That timetable lists no route names.</div>`; return; }
-      const mine=[...new Set(loadSpots().map(routeKey))].filter(Boolean);
+      // a flight numbered UA 3 is not line 3
+      const mine=[...new Set(loadSpots().filter(s=>!sys||s.mode===sys.mode).map(routeKey))].filter(Boolean);
       const tokens=m=>m.split(/[^a-z0-9]+/).filter(Boolean);
       /* "Route 3" should count for line "3", but "Route 47" must NOT count for
          line "4" — so a short code (3, 47, L1, B2) has to match a whole word,
@@ -1358,13 +1527,18 @@ function setView(v){
   $("#viewLog").style.display  = v==="log"  ? "block" : "none";
   $("#viewMap").style.display  = v==="map"  ? "block" : "none";
   $("#viewColl").style.display = v==="coll" ? "block" : "none";
-  if(v==="map") renderMap();      // Leaflet must size itself while visible
+  if(v==="map"){                  // Leaflet must size itself while visible
+    liveFitted=false;
+    if(sMap) sMap.invalidateSize();
+    renderMap();
+  }
 }
 document.querySelectorAll("#tabs .tab").forEach(t=>{ t.onclick=()=>setView(t.dataset.view); });
 $("#mapLayerLog").onclick=()=>{ mapLayer="log";
   $("#mapLayerLog").classList.add("on"); $("#mapLayerLive").classList.remove("on"); renderMap(); };
 $("#mapLayerLive").onclick=()=>{ mapLayer="live";
   $("#mapLayerLive").classList.add("on"); $("#mapLayerLog").classList.remove("on");
+  liveFitted=false;
   if(loc) fetchNear(); renderMap(); };
 $("#q").addEventListener("input", e=>{ query=e.target.value.trim().toLowerCase(); render(); });
 document.querySelectorAll("#fchips .fchip").forEach(c=>{
@@ -1844,7 +2018,12 @@ $("#closeSet").onclick=()=>$("#sheet").classList.remove("show");
 $("#sheet").addEventListener("click", e=>{ if(e.target.id==="sheet") $("#sheet").classList.remove("show"); });
 $("#saveSet").onclick=()=>{
   localStorage.setItem(LS.handle, $("#handle").value.trim());
-  localStorage.setItem(LS.feed, $("#feedUrl").value.trim().replace(/\/+$/,""));
+  /* A URL pasted with its secret on the end is split, so the secret can be sent
+     properly on both the write and the read. */
+  const rawFeed=$("#feedUrl").value.trim();
+  const secM=rawFeed.match(/[?&]s=([^&#]+)/);
+  if(secM){ try{ localStorage.setItem("tb.spotFeedSecret", decodeURIComponent(secM[1])); }catch(_){} }
+  localStorage.setItem(LS.feed, rawFeed.replace(/[?#].*$/,"").replace(/\/+$/,""));
   localStorage.setItem(LS.sheet, $("#sheetUrl").value.trim());
   if(window.TBAccount){
     TBAccount.setUrl($("#acctUrl").value);
@@ -1877,10 +2056,13 @@ let touchY=0;
 document.addEventListener("touchstart", e=>{ touchY=e.touches[0].clientY; }, {passive:true});
 document.addEventListener("touchend", e=>{
   if(window.scrollY<=0 && e.changedTouches[0].clientY-touchY>90){ $("#nearBox").innerHTML=
-    `<div class="hint">Refreshing…</div>`; loc?fetchNear():initLoc(); }
+    `<div class="hint">Refreshing…</div>`; nearLoading=true; loc?fetchNear():initLoc(); }
 }, {passive:true});
 
-render(); initLoc(); flushQueue();
+/* With no aircraft feed the plane tab can only ever be manual entry, so don't open
+   on it: the first thing a new user saw was an empty list of planes. */
+if(!adsbBase()) document.querySelector('#modes .mode[data-mode="train"]').click();
+render(); initLoc(); flushQueue(); payShareDebt();
 /* account.js is a deferred external script, so it hasn't executed while this
    inline script is still running — window.TBAccount is undefined here and the
    gate would decide it isn't needed. Deferred scripts all run before
@@ -1888,7 +2070,10 @@ render(); initLoc(); flushQueue();
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", initGate);
 else initGate();
 setInterval(()=>{ if(loc && document.visibilityState==="visible") fetchNear(); }, 30000);
-document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") flushQueue(); });
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible"){ flushQueue(); payShareDebt(); } });
+window.addEventListener("online", ()=>{ flushQueue(); payShareDebt(); });
+// another tab, or the account sync, changed the log
+window.addEventListener("storage", e=>{ if(e.key===LS.spots) render(); });
 if("serviceWorker" in navigator) navigator.serviceWorker.register("spot-sw.js").catch(()=>{});
 </script>
 </body>

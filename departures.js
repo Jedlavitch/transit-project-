@@ -62,7 +62,7 @@
       out.push({
         mode: d.mode || "", stop: String(d.stop), route: d.route == null ? "" : String(d.route),
         dest: d.dest == null ? "" : String(d.dest), min: m,
-        color: d.color || "#556", live: !!d.live,
+        color: d.color || "#556", live: !!d.live, at: Date.now(),
       });
     }
     if (!st._depBy) st._depBy = {};

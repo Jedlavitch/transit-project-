@@ -183,7 +183,7 @@
     if (s.todayAvg == null) {
       // Seen before, nothing yet today — say so rather than showing a stale figure.
       val.innerHTML = s.baseAvg != null ? fmt(s.baseAvg) + ' <small>min usually</small>' : "—";
-      sub.textContent = esc(where);
+      sub.textContent = where;
       tile.style.setProperty("--sys", "#7cc0ff");
       tile.style.setProperty("--sys2", "#b58cff");
       return;

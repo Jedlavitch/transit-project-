@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="theme-color" content="#12101A">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Transit Project — Home screen</title>
+<!--
+  home.html — the board for the screen that lives in a room, not on a wall.
+
+  Built for smart displays: Echo Show, Nest Hub, Facebook Portal, a tablet on
+  the counter, Apple HomeView. Those screens share two habits that the city
+  boards do not plan for:
+
+    1. They are read from across the room, in a glance, by someone on the way
+       out. So there is ONE big answer -- when to leave -- and everything else
+       is smaller detail for the person who walks up to it.
+    2. They come in every shape. HomeView is square (1088x1088, 544 CSS px),
+       the Echo Show 8 is 1280x800, the Show 5 is 960x480, a wall tablet is
+       portrait. So there is no one layout scaled up and down: the page picks
+       one of four by SHAPE (wide / square / tall / phone), and inside each the
+       whole thing is sized in rem against a design box, so a 544px square and
+       a 1920px TV show the same composition at different sizes.
+
+  It also shows the room itself: the Govee light the Sky view already drives
+  (govee-worker.js), its colour, whether it is following the aircraft
+  overhead, and switches for both. Everything is read from the same
+  localStorage keys the other boards use, so a device already set up for the
+  DC board or the Sky view needs no setup here at all.
+
+  What it reads (all optional -- a missing source says so and steps aside):
+    Metro + Metrobus   WMATA live predictions (transitboard.wmataKey / config.js)
+    Ride On, MARC      bundled timetables (rideon-schedule.json, marc-schedule.json)
+    Weather            Open-Meteo, no key
+    Overhead           the operator's own aircraft feed (tb.adsbUrl), never a default
+    Room light         govee-worker.js (tb.goveeUrl + tb.goveeDev)
+
+  URL:  home.html?theme=auto|dark|day|black   (auto: day while the sun is up)
+-->
+<link rel="stylesheet" href="theme.css?v=35" />
+<!-- The boards' current palette, from the file that owns it, so this page cannot
+     drift from them. Its layout rules target `header`, `footer`, `main` and `.card`,
+     so this page uses none of those and only the tokens apply. One of them hides
+     `header .clock` on a phone, which here would hide the clock. -->
+<link rel="stylesheet" href="board-home.css?v=1" />
+<!-- Same licence + kiosk set as station.html, in the same order and for the
+     same reasons (see the notes there): polyfills and feed-backoff first and
+     not deferred, the gate deferred. -->
+<script src="polyfills.js?v=1"></script>
+<script src="feed-backoff.js?v=1"></script>
+<script src="paywall.js"></script>
+<script src="license.js?v=3" defer></script>
+<script src="kiosk-reload.js?v=1" defer></script>
+<script src="gate.js?v=3" defer></script>
+<script src="wake.js?v=1"></script>
+<script src="config.js?v=2"></script>
+<script src="schedule-health.js?v=1"></script>
+<script src="worker-health.js?v=1"></script>
+<style>
+  /* ---- sizing ------------------------------------------------------------
+     Every length below is rem. The root font size is whatever makes the
+     layout's design box (--dw x --dh, in rem) exactly fill the screen, so the
+     composition never reflows inside a shape -- it only scales. The four
+     shapes then each get their own box and their own grid. */
+  :root{ --dw:64; --dh:37.5; }                                   /* wide: 1024x600 at 16px */
+  @media (max-aspect-ratio:5/4) and (min-aspect-ratio:4/5){ :root{ --dw:34; --dh:34; } }   /* square */
+  @media (max-aspect-ratio:4/5){ :root{ --dw:40; --dh:62; } }   /* tall */
+  html{
+    font-size:clamp(9px, min(calc(100vw / var(--dw)), calc(100vh / var(--dh))), 44px);
+  }
+  @supports (height:100dvh){
+    html{ font-size:clamp(9px, min(calc(100vw / var(--dw)), calc(100dvh / var(--dh))), 44px); }
+  }
+  /* Phone: a 375px-wide box would make 9px type. Below 560px wide and taller
+     than wide, size against the width alone and let the page scroll. */
+  @media (max-width:560px) and (max-aspect-ratio:4/5){
+    :root{ --dw:24; }
+    html{ font-size:calc(100vw / 24); }
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--body);
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  button{ font:inherit; color:inherit; }
+  :focus-visible{ outline:.15rem solid var(--accent); outline-offset:.12rem; }
+
+  .app{
+    height:100%; display:grid; gap:.6rem; padding:.8rem;
+    grid-template-columns:1.45fr 1fr;
+    grid-template-rows:auto auto minmax(0,1fr) auto;
+    grid-template-areas:"top top" "hero room" "list wx" "foot foot";
+  }
+  @media (max-aspect-ratio:5/4) and (min-aspect-ratio:4/5){
+    /* Room takes the height it needs; weather gets what is left and drops
+       hours to fit. The list spans both, so it is the one that gives. */
+    .app{ grid-template-columns:1.1fr 1fr; gap:.5rem; padding:.6rem;
+      grid-template-rows:auto auto auto minmax(0,1fr) auto;
+      grid-template-areas:"top top" "hero hero" "list room" "list wx" "foot foot"; }
+  }
+  @media (max-aspect-ratio:4/5){
+    .app{ grid-template-columns:1fr 1fr;
+      grid-template-rows:auto auto auto minmax(0,1fr) auto;
+      grid-template-areas:"top top" "hero hero" "room wx" "list list" "foot foot"; }
+  }
+  @media (max-width:560px) and (max-aspect-ratio:4/5){
+    body{ overflow:auto; }
+    .app{ height:auto; min-height:100%; grid-template-columns:1fr;
+      grid-template-rows:none; grid-template-areas:"top" "hero" "list" "room" "wx" "foot"; }
+  }
+
+  .box{ background:var(--panel); border:1px solid var(--line); border-radius:.65rem;
+    padding:.75rem .9rem; min-width:0; min-height:0; }
+  .lbl{ font:600 .68rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); display:flex; gap:.5rem; align-items:center; justify-content:space-between;
+    flex-wrap:wrap; row-gap:.25rem; }
+  .muted{ color:var(--muted); }
+
+  /* ---- top bar ---------------------------------------------------------- */
+  .top{ grid-area:top; display:flex; align-items:center; gap:.9rem; flex-wrap:wrap; row-gap:.3rem; }
+  .clock{ font:500 2.3rem/1 var(--mono); letter-spacing:-.045em; font-variant-numeric:tabular-nums; }
+  .clock small{ font-size:.5em; font-weight:700; margin-left:.15em; color:var(--muted); }
+  .date{ font-size:.85rem; color:var(--muted); line-height:1.25; }
+  .date b{ display:block; color:var(--text); font-weight:600; }
+  .tools{ margin-left:auto; display:flex; gap:.35rem; flex-wrap:wrap; }
+  .tool{ min-width:2.6rem; height:2.6rem; padding:0 .7rem; border-radius:.7rem;
+    border:1px solid var(--line); background:var(--panel2); cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; gap:.35rem;
+    font-size:.78rem; font-weight:600; text-decoration:none; color:var(--text); }
+  .tool svg{ width:1.05rem; height:1.05rem; }
+
+  /* ---- hero: the one number readable across the room --------------------- */
+  .hero{ grid-area:hero; display:flex; align-items:center; gap:1rem; position:relative; overflow:hidden; }
+  .hero::before{ content:""; position:absolute; inset:0 auto 0 0; width:.4rem; background:var(--hc,var(--accent)); }
+  .hero .big{ flex:none; text-align:center; min-width:6.5rem; }
+  .hero .big .k{ font:600 .66rem/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+  .hero .big .n{ font:800 3.9rem/.95 var(--display); letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+  .hero .big .u{ font-size:.85rem; font-weight:600; color:var(--muted); }
+  .hero .big.now .n{ color:var(--tb-brand-live); font-size:2.6rem; line-height:1.3; }
+  .hero .what{ min-width:0; }
+  .hero .what .t{ font:800 1.35rem/1.15 var(--display); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+  .hero .what .t .to{ min-width:0; overflow-wrap:anywhere; }
+  .hero .what .d{ font-size:.9rem; color:var(--muted); margin-top:.35rem; line-height:1.4; }
+  .hero .what .d b{ color:var(--text); font-weight:600; }
+
+  .bdg{ flex:none; min-width:2.3rem; height:1.75rem; padding:0 .4rem; border-radius:.45rem;
+    background:var(--c,#3b527d); color:var(--ci,#fff); display:inline-flex; align-items:center; justify-content:center;
+    font:700 .82rem/1 var(--mono); }
+  .tag{ font:600 .62rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase; padding:.2rem .35rem;
+    border-radius:.3rem; border:1px solid currentColor; }
+  .tag.live{ color:var(--tb-brand-live); }
+  .tag.sched{ color:var(--sched-ink); }
+
+  /* ---- departures ------------------------------------------------------- */
+  .dlist{ grid-area:list; display:flex; flex-direction:column; }
+  .rows{ flex:1; min-height:0; overflow:hidden; margin-top:.45rem; display:flex; flex-direction:column; gap:.3rem; }
+  .dep{ display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:.65rem; align-items:center;
+    padding:.45rem .55rem; border-radius:.6rem; background:var(--row-bg); border:1px solid var(--row-line); }
+  .dep .dd{ min-width:0; }
+  .dep .dd b{ display:block; font-size:1rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dep .dd small{ display:block; font-size:.74rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:.1rem; }
+  .dep .dm{ text-align:right; font-variant-numeric:tabular-nums; }
+  .dep .dm b{ font:800 1.35rem/1 var(--display); }
+  .dep .dm b.sch{ color:var(--sched-b); }
+  .dep .dm b.now{ color:var(--tb-brand-live); font-size:1.05rem; }
+  .dep .dm span{ font-size:.7rem; color:var(--muted); margin-left:.15rem; }
+  .dep .dm i{ display:block; font-style:normal; font-size:.7rem; color:var(--muted); margin-top:.15rem; white-space:nowrap; }
+  .group-h{ font:600 .62rem/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+    margin:.3rem 0 0 .15rem; display:flex; gap:.4rem; flex-wrap:wrap; }
+  .none{ color:var(--muted); font-size:.85rem; padding:.6rem .2rem; line-height:1.45; }
+
+  /* ---- room ------------------------------------------------------------- */
+  .room{ grid-area:room; display:flex; flex-direction:column; gap:.55rem; }
+  .light{ display:flex; align-items:center; gap:.75rem; }
+  .swatch{ flex:none; width:2.9rem; height:2.9rem; border-radius:50%; border:.18rem solid var(--line);
+    background:var(--sw,transparent); box-shadow:0 0 1.4rem -.2rem var(--sw,transparent); transition:background .6s, box-shadow .6s; }
+  .swatch.off{ background:transparent; box-shadow:none; }
+  .light .ln{ min-width:0; flex:1; }
+  .light .ln b{ display:block; font-size:1rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .light .ln small{ display:block; font-size:.74rem; color:var(--muted); margin-top:.1rem; line-height:1.35; }
+  .sw-row{ display:flex; gap:.4rem; flex-wrap:wrap; }
+  .tog{ flex:1 1 6rem; min-height:2.6rem; white-space:nowrap; border-radius:.65rem; border:1px solid var(--line); background:var(--panel2);
+    cursor:pointer; font-size:.8rem; font-weight:600; display:flex; align-items:center; justify-content:center; gap:.4rem; padding:0 .6rem; }
+  .tog .dot{ width:.6rem; height:.6rem; border-radius:50%; border:.12rem solid currentColor; }
+  .tog[aria-pressed="true"]{ border-color:var(--accent); color:var(--accent-ink); }
+  .tog[aria-pressed="true"] .dot{ background:currentColor; }
+  .tog:disabled{ opacity:.45; cursor:default; }
+  .sky{ display:flex; align-items:center; gap:.6rem; padding-top:.5rem; border-top:1px solid var(--line); }
+  .sky .pip{ flex:none; width:.85rem; height:.85rem; border-radius:50%; background:var(--pc,var(--plane)); }
+  .sky .sl{ min-width:0; font-size:.8rem; line-height:1.35; }
+  .sky .sl b{ font-weight:600; }
+
+  /* ---- weather ---------------------------------------------------------- */
+  .wx{ grid-area:wx; display:flex; flex-direction:column; gap:.45rem; }
+  .wx-now{ display:flex; align-items:baseline; gap:.6rem; flex-wrap:wrap; row-gap:.1rem; }
+  .wx-now .tmp{ font:800 2.2rem/1 var(--display); font-variant-numeric:tabular-nums; }
+  .wx-now .cond{ font-size:.9rem; font-weight:600; }
+  .wx-now .hl{ font-size:.75rem; color:var(--muted); width:100%; }
+  .hours{ flex:1; min-height:3.6rem; display:grid; grid-template-columns:repeat(var(--hn,6),minmax(0,1fr)); gap:.25rem; align-items:end; }
+  .hr{ display:flex; flex-direction:column; align-items:center; gap:.15rem; height:100%; justify-content:flex-end; }
+  .hr .bar{ width:.55rem; border-radius:.2rem .2rem 0 0; background:var(--blue-bright); opacity:.85; min-height:.1rem; }
+  .hr .pp{ font:600 .6rem/1 var(--mono); color:var(--muted); }
+  .hr .tt{ font-size:.78rem; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hr .hh{ font:600 .6rem/1 var(--mono); color:var(--muted); }
+  @media (max-aspect-ratio:5/4) and (min-aspect-ratio:4/5){
+    .wx-now .tmp{ font-size:1.8rem; }
+    .hours{ --hn:4; min-height:2.6rem; }
+    .room{ gap:.4rem; }
+    .swatch{ width:2.1rem; height:2.1rem; }
+    .light .ln small{ font-size:.68rem; }
+    .tog{ min-height:2.4rem; flex-basis:4.5rem; font-size:.74rem; padding:0 .4rem; }
+    .wx-now .hl{ display:none; }
+    .sky .sl{ font-size:.72rem; }
+    .box{ padding:.6rem .7rem; }
+  }
+
+  .foot{ grid-area:foot; display:flex; gap:.3rem .9rem; flex-wrap:wrap; font-size:.68rem; color:var(--muted); }
+  .foot .bad{ color:var(--late-ink); }
+  .foot .ok::before{ content:"●"; color:var(--tb-brand-live); margin-right:.3rem; }
+  .foot .sc::before{ content:"○"; margin-right:.3rem; }
+  .foot .bad::before{ content:"!"; font-weight:800; margin-right:.3rem; }
+
+  @media (prefers-reduced-motion:reduce){ .swatch{ transition:none; } }
+
+  /* ---- the boards' current design (board-home.css) -----------------------
+     The same treatment in this page's rem scale: the three-colour strip, one quiet
+     heading style with a tick, numbers in the mono face, flat rows on a rule, and
+     teal for anything live. */
+  .app{ position:relative; }
+  .app::before{ content:""; position:absolute; left:.8rem; top:0; width:6.5rem; height:.19rem;
+    background:linear-gradient(90deg,#FF3D77 0%,#FF3D77 33.333%,#00E0C6 33.333%,#00E0C6 66.666%,#2F7BFF 66.666%); }
+  .kicker{ display:block; font:500 .56rem/1.3 var(--mono); letter-spacing:.13em; color:var(--muted); margin-bottom:.15rem; }
+  .lbl{ font:600 .78rem/1.25 var(--body); letter-spacing:0; text-transform:none; color:var(--text); }
+  .lbl > span:first-child{ display:inline-flex; align-items:center; gap:.45rem; }
+  .lbl > span:first-child::before{ content:""; width:.19rem; height:.75rem; border-radius:.12rem; background:var(--accent); }
+  .lbl > span:last-child:not(:first-child){ font:400 .62rem/1.3 var(--mono); color:var(--muted); }
+  .tool, .tog{ border-radius:.5rem; background:var(--panel); box-shadow:none; }
+  .tog{ background:var(--panel2); }
+  .bdg{ border-radius:.3rem; }
+  .hero .big .n{ font:500 3.9rem/.95 var(--mono); letter-spacing:-.045em; }
+  .hero .big.now .n{ font-size:2.6rem; line-height:1.3; }
+  .hero .what .t{ letter-spacing:-.02em; }
+  .dep{ background:transparent; border:0; border-bottom:1px solid var(--row-line); border-radius:0; padding:.42rem .1rem; }
+  .dep:last-child{ border-bottom-color:transparent; }
+  .rows{ gap:0; }
+  .dep .dm b{ font:500 1.35rem/1 var(--mono); letter-spacing:-.03em; }
+  .dep .dm b.now{ font-size:1.05rem; }
+  .wx-now .tmp{ font-family:var(--mono); font-weight:500; letter-spacing:-.045em; }
+  /* config.js pins this credit to the bottom left, which is where this page's own
+     status line sits. Right-hand side here, same words, still always visible. */
+  #tbAdsbCredit{ left:auto !important; right:.8rem; bottom:.3rem !important; }
+</style>
+<script src="screen-lock.js?v=2" defer></script>
+</head>
+<body>
+<div class="app">
+  <div class="top" role="banner">
+    <div class="clock" id="clock">--:--</div>
+    <div class="date"><span class="kicker">TRANSIT PROJECT · HOME</span><b id="dow">—</b><span id="place">—</span></div>
+    <div class="tools">
+      <button class="tool" id="themeBtn" type="button" title="Theme">Auto</button>
+      <button class="tool" id="fsBtn" type="button" title="Full screen (F)"></button>
+      <a class="tool" href="tv.html" title="All views">‹ Menu</a>
+    </div>
+  </div>
+
+  <section class="box hero" id="hero" aria-live="polite">
+    <div class="big" id="heroBig"><div class="k">Loading</div><div class="n">…</div></div>
+    <div class="what"><div class="t" id="heroT">Finding what's nearby…</div><div class="d" id="heroD"></div></div>
+  </section>
+
+  <section class="box dlist">
+    <div class="lbl"><span>Leaving nearby</span><span id="listNote"></span></div>
+    <div class="rows" id="rows"><div class="none">Loading departures…</div></div>
+  </section>
+
+  <section class="box room" id="room">
+    <div class="lbl"><span>Room</span><span id="roomNote"></span></div>
+    <div class="light">
+      <div class="swatch off" id="swatch"></div>
+      <div class="ln"><b id="lightName">Lights</b><small id="lightSub">Checking…</small></div>
+    </div>
+    <div class="sw-row">
+      <button class="tog" id="powerBtn" type="button" aria-pressed="false" disabled><span class="dot"></span>Light</button>
+      <button class="tog" id="followBtn" type="button" aria-pressed="false" disabled><span class="dot"></span>Follow sky</button>
+    </div>
+    <div class="sky" id="sky"><span class="pip" id="skyPip"></span><div class="sl" id="skyTxt">Checking the sky…</div></div>
+  </section>
+
+  <section class="box wx">
+    <div class="lbl"><span>Outside</span><span id="wxNote"></span></div>
+    <div class="wx-now"><span class="tmp" id="wxTmp">--°</span><span class="cond" id="wxCond"></span><span class="hl" id="wxHl"></span></div>
+    <div class="hours" id="hours"></div>
+  </section>
+
+  <div class="foot" id="foot" role="contentinfo"></div>
+</div>
+
+<script>
+"use strict";
+/* ======================================================================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const lsGet = (k,d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
+const lsSet = (k,v) => { try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} };
+const lsJSON = (k,d) => { try{ const v=JSON.parse(localStorage.getItem(k)||"null"); return v==null?d:v; }catch(e){ return d; } };
+
+const DEFAULT_LOC = { lat:38.9582, lon:-77.1080, label:"Bethesda, MD 20816" };   // dc.html's default
+const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
+const RAIL_INK    = { YL:"#13203e", SV:"#13203e" };              // white fails on the light lines
+const RAIL_NAMES  = { RD:"Red", BL:"Blue", YL:"Yellow", OR:"Orange", GR:"Green", SV:"Silver" };
+const MARC_COL    = { Brunswick:"#e8792b", Penn:"#d1495b", Camden:"#e0a800" };
+const RIDEON_COL  = { "23":"#5b8def", "29":"#1e3a8a" };
+const BUS_COL     = "#3b527d";
+const WALK_M_PER_MIN = 80;      // ~3 mph, with the 1.3 detour factor applied to distance below
+const WALK_MAX = 25;            // farther than this, "leave in" is a drive, not a walk: don't pretend
+
+const loc = (()=>{ const s=lsJSON("transitboard.loc",null); return s&&s.lat ? s : DEFAULT_LOC; })();
+const wmataKey = lsGet("transitboard.wmataKey","") || ((window.TB_CONFIG||{}).wmataKey||"");
+
+const src = {};                 // feed name -> {state:"ok"|"sched"|"bad"|"off", note}
+function setSrc(k, state, note){ src[k]={state, note}; }
+
+function hav(a,b){
+  const R=6371000, t=x=>x*Math.PI/180, dLa=t(b.lat-a.lat), dLo=t(b.lon-a.lon);
+  const h=Math.sin(dLa/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+const walkMin = m => Math.max(1, Math.round(m*1.3/WALK_M_PER_MIN));
+const miles = m => (m/1609.34).toFixed(m<1609?1:1)+" mi";
+async function getJSON(url, ms=12000){
+  const c=new AbortController(), t=setTimeout(()=>c.abort(), ms);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error("HTTP "+r.status); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+function clock12(d, withAp=true){
+  let h=d.getHours(), m=d.getMinutes();
+  const ap=h>=12?"PM":"AM"; h=((h+11)%12)+1;
+  return withAp ? `${h}:${String(m).padStart(2,"0")} ${ap}` : `${h}:${String(m).padStart(2,"0")}`;
+}
+function minClock(absMin){ const d=new Date(); d.setHours(0,0,0,0); d.setMinutes(absMin); return clock12(d); }
+
+/* ---- departures pool ---------------------------------------------------
+   Each source writes its own bucket; render() reads them all. A live item
+   carries the moment it was fetched, so the countdown keeps falling between
+   polls instead of freezing at what WMATA said 25 seconds ago. */
+const pool = {};    // key -> [{mode, stop, stopM, route, dest, min, at, color, ink, live, note}]
+function liveMin(d){ return d.live ? Math.max(0, d.min - Math.floor((Date.now()-d.at)/60000)) : d.min; }
+/* A failed poll leaves the last answer in the pool, and liveMin stops at zero. So a
+   feed that went away left its trains reading "Due" and "Boarding" on the wall for
+   as long as it stayed away, and the hero telling the room to leave for them. */
+const LIVE_MAX_MS=5*60000;
+function stillReal(d){
+  if(!d.live) return true;
+  const gone=Date.now()-d.at;
+  return gone<LIVE_MAX_MS && d.min-gone/60000>-1;
+}
+
+/* ---- WMATA rail -------------------------------------------------------- */
+let railStations=null;
+async function nearRailStations(){
+  if(railStations) return railStations;
+  let c=lsJSON("tb.home.wmataStations",null);
+  if(!c || Date.now()-c.t > 7*864e5){
+    const j=await getJSON(`https://api.wmata.com/Rail.svc/json/jStations?api_key=${encodeURIComponent(wmataKey)}`);
+    c={ t:Date.now(), list:(j.Stations||[]).map(s=>({c:s.Code, n:s.Name, lat:s.Lat, lon:s.Lon, t1:s.StationTogether1||""})) };
+    lsSet("tb.home.wmataStations", JSON.stringify(c));
+  }
+  // one entry per physical station: transfer stations list two codes under one name
+  const seen=new Set();
+  railStations=c.list.map(s=>({...s, m:hav(loc,s)})).sort((a,b)=>a.m-b.m)
+    .filter(s=>{ if(seen.has(s.n)) return false; seen.add(s.n); return true; })
+    .filter(s=>s.m<=4500).slice(0,2);
+  return railStations;
+}
+async function refreshRail(){
+  if(!wmataKey){ setSrc("Metro","off","Metro: add a WMATA key on the DC board"); return; }
+  try{
+    const st=await nearRailStations();
+    if(!st.length){ pool.rail=[]; setSrc("Metro","off","No Metro station nearby"); return; }
+    const codes=[...new Set(st.flatMap(s=>[s.c,s.t1].filter(Boolean)))].join(",");
+    const j=await getJSON(`https://api.wmata.com/StationPrediction.svc/json/GetPrediction/${codes}?api_key=${encodeURIComponent(wmataKey)}`);
+    const at=Date.now();
+    pool.rail=(j.Trains||[]).filter(t=>{
+      // dc.html's rule: never offer a train nobody can board
+      if(!t.Line || t.Line==="--" || t.Line==="No") return false;
+      return !/^(no passenger|train|ssenger)$/i.test((t.DestinationName||"").trim());
+    }).map(t=>{
+      const s=st.find(x=>x.c===t.LocationCode||x.t1===t.LocationCode)||st[0];
+      const min=(t.Min==="BRD"||t.Min==="ARR")?0:parseInt(t.Min,10);
+      return { mode:"Metro", stop:s.n, stopM:s.m, route:t.Line, dest:t.DestinationName||t.Destination,
+        min, raw:t.Min, at, color:RAIL_COLORS[t.Line], ink:RAIL_INK[t.Line], live:true,
+        note:(t.Car?`${t.Car}-car`:"")+(t.Group?` · track ${t.Group}`:"") };
+    }).filter(d=>isFinite(d.min));
+    setSrc("Metro","ok","Metro live");
+  }catch(e){ setSrc("Metro","bad","Metro feed not answering"); }
+}
+
+/* ---- WMATA bus --------------------------------------------------------- */
+let busStops=null;
+async function refreshBus(){
+  if(!wmataKey){ setSrc("Bus","off",""); return; }
+  try{
+    if(!busStops){
+      const j=await getJSON(`https://api.wmata.com/Bus.svc/json/jStops?Lat=${loc.lat}&Lon=${loc.lon}&Radius=600&api_key=${encodeURIComponent(wmataKey)}`);
+      busStops=(j.Stops||[]).filter(s=>(s.Routes||[]).length)
+        .map(s=>({id:s.StopID, n:s.Name, m:hav(loc,{lat:s.Lat,lon:s.Lon})})).sort((a,b)=>a.m-b.m).slice(0,2);
+    }
+    if(!busStops.length){ pool.bus=[]; setSrc("Bus","off",""); return; }
+    const at=Date.now(), out=[];
+    for(const s of busStops){
+      const j=await getJSON(`https://api.wmata.com/NextBusService.svc/json/jPredictions?StopID=${s.id}&api_key=${encodeURIComponent(wmataKey)}`);
+      (j.Predictions||[]).forEach(p=>out.push({ mode:"Metrobus", stop:tidyStop(s.n), stopM:s.m, route:p.RouteID,
+        dest:(p.DirectionText||"").replace(/^(North|South|East|West|Loop)bound to /i,"").replace(/^to /i,""),
+        min:p.Minutes, at, color:BUS_COL, live:true, note:"" }));
+    }
+    pool.bus=out; setSrc("Bus","ok","Metrobus live");
+  }catch(e){ setSrc("Bus","bad","Metrobus feed not answering"); }
+}
+function tidyStop(n){ return String(n||"").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()).replace(/\+/g," & ").replace(/\s+/g," ").trim(); }
+
+/* ---- bundled timetables (Ride On, MARC) --------------------------------
+   Same schema and the same service-calendar resolution as dc.html, including
+   its last-resort fallback when a bundle has run out (labelled, not hidden). */
+const scheds={};
+async function loadSched(file){
+  if(scheds[file]!==undefined) return scheds[file];
+  try{
+    const s=await getJSON(file, 20000);
+    s._dep={};
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    scheds[file]=s;
+  }catch(e){ return null; }     // not remembered: one failed load must not end a timetable on a screen nobody restarts
+  return scheds[file];
+}
+const ymd = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+function activeServices(s, date){
+  const y=ymd(date), dow=(date.getDay()+6)%7, act=new Set();
+  for(const id in s.svc){ const v=s.svc[id]; if(y>=v.start && y<=v.end && v.dow[dow]) act.add(id); }
+  const ex=s.exc&&s.exc[y]; if(ex){ (ex.rem||[]).forEach(x=>act.delete(x)); (ex.add||[]).forEach(x=>act.add(x)); }
+  if(!act.size){ for(const id in s.svc){ if(s.svc[id].dow[dow]) act.add(id); } if(act.size) s._stale=true; }
+  return act;
+}
+/* Departures from a set of stops in the next 3 hours, including trips the
+   previous service day runs past midnight (times >= 1440). */
+function schedFrom(s, stops, horizon=180){
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const yest=new Date(now.getTime()-864e5);
+  const today=activeServices(s, now), prev=activeServices(s, yest);
+  const out=[];
+  stops.forEach(st=>(s._dep[st.id]||[]).forEach(d=>{
+    /* Both tests, not else-if. A weekday service runs today AND ran yesterday, so a
+       25:00 trip took the first branch, came out 24 hours away, and was dropped:
+       after midnight the night's last departures vanished on every weeknight. */
+    const add=rel=>{ if(rel<=horizon) out.push({...d, rel, stop:st}); };
+    if(today.has(d.s) && d.t>=nowMin) add(d.t-nowMin);
+    if(prev.has(d.s) && d.t>=1440 && d.t-1440>=nowMin) add(d.t-1440-nowMin);
+  }));
+  return out;
+}
+function nearStops(s, maxM, extraM, cap){
+  const near=(s.stations||[]).map(st=>({...st, m:hav(loc,st)})).filter(st=>st.m<=maxM).sort((a,b)=>a.m-b.m);
+  if(!near.length) return [];
+  return near.filter(st=>st.m<=near[0].m+extraM).slice(0,cap);
+}
+async function refreshSchedules(){
+  const ro=await loadSched("rideon-schedule.json");
+  if(ro){
+    const stops=nearStops(ro, 1200, 300, 4);
+    pool.rideon=schedFrom(ro, stops).map(d=>({ mode:"Ride On", stop:tidyStop(d.stop.name.replace(/\s*&?\s*BAY\s+\w+$/i,"")), stopM:d.stop.m,
+      route:d.line, dest:tidyStop(d.hs), min:d.rel, color:RIDEON_COL[d.line]||BUS_COL, live:false, note:"" }));
+    setSrc("Ride On", stops.length ? (ro._stale?"bad":"sched") : "off", ro._stale ? "Ride On timetable out of date" : "Ride On timetable");
+  } else setSrc("Ride On","bad","Ride On timetable didn't load");
+  const mc=await loadSched("marc-schedule.json");
+  if(mc){
+    const stops=nearStops(mc, 12000, 0, 1);
+    const nm=n=>String(n||"").replace(/\bMARC\b/ig,"").replace(/\b(eb|wb|nb|sb)\b/ig,"").replace(/\s+/g," ").trim();
+    // MARC stations are listed once per direction ("eb"/"wb"): take both
+    const twins=stops.length ? mc.stations.filter(st=>nm(st.name)===nm(stops[0].name)).map(st=>({...st, m:stops[0].m})) : [];
+    pool.marc=schedFrom(mc, twins).map(d=>({ mode:"MARC", stop:tidyStop(nm(d.stop.name)), stopM:d.stop.m,
+      route:d.line.slice(0,4), dest:tidyStop(nm(d.hs)), min:d.rel, color:MARC_COL[d.line]||"#e8792b", live:false, note:d.line+" Line" }));
+    setSrc("MARC", twins.length ? (mc._stale?"bad":"sched") : "off", mc._stale ? "MARC timetable out of date" : "MARC timetable");
+  } else setSrc("MARC","bad","MARC timetable didn't load");
+}
+
+/* ---- rendering --------------------------------------------------------- */
+function groups(){
+  const all=[].concat(...Object.values(pool)).filter(stillReal).map(d=>({...d, m:liveMin(d)}));
+  const by=new Map();
+  all.forEach(d=>{
+    const k=[d.mode,d.stop,d.route,d.dest].join("|");
+    if(!by.has(k)) by.set(k,{...d, mins:[]});
+    by.get(k).mins.push(d);
+  });
+  return [...by.values()].map(g=>{ g.mins.sort((a,b)=>a.m-b.m); g.first=g.mins[0]; g.walk=walkMin(g.stopM); return g; })
+    .sort((a,b)=>a.first.m-b.first.m);
+}
+function minsHTML(d, cls=""){
+  if(d.live && (d.raw==="BRD"||d.raw==="ARR")) return `<b class="now">${d.raw==="BRD"?"Boarding":"Arriving"}</b>`;
+  if(d.m===0) return `<b class="now${d.live?"":" sch"}">Due</b>`;
+  if(d.m>=60) return `<b class="sch" style="font-size:1.05rem">${esc(minClock(new Date().getHours()*60+new Date().getMinutes()+d.m))}</b>`;
+  return `<b class="${d.live?"":"sch"} ${cls}">${d.m}</b><span>min</span>`;
+}
+function thenTxt(g, from=1){
+  // "12:13p", not "12:13 PM": this sits beside the destination, and on a square screen every character comes out of the name
+  const rest=g.mins.slice(from,from+2).map(x=>x.m>=60?minClock(new Date().getHours()*60+new Date().getMinutes()+x.m).replace(/ ([AP])M$/,(m,a)=>a.toLowerCase()):x.m);
+  return rest.length ? "then "+rest.join(", ") : "";
+}
+function badge(g){
+  return `<span class="bdg" style="--c:${g.color||BUS_COL};--ci:${g.ink||"#fff"}">${esc(g.route||g.mode.slice(0,3))}</span>`;
+}
+
+/* Hero: the departure worth walking out the door for. The saved commute
+   (commute.js, tb.commute.trip) wins when it matches; otherwise the first
+   departure you can still reach on foot. */
+function pickHero(gs){
+  const trip=lsJSON("tb.commute.trip",null);
+  if(trip && trip.stop){
+    /* All of what was saved, the way commute.js reads it. Direction was ignored, so a
+       trip saved toward Glenmont could say leave for a Shady Grove train; and the
+       first departure was taken as the one to catch, however soon, so "Leave now"
+       could name a train already out of reach on foot. */
+    const nrm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+    const wantStop=nrm(trip.stop).slice(0,12), wantDest=nrm(trip.dest);
+    const mine=gs.filter(g=>{
+      if(!nrm(g.stop).includes(wantStop)) return false;
+      if(trip.route && String(g.route)!==String(trip.route)) return false;
+      if(!wantDest) return true;
+      const a=nrm(g.dest); return a.includes(wantDest) || wantDest.includes(a);
+    });
+    if(mine.length){
+      const w=parseInt(trip.walk,10), walk=isFinite(w)&&w>=0 ? w : mine[0].walk;
+      for(const g of mine){ const i=g.mins.findIndex(x=>x.m>=walk); if(i>=0) return {g, walk, idx:i, saved:true}; }
+      return {g:mine[0], walk, idx:0, saved:true, missed:true};
+    }
+  }
+  const walkable=gs.filter(g=>g.walk<=WALK_MAX);
+  for(const g of walkable){ const i=g.mins.findIndex(x=>x.m>=g.walk); if(i>=0) return {g, walk:g.walk, idx:i}; }
+  return gs[0] ? {g:gs[0], walk:null} : null;
+}
+function renderHero(gs){
+  const h=pickHero(gs), big=$("#heroBig"), hero=$("#hero");
+  if(!h){
+    big.className="big"; big.innerHTML=`<div class="k">Nothing due</div><div class="n">—</div>`;
+    $("#heroT").textContent="No departures in the next 3 hours";
+    $("#heroD").textContent=Object.values(src).filter(s=>s.state==="bad"||s.state==="off").map(s=>s.note).filter(Boolean).join(" · ");
+    return;
+  }
+  const {g, walk}=h, idx=h.idx||0, d=g.mins[Math.min(idx,g.mins.length-1)];
+  hero.style.setProperty("--hc", g.color||"var(--accent)");
+  const vehicle = g.mode==="Metro"||g.mode==="MARC" ? "Train" : "Bus";
+  if(walk!=null && walk<=WALK_MAX){
+    const leave=d.m-walk;
+    if(h.missed){ big.className="big"; big.innerHTML=`<div class="k">Too late</div><div class="n">Gone</div>`; }
+    else if(leave<=0){ big.className="big now"; big.innerHTML=`<div class="k">Leave</div><div class="n">Now</div>`; }
+    else { big.className="big"; big.innerHTML=`<div class="k">Leave in</div><div class="n">${leave}</div><div class="u">min</div>`; }
+  }else{
+    big.className="big"; big.innerHTML=`<div class="k">${vehicle} in</div><div class="n">${d.m}</div><div class="u">min</div>`;
+  }
+  $("#heroT").innerHTML=`${badge(g)}<span class="to">${esc(g.dest||g.route)}</span>`;
+  const bits=[];
+  bits.push(`<b>${vehicle} in ${d.m} min</b> from ${esc(g.stop)}`);
+  if(walk!=null) bits.push(`${walk} min walk${h.saved?" (your commute)":""}`);
+  else bits.push(miles(g.stopM)+" away");
+  const after=g.mins.slice(idx+1,idx+3).map(x=>x.m);
+  if(after.length) bits.push("then "+after.join(", "));
+  bits.push(`<span class="tag ${d.live?"live":"sched"}">${d.live?"live":"timetable"}</span>`);
+  $("#heroD").innerHTML=bits.join(" · ");
+}
+function renderList(gs){
+  const box=$("#rows");
+  if(!gs.length){
+    const why=Object.values(src).filter(s=>s.state==="off"||s.state==="bad").map(s=>s.note).filter(Boolean);
+    box.innerHTML=`<div class="none">Nothing leaving nearby in the next 3 hours.${why.length?"<br>"+esc(why.join(" · ")):""}</div>`;
+    $("#listNote").textContent="";
+    return;
+  }
+  box.innerHTML=gs.map(g=>{
+    const f=g.first, sub=[g.stop, g.mode==="Metro"?RAIL_NAMES[g.route]+" Line":g.mode, f.note, f.live?"live":"timetable"].filter(Boolean).join(" · ");
+    return `<div class="dep">${badge(g)}<div class="dd"><b>${esc(g.dest||g.route)}</b><small>${esc(sub)}</small></div>`+
+      `<div class="dm">${minsHTML(f)}<i>${esc(thenTxt(g))}</i></div></div>`;
+  }).join("");
+  fit(box);
+}
+/* Drop whole rows that would be cut by the card's edge. A half row reads as a
+   rendering bug; one fewer row reads as nothing at all. Skipped where the page
+   scrolls (phone), which caps at 12 instead. */
+function fit(box){
+  const scrolls=getComputedStyle(document.body).overflowY==="auto";
+  const rows=[...box.children];
+  if(scrolls){ rows.slice(12).forEach(r=>r.remove()); $("#listNote").textContent=""; return; }
+  let hidden=0;
+  const bottom=box.getBoundingClientRect().bottom+1;
+  for(let i=rows.length-1;i>0;i--){ if(rows[i].getBoundingClientRect().bottom>bottom){ rows[i].remove(); hidden++; } else break; }
+  $("#listNote").textContent = hidden ? `+${hidden} more` : "";
+}
+function renderFoot(){
+  const order=["Metro","Bus","Ride On","MARC","Weather","Sky","Lights"];
+  $("#foot").innerHTML=order.filter(k=>src[k] && src[k].note).map(k=>{
+    const s=src[k]; return `<span class="${s.state==="ok"?"ok":s.state==="bad"?"bad":"sc"}">${esc(s.note)}</span>`;
+  }).join("")+`<span>Updated ${esc(clock12(new Date()))}</span>`;
+}
+function render(){ const gs=groups(); renderHero(gs); renderList(gs); renderFoot(); }
+
+/* ---- clock + theme ----------------------------------------------------- */
+function tickClock(){
+  const d=new Date(), t=clock12(d,false);
+  $("#clock").innerHTML=`${t}<small>${d.getHours()>=12?"PM":"AM"}</small>`;
+  $("#dow").textContent=d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"});
+}
+let sun=null;           // {rise, set} as Date, from the weather fetch
+const THEMES=["auto","dark","day","black"];
+function themeChoice(){ const q=new URLSearchParams(location.search).get("theme"); return THEMES.includes(q)?q:lsGet("tb.home.theme","auto"); }
+/* Auto: the day palette while the sun is up, black (the OLED one) after dark,
+   because a lit screen in a dark bedroom is the complaint every smart display
+   gets. Before the first weather answer, 7am-7pm stands in for the sun. */
+function applyTheme(){
+  const c=themeChoice(); let t=c;
+  if(c==="auto"){
+    const now=new Date();
+    const up = sun ? (now>=sun.rise && now<sun.set) : (now.getHours()>=7 && now.getHours()<19);
+    t = up ? "day" : "black";
+  }
+  if(document.documentElement.dataset.theme!==t) document.documentElement.dataset.theme=t;
+  const b=$("#themeBtn"); b.textContent=c[0].toUpperCase()+c.slice(1); b.title=`Theme: ${c} — tap to change`;
+}
+$("#themeBtn").onclick=()=>{ const c=themeChoice(); lsSet("tb.home.theme", THEMES[(THEMES.indexOf(c)+1)%THEMES.length]);
+  const u=new URL(location.href); if(u.searchParams.has("theme")){ u.searchParams.delete("theme"); history.replaceState(null,"",u); }
+  applyTheme(); };
+
+/* ---- weather ----------------------------------------------------------- */
+const WMO={0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Cloudy",45:"Fog",48:"Freezing fog",51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",
+  56:"Freezing drizzle",57:"Freezing drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",
+  77:"Snow grains",80:"Showers",81:"Showers",82:"Heavy showers",85:"Snow showers",86:"Snow showers",95:"Thunderstorms",96:"Storms, hail",99:"Storms, hail"};
+async function refreshWeather(){
+  try{
+    const j=await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(3)}&longitude=${loc.lon.toFixed(3)}`+
+      `&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,precipitation_probability`+
+      `&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=2`);
+    const c=j.current, dl=j.daily;
+    $("#wxTmp").textContent=Math.round(c.temperature_2m)+"°";
+    $("#wxCond").textContent=WMO[c.weather_code]||"";
+    $("#wxHl").textContent=`H ${Math.round(dl.temperature_2m_max[0])}° · L ${Math.round(dl.temperature_2m_min[0])}° · feels ${Math.round(c.apparent_temperature)}° · wind ${Math.round(c.wind_speed_10m)} mph`;
+    $("#wxNote").textContent=`rain ${dl.precipitation_probability_max[0]??0}% today`;
+    // Open-Meteo's times are local wall-clock strings with no zone; Date() reads them as local, which is right here
+    sun={ rise:new Date(dl.sunrise[0]), set:new Date(dl.sunset[0]) };
+    const nowH=new Date(); nowH.setMinutes(0,0,0);
+    const start=j.hourly.time.findIndex(t=>new Date(t)>nowH);
+    const n=8, hrs=[];
+    for(let i=start;i>=0 && i<start+n && i<j.hourly.time.length;i++)
+      hrs.push({ h:new Date(j.hourly.time[i]), t:Math.round(j.hourly.temperature_2m[i]), p:j.hourly.precipitation_probability[i]||0 });
+    $("#hours").innerHTML=hrs.map((x,i)=>`<div class="hr" data-i="${i}"><span class="pp">${x.p}%</span>`+
+      `<span class="bar" style="height:${(x.p/100*1.6).toFixed(2)}rem" title="${x.p}% chance of rain"></span>`+
+      `<span class="tt">${x.t}°</span><span class="hh">${x.h.getHours()%12||12}${x.h.getHours()<12?"a":"p"}</span></div>`).join("");
+    fitHours();
+    setSrc("Weather","ok","");
+    applyTheme();
+  }catch(e){ setSrc("Weather","bad","Weather not answering"); }
+}
+/* Show as many hours as the card has room for: the grid's own column count is
+   set from the CSS (--hn), and extra hour cells beyond it are hidden. */
+function fitHours(){
+  const box=$("#hours"), n=parseInt(getComputedStyle(box).getPropertyValue("--hn"))||6;
+  [...box.children].forEach((c,i)=>{ c.style.display = i<n ? "" : "none"; });
+}
+
+/* ---- overhead aircraft -------------------------------------------------
+   The operator's own feed only (tb.adsbUrl -> adsb-worker / adsb-proxy). There
+   is deliberately no default: see adsbBase() in night.html for why. */
+const adsbUrl=(lsGet("tb.adsbUrl","")||"").trim().replace(/\/+$/,"");
+let overhead=null;      // {call, type, nm, alt, hex}
+let brands=null;        // AIRLINE_BRAND, read out of night.html so the room and the Sky view agree
+async function loadBrands(){
+  if(brands) return brands;
+  const c=lsJSON("tb.home.brands",null);
+  if(c && Date.now()-c.t<864e5){ brands=c.b; return brands; }
+  try{
+    const txt=await (await fetch("night.html")).text(), i=txt.indexOf("const AIRLINE_BRAND={");
+    const block=i<0?"":txt.slice(i, txt.indexOf("};",i)), b={};
+    // TRANSIT_BRAND is not read, for the reason hue-lights.py gives
+    block.replace(/"?([A-Z0-9]{2,3})"?\s*:\s*"(#[0-9A-Fa-f]{6})"/g,(m,k,v)=>{ b[k]=v; return m; });
+    brands=b; lsSet("tb.home.brands", JSON.stringify({t:Date.now(), b}));
+  }catch(e){ brands={}; }
+  return brands;
+}
+function brandOf(call){ const k=String(call||"").trim().toUpperCase().slice(0,3).replace(/[^A-Z0-9]/g,""); return (brands&&brands[k])||""; }
+const NM=1852;
+const COMPASS=["N","NE","E","SE","S","SW","W","NW"];
+function bearing(a,b){
+  const t=x=>x*Math.PI/180, y=Math.sin(t(b.lon-a.lon))*Math.cos(t(b.lat));
+  const x=Math.cos(t(a.lat))*Math.sin(t(b.lat))-Math.sin(t(a.lat))*Math.cos(t(b.lat))*Math.cos(t(b.lon-a.lon));
+  return COMPASS[Math.round(((Math.atan2(y,x)*180/Math.PI)+360)%360/45)%8];
+}
+async function refreshSky(){
+  if(!adsbUrl){ overhead=null; setSrc("Sky","off",""); renderSky(); return; }
+  try{
+    await loadBrands();
+    const j=await getJSON(`${adsbUrl}/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/15`);
+    const air=(j.ac||[]).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number")
+      .map(a=>({a, nm: a.dst!=null ? a.dst : hav(loc,{lat:a.lat,lon:a.lon})/NM})).sort((x,y)=>x.nm-y.nm);
+    overhead = air.length ? { call:(air[0].a.flight||"").trim()||air[0].a.r||air[0].a.hex, type:air[0].a.desc||air[0].a.t||"",
+      nm:air[0].nm, alt:air[0].a.alt_baro, dir:bearing(loc,air[0].a), count:air.length } : null;
+    if(overhead) overhead.hex=brandOf(overhead.call);
+    setSrc("Sky","ok","");
+  }catch(e){
+    /* Don't keep calling the last aircraft "overhead". It also held the room light
+       in that airline's colour for as long as the feed stayed down, because the
+       driver kept seeing a flight nearby. Its 90-second rule still rides out a blip. */
+    overhead=null;
+    setSrc("Sky","bad","Aircraft feed not answering");
+  }
+  renderSky(); driveLights();
+}
+function renderSky(){
+  const t=$("#skyTxt"), p=$("#skyPip");
+  if(!adsbUrl){ p.style.setProperty("--pc","var(--line)");
+    t.innerHTML=`<span class="muted">No aircraft feed set up. Add one in the Sky view's settings (see AIRCRAFT-FEED.md).</span>`; return; }
+  if(src.Sky && src.Sky.state==="bad" && !overhead){ p.style.setProperty("--pc","var(--line)"); t.innerHTML=`<span class="muted">Aircraft feed isn't answering.</span>`; return; }
+  if(!overhead){ p.style.setProperty("--pc","var(--line)"); t.innerHTML=`<b>Quiet sky</b> <span class="muted">· nothing within 15 nm</span>`; return; }
+  const o=overhead;
+  p.style.setProperty("--pc", o.hex||"var(--plane)");
+  const alt = typeof o.alt==="number" ? `${o.alt.toLocaleString()} ft` : "";
+  t.innerHTML=`<b>${esc(o.call)}</b> overhead <span class="muted">· ${o.nm.toFixed(1)} nm ${o.dir}${alt?" · "+alt:""}${o.type?" · "+esc(o.type):""}`+
+    `${o.count>1?` · ${o.count} in range`:""}</span>`;
+}
+
+/* ---- room light (Govee via govee-worker.js) ----------------------------
+   The same keys and the same restore-the-room rules as night.html's driver:
+   capture the room's own state once before colouring it, hold a colour at
+   least 45s, put it back after 90s of empty sky or when the page goes away. */
+const GV_RADIUS_NM=10, GV_DWELL=45000, GV_CLEAR=90000;
+const gvUrl=()=>(lsGet("tb.goveeUrl","")||"").trim().replace(/\/+$/,"");
+const gvDev=()=>lsJSON("tb.goveeDev",null);
+const gvOn =()=>lsGet("tb.goveeOn","0")==="1";
+const gvSnap=()=>lsJSON("tb.goveeSnap",null);
+const gvSetSnap=v=>lsSet("tb.goveeSnap", v?JSON.stringify(v):null);
+let light=null;         // last /state answer: {power, brightness, rgb}
+let lightHex="", lightAt=0, lightSeen=0;
+const rgbHex=n=>"#"+(Number(n)>>>0).toString(16).padStart(6,"0").slice(-6);
+const hexInt=h=>parseInt(h.slice(1),16);
+
+async function gvSet(extra){
+  const u=gvUrl(), d=gvDev(); if(!u||!d) return null;
+  try{
+    const j=await (await fetch(u+"/set",{method:"POST", headers:{"content-type":"application/json"},
+      body:JSON.stringify(Object.assign({sku:d.sku, device:d.device}, extra))})).json();
+    if(!j.ok) console.warn("lights:", j.error, j.detail||"");
+    return j;
+  }catch(e){ console.warn("lights:", e.message); return null; }
+}
+async function gvState(){
+  const u=gvUrl(), d=gvDev(); if(!u||!d) return null;
+  const j=await getJSON(`${u}/state?sku=${encodeURIComponent(d.sku)}&device=${encodeURIComponent(d.device)}`);
+  return j && j.ok ? {power:j.power, brightness:j.brightness, rgb:j.rgb} : null;
+}
+function restoreBody(s){
+  if(!s) return null;
+  if(s.power===0) return {power:0};
+  const p={}; if(s.power!=null) p.power=s.power;
+  if(Number.isFinite(s.rgb)) p.rgb=s.rgb;
+  if(Number.isFinite(s.brightness) && s.brightness>0) p.brightness=s.brightness;
+  return Object.keys(p).length?p:null;
+}
+async function gvRestore(){
+  lightHex="";
+  const s=gvSnap(); if(!s) return;
+  const p=restoreBody(s); if(!p){ gvSetSnap(null); return; }
+  /* Only forgotten once the light has taken it, same as night.html: in an outage it
+     is the one record of what the room looked like. */
+  const r=await gvSet(p);
+  if(r && r.ok){ gvSetSnap(null); light=Object.assign({},light||{},p); renderRoom(); }
+}
+function driveLights(){
+  if(!gvOn() || !gvUrl() || !gvDev()) return;
+  const hex = overhead && overhead.nm<=GV_RADIUS_NM ? overhead.hex : "";
+  const now=Date.now();
+  if(hex){
+    lightSeen=now;
+    if(hex===lightHex || now-lightAt<GV_DWELL) return;
+    lightAt=now;
+    (async()=>{
+      const had=!!gvSnap();
+      if(!had){ try{ const s=await gvState(); if(s) gvSetSnap(s); }catch(e){} }
+      const r=await gvSet({power:1, rgb:hexInt(hex)});
+      if(r && r.ok){ lightHex=hex; light=Object.assign({},light||{},{power:1, rgb:hexInt(hex)}); renderRoom(); return; }
+      lightHex=""; if(!had) gvSetSnap(null);
+    })();
+    return;
+  }
+  if(lightHex && now-lightSeen>GV_CLEAR) gvRestore();
+}
+window.addEventListener("pagehide",()=>{
+  const s=gvSnap(), u=gvUrl(), d=gvDev(); if(!s||!u||!d||!navigator.sendBeacon) return;
+  const p=restoreBody(s); if(!p) return;
+  navigator.sendBeacon(u+"/set", new Blob([JSON.stringify(Object.assign({sku:d.sku,device:d.device},p))],{type:"text/plain"}));
+  gvSetSnap(null); lightHex="";
+});
+async function refreshLight(){
+  if(!gvUrl()||!gvDev()){ light=null; setSrc("Lights","off",""); renderRoom(); return; }
+  try{ light=await gvState(); setSrc("Lights", light?"ok":"bad", light?"":"Light not answering"); }
+  catch(e){ setSrc("Lights","bad","Light not answering"); }
+  renderRoom();
+}
+function renderRoom(){
+  const d=gvDev(), sw=$("#swatch"), pb=$("#powerBtn"), fb=$("#followBtn");
+  if(!gvUrl()||!d){
+    sw.className="swatch off"; $("#lightName").textContent="No light linked";
+    $("#lightSub").textContent="Link a Govee light in Sky view → Settings → Room lights.";
+    pb.disabled=fb.disabled=true; $("#roomNote").textContent=""; return;
+  }
+  $("#lightName").textContent=d.name||"Room light";
+  pb.disabled=fb.disabled=false;
+  fb.setAttribute("aria-pressed", gvOn()?"true":"false");
+  if(!light){
+    sw.className="swatch off"; pb.setAttribute("aria-pressed","false");
+    $("#lightSub").textContent = src.Lights&&src.Lights.state==="bad" ? "Not answering. Is it plugged in?" : "Checking…";
+    return;
+  }
+  const on=light.power===1, hex=Number.isFinite(light.rgb)?rgbHex(light.rgb):"";
+  sw.className="swatch"+(on?"":" off"); sw.style.setProperty("--sw", hex||"#ffe7b8");
+  pb.setAttribute("aria-pressed", on?"true":"false");
+  const bits=[on?"On":"Off"];
+  if(on && light.brightness>0) bits.push(light.brightness+"%");
+  if(gvOn()) bits.push(lightHex ? `wearing ${overhead&&overhead.call?overhead.call.slice(0,3):"the flight"}'s colour` : "following the sky, nothing close yet");
+  else if(on && hex) bits.push(hex.toUpperCase());
+  $("#lightSub").textContent=bits.join(" · ");
+  $("#roomNote").textContent = gvOn() ? `within ${GV_RADIUS_NM} nm` : "";
+}
+$("#powerBtn").onclick=async()=>{
+  const want = !(light && light.power===1) ? 1 : 0;
+  light=Object.assign({},light||{},{power:want}); renderRoom();          // answer the tap now; the Worker can be slow
+  // a manual switch means the room is yours again: drop the "put it back" snapshot
+  if(want===0){ gvSetSnap(null); lightHex=""; }
+  const r=await gvSet({power:want});
+  if(!r||!r.ok){ setSrc("Lights","bad","Light didn't respond"); }
+  setTimeout(refreshLight, 2500);
+};
+$("#followBtn").onclick=()=>{
+  const on=!gvOn(); lsSet("tb.goveeOn", on?"1":"0");
+  if(!on) gvRestore(); else { lightAt=0; driveLights(); }
+  renderRoom();
+};
+
+/* ---- full screen (station.html's, trimmed) ----------------------------- */
+const SVG_EXPAND=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>`;
+const SVG_COMPRESS=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3m8 0v-3a2 2 0 0 1 2-2h3"/></svg>`;
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+function toggleFullscreen(){
+  if(fsEl()){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); return; }
+  if(window.TBGate && !TBGate.require("fullscreen")) return;
+  const el=document.documentElement, req=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(req) try{ const p=req.call(el); if(p&&p.catch) p.catch(()=>{}); }catch(e){}
+}
+function onFs(){ const b=$("#fsBtn"); b.innerHTML=fsEl()?SVG_COMPRESS:SVG_EXPAND; b.title=fsEl()?"Exit full screen (F)":"Full screen (F)"; }
+$("#fsBtn").onclick=toggleFullscreen;
+["fullscreenchange","webkitfullscreenchange"].forEach(ev=>document.addEventListener(ev,()=>{ onFs(); relayout(); }));
+document.addEventListener("keydown",e=>{
+  if((e.key==="f"||e.key==="F") && !e.metaKey && !e.ctrlKey && !e.altKey){ e.preventDefault(); toggleFullscreen(); }
+});
+onFs();
+
+/* A rotate or a resize changes which shape is in force, and so how many rows
+   and hours fit. Re-render rather than re-measure: fit() works on fresh rows. */
+let rlT=null;
+function relayout(){ clearTimeout(rlT); rlT=setTimeout(()=>{ fitHours(); render(); }, 150); }
+window.addEventListener("resize", relayout);
+
+/* ---- boot -------------------------------------------------------------- */
+(async function boot(){
+  $("#place").textContent=loc.label||"Home";
+  tickClock(); applyTheme(); renderRoom(); renderSky();
+  setInterval(tickClock, 1000);
+  setInterval(applyTheme, 60000);
+  await Promise.allSettled([refreshRail(), refreshBus(), refreshSchedules()]);
+  render();
+  refreshWeather(); refreshSky(); refreshLight();
+  setInterval(async()=>{ await refreshRail(); render(); }, 20000);
+  setInterval(async()=>{ await refreshBus(); render(); }, 30000);
+  setInterval(async()=>{ await refreshSchedules(); render(); }, 30000);
+  setInterval(render, 15000);
+  setInterval(refreshWeather, 10*60000);
+  setInterval(refreshSky, 15000);
+  setInterval(refreshLight, 60000);
+})();
+</script>
+</body>
+</html>

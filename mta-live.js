@@ -137,7 +137,10 @@
      seven feeds are independent, and losing the L should not blank the R. */
   async function fetchAll() {
     const results = await Promise.allSettled(
-      SUBWAY_FEEDS.map(f => fetch(FEED_BASE + f).then(r => r.arrayBuffer())));
+      SUBWAY_FEEDS.map(f => fetch(FEED_BASE + f).then(r => {
+        if (!r.ok) throw new Error("HTTP " + r.status);   // an error body is not a feed
+        return r.arrayBuffer();
+      })));
     let updates = {}, vehicles = [], ok = 0;
     results.forEach(r => {
       if (r.status !== "fulfilled") return;

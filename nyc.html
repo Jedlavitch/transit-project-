@@ -42,21 +42,21 @@
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=7" defer></script>
+<script src="mascot-buddy.js?v=8" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="fit-cards.js?v=22" defer></script>
+<script src="fit-cards.js?v=23" defer></script>
 <script src="screen-lock.js?v=2" defer></script>
 <script src="atlasrows.js?v=1" defer></script>
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
-<script src="spotlog.js?v=13" defer></script>
+<script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=2" defer></script>
-<script src="departures.js?v=1" defer></script>
-<script src="commute.js?v=6" defer></script>
-<script src="ontime.js?v=25" defer></script>
-<script src="ontime-tile.js?v=1" defer></script>
+<script src="departures.js?v=2" defer></script>
+<script src="commute.js?v=7" defer></script>
+<script src="ontime.js?v=26" defer></script>
+<script src="ontime-tile.js?v=2" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return /^tb\.(theme|accent|rows|style)$/.test(k)?TBBoardPreferences.get(k.slice(3)):localStorage.getItem(k)},d=document.documentElement;
@@ -2101,16 +2101,18 @@ async function fetchSubwayLive(){
   drawSubwayRoutes();   // one-time; no-ops after the first successful draw
   const sched = await ensureSubwaySchedule();
   const results = await Promise.allSettled(SUBWAY_FEEDS.map(f =>
-    fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F${f}`).then(r=>r.arrayBuffer())
+    fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F${f}`).then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
   ));
-  let vehicles=[], updates={};
+  let vehicles=[], updates={}, fed=0;
   results.forEach(r=>{
     if(r.status!=="fulfilled") return;
     try{
       const {vehicles:v, updates:u} = decodeGtfsRt(new Uint8Array(r.value));
-      vehicles = vehicles.concat(v); Object.assign(updates, u);
+      vehicles = vehicles.concat(v); Object.assign(updates, u); fed++;
     }catch(e){}
   });
+  // Every feed down is not an empty subway: leave the last answer up rather than draw one.
+  if(!fed) return;
   const here=state.loc;
   // NYCT subway reports no GPS (see decodeGtfsRt's note) -- place each train
   // at its current/next stop's bundled coordinate instead. A stop outside
@@ -2513,7 +2515,7 @@ function railRouteIdLineOf(v){ return v.routeId || "?"; }   // e.g. MTA Bus, who
 async function fetchRailLive(feedPath, ensureSched, lineOf){
   const sched = await ensureSched();
   let buf;
-  try{ buf = new Uint8Array(await fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/${feedPath}`).then(r=>r.arrayBuffer())); }
+  try{ buf = new Uint8Array(await fetch(`https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/${feedPath}`).then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })); }
   catch(e){ return null; }
   const {vehicles, updates} = decodeGtfsRt(buf);
   const here=state.loc;
@@ -2531,8 +2533,15 @@ async function fetchRailLive(feedPath, ensureSched, lineOf){
   }).filter(Boolean).sort((a,b)=>a.mi-b.mi);
 }
 function renderRailCard(listId, countId, list, color, fleet){
-  const box=$(listId); if(!box) return; box.innerHTML="";
-  if(!list || !list.length){ box.appendChild(el("div","empty","No trains found nearby right now.")); $(countId).textContent="";
+  const box=$(listId); if(!box) return;
+  /* fetchRailLive answers null when the feed itself failed. That is not an empty
+     line: same rule as dc.html's fetchBus, keep what is showing, and otherwise say
+     which of the two it is rather than announcing that nothing is running. */
+  if(list===null && box.querySelector(".row")) return;
+  box.innerHTML="";
+  if(!list || !list.length){ box.appendChild(el("div","empty", list===null
+      ? "That feed isn't answering right now. Trying again shortly."
+      : "No trains found nearby right now.")); $(countId).textContent="";
     if(window.TBDep && fleet) TBDep.clear(fleet); return; }
   list.slice(0,20).forEach(({v,lateMin,arrSec,mi,stationName,line})=>{
     const row=el("div","row");
@@ -2563,6 +2572,7 @@ const NYC_FLEET_NAME={ subway:"Subway", lirr:"LIRR", mnr:"Metro-North" };
    a corridor and a palette stop looking like the same vehicle. */
 const NYC_FLEET_MODE={ subway:"metro", lirr:"train", mnr:"train" };
 function drawRailFleet(fleet, list, color){
+  if(list===null) return;       // a failed fetch, not an empty network: leave the map alone
   const items=(list||[]).map(({v,lat,lon,stationName,line})=>({
     id:fleet+v.tripId, lat, lon,
     icon:()=>labelIcon(color, line||"?", NYC_FLEET_MODE[fleet]),
@@ -2685,7 +2695,7 @@ async function drawBusScheduledMap(){
 async function fetchBusLive(){
   if(!state.busUrl) return;
   let buf;
-  try{ buf = new Uint8Array(await fetch(`${state.busUrl}/vehiclePositions`).then(r=>r.arrayBuffer())); }
+  try{ buf = new Uint8Array(await fetch(`${state.busUrl}/vehiclePositions`).then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })); }
   catch(e){ return; }
   const {vehicles, updates} = decodeGtfsRt(buf);
   const BUS_ROUTES = new Set(["M42","M15","M15+","M34+","M34A+"]);

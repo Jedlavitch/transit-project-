@@ -902,21 +902,23 @@ body .card.tb-tight .statline{display:none}
     return s.split(/\s+[—–-]\s+/)[0].trim() || card.id;
   }
   /* The board's own hidden-cards list. Its key is namespaced per board
-     (transitboard.hiddenCards, transitboardphl.hiddenCards, ...) and is found
-     rather than guessed, so a city added later cannot end up writing into
-     another board's settings. */
-  function boardHiddenKey(){
-    try{
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i);
-        if(/^transitboard[a-z]*\.hiddenCards$/.test(k)) return k;
-      }
-      for(let i=0;i<localStorage.length;i++){
-        const m=/^(transitboard[a-z]*)\./.exec(localStorage.key(i));
-        if(m) return m[1]+".hiddenCards";
-      }
-    }catch(_){}
-    return "";
+     (transitboard.hiddenCards, transitboardphl.hiddenCards, ...). */
+  /* The key this board's own loadHiddenCards() reads, found by watching it read.
+     All the boards share one origin, so "the first transitboard*.hiddenCards in
+     localStorage" was usually ANOTHER city's list: on a device that had opened two
+     boards the × overwrote that city's choices, and came back here on reload. */
+  function boardHiddenKey() {
+    var found = "", proto = Storage.prototype, real = proto.getItem;
+    try {
+      proto.getItem = function (k) {
+        if (/hiddenCards$/.test(String(k))) found = String(k);
+        return real.apply(this, arguments);
+      };
+      /* eslint-disable-next-line no-undef */
+      if (typeof loadHiddenCards === "function") loadHiddenCards();
+    } catch (_) {
+    } finally { proto.getItem = real; }
+    return found;
   }
   function registerStrayCards(){
     let defs=null;

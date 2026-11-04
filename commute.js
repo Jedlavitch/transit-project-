@@ -57,18 +57,22 @@
   }
   var REGISTERED = registerCardToggle();
 
+  /* The key this board's own loadHiddenCards() reads, found by watching it read.
+     All the boards share one origin, so "the first transitboard*.hiddenCards in
+     localStorage" was usually ANOTHER city's list: on a device that had opened two
+     boards the × overwrote that city's choices, and came back here on reload. */
   function boardHiddenKey() {
+    var found = "", proto = Storage.prototype, real = proto.getItem;
     try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (/^transitboard[a-z]*\.hiddenCards$/.test(k)) return k;
-      }
-      for (var j = 0; j < localStorage.length; j++) {
-        var m = /^(transitboard[a-z]*)\./.exec(localStorage.key(j));
-        if (m) return m[1] + ".hiddenCards";
-      }
-    } catch (_) {}
-    return "";
+      proto.getItem = function (k) {
+        if (/hiddenCards$/.test(String(k))) found = String(k);
+        return real.apply(this, arguments);
+      };
+      /* eslint-disable-next-line no-undef */
+      if (typeof loadHiddenCards === "function") loadHiddenCards();
+    } catch (_) {
+    } finally { proto.getItem = real; }
+    return found;
   }
   function hiddenNow() {
     try {
@@ -129,8 +133,19 @@
   function pool() {
     var st = boardState();
     var by = (st && st._depBy) || {};
-    var out = [];
-    for (var k in by) if (Array.isArray(by[k])) out = out.concat(by[k]);
+    var out = [], now = Date.now();
+    /* `min` was true when it was fed. Taken as read, the 30-second repaint below had
+       nothing to repaint, and a feed that stopped answering froze the card on
+       "leave in 4" for as long as it stayed down. So age each row from when it
+       arrived, and a departure that has now left is no longer offered. */
+    for (var k in by) {
+      if (!Array.isArray(by[k])) continue;
+      by[k].forEach(function (d) {
+        var m = d.at ? d.min - Math.floor((now - d.at) / 60000) : d.min;
+        if (m < 0) return;
+        out.push(m === d.min ? d : Object.assign({}, d, { min: m }));
+      });
+    }
     return out;
   }
 
@@ -400,6 +415,9 @@
   function openSetup() {
     var t = trip() || { stop: "", route: "", dest: "", walk: 5 };
     var stops = knownStops();
+    /* The saved stop may simply have nothing running right now. Without this the
+       picker silently showed the first stop on the list, and Save moved the trip. */
+    if (t.stop && !stops.some(function (s) { return norm(s) === norm(t.stop); })) stops.unshift(t.stop);
     if (!stops.length) {
       alert("The board has not loaded any departures yet — give it a few seconds and try again.");
       return;
@@ -438,6 +456,8 @@
           sel.innerHTML = "";
           var a = document.createElement("option"); a.value = ""; a.textContent = anyLbl;
           sel.appendChild(a);
+          // Same for a line or direction with nothing running: keep it, don't widen the trip.
+          if (cur && !vals.some(function (v) { return norm(v) === norm(cur); })) vals = [cur].concat(vals);
           vals.forEach(function (v) {
             var oo = document.createElement("option"); oo.value = v; oo.textContent = v;
             if (norm(v) === norm(cur)) oo.selected = true;

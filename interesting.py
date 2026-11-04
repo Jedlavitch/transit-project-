@@ -265,12 +265,14 @@ WIDEBODY = re.compile(
 # fallback for feeds that omit the category, and covers the machines that
 # actually orbit a city: police, air ambulance, news, tour.
 #
-# PREFIX-ANCHORED WITH NO TRAILING ANCHOR — it is a startswith test, so this one
-# uses re.match, never fullmatch. re.ASCII narrows \d back to JS's meaning.
+# WHOLE CODES, anchored both ends (see interesting.js for what the old prefix test
+# got wrong: B39M and B37M, the 737 MAX 9 and 7, read as helicopters). Kept in step
+# with that file. re.ASCII narrows [0-9]-adjacent classes back to JS's meaning.
 HELI_TYPES = re.compile(
-    r"^(B06|B07|B27|B29|B37|B39|B42|B429|B430|B47|EC[0-9]|EC[35]\d|H[0-9]{2}|A109|A119|"
-    r"A139|A169|A189|AS[0-9]{2}|AS3[25]|R22|R44|R66|S76|S92|S64|UH1|H60|H500|MD5\d|MD90|"
-    r"GAZL|EN28|EXPL|NH90|TIGR)", re.ASCII)
+    r"^(B06T?|B105|B212|B222|B230|B407|B412|B427|B429|B430|B47[A-Z]?|B505|BK17|EC[0-9]{2}|"
+    r"H[0-9]{2}|H[12][0-9]{2}|H500|A109|A119|A129|A139|A149|A169|A189|AS[0-9]{2}|AS3B|R22|"
+    r"R44|R66|S61|S64|S70|S76|S92|UH1[A-Z]?|MD52|MD60|GAZL|EN28|EN48|EXPL|LYNX|NH90|TIGR)$",
+    re.ASCII)
 
 # A scheduled airline flight's callsign: three letters then a flight number. A
 # tail number in the callsign field — N212FX — is general aviation and fails

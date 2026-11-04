@@ -21,6 +21,10 @@
      in the page and runs while parsing, so a deferred shim arrives too late. -->
 <script src="polyfills.js?v=1"></script>
 <script src="feed-backoff.js?v=1"></script>
+<!-- Copies the aircraft feed, the WMATA key and the live-Worker URLs into the keys
+     read below. Without it Sky only worked for someone who had already opened a
+     board in this browser; a first visit sat on "Scanning the sky…" for good. -->
+<script src="config.js?v=2"></script>
 <script src="paywall.js"></script>
 <script src="license.js?v=3" defer></script>
 <!-- Restarts a board that has been up for days, but only once it has just
@@ -29,7 +33,7 @@
 <script src="kiosk-reload.js?v=1" defer></script>
 <script src="gate.js?v=3" defer></script>
 <script src="delays.js?v=2"></script>
-<script src="transitous.js?v=2"></script>
+<script src="transitous.js?v=3"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <style>
@@ -747,6 +751,7 @@ function skyApplyLoc(next, manual){
   }catch(e){}
   const l=document.getElementById("loclbl"); if(l) l.textContent = next.label ? "near "+next.label : "";
   miniMapFor=null;                       // re-frame the mini map on the new area
+  planeMemory.clear();                   // those aircraft, and their distances, belong to the old spot
   if(typeof updateSunSky==="function") updateSunSky();
   if(typeof updateMoon==="function") updateMoon();
   tick();
@@ -779,7 +784,15 @@ const routeCache = loadRouteCache();
 
 const $ = s=>document.querySelector(s);
 function loadRouteCache(){ try{ const c=JSON.parse(localStorage.getItem("nightmode.routes")||"{}"); return c; }catch(e){ return {}; } }
-function saveRouteCache(){ try{ localStorage.setItem("nightmode.routes", JSON.stringify(routeCache)); }catch(e){} }
+/* Bounded: every callsign ever seen used to stay here for good, and this whole site
+   shares one localStorage quota with the Spotter log. */
+function trimCache(c, ttl, max){
+  const now=Date.now();
+  Object.keys(c).forEach(k=>{ if(!c[k] || now-c[k].t>ttl) delete c[k]; });
+  const ks=Object.keys(c);
+  if(ks.length>max) ks.sort((a,b)=>c[a].t-c[b].t).slice(0,ks.length-max).forEach(k=>delete c[k]);
+}
+function saveRouteCache(){ trimCache(routeCache,216e5,300); try{ localStorage.setItem("nightmode.routes", JSON.stringify(routeCache)); }catch(e){} }
 
 async function getJSON(url, timeout=10000){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
@@ -816,7 +829,7 @@ async function lookupRoute(callsign){
     const v = fr ? { airline:fr.airline, origin:fr.origin, destination:fr.destination } : null;
     routeCache[callsign]={ t:Date.now(), v }; saveRouteCache();
     return v;
-  }catch(e){ routeCache[callsign]={ t:Date.now(), v:null }; return null; }
+  }catch(e){ routeCache[callsign]={ t:Date.now()-216e5+3e5, v:null }; return null; }   // a blip: ask again in 5 min, not 6 h
 }
 
 
@@ -884,7 +897,7 @@ function orientRoute(route, pos, track){
 
 /* ---- aircraft photo (planespotters.net public API, by ADS-B hex) ---- */
 const photoCache = (function(){ try{ return JSON.parse(localStorage.getItem("nightmode.photos")||"{}"); }catch(e){ return {}; } })();
-function savePhotoCache(){ try{ localStorage.setItem("nightmode.photos", JSON.stringify(photoCache)); }catch(e){} }
+function savePhotoCache(){ trimCache(photoCache,30*864e5,200); try{ localStorage.setItem("nightmode.photos", JSON.stringify(photoCache)); }catch(e){} }
 /* Returns a LIST of photos of this exact airframe (planespotters often has
    several) so the view can cycle through them instead of showing one still.
    Cache key is versioned ("p2:") because older entries hold a single object. */
@@ -1343,11 +1356,14 @@ function setSunSky(v){
 /* The panel is a slideshow, not a still: whatever photos the subject has cycle
    every 9 s with a cross-fade, and the credit line tracks the current frame
    (each photo has its OWN photographer, so the credit must change with it). */
-let photoShownFor=null, photoList=[], photoIdx=0, photoTimer=null, photoRep=false;
+let photoShownFor=null, photoList=[], photoIdx=0, photoTimer=null, photoRep=false, photoWant=null;
 async function updatePhoto(key, representative, fallbackQuery){
   const wrap=$("#photoWrap");
-  if(photoShownFor===key) return;                              // same subject — keep the running slideshow
+  if(photoShownFor===key || photoWant===key) return;           // same subject — keep the running slideshow
+  photoWant=key;
   const v = representative ? await lookupWikiPhoto(key, fallbackQuery) : await lookupPhoto(key);
+  if(photoWant!==key) return;                                  // the subject moved on while that loaded
+  photoWant=null;
   photoShownFor=key; photoRep=!!representative; photoIdx=0;
   photoList=(Array.isArray(v)?v:(v?[v]:[])).filter(x=>x && x.src);
   clearInterval(photoTimer); photoTimer=null;
@@ -1390,7 +1406,11 @@ function showPhoto(i){
 /* ===== subject producers: each returns a normalized subject or null ===== */
 let mode = (()=>{ const m=localStorage.getItem("nightmode.subject"); return ["planes","trains","buses","iss"].includes(m)?m:"planes"; })();
 const TAGS  = { planes:"Nearest flight", trains:"Nearest train", buses:CITY_CFG.busTag, iss:"Nearest spacecraft" };
-const RANGE = { planes:"aircraft within 30 nm", trains:`Amtrak + ${CITY_CFG.localRailSystem} trains`, buses:CITY_CFG.busRange, iss:"International Space Station · low Earth orbit" };
+const RANGE = { planes:"aircraft within 30 nm",
+  // Europe's boards have no Amtrak and no local system name: this read "Amtrak + null trains".
+  trains: CITY_CFG.noLocalVehicles ? "trains near here, placed from the timetable"
+        : CITY==="amsterdam" ? "no live train positions here yet"
+        : `Amtrak + ${CITY_CFG.localRailSystem} trains`, buses:CITY_CFG.busRange, iss:"International Space Station · low Earth orbit" };
 /* SEPTA's live feeds occasionally send phantom vehicles with nonsense
    sentinel lateness (e.g. late:998) instead of omitting the field --
    matching the same guard used on the boards. */
@@ -1462,11 +1482,14 @@ function adsbRequire(){
   return b;
 }
 async function producePlane(){
+  /* Unconfigured is not the same as searching. Thrown, this landed in tick()'s
+     catch and the screen pulsed "Scanning the sky…" for ever. */
+  if(!adsbBase()) return { none:true, note:"No aircraft feed is set up on this screen. Trains, buses and the ISS still work." };
   const data=await getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
   scanAlerts(data.ac);                              // rare-bird sweep over EVERY aircraft in range
   const acAll=coastPlanes(data.ac||[]);             // survive brief tracking gaps overhead
   const air=acAll.filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
-    .map(a=>({a, nm: a.dst!=null? a.dst : haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
+    .map(a=>({a, nm: (a._coasted||a.dst==null) ? haversineNm(loc,{lat:a.lat,lon:a.lon}) : a.dst})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
   let pick=null;
   for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,4)){
@@ -1529,7 +1552,8 @@ let amStations=null;
 async function ensureAmStations(){
   if(amStations) return amStations;
   try{ const d=await getJSON("https://api-v3.amtraker.com/v3/stations",12000); const m={};
-    for(const c in d){ const s=d[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }catch(e){ amStations={}; }
+    for(const c in d){ const s=d[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }
+  catch(e){ return {}; }          // not remembered: one failed fetch must not last the life of a kiosk
   return amStations;
 }
 async function produceAmtrakTrain(){
@@ -1537,7 +1561,9 @@ async function produceAmtrakTrain(){
   for(const arr of Object.values(data)) for(const t of (arr||[])){
     if(typeof t.lat!=="number"||typeof t.lon!=="number") continue;
     if(t.trainState && t.trainState!=="Active") continue;
-    list.push({t, mi: haversineNm(loc,{lat:t.lat,lon:t.lon})*1.15078});
+    const away=haversineNm(loc,{lat:t.lat,lon:t.lon})*1.15078;
+    // "Nearest train" from Amsterdam was an Amtrak 3,700 miles away over the Atlantic.
+    if(away<=600) list.push({t, mi:away});
   }
   list.sort((x,y)=>x.mi-y.mi);
   if(!list.length) return null;
@@ -1697,7 +1723,9 @@ async function fetchNycFleet(feedPaths, schedFile){
     if(!v.routeId && updates[v.tripId]) v.routeId = updates[v.tripId].routeId;   // LIRR: route_id lives on the TripUpdate
     const coord = typeof v.lat==="number" ? [v.lat,v.lon] : nycStationCoord(sched, v.stopId);
     if(!coord) return null;
-    return { v, lat:coord[0], lon:coord[1], nm:haversineNm(loc,{lat:coord[0],lon:coord[1]}),
+    // Miles, as these subjects are labelled, and as produceTrain() compares them to
+    // Amtrak's. This was nautical miles printed as miles.
+    return { v, lat:coord[0], lon:coord[1], nm:haversineNm(loc,{lat:coord[0],lon:coord[1]})*1.15078,
       stationName: nycStationName(sched, v.stopId), line: nycLineOf(v, sched) };
   }).filter(Boolean);
 }
@@ -1803,7 +1831,7 @@ let metroPosNight=null;          // circuitId -> {lat,lon,line}
    system does not change between refreshes. */
 async function ensureMetroPositions(key){
   if(metroPosNight) return metroPosNight;
-  metroPosNight={};
+  const built={};
   try{
     const [routes, stationsDoc] = await Promise.all([
       getJSON(`https://api.wmata.com/TrainPositions/StandardRoutes?contentType=json&api_key=${encodeURIComponent(key)}`, 15000),
@@ -1828,11 +1856,12 @@ async function ensureMetroPositions(key){
           ll={ lat:before.ll.lat+(after.ll.lat-before.ll.lat)*f,
                lon:before.ll.lon+(after.ll.lon-before.ll.lon)*f };
         }
-        if(c.CircuitId!=null) metroPosNight[c.CircuitId]={...ll, line:r.LineCode};
+        if(c.CircuitId!=null) built[c.CircuitId]={...ll, line:r.LineCode};
       });
     });
-  }catch(e){ /* leave the map empty; produceMetroTrain then simply finds nothing */ }
-  return metroPosNight;
+    metroPosNight=built;
+  }catch(e){ return built; }   // finds nothing this time, and asks again next time: one 429 used to end Metro for good
+  return built;
 }
 
 async function produceMetroTrain(){
@@ -1868,7 +1897,7 @@ async function produceMetroTrain(){
     color:LINE_COL[line]||"#8ab4ff",
     photoQuery:CITY_CFG.metroPhotoQuery||"WMATA Metrorail train",
     fleet:cand.slice(0,40).map(c=>({ t:`${c.line} Line`, s:`train ${c.t.TrainId||"?"}`,
-      nm:c.nm, unit:"nm", ll:c.ll })),
+      nm:c.nm, unit:"nm", dir:bearingFrom(loc,c.ll), ll:c.ll })),
     count:cand.length,
   };
 }
@@ -1991,8 +2020,8 @@ function roYmd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2
 // "Now" for schedule math, in the bundle's own timezone when it declares one
 // (s.tz, e.g. "Europe/Amsterdam") -- else the viewer's local clock (all US
 // bundles; unchanged). Same helper flipboard.html carries.
-function roNowParts(tz){
-  const d=new Date();
+function roNowParts(tz, agoMs){
+  const d=new Date(Date.now()-(agoMs||0));
   if(!tz) return { y:roYmd(d), dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
   const p={};
   new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",
@@ -2120,7 +2149,7 @@ async function produceMetroBus(){
     color:"#6aa9ff",
     photoQuery:CITY_CFG.metroBusPhotoQuery||"WMATA Metrobus",
     fleet:cand.slice(0,40).map(c=>({ t:`Route ${c.v.RouteID||"?"}`, s:c.v.TripHeadsign||"",
-      nm:c.nm, unit:"nm", ll:c.ll,
+      nm:c.nm, unit:"nm", dir:bearingFrom(loc,c.ll), ll:c.ll,
       x: typeof c.dev==="number" && Math.abs(Math.round(c.dev))>=2
          ? `${Math.abs(Math.round(c.dev))}m ${c.dev>0?"late":"early"}` : "on time" })),
     count:cand.length,
@@ -2146,11 +2175,14 @@ async function produceBus(){
   if(!s) return await produceMetroBus().catch(()=>null);
   const busSystem = CITY_CFG.localBusSystem;
   const nowP=roNowParts(s.tz), active=roActiveServices(s, nowP);
+  // Times past 1440 belong to the service day that started yesterday, so they are
+  // tested against yesterday's calendar: Friday's last bus still runs at 00:30 Saturday.
+  const yActive=roActiveServices(s, roNowParts(s.tz, 864e5));
   let best=null, inService=0; const cand=[];
   s.trips.forEach((tr,i)=>{
-    if(!active.has(tr.s)) return;
     const seq=tr.st; if(seq.length<2) return;
     for(const nowMin of [nowP.min, nowP.min+1440]){
+      if(!(nowMin===nowP.min?active:yActive).has(tr.s)) continue;
       if(nowMin < seq[0][1] || nowMin > seq[seq.length-1][1]) continue;
       let k=0; while(k<seq.length-1 && seq[k+1][1] <= nowMin) k++;
       const a=seq[k], b=seq[Math.min(k+1,seq.length-1)];
@@ -2621,11 +2653,12 @@ function render(s){
   if(s && s.none){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
     L.textContent = s.note || "Not available for this city";
-    renderMiniMap(null,null,null,null); return;
+    renderMiniMap(null,null,null,null); clearedSubject(); return;
   }
   if(!s){
     $("#flight").style.display="none"; L.style.display=""; L.classList.remove("pulse");
-    L.textContent = mode==="planes"?"No aircraft overhead":mode==="trains"?"No trains nearby":"No buses nearby";
+    L.textContent = mode==="planes"?"No aircraft overhead":mode==="trains"?"No trains nearby":mode==="iss"?"Can't place the ISS right now":"No buses nearby";
+    clearedSubject();
     return;
   }
   L.style.display="none";
@@ -2671,7 +2704,7 @@ function render(s){
     const u=s.unit||"nm", pctTxt=(s.progPct*100).toFixed(1)+"%";
     pv.style.display="block";
     $("#progFill").style.width=pctTxt; $("#progDot").style.left=pctTxt;
-    $("#progFlown").textContent=`${Math.round(s.progFlown).toLocaleString()} ${u} flown`;
+    $("#progFlown").textContent=`${Math.round(s.progFlown).toLocaleString()} ${u} ${mode==="planes"?"flown":"travelled"}`;
     $("#progPct").textContent=`${Math.round(s.progPct*100)}%`;
     $("#progToGo").textContent=`${Math.round(s.progToGo).toLocaleString()} ${u} to go`;
   } else pv.style.display="none";
@@ -2715,9 +2748,36 @@ function render(s){
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
+/* Nothing to show means nothing to dress up as. These two only ran for a subject,
+   so an empty sky — the quiet hours the room lights' 90-second restore exists for —
+   left the room in the last airline's colour all night, and the screen with it. */
+function clearedSubject(){
+  window.__lastSubject=null;
+  applyBrand(null);
+  driveLights(null);
+}
+
+/* Trains can outlast the 12s refresh, so results can land late and out of order.
+   One from a mode you have since left would be drawn, and logged, as the new mode. */
+let tickSeq=0, tickShown=0;
 async function tick(){
   const fn=PRODUCERS[mode]; if(!fn) return;
-  try{ render(await fn()); }catch(e){ /* keep last render */ }
+  const asked=mode, seq=++tickSeq;
+  try{
+    const s=await fn();
+    if(asked!==mode || seq<tickShown) return;
+    tickShown=seq;
+    render(s);
+  }catch(e){
+    if(asked!==mode) return;
+    /* Keep the last good screen. But with nothing on it yet, say so, or a feed that
+       is down reads as still searching — and let the lights' timer run. */
+    if(!window.__lastSubject){
+      const L=$("#loading"); L.classList.remove("pulse");
+      L.textContent="That feed isn't answering. Trying again shortly.";
+    }
+    driveLights(null);
+  }
 }
 
 /* ---- theme (color) + mode selection + settings panel ---- */
@@ -2728,6 +2788,9 @@ function setTheme(hex){
   localStorage.setItem("nightmode.accent", hex);
   document.querySelectorAll("#swatches .sw[data-hex]").forEach(el=>el.classList.toggle("active", el.dataset.hex.toLowerCase()===hex.toLowerCase()));
   applyPalette(hex);
+  // Airline colours borrow the screen from this. Without a repaint, picking an
+  // accent or a theme wiped them until the next carrier came along.
+  if(brandActive){ brandActive="__"; applyBrand(window.__lastSubject||null); }
 }
 /* The palette, without saving it as the user's choice. Airline colours borrow
    the screen for as long as that aircraft is the subject; the accent picked in
@@ -3001,11 +3064,15 @@ function gvRestoreBody(s){
   if(Number.isFinite(s.brightness) && s.brightness>0) p.brightness=s.brightness;
   return Object.keys(p).length ? p : null;
 }
-function gvRestore(){
-  const s=gvSnap(); if(!s) return;
-  gvSetSnap(null); lightHex="";
+/* The snapshot goes only once the light has taken it. Dropped up front, a restore
+   into an outage lost the one record of what the room looked like, when surviving
+   that is why it is on disk at all. Kept, the next load tries again. */
+async function gvRestore(){
+  const s=gvSnap(); lightHex=""; if(!s) return;
   const p=gvRestoreBody(s);
-  if(p) gvSet(p);
+  if(!p){ gvSetSnap(null); return; }
+  const r=await gvSet(p);
+  if(r && r.ok) gvSetSnap(null);
 }
 const gvRgbInt = (hex)=>{ const [r,g,b]=hexToRgb(hex); return (r<<16)|(g<<8)|b; };
 
@@ -3060,6 +3127,7 @@ window.addEventListener("pagehide", ()=>{
   const p=gvRestoreBody(s), body=gvBody(p); if(!p || !body) return;
   navigator.sendBeacon(u+"/set", new Blob([JSON.stringify(body)], {type:"text/plain"}));
   gvSetSnap(null);
+  lightHex="";    // a page restored from the back/forward cache must not think the room is still coloured
 });
 function gvMsg(m, kind){
   const el=document.getElementById("goveeMsg"); if(!el) return;
@@ -3081,14 +3149,17 @@ async function gvScan(){
   if(!lights.length){ gvMsg("No colour-capable lights on that account.", "bad"); return; }
   sel.innerHTML="";
   const cur=gvDev();
+  let curFound=false;
   lights.forEach(d=>{
     const o=document.createElement("option");
     o.value=JSON.stringify({sku:d.sku, device:d.device, name:d.name});
     o.textContent=d.name;
-    if(cur && cur.device===d.device) o.selected=true;
+    if(cur && cur.device===d.device){ o.selected=true; curFound=true; }
     sel.appendChild(o);
   });
-  if(!cur) try{ localStorage.setItem("tb.goveeDev", sel.value); }catch(e){}
+  // A saved light that has left the account: the picker must not name one light
+  // while the board keeps sending commands to another.
+  if(!curFound) try{ localStorage.setItem("tb.goveeDev", sel.value); }catch(e){}
   gvMsg(`${lights.length} light${lights.length>1?"s":""} found.`, "good");
 }
 function setGovee(v){
@@ -3145,7 +3216,7 @@ function setMode(m){
   mode=m; localStorage.setItem("nightmode.subject", m);
   $("#tag").textContent=TAGS[m]; $("#rangeLbl").textContent=RANGE[m];
   document.querySelectorAll("#modeSeg button").forEach(b=>b.classList.toggle("active", b.dataset.mode===m));
-  lastId=null; photoShownFor=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
+  lastId=null; photoShownFor=null; photoWant=null; $("#photoWrap").style.display="none"; $("#flight").style.display="none";
   if(miniVehLayer){ miniVehLayer.clearLayers(); miniVeh=null; miniVehKind=null; miniMapFor=null; }
   if(miniFleetLayer) miniFleetLayer.clearLayers();
   currentFleet=null; $("#fleetPanel").classList.remove("show");
@@ -3256,7 +3327,7 @@ function initFullscreen(){
 try{ if(fsDoc()!==document) fsDoc().addEventListener("fullscreenchange", onFsChange); }catch(e){}
   document.addEventListener("webkitfullscreenchange", onFsChange);
 try{ if(fsDoc()!==document) fsDoc().addEventListener("webkitfullscreenchange", onFsChange); }catch(e){}
-  document.addEventListener("keydown", e=>{ if((e.key==="f"||e.key==="F") && !/^(input|textarea)$/i.test(e.target.tagName)) toggleFullscreen(); });
+  document.addEventListener("keydown", e=>{ if((e.key==="f"||e.key==="F") && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(input|textarea|select)$/i.test(e.target.tagName)) toggleFullscreen(); });
   document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") requestWake(); });
   onFsChange();
   // Keep kiosk fullscreen across the ‹ board (and other) nav links: remember it
@@ -3311,6 +3382,9 @@ function boot(){
       gvMsg("Saved. Press Scan to find your lights."); };
     if(sc) sc.onclick=gvScan;
     if(sel) sel.onchange=()=>{ if(!sel.value) return;
+      // Before the switch, while gvBody still names the OLD light: it is the one
+      // wearing the colour, and the snapshot is of that room, not this one.
+      gvRestore();
       try{ localStorage.setItem("tb.goveeDev", sel.value); }catch(e){}
       lightHex=""; lightAt=0;                       // new light: let it take a colour at once
       gvMsg(JSON.parse(sel.value).name+" will follow what's overhead.", "good"); };
@@ -3330,7 +3404,11 @@ function boot(){
   // address you typed into the board with your device's raw location.
   if(navigator.geolocation && !boardLocIsManual()){
     navigator.geolocation.getCurrentPosition(p=>{
+      /* Zurich's Sky opened from Maryland is a question about Zurich. Same reasoning
+         as station.html's radius: a fix this far from the city says nothing about it. */
+      if(haversineNm(CFG.defaultLoc,{lat:p.coords.latitude,lon:p.coords.longitude})>130) return;
       loc={ lat:p.coords.latitude, lon:p.coords.longitude, label:"your location" };
+      planeMemory.clear();
       $("#loclbl").textContent="near your location"; tick(); updateSunSky(); updateMoon();
     }, ()=>{}, { enableHighAccuracy:false, timeout:8000, maximumAge:600000 });
   }
@@ -3341,6 +3419,6 @@ function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retry
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=7" defer></script>
+<script src="mascot-buddy.js?v=8" defer></script>
 </body>
 </html>

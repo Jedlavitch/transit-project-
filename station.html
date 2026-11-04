@@ -57,7 +57,7 @@
 <script src="config.js?v=2"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
-<script src="mta-live.js?v=1"></script>
+<script src="mta-live.js?v=2"></script>
 <style>
   *{box-sizing:border-box}
   html,body{height:100%; margin:0; overflow:hidden}
@@ -333,9 +333,17 @@ function nearestStation(lat, lon){
 }
 async function refresh(){
   if(!state.stopId) return;
-  let d;
+  const stop = state.stopId;
+  let d = null;
   try{ d = await TBMta.fetchAll(); }
-  catch(e){ return; }                        // keep the last good screen up
+  catch(e){ /* handled below */ }
+  if(stop !== state.stopId) return;          // the picker moved on; its own refresh is coming
+  state.loading = false;
+  /* fetchAll never rejects: with every feed down or rate limited it resolves to an
+     empty list. Taken at face value that was a fresh "no trains", and the sign
+     announced an empty platform with the time stamped as current. */
+  if(!d || !d.feedsOk){ state.failing = true; render(); return; }   // keep the last good screen up
+  state.failing = false;
   state.lastOk = Date.now();
   let arr = TBMta.arrivalsAt(d.updates, state.stopId, {horizonMin:40});
   if(state.dir) arr = arr.filter(a => a.dir === state.dir);
@@ -373,7 +381,9 @@ function render(){
 
   if(!arr.length){
     $("#msg").classList.remove("hide");
-    $("#msg").textContent = "No trains due at " + stationName(state.stopId) + " right now.";
+    $("#msg").textContent = state.loading ? "Loading trains at " + stationName(state.stopId) + "…"
+      : state.failing ? "Can't reach the MTA feed right now. Trying again."
+      : "No trains due at " + stationName(state.stopId) + " right now.";
     return;
   }
   $("#msg").classList.add("hide");
@@ -613,7 +623,7 @@ function onFsChange(){
   /* Going full screen changes the screen shape, which is the one input
      decideView() has — a 16:9 window that becomes a 16:9 screen stays put, but
      a maximised strip should flip to the countdown. */
-  decideView(); measurePicker(); render();
+  decideView(); measurePicker(); render(); setAdvisory($("#cAdvisory").textContent);
 }
 function hookFullscreen(){
   $("#fsBtn").innerHTML = SVG_EXPAND;
@@ -645,11 +655,17 @@ function fillPicker(){
   });
   sel.onchange = () => {
     state.stopId = sel.value;
+    /* The trains on screen belong to the old station. Left in place, its name went
+       up over their times until the fetch came back. */
+    state.data = null; state.loading = true; state.failing = false;
+    render();
     try{ localStorage.setItem("tb.stationStop", sel.value); }catch(_){}
     refresh();
     refreshWeather();          // a different station can be a different borough
   };
-  $("#viewPick").onchange = () => { decideView(); render(); };
+  /* The ticker measures zero while its format is hidden, so a long advisory never
+     started scrolling when you switched to the countdown: it just sat clipped. */
+  $("#viewPick").onchange = () => { decideView(); render(); setAdvisory($("#cAdvisory").textContent); };
 }
 
 /* Reserve exactly as much header gutter as the picker actually occupies. The

@@ -48,6 +48,13 @@
     let d = null;
     try { d = await r.json(); } catch (_) {}
     if (!r.ok || !d || d.ok === false) {
+      /* The server no longer knows this session: it expired, or a password change
+         signed this device out. Keeping the token left the page saying "Signed in"
+         above a Sync button that could only ever fail. Matched on the Worker's own
+         words, because a wrong password is also a 401 and must not sign anyone out. */
+      if (r.status === 401 && d && d.error === "not signed in") {
+        set(LS.session, ""); set(LS.email, ""); set(LS.hasPw, "");
+      }
       const msg = (d && d.error) || ("request failed (" + r.status + ")");
       const err = new Error(msg); err.status = r.status; throw err;
     }
@@ -74,6 +81,12 @@
   async function syncQuietly() {
     try { await TBAccount.sync(); } catch (_) {}
   }
+
+  function readTombs() {
+    try { const v = JSON.parse(localStorage.getItem("tb.spotTombs") || "{}"); return v && typeof v === "object" ? v : {}; }
+    catch (_) { return {}; }
+  }
+  function writeTombs(v) { try { localStorage.setItem("tb.spotTombs", JSON.stringify(v)); } catch (_) {} }
 
   /* Same merge rule as the Worker's, so a device that syncs and a device that
      doesn't end up agreeing rather than diverging. */
@@ -121,8 +134,8 @@
     /* Which doors this server actually has open. Cached for the page's life —
        it changes only when the Worker is reconfigured, and the sign-in screen
        asks for it on every repaint. Never throws: a server that can't be
-       reached is reported as code-only, which is what the app did before any
-       of this existed. */
+       reached is reported as code and password, the two doors that need no
+       redirect, so the form still has something to offer when it comes back. */
     _methods: null,
     async methods() {
       if (!configured()) return { code: false, password: false, google: false, apple: false };
@@ -274,11 +287,34 @@
     async sync() {
       if (!signedIn()) return null;
       const remote = (await api("/spots")).spots || [];
-      const merged = merge(readSpots(), remote);
-      writeSpots(merged);
-      const saved = await api("/spots", { method: "PUT", body: JSON.stringify({ spots: merged }) });
-      if (Array.isArray(saved.spots)) writeSpots(saved.spots);
-      return { count: (saved.spots || merged).length };
+      /* A union can only ever add, so a sighting deleted here came straight back
+         from the server on the next sync. Deletions travel as a stub carrying a
+         newer edit stamp: the Worker's merge already keeps the newer copy of an id
+         with no change on its side, and every other device learns of the delete
+         from it. Stubs stay off tb.spots, so nothing else ever has to know. */
+      const tombs = readTombs();
+      remote.forEach(x => { if (x && x.deleted && x.id && !tombs[x.id]) tombs[x.id] = x.edited || Date.now(); });
+      writeTombs(tombs);
+      const live = merge(readSpots(), remote).filter(x => !x.deleted && !tombs[x.id]);
+      writeSpots(live);
+      const stubs = Object.keys(tombs).map(id => ({ id, ts: tombs[id], edited: tombs[id], deleted: true }));
+      const saved = await api("/spots", { method: "PUT", body: JSON.stringify({ spots: live.concat(stubs) }) });
+      /* Merged with what is on the device NOW, not written over it: this round trip
+         takes a second or two on a phone, and a sighting logged during it existed
+         only here, so replacing the list with the server's answer deleted it. */
+      const tombsNow = readTombs();
+      const kept = merge(readSpots(), Array.isArray(saved.spots) ? saved.spots : [])
+        .filter(x => x && !x.deleted && !tombsNow[x.id]);
+      writeSpots(kept);
+      return { count: kept.length };
+    },
+
+    /* Call when a sighting is deleted, so the next sync can tell the others. */
+    forget(id) {
+      if (!id) return;
+      const tombs = readTombs();
+      tombs[id] = Date.now();
+      writeTombs(tombs);
     },
 
     _merge: merge,   // exposed for tests

@@ -70,7 +70,7 @@
   function setScope(v) { try { localStorage.setItem(LS.scope, v); } catch (_) {} render(); }
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const local = () => { try { return JSON.parse(localStorage.getItem(LS.spots) || "[]"); } catch (_) { return []; } };
+  const local = () => { try { const v = JSON.parse(localStorage.getItem(LS.spots) || "[]"); return Array.isArray(v) ? v : []; } catch (_) { return []; } };
   const feedUrl = () => { try { return (localStorage.getItem(LS.feed) || "").trim().replace(/\/+$/, ""); } catch (_) { return ""; } };
   const sheetUrl = () => { try { return (localStorage.getItem(LS.sheet) || "").trim(); } catch (_) { return ""; } };
   const isSheet = u => /script\.google\.com/i.test(u);
@@ -95,7 +95,11 @@
      URL in both places is all the setup there is); anything else is treated as a
      spotter-worker deployment. */
   function setFeedUrl(v) {
-    const u = String(v || "").trim().replace(/\/+$/, "");
+    /* A Worker URL pasted with its secret on the end: split it, or every read goes
+       to "...workers.dev?s=abc/feed" and fails. */
+    const secret = String(v || "").match(/[?&]s=([^&#]+)/);
+    if (secret) { try { localStorage.setItem("tb.spotFeedSecret", decodeURIComponent(secret[1])); } catch (_) {} }
+    const u = String(v || "").trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
     const id = parseBlobId(u);
     try {
       if (!u) { localStorage.setItem(LS.feed, ""); localStorage.setItem(LS.sheet, ""); localStorage.setItem(LS.blob, ""); }
@@ -157,18 +161,35 @@
      sitting in memory, so matching the log against them costs no extra request
      and no new permission — a sighting lights up the moment the same flight or
      tail number is overhead again. */
+  /* Identities only, and per mode. This pooled everything into one set and tested
+     the logged ROUTE against it, which went wrong three ways, all reading as "near
+     you, passing now" on a vehicle that wasn't:
+       - every WMATA prediction added its LINE, so any train logged as "RD" was
+         "your exact train" whenever any Red Line train existed;
+       - timetable fleets are keyed by array index (ms3, ro12), and stripping the
+         prefix left "3" and "12", so bus route 12 matched a MARC trip;
+       - nothing checked the mode, so a bus 29 could match train number 29.
+     What's left is what actually identifies one vehicle. */
+  const SYNTHETIC_FLEET_ID = /^(ms|ro)\d+$/;      // array positions, not vehicles
+  const FLEET_MODE = { plane: "plane", bus: "bus", metro: "train", marc: "train", amtrak: "train" };
   function liveIdents() {
-    const out = new Set();
-    const add = v => { const t = String(v == null ? "" : v).trim().toUpperCase(); if (t) out.add(t); };
+    const out = { plane: new Set(), train: new Set(), bus: new Set() };
+    const add = (m, v) => { const t = String(v == null ? "" : v).trim().toUpperCase(); if (t) out[m].add(t); };
     const s = (typeof state !== "undefined" && state) ? state : null;
     if (!s) return out;
-    try { (s._planes || []).forEach(a => { add(a.flight); add(a.r); }); } catch (_) {}
-    try { (s._amtrak || []).forEach(x => { const t = x && (x.t || x); add(t && (t.trainNum || t.trainID)); add(t && t.routeName); }); } catch (_) {}
-    try { (s._rail || []).forEach(p => { add(p && (p.TrainId || p.Line)); }); } catch (_) {}
-    // live vehicles already plotted on the map, whatever the system
+    try { (s._planes || []).forEach(a => { add("plane", a.flight); add("plane", a.r); }); } catch (_) {}
+    try { (s._amtrak || []).forEach(x => {
+      const t = x && (x.t || x); if (!t) return;
+      add("train", t.trainNum); add("train", t.trainID);
+      // one-tap logging on the phone saves the label, "Northeast Regional 171"
+      if (t.trainNum) add("train", (t.routeName || "Amtrak") + " " + t.trainNum);
+    }); } catch (_) {}
     try {
-      Object.keys(s.fleets || {}).forEach(mode => {
-        Object.keys(s.fleets[mode] || {}).forEach(id => add(String(id).replace(/^[a-z]+/i, "")));
+      Object.keys(s.fleets || {}).forEach(fleet => {
+        const m = FLEET_MODE[fleet]; if (!m) return;
+        Object.keys(s.fleets[fleet] || {}).forEach(id => {
+          if (!SYNTHETIC_FLEET_ID.test(id)) add(m, String(id).replace(/^[a-z]+/i, ""));
+        });
       });
     } catch (_) {}
     return out;
@@ -205,9 +226,14 @@
      serving a stop near you now. Kept apart because they deserve different words:
      one is your bus, the other is a bus. */
   function passState(sp, live, routes) {
-    const r = String(sp.route || "").trim().toUpperCase();
+    const raw = String(sp.route || "").trim().toUpperCase();
+    // one-tap writes "Route 29"; the board's badge says "29"
+    const r = raw.replace(/^(ROUTE|BUS)\s+/, "");
     const v = String(sp.vehicle || "").trim().toUpperCase();
-    if (live && live.size && ((r && live.has(r)) || (v && live.has(v)))) return "vehicle";
+    const ids = live && live[sp.mode];
+    // a route name only identifies one vehicle for planes and Amtrak, where the
+    // "route" logged is a flight or train number
+    if (ids && ((v && ids.has(v)) || (sp.mode !== "bus" && raw && ids.has(raw)))) return "vehicle";
     const set = routes && routes[sp.mode];
     if (set && r && set.has(r)) return "route";
     return "";
@@ -418,15 +444,10 @@
     input.focus();
   }
 
-  function trim(box) {                        // same "no scrollbar, no clipping" rule the boards use
-    // Guard exactly as the boards' own fitList() does: a box that hasn't been
-    // laid out yet reports ~0 height, and trimming against that deletes EVERY
-    // row (looks like "the card renders nothing"). Skip and let a later pass fit it.
-    if (!box || box.clientHeight < 8) return;
-    let guard = 0;
-    while (box.scrollHeight > box.clientHeight + 1 && box.lastElementChild && guard++ < 80)
-      box.removeChild(box.lastElementChild);
-  }
+  /* DELIBERATELY NOT TRIMMING, for the reason interesting.js gives. theme.css makes
+     every .list scroll, so deleting rows to fit only threw sightings away: on a short
+     card this cut a long log down to one row. */
+  function trim(/* box */) {}
 
   function render() {
     let hidden = false;
@@ -438,7 +459,8 @@
 
     // merge local + shared, newest first, de-duped by id
     const byId = {};
-    local().concat(remote).forEach(s => { if (s && s.id) byId[s.id] = s; });
+    // this device's own copy wins: the shared one may predate an edit made here
+    remote.concat(local()).forEach(s => { if (s && s.id) byId[s.id] = s; });
     const every = Object.values(byId).sort((a, b) => b.ts - a.ts);
 
     /* Scope to this board's own city. A sighting with no lat/lon (GPS refused
@@ -459,10 +481,21 @@
     const elsewhere = near ? placed.length - shown.length : 0;
     const unplaced = placed.filter(p => p.mi == null).length;
 
+    /* Called every 10 seconds, and rebuilding the rows also threw away the list's
+       scroll position and restarted the pulse. Redraw only when something changed. */
+    const liveNow = liveIdents(), routesNow = liveRoutes();
+    const liveSig = ["plane", "train", "bus"].map(m => [...liveNow[m]].sort().join() + "/" + [...routesNow[m]].sort().join()).join("|");
+    const sig = JSON.stringify([scope(), !!here, remoteErr, every.length, liveSig, isUnlocked(),
+      every.slice(0, 60).map(s => [s.id, s.ts, s.edited, s.route, s.vehicle, s.place, s.ridden, s.by]),
+      Math.floor(Date.now() / 60000)]);     // "3 min ago" still has to move
+    if (card.dataset.sig === sig) return;
+    card.dataset.sig = sig;
+
     const list = document.getElementById("spotList");
     const stat = document.getElementById("spotStat");
     const count = document.getElementById("spotCount");
     const scopeBtn = document.getElementById("spotScopeBtn");
+    const scrollWas = list.scrollTop;
     list.innerHTML = "";
     if (scopeBtn) {
       scopeBtn.textContent = near ? "near here" : "everywhere";
@@ -518,7 +551,7 @@
     /* Anything passing right now goes to the top and stays there — it is the one
        thing on this card you can still walk outside and look at. Everything else
        keeps its newest-first order. */
-    const live = liveIdents(), routes = liveRoutes();
+    const live = liveNow, routes = routesNow;
     const hot = {}; all.forEach(s => { hot[s.id] = passState(s, live, routes); });
     const rank = s => hot[s.id] === "vehicle" ? 2 : hot[s.id] === "route" ? 1 : 0;
     all.sort((a, b) => rank(b) - rank(a) || b.ts - a.ts);
@@ -558,6 +591,7 @@
       list.appendChild(row);
     });
     trim(list);
+    list.scrollTop = scrollWas;
   }
 
   async function pull() {

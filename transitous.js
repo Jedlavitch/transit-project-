@@ -253,10 +253,14 @@
       const st = await findStation(o.mainStation);
       if (st && !stops.some(x => x.id === st.id)) stops = [st].concat(stops).slice(0, (o.stops || 4) + 1);
     }
+    let failed = 0;
     const withDeps = await Promise.all(stops.map(async s => {
       try { return Object.assign({}, s, { deps: await departures(s.id, o.perStop || 12) }); }
-      catch (_) { return Object.assign({}, s, { deps: [] }); }
+      catch (_) { failed++; return Object.assign({}, s, { deps: [] }); }
     }));
+    /* Every stop failing is an outage or a rate limit, not an empty city. Returned as
+       [], the board cleared its cards and said nothing was leaving. */
+    if (stops.length && failed === stops.length) throw new Error("no stop answered");
     return withDeps.filter(s => s.deps.length);
   }
 
@@ -333,10 +337,12 @@
     let stops = await chStops(lat, lon, o.stops || 4);
     if (o.mainStation && !stops.some(s => s.name === o.mainStation))
       stops = [{ id: o.mainStation, name: o.mainStation, lat: lat, lon: lon }].concat(stops).slice(0, (o.stops || 4) + 1);
+    let failed = 0;
     const withDeps = await Promise.all(stops.map(async s => {
       try { return Object.assign({}, s, { deps: await chDepartures(s.id, o.perStop || 12) }); }
-      catch (_) { return Object.assign({}, s, { deps: [] }); }
+      catch (_) { failed++; return Object.assign({}, s, { deps: [] }); }
     }));
+    if (stops.length && failed === stops.length) throw new Error("no stop answered");
     return withDeps.filter(s => s.deps.length);
   }
 

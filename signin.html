@@ -12,7 +12,7 @@
 var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
 var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
 <script src="config.js?v=2"></script>
-<script src="account.js?v=2"></script>
+<script src="account.js?v=3"></script>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0; min-height:100%}
@@ -103,7 +103,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   <!-- ── ask for the code (no ?c= in the URL) ──────────────────────────── -->
   <div class="panel hide" id="stateCode">
     <label for="codeInput">The six characters on that screen</label>
-    <input id="codeInput" inputmode="latin" autocapitalize="characters" autocomplete="off"
+    <input id="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off"
            spellcheck="false" maxlength="8" placeholder="A1B2C3" />
     <button class="cta" id="codeGo" type="button">Continue</button>
     <div class="msg" id="codeMsg"></div>
@@ -176,6 +176,7 @@ function normCode(s) {
 }
 
 let CODE = "";
+let TYPED = false;      // typed here rather than arriving in the link
 
 function codeFromUrl() {
   const q = new URLSearchParams(location.search);
@@ -211,6 +212,9 @@ async function route() {
   }
 
   if (!info.found) {
+    /* Typed by hand this is as likely a slip as an expiry, and the page below has no
+       way back: one wrong character meant reloading to try again. */
+    if (TYPED) { askForCode("That code isn't active. Check it against the screen — codes last ten minutes."); return; }
     show("stateDone");
     $("doneTick").textContent = "⏱";
     $("doneTitle").textContent = "That code has expired";
@@ -219,6 +223,7 @@ async function route() {
   }
   if (info.done) {
     show("stateDone");
+    $("doneTick").textContent = "⚠︎";
     $("doneTitle").textContent = "That code has already been used";
     $("doneText").textContent = "If it wasn't you, change your password from Your account — that signs "
       + "every other device out.";
@@ -252,7 +257,7 @@ async function route() {
 $("codeGo").onclick = async () => {
   const c = normCode($("codeInput").value);
   if (c.length !== 6) return say("codeMsg", "That's six characters, like A1B2C3.", "bad");
-  CODE = c;
+  CODE = c; TYPED = true;
   say("codeMsg", "Checking…");
   await route();
 };
@@ -267,6 +272,8 @@ $("askGo").onclick = async () => {
     await TBAccount.pairApprove(CODE);
     show("stateDone");
   } catch (e) {
+    // This phone's own session has lapsed: the way on is to sign in again, not retry.
+    if (!TBAccount.signedIn()) { route(); return; }
     say("askMsg", e.message || "That didn't work.", "bad");
     btn.disabled = false; btn.textContent = "Sign in that screen";
   }
@@ -275,7 +282,15 @@ $("askGo").onclick = async () => {
 $("askNo").onclick = async () => {
   const btn = $("askNo");
   btn.disabled = true;
-  try { await TBAccount.pairDeny(CODE); } catch (_) {}
+  /* A rejection that never arrived must not report "that code is dead": the person
+     has just been warned someone may be phishing them, and it is still live. */
+  try { await TBAccount.pairDeny(CODE); }
+  catch (e) {
+    if (!TBAccount.signedIn()) { route(); return; }
+    btn.disabled = false;
+    say("askMsg", "That didn't reach the server, so the code is still live. Try again.", "bad");
+    return;
+  }
   show("stateDone");
   $("doneTick").textContent = "✕";
   $("doneTitle").textContent = "Rejected";

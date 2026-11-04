@@ -17,7 +17,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 <script src="config.js?v=2"></script>
 <script src="paywall.js"></script>
 <script src="license.js?v=3"></script>
-<script src="account.js?v=2"></script>
+<script src="account.js?v=3"></script>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0; min-height:100%}
@@ -61,7 +61,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
   .btns{display:flex; flex-wrap:wrap; gap:9px; margin-top:14px}
 
   input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
-    background:var(--row-bg); color:var(--text); font:600 15px inherit}
+    background:var(--row-bg); color:var(--text); font-family:inherit; font-size:15px; font-weight:600}
   input.code{font-family:ui-monospace,Menlo,monospace; letter-spacing:.28em; text-align:center;
     font-size:20px; font-weight:800}
   label{display:block; font-size:11px; font-weight:800; text-transform:uppercase;
@@ -225,8 +225,8 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
       <button class="btn danger" id="forgetBtn" type="button">Clear saved settings on this device</button>
     </div>
     <p class="note">This only clears what this browser has stored — themes, saved locations, your
-      licence key and your local sightings. It does not touch your account, cancel a licence, or
-      remove anything from any server.</p>
+      licence key and your local sightings — and signs this browser out. It does not touch your
+      account, cancel a licence, or remove anything from any server.</p>
     <div class="msg" id="devMsg"></div>
   </div>
 </div>
@@ -239,6 +239,13 @@ const LS = { key:"tb.license", dev:"tb.device", spots:"tb.spots", blob:"tb.spotB
 const get = k => { try { return localStorage.getItem(k) || ""; } catch(e){ return ""; } };
 function say(el, text, kind){ const e=$(el); if(!e) return; e.textContent=text||"";
   e.className = "msg" + (kind ? " " + kind : ""); }
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* Back to step one. Signing out after a code left the old code and "Code sent to…"
+   on screen, with nowhere to type an address. */
+function resetSignIn(){
+  $("#stepCode").classList.add("hide"); $("#stepEmail").classList.remove("hide");
+  $("#codeInput").value=""; authToken=""; say("#acctMsg","");
+}
 
 /* Come back to whichever board sent you here, when that is knowable. */
 (function backLink(){
@@ -352,17 +359,20 @@ $("#verifyBtn").onclick = async () => {
   const code = $("#codeInput").value.trim();
   if (!/^\d{6}$/.test(code)) return say("#acctMsg", "The code is six digits.", "bad");
   say("#acctMsg", "Checking…");
-  try { await TBAccount.verify(authToken, code); paintAccount(); paintSpots(); }
+  try { await TBAccount.verify(authToken, code); resetSignIn(); paintAccount(); paintSpots(); }
   catch (e) { say("#acctMsg", "That didn't work: " + e.message, "bad"); }
 };
 $("#syncBtn").onclick = async () => {
   say("#acctMsg2", "Syncing…");
   try { const r = await TBAccount.sync(); paintSpots();
         say("#acctMsg2", r ? `Synced — ${r.count} sightings.` : "Nothing to sync.", "good"); }
-  catch (e) { say("#acctMsg2", "Sync failed: " + e.message, "bad"); }
+  catch (e) {
+    say("#acctMsg2", "Sync failed: " + e.message, "bad");
+    if (!TBAccount.signedIn()) { await paintAccount(); say("#acctMsg", "That session has ended. Please sign in again.", "bad"); }
+  }
 };
 $("#signOutBtn").onclick = async () => {
-  await TBAccount.signOut(); paintAccount(); say("#acctMsg2", "Signed out. Your sightings are still here.", "good");
+  await TBAccount.signOut(); resetSignIn(); paintAccount(); say("#acctMsg2", "Signed out. Your sightings are still here.", "good");
 };
 
 /* ── Licence ──────────────────────────────────────────────────────────────
@@ -469,8 +479,8 @@ function paintPrefs(){
   $("#prefTheme").textContent = get(LS.theme) || "Dark (default)";
   const a = get(LS.accent);
   $("#prefAccent").innerHTML = a
-    ? `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${a};
-        vertical-align:-1px;margin-right:7px"></span><span class="mono">${a}</span>` : "Default";
+    ? `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${esc(a)};
+        vertical-align:-1px;margin-right:7px"></span><span class="mono">${esc(a)}</span>` : "Default";
   $("#prefRows").textContent = get(LS.rows) || "Normal";
 
   const found = {};
@@ -481,7 +491,8 @@ function paintPrefs(){
   }
   const ids = Object.keys(found).sort();
   const body = $("#cityRows");
-  if (!ids.length) return;
+  // Not an early return: after "Clear saved settings" the old cities stayed listed.
+  if (!ids.length) { body.innerHTML = '<tr><td colspan="3" style="color:var(--muted)">None yet.</td></tr>'; return; }
   body.innerHTML = "";
   ids.forEach(id => {
     let where = "—", hidden = "None";
@@ -489,7 +500,8 @@ function paintPrefs(){
     try { const h = JSON.parse(found[id].hiddenCards || "[]");
           if (h.length) hidden = h.length + " hidden"; } catch(e){}
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${CITY_NAMES[id] || id || "Washington DC"}</td><td>${where}</td><td>${hidden}</td>`;
+    // `where` can be an address someone typed.
+    tr.innerHTML = `<td>${esc(CITY_NAMES[id] || id || "Washington DC")}</td><td>${esc(where)}</td><td>${esc(hidden)}</td>`;
     body.appendChild(tr);
   });
 }
@@ -515,17 +527,23 @@ function paintDevice(){
    untouched, which is what the note under the button promises. */
 $("#forgetBtn").onclick = () => {
   const keys = [];
+  /* Left alone: what config.js owns, because it writes it straight back on the next
+     load and until then this page reports accounts as "not set up"; and the device
+     id, because a new id on the next licence check takes another of the five slots. */
+  let owned = {};
+  try { owned = JSON.parse(localStorage.getItem("tb.configWrote") || "{}") || {}; } catch(e){}
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i) || "";
+    if (k === "tb.configWrote" || k === LS.dev || owned[k]) continue;
     if (/^(tb\.|transitboard|nightmode\.|flipboard\.)/.test(k)) keys.push(k);
   }
   if (!keys.length) return say("#devMsg", "Nothing saved on this device.", "good");
   if (!confirm(`Clear ${keys.length} saved settings from this browser?\n\n`
-    + "This removes your themes, saved locations, licence key and local sightings from THIS device "
-    + "only. Your account and licence are not affected.")) return;
+    + "This removes your themes, saved locations, licence key and local sightings from THIS device, "
+    + "and signs this device out. Your account and licence are not affected.")) return;
   keys.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
   say("#devMsg", `Cleared ${keys.length} settings. Reload to start fresh.`, "good");
-  paintKey(); paintSpots(); paintPrefs(); paintDevice();
+  paintKey(); paintSpots(); paintPrefs(); paintDevice(); resetSignIn(); paintAccount();
 };
 
 /* license.js verifies on its own schedule; give it a moment to settle before

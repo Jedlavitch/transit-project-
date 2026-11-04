@@ -42,20 +42,20 @@
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=7" defer></script>
+<script src="mascot-buddy.js?v=8" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="fit-cards.js?v=22" defer></script>
+<script src="fit-cards.js?v=23" defer></script>
 <script src="screen-lock.js?v=2" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
-<script src="spotlog.js?v=13" defer></script>
-<script src="departures.js?v=1" defer></script>
-<script src="commute.js?v=6" defer></script>
-<script src="ontime.js?v=25" defer></script>
-<script src="ontime-tile.js?v=1" defer></script>
+<script src="spotlog.js?v=14" defer></script>
+<script src="departures.js?v=2" defer></script>
+<script src="commute.js?v=7" defer></script>
+<script src="ontime.js?v=26" defer></script>
+<script src="ontime-tile.js?v=2" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
-<script src="interesting.js?v=1" defer></script>
+<script src="interesting.js?v=2" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return /^tb\.(theme|accent|rows|style)$/.test(k)?TBBoardPreferences.get(k.slice(3)):localStorage.getItem(k)},d=document.documentElement;
 var t=g("tb.theme")||g("transitboard.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
@@ -894,7 +894,20 @@ const kmToMi = km => km*0.621371;
    "timetable out of date" warning about a file that had in fact been refreshed
    in the repo days before. The bundle was fine; the copy in the browser was
    not. San Francisco and Boston already did this; everyone else does now. */
+/* WMATA allows 10 calls a second per key and answers 429 past that. A board fires
+   most of its feeds in the same instant at startup and on every shared tick, and
+   the failures were swallowed: the bus card announced no buses were coming, and
+   three of them in a row made feed-backoff.js park the whole host, Metro included.
+   So WMATA requests leave one at a time, just under that limit. */
+const WMATA_GAP_MS=125;
+let wmataNextAt=0;
+function wmataSlot(){
+  const now=Date.now(), at=Math.max(now,wmataNextAt);
+  wmataNextAt=at+WMATA_GAP_MS;
+  return at>now ? new Promise(r=>setTimeout(r,at-now)) : null;
+}
 async function getJSON(url, timeout=12000, cache){
+  if(String(url).indexOf("https://api.wmata.com/")===0) await wmataSlot();
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
   try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
   finally{ clearTimeout(t); }
@@ -1745,13 +1758,21 @@ async function ensureBusStops(){
 async function fetchBus(){
   if(!state.wmataKey){ $("#busList").innerHTML=""; $("#busList").appendChild(el("div","empty",needsSetupMsg("Add a WMATA key (⚙︎) to see live bus times.","Live bus times aren\u2019t available on this board."))); return; }
   await ensureBusStops();
-  const box=$("#busList"); box.innerHTML="";
-  let any=false, predCount=0, soonest=null;
+  /* Built off-screen and swapped in at the end. This loop makes two requests per
+     stop in sequence, and clearing the card first left it blank for all of them on
+     every refresh. It also keeps the old rows if the feed fails, below. */
+  const shown=$("#busList"), box=document.createDocumentFragment();
+  let any=false, predCount=0, soonest=null, failed=0;
   const busDeps=[];   // this render's rows for the commute countdown
   for(const stop of state.busStops){
     let pred={}, sched={};
-    try{ pred = await getJSON(wmata(`NextBusService.svc/json/jPredictions?StopID=${stop.StopID}`)); }catch(e){}
-    try{ sched= await getJSON(wmata(`Bus.svc/json/jStopSchedule?StopID=${stop.StopID}`)); }catch(e){}
+    try{ pred = await getJSON(wmata(`NextBusService.svc/json/jPredictions?StopID=${stop.StopID}`)); }catch(e){ failed++; }
+    /* A day's timetable does not change every 30 seconds, and refetching it was over
+       a third of this board's WMATA traffic against a daily quota. */
+    if(!stop.schedAt || Date.now()-stop.schedAt>600000){
+      try{ stop.sched=await getJSON(wmata(`Bus.svc/json/jStopSchedule?StopID=${stop.StopID}`)); stop.schedAt=Date.now(); }catch(e){}
+    }
+    sched=stop.sched||{};
     const preds=(pred.Predictions||[]).slice(0,4);
     const schedByRoute=nextScheduledByRoute(sched.ScheduleArrivals||[]);
     if(!preds.length && !Object.keys(schedByRoute).length) continue;
@@ -1786,11 +1807,17 @@ async function fetchBus(){
       });
     }
   }
-  if(!any) box.appendChild(el("div","empty","No buses predicted at nearby stops right now."));
+  /* A request that failed is not an empty stop. The two used to read the same, so a
+     burst of rate-limited calls at startup announced that no buses were coming. */
+  if(failed && failed===state.busStops.length && shown.querySelector(".row")) return;
+  if(!any) box.appendChild(el("div","empty", failed
+    ? "Metrobus isn't answering right now. Trying again shortly."
+    : "No buses predicted at nearby stops right now."));
+  shown.innerHTML=""; shown.appendChild(box);
   state._busPreds=predCount; state._busNext=soonest;   // stats strip reads these
   if(window.TBDep) TBDep.feed("bus", busDeps);
   $("#busCount").textContent = state.busStops.length? `${state.busStops.length} stops nearby` : "";
-  fitList(box);
+  fitList(shown);
 }
 function nextScheduledByRoute(arrivals){
   const now=Date.now(), out={};

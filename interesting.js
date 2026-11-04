@@ -200,23 +200,23 @@
     }
   }
 
+  /* The key this board's own loadHiddenCards() reads, found by watching it read.
+     Every board's key is a literal inside its own loader. This used to take the
+     first transitboard*.hiddenCards in localStorage, but all eleven boards share
+     one origin, so on a device that had opened two of them the x wrote to the
+     OTHER board's list and the card simply stayed on screen. */
   function boardHiddenKey() {
+    var found = "", proto = Storage.prototype, real = proto.getItem;
     try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (/^transitboard[a-z]*\.hiddenCards$/.test(k)) return k;
-      }
-    } catch (_) {}
-    /* Nothing saved yet on this board, so derive the namespace from another key
-       it definitely owns (every board writes its own .loc or .theme eventually);
-       failing that, fall back to the private flag by returning "". */
-    try {
-      for (var j = 0; j < localStorage.length; j++) {
-        var m = /^(transitboard[a-z]*)\./.exec(localStorage.key(j));
-        if (m) return m[1] + ".hiddenCards";
-      }
-    } catch (_) {}
-    return "";
+      proto.getItem = function (k) {
+        if (/hiddenCards$/.test(String(k))) found = String(k);
+        return real.apply(this, arguments);
+      };
+      /* eslint-disable-next-line no-undef */
+      if (typeof loadHiddenCards === "function") loadHiddenCards();
+    } catch (_) {
+    } finally { proto.getItem = real; }
+    return found;
   }
 
   /* ---- storage ------------------------------------------------------------
@@ -292,14 +292,23 @@
     }
   }
 
+  /* Days this token was seen BEFORE today. rec.d already includes today once the
+     first pass has run, so reading it raw made a sighting less rare twenty
+     seconds after it appeared, and told people "only the 3rd day" on the 2nd. */
+  function priorDays(rec) {
+    return rec.last === today() ? (rec.d || 1) - 1 : (rec.d || 0);
+  }
+
   /* Rarity of one token, 0..1, where 1 is "this board has never shown it". */
   function rarity(c, token) {
     var rec = c[token];
     if (!rec) return 1;
-    if (rec.d <= 1) return 0.75;
-    if (rec.d <= 2) return 0.55;
-    if (rec.d <= 4) return 0.35;
-    if (rec.d <= 8) return 0.18;
+    var d = priorDays(rec);
+    if (d <= 0) return 1;
+    if (d <= 1) return 0.75;
+    if (d <= 2) return 0.55;
+    if (d <= 4) return 0.35;
+    if (d <= 8) return 0.18;
     return 0.05;
   }
 
@@ -473,7 +482,12 @@
      answer and does not depend on guessing from a model name. The type list is
      the fallback for feeds that omit the category, and covers the machines that
      actually orbit a city: police, air ambulance, news, tour. */
-  var HELI_TYPES = /^(B06|B07|B27|B29|B37|B39|B42|B429|B430|B47|EC[0-9]|EC[35]\d|H[0-9]{2}|A109|A119|A139|A169|A189|AS[0-9]{2}|AS3[25]|R22|R44|R66|S76|S92|S64|UH1|H60|H500|MD5\d|MD90|GAZL|EN28|EXPL|NH90|TIGR)/;
+  /* Whole codes, anchored at both ends. This was a bare prefix match, which read
+     B39M and B37M (the 737 MAX 9 and 7) as Bell helicopters, H25B (a Hawker
+     bizjet) as one too and MD90 (an airliner) as well -- and with no entry for
+     B407 it missed the most common police helicopter in the country. In the
+     default airline-only scope that dropped every MAX 9 from the leaderboard. */
+  var HELI_TYPES = /^(B06T?|B105|B212|B222|B230|B407|B412|B427|B429|B430|B47[A-Z]?|B505|BK17|EC[0-9]{2}|H[0-9]{2}|H[12][0-9]{2}|H500|A109|A119|A129|A139|A149|A169|A189|AS[0-9]{2}|AS3B|R22|R44|R66|S61|S64|S70|S76|S92|UH1[A-Z]?|MD52|MD60|GAZL|EN28|EN48|EXPL|LYNX|NH90|TIGR)$/;
   function isRotor(a) {
     if (clean(a.category).toUpperCase() === "A7") return true;
     return HELI_TYPES.test(clean(a.t).toUpperCase());
@@ -629,8 +643,9 @@
      proper nouns — "only the 2nd day with a PSA Airlines" is not English. */
   function rarePhrase(c, token, subject, useArticle) {
     var rec = c[token], art = useArticle ? article(subject) + " " : "";
-    if (!rec) return "the first " + subject + " this board has shown";
-    if (rec.d <= 2) return "only the " + ord(rec.d + 1) + " day with " + art + subject;
+    var prior = rec ? priorDays(rec) : 0;
+    if (prior <= 0) return "the first " + subject + " this board has shown";
+    if (prior <= 2) return "only the " + ord(prior + 1) + " day with " + art + subject;
     return art + subject + ", which is rare here";
   }
 
@@ -845,6 +860,10 @@
       var card = cards[k], id = card.id || "";
       if (id === "planeCard" || id === "amtrakCard" || id === "spotCard" ||
           id === "leaderCard" || id === "alertCard") continue;
+      /* Not vehicles at all: elevator status, the on-time record and the commute
+         countdown all draw .row elements, which this reads as trains, so a broken
+         lift could win the day as rail. */
+      if (id === "liftCard" || id === "ontimeCard" || id === "commuteCard") continue;
       if (card.classList.contains("user-hidden")) continue;
       var label = cardLabel(card) || id.replace(/Card$/, "");
       if (isBusCard(id, label)) continue;
@@ -878,6 +897,9 @@
     for (var city in box.cities) {
       var list = box.cities[city] || [];
       if (!list.length) continue;
+      /* If the write below ever fails (a full quota), the old box is still there
+         on the next pass and would be archived again, every twenty seconds. */
+      if (arch.some(function (a) { return a && a.day === box.day && a.city === city; })) continue;
       arch.unshift({ day: box.day, city: city, entry: list[0] });
     }
     write(LS.archive, arch.slice(0, ARCHIVE_MAX * CITIES.length));
@@ -996,16 +1018,50 @@
   var BLOB_API = "https://jsonblob.com/api/jsonBlob/";
   function blobId() { try { return clean(localStorage.getItem(LS.blob)); } catch (_) { return ""; } }
 
+  /* What this device knows, laid over what the shared list already holds.
+
+     This used to PUT its own box straight over the blob, so "pooling" two screens
+     meant each erased the other every five minutes, and the daily post read
+     whichever had written last. Cities this device has never run are kept as they
+     are; a city both have seen is a union by id, keeping each entry's best score. */
+  function mergeShared(mine, theirs) {
+    var cities = {};
+    if (theirs && theirs.day === mine.day && theirs.cities && typeof theirs.cities === "object") {
+      Object.keys(theirs.cities).forEach(function (c) {
+        if (Array.isArray(theirs.cities[c])) cities[c] = theirs.cities[c];
+      });
+    }
+    Object.keys(mine.cities || {}).forEach(function (c) {
+      var into = (cities[c] || []).filter(function (e) {
+        return e && e.id && typeof e.score === "number" && isFinite(e.score);
+      });
+      (mine.cities[c] || []).forEach(function (e) {
+        for (var i = 0; i < into.length; i++) {
+          if (into[i].id === e.id) { if (e.score > into[i].score) into[i] = e; return; }
+        }
+        into.push(e);
+      });
+      cities[c] = capPerKind(into);
+    });
+    return cities;
+  }
+
   function publish(box) {
     var id = blobId();
     if (!id) return;
-    var payload = { kind: "transit-leaders", v: 1, day: box.day, updated: new Date().toISOString(), cities: box.cities };
-    try {
-      fetch(BLOB_API + id, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }).catch(function () {});
-    } catch (_) {}
+    var url = BLOB_API + id;
+    /* Cannot read it, so do not write it: overwriting the pool blind is the bug
+       above, and the next attempt is only five minutes away. */
+    fetch(url, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (theirs) {
+        return fetch(url, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "transit-leaders", v: 1, day: box.day,
+            updated: new Date().toISOString(), cities: mergeShared(box, theirs) })
+        });
+      })
+      .catch(function () {});
   }
 
   /* ---- the card on the board --------------------------------------------- */

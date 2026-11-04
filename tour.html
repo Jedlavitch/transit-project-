@@ -7,6 +7,9 @@
      before any other script can start a feed. Deferred would run after the
      page's own inline code had already begun fetching. -->
 <script src="feed-backoff.js?v=1"></script>
+<!-- Copies the aircraft feed into tb.adsbUrl. Without it this page only had planes
+     for someone who had already opened a board in this browser. -->
+<script src="config.js?v=2"></script>
 <script src="paywall.js"></script>
 <script src="license.js?v=3" defer></script>
 <!-- Restarts a board that has been up for days, but only once it has just
@@ -510,7 +513,7 @@ async function ensureAmtrakShapes(){
     const data=await getJSON("amtrak-routes.json",15000);
     const m={}; for(const name in data) m[normAmtrakName(name)]=data[name];
     amtrakShapes=m;
-  }catch(e){ amtrakShapes={}; }
+  }catch(e){ return {}; }      // not remembered: one failed fetch must not last the life of a kiosk
   return amtrakShapes;
 }
 
@@ -565,15 +568,24 @@ function pathProgress(path, p){
 /* ===================== route + photo lookups (planes) ==================== */
 const routeCache = (()=>{ try{ return JSON.parse(localStorage.getItem("tour.routes")||"{}"); }catch(e){ return {}; } })();
 const photoCache = (()=>{ try{ return JSON.parse(localStorage.getItem("tour.photos")||"{}"); }catch(e){ return {}; } })();
-const saveRoutes=()=>{ try{ localStorage.setItem("tour.routes", JSON.stringify(routeCache)); }catch(e){} };
-const savePhotos=()=>{ try{ localStorage.setItem("tour.photos", JSON.stringify(photoCache)); }catch(e){} };
+/* Every callsign ever seen used to stay in these forever. The site shares one
+   localStorage quota, so a tour left running would eventually fill it and take
+   the Spotter log's next save down with it. */
+function trimCache(c, ttl, max){
+  const now=Date.now();
+  Object.keys(c).forEach(k=>{ if(!c[k] || now-c[k].t>ttl) delete c[k]; });
+  const ks=Object.keys(c);
+  if(ks.length>max) ks.sort((a,b)=>c[a].t-c[b].t).slice(0,ks.length-max).forEach(k=>delete c[k]);
+}
+const saveRoutes=()=>{ trimCache(routeCache,216e5,300); try{ localStorage.setItem("tour.routes", JSON.stringify(routeCache)); }catch(e){} };
+const savePhotos=()=>{ trimCache(photoCache,30*864e5,200); try{ localStorage.setItem("tour.photos", JSON.stringify(photoCache)); }catch(e){} };
 async function lookupRoute(cs){
   if(!cs) return null; const hit=routeCache[cs]; if(hit && Date.now()-hit.t<216e5) return hit.v;
   try{ const d=await getJSON(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(cs)}`);
     const fr=d&&d.response&&d.response.flightroute;
     const v=fr?{airline:fr.airline,origin:fr.origin,destination:fr.destination}:null;
     routeCache[cs]={t:Date.now(),v}; saveRoutes(); return v;
-  }catch(e){ routeCache[cs]={t:Date.now(),v:null}; return null; }
+  }catch(e){ routeCache[cs]={t:Date.now()-216e5+3e5,v:null}; return null; }   // a blip: ask again in 5 min, not 6 h
 }
 /* adsbdb stores ONE canonical direction per callsign while airlines reuse the
    number for the return leg, so a flight is often shown flying its route
@@ -686,7 +698,11 @@ async function planeSubject(stop, pin){
   const {loc}=stop;
   const data=await getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${RADIUS_NM}`);
   const air=(coastPlanes(data.ac||[])).filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
-    .map(a=>({a, nm:a.dst!=null?a.dst:haversineNm(loc,{lat:a.lat,lon:a.lon})})).sort((x,y)=>x.nm-y.nm);
+    /* planeMemory is shared by every city on the tour, so a coasted aircraft can
+       belong to the LAST stop. Its dst was measured from there too: trusted, an
+       airliner on approach to DCA sorted as the nearest traffic over Philadelphia. */
+    .map(a=>({a, nm:(a._coasted||a.dst==null)?haversineNm(loc,{lat:a.lat,lon:a.lon}):a.dst}))
+    .filter(x=>x.nm<=RADIUS_NM+5).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
   let pick=null;
   if(pin){
@@ -732,7 +748,8 @@ async function ensureAmtrak(){
     amStations?Promise.resolve(null):getJSON("https://api-v3.amtraker.com/v3/stations",15000).catch(()=>({})),
   ]);
   amTrains=tr; amAt=Date.now();
-  if(st){ const m={}; for(const c in st){ const s=st[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; } amStations=m; }
+  if(st){ const m={}; for(const c in st){ const s=st[c]; if(typeof s.lat==="number") m[c]=[s.lat,s.lon]; }
+    if(Object.keys(m).length) amStations=m; }   // a failed lookup is retried; {} would have stuck for good
 }
 async function amtrakSubject(stop, pin){
   await ensureAmtrak(); const {loc}=stop, st=amStations||{}, list=[];
@@ -801,8 +818,8 @@ async function ensureBundle(file){
   bundleCache[file]=s; return s;
 }
 function ymd(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
-function nowParts(tz){
-  const d=new Date();
+function nowParts(tz, agoMs){
+  const d=new Date(Date.now()-(agoMs||0));
   if(!tz) return { y:ymd(d), dow:(d.getDay()+6)%7, min:d.getHours()*60+d.getMinutes() };
   const p={}; new Intl.DateTimeFormat("en-US",{timeZone:tz,hour12:false,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",weekday:"short"})
     .formatToParts(d).forEach(x=>{ if(x.type!=="literal") p[x.type]=x.value; });
@@ -831,11 +848,17 @@ function minClock(min){ if(typeof min!=="number") return ""; const m=((Math.roun
   return new Date(2000,0,1,Math.floor(m/60),m%60).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 async function schedSubject(stop, pin){
   const s=await ensureBundle(stop.src); if(!s) return null;
-  const p=nowParts(s.tz), active=activeServices(s,p); let best=null, running=0;
+  // The US bundles carry no tz of their own; the stop knows which city it is in.
+  const tz=s.tz||stop.tz, p=nowParts(tz), active=activeServices(s,p);
+  /* A time past 1440 belongs to the service day that STARTED yesterday. Testing it
+     against today's calendar lost Friday's last trains at 00:30 on Saturday, and
+     invented a Sunday-night train on Sunday morning. */
+  const yActive=activeServices(s, nowParts(tz,864e5)); let best=null, running=0;
   s.trips.forEach(tr=>{
     if(pin && tr!==pin.trip) return;   // stay mode: track only the pinned trip
-    if(!active.has(tr.s)) return; const seq=tr.st; if(seq.length<2) return;
+    const seq=tr.st; if(seq.length<2) return;
     for(const now of [p.min, p.min+1440]){
+      if(!(now===p.min?active:yActive).has(tr.s)) continue;
       if(now<seq[0][1] || now>seq[seq.length-1][1]) continue;
       let k=0; while(k<seq.length-1 && seq[k+1][1]<=now) k++;
       const a=seq[k], b=seq[Math.min(k+1,seq.length-1)], ca=s._coord[a[0]], cb=s._coord[b[0]]; if(!ca||!cb) break;
@@ -1044,7 +1067,9 @@ function present(s){
     // so the tour never lingers zoomed out over nothing.
     if(Math.abs(map.getZoom()-tz)>0.5) map.setView(ctr, tz, {animate:false});
   }, 2800);
-  map.flyTo(ctr, tz, {duration:2.6, easeLinearity:.25});
+  /* Leaflet throws from a map with no size (a tour loaded in a hidden frame). Nothing
+     below this line would then run, including the countdown, and the tour just stops. */
+  try{ map.flyTo(ctr, tz, {duration:2.6, easeLinearity:.25}); }catch(e){ flying=false; }
   animateDashes();
   startDrift();
   fillCard(s);
@@ -1212,7 +1237,8 @@ function loadPref(k){ try{ return JSON.parse(localStorage.getItem(k)||"null")||{
 let cityPref=loadPref("tour.cities"), modePref=loadPref("tour.modes");
 function savePrefs(){ try{ localStorage.setItem("tour.cities",JSON.stringify(cityPref));
   localStorage.setItem("tour.modes",JSON.stringify(modePref)); }catch(e){} }
-function stopEnabled(st){ return cityPref[st.cityKey]!==false && modePref[st.kind]!==false; }
+function stopEnabled(st){ return cityPref[st.cityKey]!==false && modePref[st.kind]!==false
+  && (st.src!=="plane" || !!adsbBase()); }   // no feed: these can never play, so don't queue them
 function activeIdx(){
   const a=STOPS.map((_,i)=>i).filter(i=>stopEnabled(STOPS[i]));
   return a.length ? a : STOPS.map((_,i)=>i);
@@ -1244,7 +1270,17 @@ function flash(city){ $("#flashBig").textContent=city; $("#flash").classList.add
 function unflash(){ $("#flash").classList.remove("show"); }
 
 function advanceNext(){ oi=(oi+1)%order.length; if(oi===0) buildOrder(); advance(); }
+/* Only ever arm the countdown through here. skip, back and a stop that finished
+   loading all used to arm it regardless, so a paused tour carried on touring. */
+function armHold(ms){
+  clearTimeout(holdTimer);
+  if(!paused && !stay) holdTimer=setTimeout(advanceNext, ms==null?holdMs:ms);
+}
+let advanceSeq=0;
 async function advance(){
+  /* Skip while the last stop is still loading starts a second run of this. Without
+     the token both finish: two stops flash past and two countdowns are armed. */
+  const seq=++advanceSeq;
   clearTimeout(holdTimer); cancelAnimationFrame(ringRAF);
   endStay();
   if(oi>=order.length) oi=0;         // order can shrink when filters change
@@ -1257,44 +1293,57 @@ async function advance(){
     const stop=STOPS[order[oi]];
     if(!(nextPrefetch && nextPrefetch.used)) flash(stop.city);
     s=await fetchSubject(stop);
+    if(seq!==advanceSeq) return;
     if(!s){ oi=(oi+1)%order.length; tries++; if(oi===0) buildOrderKeepPos(); }
   }
   unflash();
   if(!s){ // nothing anywhere right now — wait and retry
     holdTimer=setTimeout(advance, 4000); return;
   }
+  renderQueue();     // stops with nothing running were skipped; the "now" chip has to say so
   if(cur){ hist.push(cur); if(hist.length>14) hist.shift(); }
   present(s);
   startRing();
   prefetchNext();
-  holdTimer=setTimeout(advanceNext, holdMs);
-  holdStart=Date.now();
+  armHold();
 }
-function buildOrderKeepPos(){ const seen=order.slice(0,oi); order=seen.concat(shuffle(activeIdx())); }
+/* Keeps what has played AND what is playing, so the "now" chip goes on naming the
+   thing on screen after a filter changes. */
+function buildOrderKeepPos(){
+  const seen=order.slice(0,oi+1), cur=order[oi];
+  order=seen.concat(shuffle(activeIdx().filter(i=>i!==cur)));
+}
 async function prefetchNext(){
   const idx=order[(oi+1)%order.length]; const stop=STOPS[idx];
   try{ const subject=await fetchSubject(stop); nextPrefetch={idx, subject, used:true}; }catch(e){ nextPrefetch=null; }
 }
-function startRing(){
+function startRing(resume){
   const C=$("#ringC"), R=18.5, LEN=2*Math.PI*R; C.style.strokeDasharray=LEN;
   const tick=()=>{ const el=Math.min(1,(Date.now()-holdStart)/holdMs); C.style.strokeDashoffset=(LEN*el).toFixed(1);
     if(el<1 && !paused) ringRAF=requestAnimationFrame(tick); };
-  holdStart=Date.now(); ringRAF=requestAnimationFrame(tick);
+  if(!resume) holdStart=Date.now();
+  cancelAnimationFrame(ringRAF); ringRAF=requestAnimationFrame(tick);
 }
 
 /* ===================== controls ======================================== */
+/* The countdown stops while paused. Time spent paused used to count against the
+   stop, so a pause longer than one stop ended in an instant jump the moment it
+   was released — and the ring restarted full while only seconds were really left. */
+let pausedAt=0;
 function togglePause(){ paused=!paused; $("#pauseBtn").textContent=paused?"▶":"⏸";
-  if(paused){ clearTimeout(holdTimer); cancelAnimationFrame(ringRAF); }
-  else if(!stay){ const left=Math.max(0,holdMs-(Date.now()-holdStart)); holdStart=Date.now()-(holdMs-left);
-    holdTimer=setTimeout(advanceNext, left); startRing(); } }
+  if(paused){ pausedAt=Date.now(); clearTimeout(holdTimer); cancelAnimationFrame(ringRAF); }
+  else if(!stay){ holdStart+=Date.now()-pausedAt;
+    armHold(Math.max(0,holdMs-(Date.now()-holdStart))); startRing(true); } }
 function skip(){ clearTimeout(holdTimer); advanceNext(); }
 function goBack(){
   if(!hist.length) return;
   clearTimeout(holdTimer); cancelAnimationFrame(ringRAF); endStay();
   nextPrefetch=null;
+  advanceSeq++;                      // a stop still loading must not land on top of this one
+  unflash();
   present(hist.pop());               // its pos kept drifting while stored — resumes seamlessly
   startRing();
-  holdTimer=setTimeout(advanceNext, holdMs);
+  armHold();
 }
 
 /* ---- stay mode: hold the tour on this vehicle, keep its data LIVE ----
@@ -1307,7 +1356,7 @@ function setStayUI(on){ const b=$("#stayBtn"); b.classList.toggle("on",on);
   b.title=on?"Resume the tour (S)":"Stay with this vehicle (S)"; }
 function endStay(){ if(!stay) return; stay=false; clearInterval(stayTimer); setStayUI(false); }
 function toggleStay(){
-  if(stay){ endStay(); holdStart=Date.now(); holdTimer=setTimeout(advanceNext, holdMs); startRing(); return; }
+  if(stay){ endStay(); startRing(); armHold(); return; }
   if(!cur || !cur.ref) return;
   stay=true; stayMiss=0; setStayUI(true);
   clearTimeout(holdTimer); cancelAnimationFrame(ringRAF);
@@ -1345,7 +1394,7 @@ function buildSettings(){
     l.classList.toggle("on",cityPref[k]!==false);
     savePrefs(); buildOrderKeepPos(); renderQueue();
   });
-  const MODES=["plane","train","bus","tram"];
+  const MODES=[["plane","Planes"],["train","Trains"],["bus","Buses"],["tram","Trams"]];
   const mc=$("#modeChecks");
   mc.innerHTML=MODES.map(([k,lbl])=>`<label data-k="${k}" class="${modePref[k]!==false?"on":""}">${lbl}</label>`).join("");
   mc.querySelectorAll("label").forEach(l=> l.onclick=()=>{
@@ -1397,6 +1446,7 @@ function boot(){
   $("#backBtn").onclick=goBack; $("#stayBtn").onclick=toggleStay;
   $("#setBtn").onclick=()=>$("#settings").classList.toggle("show");
   document.addEventListener("keydown",e=>{ if(/^(input|textarea)$/i.test(e.target.tagName)) return;
+    if(e.metaKey||e.ctrlKey||e.altKey) return;   // Cmd-F is find and Cmd-L the address bar, not this page's F and L
     if(e.key===" "){ e.preventDefault(); togglePause(); } else if(e.key==="ArrowRight") skip();
     else if(e.key==="ArrowLeft") goBack();
     else if(e.key==="s"||e.key==="S") toggleStay();

@@ -40,22 +40,22 @@
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=7" defer></script>
+<script src="mascot-buddy.js?v=8" defer></script>
 <script src="tour-guide.js?v=2" defer></script>
 <script src="worker-health.js?v=1"></script>
-<script src="fit-cards.js?v=22" defer></script>
+<script src="fit-cards.js?v=23" defer></script>
 <script src="screen-lock.js?v=2" defer></script>
 <script src="atlasrows.js?v=1" defer></script>
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
-<script src="transitous.js?v=2"></script>
-<script src="spotlog.js?v=13" defer></script>
+<script src="transitous.js?v=3"></script>
+<script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=2" defer></script>
-<script src="departures.js?v=1" defer></script>
-<script src="commute.js?v=6" defer></script>
-<script src="ontime.js?v=25" defer></script>
-<script src="ontime-tile.js?v=1" defer></script>
+<script src="departures.js?v=2" defer></script>
+<script src="commute.js?v=7" defer></script>
+<script src="ontime.js?v=26" defer></script>
+<script src="ontime-tile.js?v=2" defer></script>
 <script src="weather-radar.js?v=1" defer></script>
 <script>/* pre-paint: apply the shared saved look so city switches don't flash colors */
 (function(){try{var g=function(k){return /^tb\.(theme|accent|rows|style)$/.test(k)?TBBoardPreferences.get(k.slice(3)):localStorage.getItem(k)},d=document.documentElement;
@@ -1926,7 +1926,11 @@ async function refreshTransit(){
   try{
     stops = await TBTransitous.cityBoard(state.loc.lat, state.loc.lon,
       {stops:4, perStop:14, source:CFG.transitSource, mainStation:CFG.mainStation});
-  }catch(e){ stops=[]; }
+  }catch(e){
+    // A failed refresh keeps the last good departures; only a first load has nothing to keep.
+    if(state._transit && state._transit.length) return;
+    stops=[];
+  }
   state._transit=stops;
 
   // one flat list of departures, each remembering which stop it leaves from

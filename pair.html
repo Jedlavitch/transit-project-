@@ -8,6 +8,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Transit Project — Unlock a screen</title>
 <link rel="stylesheet" href="theme.css?v=35" />
+<script>/* pre-paint: same look as every other page, on day and OLED themes too */
+(function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
+var t=g("tb.theme");if(t&&t!=="dark")d.setAttribute("data-theme",t);
+var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</script>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0; min-height:100%}
@@ -103,6 +107,7 @@
     <div id="haveKey" class="hide">
       <p class="keyline">Using the licence on this phone: <b id="keyMask">—</b></p>
       <button class="cta" id="unlockBtn">Unlock that screen</button>
+      <button class="ghost" id="otherKeyBtn" type="button">Use a different key</button>
     </div>
 
     <div id="needKey" class="hide">
@@ -207,8 +212,11 @@
     api("GET", "/pair/check?code=" + encodeURIComponent(c)).then(function (d) {
       if (!d.ok || !d.found) {
         show("askCode", true); show("approve", false);
+        // Scanned, then a flaky connection: Continue should be one tap, not six characters.
+        $("codeInput").value = pretty(c);
         say("codeMsg", d.error === "offline"
           ? "Couldn’t reach the licence server. Check your connection and try again."
+          : d.error === "rate_limited" ? explain(d)
           : "That code isn’t active. Codes last ten minutes — ask the screen for a new one.", "bad");
         return;
       }
@@ -224,8 +232,8 @@
       show("approve", true);
       $("codeShow").textContent = pretty(c);
       var k = (get(LS_KEY) || "").trim().toUpperCase();
-      if (k) { show("haveKey", true); $("keyMask").textContent = maskKey(k); }
-      else { show("needKey", true); }
+      show("haveKey", !!k); show("needKey", !k);
+      if (k) $("keyMask").textContent = maskKey(k);
     });
   }
 
@@ -245,8 +253,18 @@
         return;
       }
       say("msg", explain(d), "bad");
+      /* A dead code cannot be fixed from this panel, and neither can a dead key while
+         the panel only offers that key: both used to leave one button that kept failing. */
+      if (d.error === "unknown_code" || d.error === "already_used") {
+        show("approve", false); show("askCode", true);
+        $("codeInput").value = "";
+        say("msg", ""); say("codeMsg", explain(d), "bad");
+      } else if (d.error === "unknown_key" || d.error === "revoked" || d.error === "expired") {
+        show("haveKey", false); show("needKey", true);
+      }
     });
   }
+  $("otherKeyBtn").onclick = function () { show("haveKey", false); show("needKey", true); say("msg", ""); $("keyInput").focus(); };
   $("unlockBtn").onclick = function () { unlock(this, get(LS_KEY)); };
   $("unlockBtn2").onclick = function () { unlock(this, $("keyInput").value); };
 
@@ -254,7 +272,7 @@
     switch (d.error) {
       case "device_limit":
         return "That licence is already on its limit of " + (d.limit || 5) + " devices. "
-             + "Open Profile on a device you no longer use and clear its saved settings, then try again.";
+             + "Email info@transitproject.online and we’ll free one up.";
       case "unknown_key":   return "That key wasn’t recognised. Check it against your purchase email.";
       case "expired":       return "That licence has expired.";
       case "revoked":       return "That licence is no longer active.";

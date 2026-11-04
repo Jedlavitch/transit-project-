@@ -197,8 +197,13 @@ def main():
 
     now = datetime.datetime.now(datetime.timezone.utc)
     # US Eastern is where every line this watches runs; a poll just after midnight
-    # UTC belongs to the previous local day, not the next one.
-    eastern = now - datetime.timedelta(hours=5)
+    # UTC belongs to the previous local day, not the next one. A real zone, because a
+    # fixed five hours filed the first hour of every summer day under the day before.
+    try:
+        from zoneinfo import ZoneInfo
+        eastern = now.astimezone(ZoneInfo("America/New_York"))
+    except Exception:
+        eastern = now - datetime.timedelta(hours=5)
     day = eastern.date().isoformat()
 
     archive = {}
