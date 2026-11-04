@@ -18,6 +18,14 @@
    ============================================================================ */
 window.TB_CONFIG = {
 
+  /* Optional MOTIS trip-planning service. Blank uses Transitous for the
+     current free prototype. Transitous permits noncommercial open-source
+     apps only; use an authorized provider before commercial release.
+     See JOURNEYS.md. No private keys belong in this public file. */
+  journeyApi: "",
+  journeyProviderName: "", // Attribution for a custom routing provider
+  journeyProviderUrl: "",  // HTTPS attribution link for that provider
+
   /* ---- the licensed feed proxy (feed-proxy-worker.js) ------------------- */
   feedProxy: "",          // https://tb-feeds.yourname.workers.dev
   licence:   "",          // TB-XXXXX-XXXXX-XXXXX-XXXXX
