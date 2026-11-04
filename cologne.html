@@ -751,6 +751,13 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
 
     <div class="accent-lbl">Display size</div>
     <div class="theme-row" id="zoomRow">
+      <!-- Auto first, and it is the default: it fits the board's own 1600x900
+           design box to the screen, which on a television means the desktop
+           board scaled up rather than a tighter layout enlarged. It also has
+           to EXIST: picking any size writes tb.uiZoom and auto never applies
+           again, so a set that was told to "pick 150% or 175%" under the old
+           advice had no way back to a fitted board. This is that way back. -->
+      <button type="button" class="theme-btn" data-zoom="auto">Auto</button>
       <button type="button" class="theme-btn" data-zoom="0.8">80%</button>
       <button type="button" class="theme-btn" data-zoom="0.9">90%</button>
       <button type="button" class="theme-btn" data-zoom="1">100%</button>
@@ -2792,12 +2799,25 @@ function applyDisplay(zoom, padPct){
   d.style.setProperty("--ui-zoom", String(zoom));
   // percentage of the SHORTER side, so the inset looks even on any aspect ratio
   d.style.setProperty("--safe-pad", padPct>0 ? padPct+"vmin" : "0px");
-  document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.zoom)-zoom)<0.001));
+  /* Auto is lit when nothing is saved, and then no number is lit: the board is
+     following the fit, not sitting on the rung that happens to match it today.
+     parseFloat("auto") is NaN, so the numeric test below can never light it. */
+  let savedZoom=null; try{ savedZoom=localStorage.getItem("tb.uiZoom"); }catch(e){}
+  document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>b.classList.toggle("active",
+    b.dataset.zoom==="auto" ? savedZoom==null
+                            : savedZoom!=null && Math.abs(parseFloat(b.dataset.zoom)-zoom)<0.001));
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>b.classList.toggle("active", Math.abs(parseFloat(b.dataset.pad)-padPct)<0.001));
   paintZoomAuto(zoom);
   setTimeout(()=>{ if(state.map){ state.map.invalidateSize(); } if(typeof fitAll==="function") fitAll(); }, 120);
 }
-function setBoardZoom(z){ localStorage.setItem("tb.uiZoom", String(z)); applyDisplay(z, curPad()); }
+function setBoardZoom(z){
+  /* "auto" CLEARS the key rather than writing a number, so the board keeps
+     re-fitting on resize -- which is what the resize listener below already
+     gates on tb.uiZoom being absent. Writing today's fitted number instead
+     would look identical and then freeze at the next screen change. */
+  if(z==="auto"){ try{ localStorage.removeItem("tb.uiZoom"); }catch(e){} applyDisplay(autoDisplay().z, curPad()); return; }
+  localStorage.setItem("tb.uiZoom", String(z)); applyDisplay(z, curPad());
+}
 function setBoardPad(p){ localStorage.setItem("tb.safePad", String(p)); applyDisplay(curZoom(), p); }
 /* First open on a TV looked enormous: TV browsers report a small CSS viewport
    (often 1280x720) for a big panel, so a layout designed around ~1600x900 gets
@@ -2863,7 +2883,7 @@ function paintZoomAuto(active){
       ? "Set by hand: <b>"+pct(parseFloat(saved))+"</b>. Auto would pick "+pct(auto.z)+"."
       : "Auto: <b>"+pct(auto.z)+"</b>, and in use.") +
     "<br>" + innerWidth+"\u00d7"+innerHeight + " \u00b7 " +
-    (tv ? "recognised as a television" : "not recognised as a television \u2014 if this IS one, pick 150% or 175% above");
+    (tv ? "recognised as a television" : "not recognised as a television \u2014 if this IS one, Auto still fits the whole board; pick 150% or 175% only if the type is too small from the sofa");
 }
 
 function autoDisplay(){
@@ -2873,14 +2893,27 @@ function autoDisplay(){
      of a wall-mounted 4K panel showed a full desktop-density board — correct,
      and useless from the room it was in.
 
-     So the two cases get different design targets. A desk fits 1600x900 and may
-     only ever shrink. A television fits 1280x720 — the size the format was
-     designed around — and may only ever grow: 1.5x on a 1080p panel, 3x on a
-     4K one. Capping both at 100% was the bug; it meant the auto-fit could
-     rescue a small screen and never a distant one. */
+     The first answer to that gave a television its OWN design target, 1280x720,
+     and grew it to fill the panel — 1.5x at 1080p, 3x at 4K. It made the type
+     big enough, but it bought that with a different board: 1280x720 is 36% less
+     room than the 1600x900 the board is designed in, so the cards column lost a
+     column and fit-cards.js spent the difference trimming departures off the
+     bottom. What reached the wall was the tablet layout enlarged, not the
+     desktop one — and on Atlas, where .atlas-tight fires above 1.4x, it also
+     took Alerts off the screen outright.
+
+     So BOTH cases now fit the same 1600x900 design box, and only the clamp
+     differs: a desk may only ever shrink from it, a television may only grow.
+     The board is laid out once and scaled, which is the whole point — what the
+     wall shows is the screen from the laptop, bigger. 1600x900 is 16:9, so on
+     any 16:9 panel this lands exactly with nothing letterboxed: 1.2x at 1080p,
+     1.6x at 1440p, 2.4x at 4K.
+
+     The cost is honest and uniform: type is 0.8x what the old target gave
+     (1.2 against 1.5 at 1080p). The 150%/175%/200% rungs are still there for a
+     room that needs them, and Auto below puts it back. */
   const tv  = looksLikeTv();
-  const fit = tv ? Math.min(viewportW()/1280, viewportH()/720)
-                 : Math.min(viewportW()/1600, viewportH()/900);
+  const fit = Math.min(viewportW()/1600, viewportH()/900);
   const hi  = tv ? 3   : 1;
   /* The "don't shrink past 70%" floor is a legibility preference, not a
      guarantee, so it must never ask for more room than the viewport actually
@@ -3012,7 +3045,7 @@ function buildVehIconButtons(){
   document.querySelectorAll("#vehIconRow .theme-btn").forEach(b=>{ b.onclick=()=>setVehIcons(b.dataset.vehicons); });
 }
 function buildDisplayButtons(){
-  document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(parseFloat(b.dataset.zoom)); });
+  document.querySelectorAll("#zoomRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardZoom(b.dataset.zoom==="auto" ? "auto" : parseFloat(b.dataset.zoom)); });
   document.querySelectorAll("#padRow .theme-btn").forEach(b=>{ b.onclick=()=>setBoardPad(parseFloat(b.dataset.pad)); });
 }
 
