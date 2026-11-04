@@ -48,7 +48,10 @@ SEPTA_TRANSITV  = "https://www3.septa.org/api/TransitView/index.php"
 
 KEEP_DAYS   = 90     # the archive is the durable copy; the board only draws 14
 ON_TIME_MAX = 6      # under six minutes late, the same bar ontime.js applies
-SANE_LATE   = 90     # past an hour and a half it is a parsing fault, not a delay
+SANE_LATE   = 90     # SEPTA: past an hour and a half it is sentinel garbage (late:998)
+# Amtrak's figure comes from its own scheduled and actual times, and long-distance
+# trains really do run hours behind. Same ceiling as ontime.js and delays.js.
+AMTRAK_SANE_LATE = 1440
 
 SEPTA_METRO_NAME = {"L": "Market-Frankford", "B": "Broad Street", "T": "Subway-Surface",
                     "M": "Norristown", "G": "Girard", "D": "Media-Sharon Hill"}
@@ -76,12 +79,12 @@ def band_of(m):
     return 0 if m <= 0 else 1 if m <= 5 else 2 if m <= 14 else 3 if m <= 29 else 4
 
 
-def usable(v):
+def usable(v, limit=SANE_LATE):
     try:
         m = float(v)
     except (TypeError, ValueError):
         return None
-    if m != m or abs(m) > SANE_LATE:      # NaN or beyond the sane bound
+    if m != m or abs(m) > limit:          # NaN or beyond the sane bound
         return None
     return int(round(m))
 
@@ -112,7 +115,7 @@ def amtrak_rows():
                     datetime.datetime.fromisoformat(sch)).total_seconds() / 60.0
         except Exception:
             continue
-        m = usable(mins)
+        m = usable(mins, AMTRAK_SANE_LATE)
         if m is None:
             continue
         name = (t.get("routeName") or "Amtrak").strip() or "Amtrak"

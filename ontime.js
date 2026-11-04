@@ -184,6 +184,12 @@
      A board opts in by calling, once per refresh, with one row per vehicle:
        TBOnTime.late([{ id, label, mode, color, late }, ...])   */
   var LATE_ON_TIME = 6;      // SEPTA calls Regional Rail on time inside 5:59
+  var LATE_LIMIT = 90;       // minutes; past this a reported delay is no data
+  /* Amtrak's figure is worked out from its own scheduled and actual times, and its
+     long-distance trains really do run hours behind. At 90 those trains vanished from
+     the record, on one night's feed 17 of 95, and the routes read better for it.
+     Same ceiling as delays.js's AMTRAK_LIMIT. */
+  var AMTRAK_LATE_LIMIT = 1440;
   var LATE_BANDS = ["≤0", "1–5", "6–14", "15–29", "30+"];
   function lateBandOf(m) { return m <= 0 ? 0 : m <= 5 ? 1 : m <= 14 ? 2 : m <= 29 ? 3 : 4; }
   var lateHist = read(LS.late, {});
@@ -349,9 +355,10 @@
     rows.forEach(function (r) {
       if (!r || !r.id) return;
       var m = Number(r.late);
-      // Same sanity bound delays.js uses: past an hour and a half it is a
-      // parsing fault, not a delay.
-      if (!isFinite(m) || Math.abs(m) > 90) return;
+      // Same rule delays.js uses: the ceiling belongs to the feed. Past an hour and
+      // a half SEPTA's figure is sentinel garbage (late:998); a row whose feed really
+      // does run hours behind says so with its own `limit`.
+      if (!isFinite(m) || Math.abs(m) > (r.limit || LATE_LIMIT)) return;
       if (!by[r.id]) by[r.id] = { meta: [r.label || r.id, r.mode || "", r.color || "", r.badge || ""], v: [] };
       if (by[r.id].sealed) { by[r.id].sealed = false; by[r.id].v = []; by[r.id].st = [0, 0, 0]; }
       by[r.id].v.push(Math.round(m));
@@ -373,7 +380,7 @@
       if (r.statusKnown) b.known = 1;
       if (r.cancelled) { b.st[2] += 1; return; }
       var lm = Number(r.late);
-      if (!isFinite(lm) || Math.abs(lm) > 90) return;   // no figure = no verdict
+      if (!isFinite(lm) || Math.abs(lm) > (r.limit || LATE_LIMIT)) return;   // no figure = no verdict
       if (Math.round(lm) >= LATE_ON_TIME) b.st[1] += 1; else b.st[0] += 1;
     });
 
@@ -475,7 +482,7 @@
       var name = String(t.routeName || "Amtrak").trim() || "Amtrak";
       out.push({
         id: "amtrak|" + name, label: name, badge: amtrakBadge(name),
-        mode: "train", color: "var(--amtrak,#3ad0c8)", late: m,
+        mode: "train", color: "var(--amtrak,#3ad0c8)", late: m, limit: AMTRAK_LATE_LIMIT,
         // amtraker drops a cancelled train from the feed rather than flagging
         // it, so there is no cancelled share to claim here.
         statusKnown: false,
