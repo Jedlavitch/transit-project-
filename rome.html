@@ -648,7 +648,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         <span style="color:#2563eb">▦ bus</span>
         <span style="color:#5ad17a">▦ boat</span>
         <!-- [ADD-A-SYSTEM] legend swatch: one <span style="color:#XXX">▦ YourSystem</span> per system -->
-        <span id="posNote" style="opacity:.7">positions from the timetable · zoom in for labels</span>
+        <span id="posNote" style="opacity:.7">positions from the timetable</span>
       </div>
     </div>
 
@@ -2070,8 +2070,8 @@ function romeGpsLive(){ return !!(state._gps && Date.now()-state._gps.at < ROME_
 function syncRomePosNote(){
   const note=$("#posNote"); if(!note) return;
   note.textContent = romeGpsLive()
-    ? "buses & trams: live GPS, Roma Mobilità · metro & trains: timetable · zoom in for labels"
-    : "positions from the timetable · zoom in for labels";
+    ? "buses & trams: live GPS, Roma Mobilità · metro & trains: timetable"
+    : "positions from the timetable";
 }
 
 /* Trenitalia's own record fills in the trains Transitous only has a timetable
