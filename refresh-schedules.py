@@ -18,6 +18,11 @@ WHAT IT DOES
     .github/workflows/schedule-refresh.yml) and the bundles keep themselves
     current; run it by hand when you want to know where things stand.
 
+    The bundle's last date is not enough on its own. A feed can publish light
+    rail into next year and heavy rail only to next month, and then the bundle
+    reads healthy while every NEC train is gone (NJ Transit, October 2026). So
+    each line is also dated separately: see stopped_lines().
+
 USAGE
     python3 refresh-schedules.py              # report only (default)
     python3 refresh-schedules.py --fix        # regenerate what needs it
@@ -74,6 +79,18 @@ GENERATORS = {
     "njt-state-rail-schedule.json": "gen-njt-state.py",
 }
 
+# A line is reported when its own dates stop at least this many days before the
+# bundle's last date. Shorter gaps are just calendar shape: a weekday line in a
+# feed that ends on a Saturday, or a weekend line that ends a week early.
+LINE_GAP_DAYS = 21
+# ...and only if it ran on at least this many days, or a quarter of the bundle's
+# days if that is fewer (Amsterdam publishes 31 days, so a line 21 days short of
+# the end cannot have run 14). Below that it is event or seasonal service whose
+# end means nothing: Meadowlands Rail runs 1-3 game days per feed, Foxboro 5. A
+# long season (a summer Friday-Sunday service, say) still clears this and gets
+# reported. Better a person looks once than a line vanishes.
+LINE_MIN_DAYS = 14
+
 
 def ymd(d):
     return d.strftime("%Y%m%d")
@@ -114,6 +131,57 @@ def active_on(bundle, day):
     return len(active)
 
 
+def service_dates(bundle):
+    """service id -> every date it runs, by the same rules as active_on()."""
+    out = {}
+    for sid, v in (bundle.get("svc") or {}).items():
+        try:
+            day = datetime.datetime.strptime(v["start"], "%Y%m%d").date()
+            end = datetime.datetime.strptime(v["end"], "%Y%m%d").date()
+            mask = v["dow"]
+            dates = out.setdefault(sid, set())
+            while day <= end:
+                if mask[day.weekday()]:
+                    dates.add(ymd(day))
+                day += datetime.timedelta(days=1)
+        except (KeyError, IndexError, TypeError, ValueError):
+            continue
+    for date, ex in (bundle.get("exc") or {}).items():
+        for sid in (ex or {}).get("rem", []):
+            out.get(sid, set()).discard(date)
+        for sid in (ex or {}).get("add", []):
+            out.setdefault(sid, set()).add(date)
+    return out
+
+
+def stopped_lines(bundle, today, days_window):
+    """Lines whose own dates run out well before the rest of their bundle.
+
+    -> [{"line", "end", "days"}], earliest end first. A line counts once it is
+    within days_window of its last date, the same warning the whole bundle gets.
+    Compact ("v":2) bundles spell a trip's line `l` instead of `line`.
+    """
+    dates = service_dates(bundle)
+    lines = {}
+    for trip in bundle.get("trips") or []:
+        line = trip.get("line") or trip.get("l")
+        if line:
+            lines.setdefault(line, set()).update(dates.get(trip.get("s"), ()))
+    ends = [max(d) for d in lines.values() if d]
+    if not ends:
+        return []
+    last = datetime.datetime.strptime(max(ends), "%Y%m%d").date()
+    min_days = min(LINE_MIN_DAYS, len(set().union(*lines.values())) // 4)
+    out = []
+    for line, days in lines.items():
+        if len(days) < min_days or not days:
+            continue
+        end = datetime.datetime.strptime(max(days), "%Y%m%d").date()
+        if (last - end).days >= LINE_GAP_DAYS and (end - today).days <= days_window:
+            out.append({"line": line, "end": max(days), "days": len(days)})
+    return sorted(out, key=lambda r: (r["end"], r["line"]))
+
+
 def audit(days_window):
     """Report on every bundle we know how to rebuild."""
     today = datetime.date.today()
@@ -132,6 +200,7 @@ def audit(days_window):
             continue
         end = coverage_end(bundle)
         today_count = active_on(bundle, today)
+        lines = stopped_lines(bundle, today, days_window)
         if end is None:
             state, left = "unknown", None
         else:
@@ -139,12 +208,21 @@ def audit(days_window):
             left = (end_date - today).days
             if today_count == 0:
                 state = "EXPIRED"
-            elif left <= days_window:
+            elif left <= days_window or lines:
                 state = "expiring"
             else:
                 state = "ok"
-        rows.append({"name": name, "state": state, "end": end, "left": left, "today": today_count})
+        rows.append({"name": name, "state": state, "end": end, "left": left, "today": today_count,
+                     "lines": lines})
     return rows
+
+
+def lines_summary(lines):
+    """'NEC, RARV to 20261010; BNTN to 20261009', latest-stopping group last."""
+    by_end = {}
+    for r in lines:
+        by_end.setdefault(r["end"], []).append(r["line"])
+    return "; ".join(f"{', '.join(names)} to {end}" for end, names in sorted(by_end.items()))
 
 
 def run_generator(script):
@@ -188,6 +266,8 @@ def main():
         mark = {"EXPIRED": "!!", "expiring": " *", "missing": "!!", "unreadable": "!!"}.get(r["state"], "  ")
         print(f" {mark} {r['name']:<{width}}  {r['state']:<10} ends {end}  {left}"
               f"   ({r['today']} services today)")
+        if r.get("lines"):
+            print(f"      lines stopping early: {lines_summary(r['lines'])}")
 
     stale = [r for r in rows if r["state"] in ("EXPIRED", "expiring", "missing", "unreadable")]
 
@@ -224,11 +304,18 @@ def main():
     broken = [r for r in after if r["state"] in ("EXPIRED", "missing", "unreadable")]
     for r in broken:
         print(f"  still {r['state']}: {r['name']} (ends {r['end']}) -- feed URL or format may have changed")
-    horizon = [r for r in after if r["state"] == "expiring"]
+    # A line still stopping early after a rebuild is different news from a short
+    # horizon: the agency's own feed has dropped it, and the "--days 0" gate in CI
+    # will fail on it once its last date has passed.
+    early = [r for r in after if r.get("lines")]
+    for r in early:
+        print(f"  lines stopping early in the agency's own feed: {r['name']} "
+              f"({lines_summary(r['lines'])}, bundle runs to {r['end']})")
+    horizon = [r for r in after if r["state"] == "expiring" and not r.get("lines")]
     if horizon:
         print("  short agency horizon (rebuilt, nothing more to get): "
               + ", ".join(f"{r['name'].replace('-schedule.json','')} to {r['end']}" for r in horizon))
-    if not broken and not horizon:
+    if not broken and not horizon and not early:
         print("  all bundles current")
     if failed:
         print(f"\n{len(failed)} generator(s) failed: {', '.join(failed)}")
