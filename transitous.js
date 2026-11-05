@@ -279,6 +279,13 @@
         lineTextColor: t.routeTextColor ? "#" + String(t.routeTextColor).replace(/^#/, "") : null,
         platform: (t.place && (t.place.track || t.place.scheduledTrack)) || "",
         tripId: t.tripId || "",          // needed to locate the vehicle (see nearestVehicle)
+        /* WHO is running it. Carried for the mainline fleets, where the
+           operator is half the identity of the service and the map draws it as
+           a wordmark (operator-logos.js). The field is often a joint-venture
+           partner rather than the brand on the train -- an ICE through Arnhem
+           arrives filed under "Nederlandse Spoorwegen" -- so it is passed
+           through raw and the resolving is left to one place. */
+        agency: t.agencyName || "",
         /* Where this train STARTED and where it ENDS, each carrying its own
            IANA zone. That zone is what tells the international card a train is
            leaving the country — see isInternational(). Kept as the raw objects

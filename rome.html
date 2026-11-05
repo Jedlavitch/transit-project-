@@ -41,6 +41,7 @@
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="vehicle-icons.js?v=5"></script>
+<script src="operator-logos.js?v=2"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -54,7 +55,7 @@
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
-<script src="transitous.js?v=6"></script>
+<script src="transitous.js?v=7"></script>
 <script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=3" defer></script>
 <script src="departures.js?v=2" defer></script>
@@ -1106,6 +1107,38 @@ function labelIcon(color, label, mode){
   return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
     html:`<div style="position:relative">${mark}${chip}</div>` });
 }
+
+/* ---------- mainline markers: the operator, then the train ----------------
+   The long-distance and international fleets get a two-row plaque instead of
+   the one-line chip the trams use: the operating railway's wordmark on top, in
+   that railway's own colours, and the service number and destination
+   underneath. operator-logos.js explains why -- the operator is the first fact
+   a traveller wants from an intercity train and the one thing neither the
+   marker's shape nor its colour could carry.
+
+   HOME_OPERATOR is this board's own railway, and it is used for exactly one
+   job: resolving a bare "IC" or "EC" off the map feed, which carries a route
+   name and no agency at all. A code that names its own railway -- ICE, EST,
+   TGV, FR, NJ -- never reaches it.
+
+   Falls back to the ordinary chip when the script is missing or when nothing
+   can name the railway, so deleting operator-logos.js leaves a working board
+   rather than a blank map. */
+const HOME_OPERATOR = "TRENITALIA";
+function operatorIcon(color, service, dest, agency, mode){
+  const label=[service,dest].filter(Boolean).join(" \u2192 ");
+  if(!window.TBOp || !TBOp.has(agency, service, HOME_OPERATOR))
+    return labelIcon(color, label, mode);
+  const glyph=(mode && vehGlyphsOn() && window.TBVeh) ? TBVeh.glyphHTML(mode, color, 15) : "";
+  const mark=glyph || `<span style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;
+        background:${color};border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.6)"></span>`;
+  // the plaque clears the marker it hangs off, so it moves when the marker grows
+  const plaque=state.labelsOn
+    ? TBOp.plaqueHTML({agency, service, dest, color, home:HOME_OPERATOR, left: glyph?13:9})
+    : "";
+  return L.divIcon({ className:"veh-icon", iconSize:[0,0], iconAnchor:[0,0],
+    html:`<div style="position:relative">${mark}${plaque}</div>` });
+}
 // Plane: heading-rotated glyph + a callsign chip (chip hidden when zoomed out).
 function planeIcon(track, label){
   const lbl = (state.labelsOn && label) ? `<span class="veh-lbl" style="position:absolute;left:19px;top:3px;background:rgba(9,13,24,.85);
@@ -1201,7 +1234,15 @@ function declutterLabels(){
        r.bottom < box.top || r.top > box.bottom){ el.style.visibility="hidden"; return; }
     items.push({el, r, d:Math.hypot(r.left+r.width/2-cx, r.top+r.height/2-cy)});
   });
-  items.sort((a,b)=>a.d-b.d);
+  /* Mainline trains go first, then everything else by distance from the
+     centre. The ceiling below is small on purpose -- about twenty chips on a
+     laptop -- and on a board with a busy sky a thousand aircraft callsigns
+     were taking every slot before the first train was considered, so the one
+     marker carrying an operator's wordmark was reliably the one that lost it.
+     There are only ever a handful of intercity services inside a city's map;
+     putting them at the front of the queue costs the rest almost nothing. */
+  items.forEach(it=>{ it.pri = it.el.classList.contains("tb-op-plaque") ? 1 : 0; });
+  items.sort((a,b)=> (b.pri-a.pri) || (a.d-b.d));
   const kept=[];
   /* Real breathing room, not merely "not overlapping". At +2/+1 a label only had
      to miss its neighbour by a hair to qualify, so a dense centre kept twenty of
@@ -2544,11 +2585,20 @@ function tickTransitVehicles(){
         : "scheduled position";
       // banded, so the tooltip agrees with the chip on the card behind it
       const late=delayHtml(dep.realTime ? liveLateInfo(dep.delayMin) : null);
+      /* Mainline services get the operator plaque; everything local keeps the
+         one-line chip. The agency comes from the departure where a card knows
+         this trip by id, and from the trip detail otherwise -- the area feed
+         that places most vehicles carries no agency at all, which is why
+         operatorIcon() can also read the railway off the service code. */
+      const mainline = (key==="intl" || key==="ld");
+      const agency = dep.agency || trip.agency || "";
       items.push({
         id: dep.tripId, lat: pos.lat, lon: pos.lon,
         /* A plain dot for a bus until labels are on: a glyph per vehicle across
            Rome's whole fleet costs more than the map can repaint. */
-        icon: ()=>labelIcon(FAMILY_COL[key], label, (key==="busx"&&!state.labelsOn)?undefined:FAMILY_MODE[key]), ik: label,
+        icon: mainline ? (()=>operatorIcon(FAMILY_COL[key], line, dest, agency, FAMILY_MODE[key]))
+                       : (()=>labelIcon(FAMILY_COL[key], label, (key==="busx"&&!state.labelsOn)?undefined:FAMILY_MODE[key])),
+        ik: mainline ? label+"|"+agency : label,
         tip: [label, next?("next: "+next):"", src+late].filter(Boolean).join(" · "),
         route: tripPoints(trip), label, color: FAMILY_COL[key],
       });
