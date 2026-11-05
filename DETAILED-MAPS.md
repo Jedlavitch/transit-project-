@@ -10,6 +10,12 @@ The new independent route layer does not disappear when a departure card hides. 
 
 Map choices are saved separately for each city under `tb.transitMap.<city>.v1`. Light is the default; Dark and Match board are available. Rail, metro/light rail, major bus/BRT, stations and local POIs can be toggled. Ferries, where present in the source, share the metro/light-rail switch. Network overview changes only the map view; My board location returns to the saved board location. Neither changes that location. The control occupies the map rather than adding a departure panel.
 
+## Major stations
+
+Big stations get a larger dot; tapping one opens that station's timetable, every service in one list, soonest first. Hubs are a curated list in `map-data/station-hubs.json`, and `station-hubs.js` draws them. `python3 test-station-hubs.py` checks that each hub still lands on stops in the timetables it names. Times come from the bundled schedules (scheduled only), WMATA with the board's key (live), Amtrak (only trains already running) and, for Zürich, Cologne, Stuttgart and Rome, the same APIs those boards already use. The Major stations switch under Map layers hides them. Rome has no Map layers panel, so its dots stay on.
+
+A hub lists a bundle only where that bundle covers it properly. Partial bus bundles are left out, and subway departures outside Manhattan and nearby are noted rather than implied.
+
 ## Network coverage
 
 Network bundles contain the passenger lines available in the listed agencies' published geometry, clipped to a regional boundary. They are not a promise of every operator in an entire state or country. All distinct supplied rail shapes are retained. Missing shapes are never replaced by invented straight segments. Source editions are exposed under Map coverage & sources. Route geometry is static network information, not a live-service guarantee.

@@ -832,6 +832,8 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="basemap.js?v=3"></script>
+<link rel="stylesheet" href="station-hubs.css?v=2" />
+<script src="station-hubs.js?v=6"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -1033,6 +1035,7 @@ function initMap(){
   state.map = L.map("map", { zoomControl:true, attributionControl:false })
     .setView([state.loc.lat, state.loc.lon], 12);
   state.tileLayer = TBBasemap.add(state.map, document.documentElement.getAttribute("data-theme"), { maxZoom:19 });
+  TBStationHubs.attach(state.map, { city:"rome" });
   state.ringLayer   = L.layerGroup().addTo(state.map);   // tactical range rings, beneath everything
   // [ADD-A-SYSTEM] initMap layers: create each layer group here. ORDER = z-order
   // (earlier = underneath), so add route-line layers first, then vehicle layers.

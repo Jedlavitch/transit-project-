@@ -1,0 +1,1122 @@
+{
+ "cities": {
+  "dc": {
+   "tz": "America/New_York",
+   "feeds": {
+    "marc": {
+     "file": "marc-schedule.json",
+     "label": "MARC",
+     "color": "#FF8000",
+     "agency": "MARC"
+    },
+    "rideon": {
+     "file": "rideon-schedule.json",
+     "label": "Ride On 23, 29",
+     "color": "#00723F"
+    }
+   },
+   "hubs": [
+    {
+     "name": "Union Station",
+     "lat": 38.8973,
+     "lon": -77.0063,
+     "r": 250,
+     "feeds": [
+      "marc"
+     ],
+     "amtrak": "WAS",
+     "wmata": "B03"
+    },
+    {
+     "name": "Metro Center",
+     "lat": 38.8983,
+     "lon": -77.0281,
+     "r": 250,
+     "feeds": [],
+     "wmata": "A01,C01"
+    },
+    {
+     "name": "Gallery Place",
+     "lat": 38.8983,
+     "lon": -77.0219,
+     "r": 250,
+     "feeds": [],
+     "wmata": "B01,F01"
+    },
+    {
+     "name": "L'Enfant Plaza",
+     "lat": 38.8848,
+     "lon": -77.0219,
+     "r": 250,
+     "feeds": [],
+     "wmata": "D03,F03"
+    },
+    {
+     "name": "Fort Totten",
+     "lat": 38.9518,
+     "lon": -77.0022,
+     "r": 250,
+     "feeds": [],
+     "wmata": "B06,E06"
+    },
+    {
+     "name": "Rosslyn",
+     "lat": 38.896,
+     "lon": -77.072,
+     "r": 250,
+     "feeds": [],
+     "wmata": "C05"
+    },
+    {
+     "name": "Pentagon",
+     "lat": 38.8694,
+     "lon": -77.0539,
+     "r": 250,
+     "feeds": [],
+     "wmata": "C07"
+    },
+    {
+     "name": "Silver Spring",
+     "lat": 38.9939,
+     "lon": -77.031,
+     "r": 350,
+     "feeds": [
+      "marc"
+     ],
+     "wmata": "B08"
+    },
+    {
+     "name": "Bethesda",
+     "lat": 38.9843,
+     "lon": -77.0941,
+     "r": 350,
+     "feeds": [
+      "rideon"
+     ],
+     "wmata": "A09",
+     "note": "Only Ride On routes 23 and 29 have a timetable here."
+    },
+    {
+     "name": "Rockville",
+     "lat": 39.0845,
+     "lon": -77.1461,
+     "r": 350,
+     "feeds": [
+      "marc"
+     ],
+     "wmata": "A14",
+     "amtrak": "RKV"
+    },
+    {
+     "name": "Shady Grove",
+     "lat": 39.1199,
+     "lon": -77.1646,
+     "r": 350,
+     "feeds": [],
+     "wmata": "A15"
+    }
+   ]
+  },
+  "nyc": {
+   "tz": "America/New_York",
+   "feeds": {
+    "subway": {
+     "file": "mta-subway-schedule.json",
+     "label": "Subway",
+     "color": "#0039A6",
+     "agency": "MTA Subway"
+    },
+    "lirr": {
+     "file": "lirr-schedule.json",
+     "label": "LIRR",
+     "color": "#00985F"
+    },
+    "mnr": {
+     "file": "mnr-schedule.json",
+     "label": "Metro-North",
+     "color": "#0039A6"
+    },
+    "njt": {
+     "file": "njt-nyc-schedule.json",
+     "label": "NJ Transit",
+     "color": "#075AAA"
+    },
+    "path": {
+     "file": "path-schedule.json",
+     "label": "PATH",
+     "color": "#004D6F"
+    }
+   },
+   "hubs": [
+    {
+     "name": "Penn Station",
+     "lat": 40.7505,
+     "lon": -73.9925,
+     "r": 320,
+     "feeds": [
+      "subway",
+      "lirr",
+      "njt"
+     ],
+     "amtrak": "NYP"
+    },
+    {
+     "name": "Grand Central",
+     "lat": 40.7527,
+     "lon": -73.9772,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "mnr"
+     ]
+    },
+    {
+     "name": "Times Sq-42 St",
+     "lat": 40.756,
+     "lon": -73.988,
+     "r": 260,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Fulton St",
+     "lat": 40.7102,
+     "lon": -74.0079,
+     "r": 250,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "World Trade Center",
+     "lat": 40.7126,
+     "lon": -74.0116,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "path"
+     ]
+    },
+    {
+     "name": "Union Sq",
+     "lat": 40.7347,
+     "lon": -73.9904,
+     "r": 200,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Atlantic Terminal",
+     "lat": 40.6844,
+     "lon": -73.9779,
+     "r": 280,
+     "feeds": [
+      "lirr"
+     ],
+     "note": "Subway departures here are not in the bundled timetable."
+    },
+    {
+     "name": "Jamaica Station",
+     "lat": 40.7,
+     "lon": -73.808,
+     "r": 400,
+     "feeds": [
+      "lirr"
+     ],
+     "note": "Subway and bus departures here are not in the bundled timetable."
+    },
+    {
+     "name": "Hoboken Terminal",
+     "lat": 40.735,
+     "lon": -74.029,
+     "r": 300,
+     "feeds": [
+      "njt",
+      "path"
+     ]
+    },
+    {
+     "name": "Newark Penn",
+     "lat": 40.7346,
+     "lon": -74.164,
+     "r": 300,
+     "feeds": [
+      "njt",
+      "path"
+     ],
+     "amtrak": "NWK"
+    }
+   ]
+  },
+  "philadelphia": {
+   "tz": "America/New_York",
+   "feeds": {
+    "rail": {
+     "file": "septa-rail-schedule.json",
+     "label": "Regional Rail",
+     "color": "#45637A"
+    },
+    "subway": {
+     "file": "septa-subway-schedule.json",
+     "label": "Metro",
+     "color": "#0F5EAA",
+     "agency": "SEPTA"
+    },
+    "patco": {
+     "file": "patco-schedule.json",
+     "label": "PATCO",
+     "color": "#BC0035"
+    },
+    "njt": {
+     "file": "njt-phl-schedule.json",
+     "label": "NJ Transit",
+     "color": "#075AAA"
+    }
+   },
+   "hubs": [
+    {
+     "name": "30th Street Station",
+     "lat": 39.9557,
+     "lon": -75.182,
+     "r": 320,
+     "feeds": [
+      "rail",
+      "subway",
+      "njt"
+     ],
+     "amtrak": "PHL"
+    },
+    {
+     "name": "Suburban Station",
+     "lat": 39.9537,
+     "lon": -75.1677,
+     "r": 300,
+     "feeds": [
+      "rail",
+      "subway"
+     ]
+    },
+    {
+     "name": "Jefferson Station",
+     "lat": 39.9525,
+     "lon": -75.1581,
+     "r": 320,
+     "feeds": [
+      "rail",
+      "subway"
+     ]
+    },
+    {
+     "name": "8th & Market",
+     "lat": 39.9511,
+     "lon": -75.1536,
+     "r": 200,
+     "feeds": [
+      "subway",
+      "patco"
+     ]
+    },
+    {
+     "name": "Temple University",
+     "lat": 39.9812,
+     "lon": -75.1494,
+     "r": 300,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Frankford Transit Center",
+     "lat": 40.023,
+     "lon": -75.0777,
+     "r": 300,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "69th Street Transit Center",
+     "lat": 39.9623,
+     "lon": -75.2587,
+     "r": 300,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Olney Transit Center",
+     "lat": 40.0391,
+     "lon": -75.1447,
+     "r": 300,
+     "feeds": [
+      "subway"
+     ]
+    }
+   ]
+  },
+  "boston": {
+   "tz": "America/New_York",
+   "feeds": {
+    "subway": {
+     "file": "mbta-subway-schedule.json",
+     "label": "Subway",
+     "color": "#003DA5",
+     "agency": "MBTA"
+    },
+    "cr": {
+     "file": "mbta-cr-schedule.json",
+     "label": "Commuter Rail",
+     "color": "#80276C",
+     "agency": "MBTA"
+    }
+   },
+   "hubs": [
+    {
+     "name": "South Station",
+     "lat": 42.3522,
+     "lon": -71.0552,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "cr"
+     ],
+     "amtrak": "BOS"
+    },
+    {
+     "name": "North Station",
+     "lat": 42.3655,
+     "lon": -71.0612,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "cr"
+     ],
+     "amtrak": "BON"
+    },
+    {
+     "name": "Back Bay",
+     "lat": 42.3473,
+     "lon": -71.0752,
+     "r": 250,
+     "feeds": [
+      "subway",
+      "cr"
+     ],
+     "amtrak": "BBY"
+    },
+    {
+     "name": "Park Street",
+     "lat": 42.3564,
+     "lon": -71.0624,
+     "r": 120,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Downtown Crossing",
+     "lat": 42.3555,
+     "lon": -71.0604,
+     "r": 120,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Government Center",
+     "lat": 42.3597,
+     "lon": -71.0592,
+     "r": 120,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Harvard",
+     "lat": 42.3734,
+     "lon": -71.119,
+     "r": 280,
+     "feeds": [
+      "subway"
+     ]
+    },
+    {
+     "name": "Ruggles",
+     "lat": 42.3366,
+     "lon": -71.089,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "cr"
+     ]
+    },
+    {
+     "name": "Forest Hills",
+     "lat": 42.3005,
+     "lon": -71.1137,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "cr"
+     ]
+    },
+    {
+     "name": "JFK/UMass",
+     "lat": 42.3202,
+     "lon": -71.0524,
+     "r": 280,
+     "feeds": [
+      "subway",
+      "cr"
+     ]
+    }
+   ]
+  },
+  "sanfrancisco": {
+   "tz": "America/Los_Angeles",
+   "feeds": {
+    "bart": {
+     "file": "sf-bart-schedule.json",
+     "label": "BART",
+     "color": "#0099D8",
+     "agency": "BART"
+    },
+    "muni": {
+     "file": "sf-muni-schedule.json",
+     "label": "Muni Metro",
+     "color": "#BA0C2F"
+    },
+    "cable": {
+     "file": "sf-cablecar-schedule.json",
+     "label": "Cable Car",
+     "color": "#8C5A2B"
+    },
+    "caltrain": {
+     "file": "sf-caltrain-schedule.json",
+     "label": "Caltrain",
+     "color": "#C8102E"
+    }
+   },
+   "hubs": [
+    {
+     "name": "Embarcadero",
+     "lat": 37.7929,
+     "lon": -122.3969,
+     "r": 280,
+     "feeds": [
+      "bart",
+      "muni"
+     ]
+    },
+    {
+     "name": "Montgomery St",
+     "lat": 37.7893,
+     "lon": -122.4014,
+     "r": 250,
+     "feeds": [
+      "bart",
+      "muni"
+     ]
+    },
+    {
+     "name": "Powell St",
+     "lat": 37.7844,
+     "lon": -122.4079,
+     "r": 280,
+     "feeds": [
+      "bart",
+      "muni",
+      "cable"
+     ]
+    },
+    {
+     "name": "Civic Center",
+     "lat": 37.7795,
+     "lon": -122.4139,
+     "r": 250,
+     "feeds": [
+      "bart",
+      "muni"
+     ]
+    },
+    {
+     "name": "San Francisco Caltrain",
+     "lat": 37.7766,
+     "lon": -122.3947,
+     "r": 280,
+     "feeds": [
+      "caltrain",
+      "muni"
+     ]
+    },
+    {
+     "name": "Balboa Park",
+     "lat": 37.7217,
+     "lon": -122.4474,
+     "r": 280,
+     "feeds": [
+      "bart",
+      "muni"
+     ]
+    },
+    {
+     "name": "Millbrae",
+     "lat": 37.6003,
+     "lon": -122.3867,
+     "r": 300,
+     "feeds": [
+      "bart",
+      "caltrain"
+     ]
+    },
+    {
+     "name": "San Jose Diridon",
+     "lat": 37.3299,
+     "lon": -121.9025,
+     "r": 300,
+     "feeds": [
+      "caltrain"
+     ],
+     "amtrak": "SJC"
+    },
+    {
+     "name": "12th St Oakland",
+     "lat": 37.8037,
+     "lon": -122.2716,
+     "r": 200,
+     "feeds": [
+      "bart"
+     ]
+    },
+    {
+     "name": "MacArthur",
+     "lat": 37.829,
+     "lon": -122.267,
+     "r": 200,
+     "feeds": [
+      "bart"
+     ]
+    }
+   ]
+  },
+  "losangeles": {
+   "tz": "America/Los_Angeles",
+   "feeds": {
+    "rail": {
+     "file": "la-rail-schedule.json",
+     "label": "Metro Rail",
+     "color": "#0072BC",
+     "agency": "LA Metro Rail"
+    },
+    "metrolink": {
+     "file": "la-metrolink-schedule.json",
+     "label": "Metrolink",
+     "color": "#00447C"
+    }
+   },
+   "hubs": [
+    {
+     "name": "Union Station",
+     "lat": 34.0562,
+     "lon": -118.2346,
+     "r": 320,
+     "feeds": [
+      "rail",
+      "metrolink"
+     ],
+     "amtrak": "LAX"
+    },
+    {
+     "name": "7th St/Metro Center",
+     "lat": 34.0486,
+     "lon": -118.2588,
+     "r": 200,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Willowbrook-Rosa Parks",
+     "lat": 33.928,
+     "lon": -118.2376,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "LAX/Metro Transit Center",
+     "lat": 33.9501,
+     "lon": -118.3787,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "North Hollywood",
+     "lat": 34.1686,
+     "lon": -118.3767,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Hollywood/Highland",
+     "lat": 34.1017,
+     "lon": -118.3385,
+     "r": 200,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Downtown Long Beach",
+     "lat": 33.7681,
+     "lon": -118.1925,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Anaheim ARTIC",
+     "lat": 33.8037,
+     "lon": -117.8775,
+     "r": 350,
+     "feeds": [
+      "metrolink"
+     ],
+     "amtrak": "ANA"
+    }
+   ]
+  },
+  "newjersey": {
+   "tz": "America/New_York",
+   "feeds": {
+    "rail": {
+     "file": "njt-state-rail-schedule.json",
+     "label": "NJ Transit",
+     "color": "#075AAA",
+     "agency": "NJ TRANSIT Rail"
+    }
+   },
+   "hubs": [
+    {
+     "name": "Newark Penn",
+     "lat": 40.7346,
+     "lon": -74.164,
+     "r": 300,
+     "feeds": [
+      "rail"
+     ],
+     "amtrak": "NWK"
+    },
+    {
+     "name": "Newark Broad St",
+     "lat": 40.7473,
+     "lon": -74.1711,
+     "r": 200,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Hoboken Terminal",
+     "lat": 40.735,
+     "lon": -74.029,
+     "r": 300,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "Secaucus Junction",
+     "lat": 40.7612,
+     "lon": -74.0758,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ]
+    },
+    {
+     "name": "New York Penn",
+     "lat": 40.7505,
+     "lon": -73.9925,
+     "r": 320,
+     "feeds": [
+      "rail"
+     ],
+     "amtrak": "NYP"
+    },
+    {
+     "name": "Metropark",
+     "lat": 40.568,
+     "lon": -74.3296,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ],
+     "amtrak": "MET"
+    },
+    {
+     "name": "New Brunswick",
+     "lat": 40.4971,
+     "lon": -74.4457,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ],
+     "amtrak": "NBK"
+    },
+    {
+     "name": "Trenton",
+     "lat": 40.2178,
+     "lon": -74.7555,
+     "r": 300,
+     "feeds": [
+      "rail"
+     ],
+     "amtrak": "TRE"
+    }
+   ]
+  },
+  "amsterdam": {
+   "tz": "Europe/Amsterdam",
+   "clock24": true,
+   "feeds": {
+    "rail": {
+     "file": "ams-rail-schedule.json",
+     "label": "NS / rail",
+     "color": "#FFC917"
+    },
+    "intl": {
+     "file": "ams-intl-schedule.json",
+     "label": "International",
+     "color": "#8562BD"
+    },
+    "metro": {
+     "file": "ams-metro-schedule.json",
+     "label": "Metro",
+     "color": "#169879"
+    },
+    "tram": {
+     "file": "ams-tram-schedule.json",
+     "label": "Tram",
+     "color": "#004699"
+    },
+    "ferry": {
+     "file": "ams-ferry-schedule.json",
+     "label": "Ferry",
+     "color": "#0A7EA4"
+    }
+   },
+   "hubs": [
+    {
+     "name": "Amsterdam Centraal",
+     "lat": 52.3789,
+     "lon": 4.9003,
+     "r": 380,
+     "feeds": [
+      "rail",
+      "intl",
+      "metro",
+      "tram",
+      "ferry"
+     ]
+    },
+    {
+     "name": "Amsterdam Zuid",
+     "lat": 52.339,
+     "lon": 4.873,
+     "r": 300,
+     "feeds": [
+      "rail",
+      "metro",
+      "tram"
+     ]
+    },
+    {
+     "name": "Amsterdam Sloterdijk",
+     "lat": 52.3889,
+     "lon": 4.838,
+     "r": 300,
+     "feeds": [
+      "rail",
+      "metro",
+      "tram"
+     ]
+    },
+    {
+     "name": "Amsterdam Amstel",
+     "lat": 52.3467,
+     "lon": 4.9177,
+     "r": 300,
+     "feeds": [
+      "rail",
+      "metro",
+      "tram"
+     ]
+    },
+    {
+     "name": "Bijlmer ArenA",
+     "lat": 52.312,
+     "lon": 4.947,
+     "r": 300,
+     "feeds": [
+      "rail",
+      "metro"
+     ]
+    },
+    {
+     "name": "Schiphol Airport",
+     "lat": 52.3094,
+     "lon": 4.762,
+     "r": 400,
+     "feeds": [
+      "rail",
+      "intl"
+     ]
+    }
+   ]
+  },
+  "zurich": {
+   "tz": "Europe/Zurich",
+   "clock24": true,
+   "feeds": {},
+   "hubs": [
+    {
+     "name": "Zürich HB",
+     "lat": 47.3779,
+     "lon": 8.5403,
+     "r": 250,
+     "feeds": [],
+     "live": "ch",
+     "station": "Zürich HB"
+    },
+    {
+     "name": "Zürich Stadelhofen",
+     "lat": 47.3667,
+     "lon": 8.5487,
+     "r": 250,
+     "feeds": [],
+     "live": "ch",
+     "station": "Zürich Stadelhofen"
+    },
+    {
+     "name": "Zürich Oerlikon",
+     "lat": 47.4114,
+     "lon": 8.5441,
+     "r": 250,
+     "feeds": [],
+     "live": "ch",
+     "station": "Zürich Oerlikon"
+    },
+    {
+     "name": "Zürich Hardbrücke",
+     "lat": 47.3851,
+     "lon": 8.5172,
+     "r": 250,
+     "feeds": [],
+     "live": "ch",
+     "station": "Zürich Hardbrücke"
+    },
+    {
+     "name": "Zürich Altstetten",
+     "lat": 47.3914,
+     "lon": 8.4889,
+     "r": 250,
+     "feeds": [],
+     "live": "ch",
+     "station": "Zürich Altstetten"
+    },
+    {
+     "name": "Zürich Flughafen",
+     "lat": 47.4504,
+     "lon": 8.5624,
+     "r": 250,
+     "feeds": [],
+     "live": "ch",
+     "station": "Zürich Flughafen"
+    }
+   ]
+  },
+  "cologne": {
+   "tz": "Europe/Berlin",
+   "clock24": true,
+   "feeds": {},
+   "hubs": [
+    {
+     "name": "Köln Hbf",
+     "lat": 50.943,
+     "lon": 6.9589,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Köln Hbf"
+    },
+    {
+     "name": "Köln Messe/Deutz",
+     "lat": 50.9408,
+     "lon": 6.975,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Köln Messe/Deutz"
+    },
+    {
+     "name": "Neumarkt",
+     "lat": 50.9365,
+     "lon": 6.9476,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Neumarkt, Köln"
+    },
+    {
+     "name": "Köln Ehrenfeld",
+     "lat": 50.951,
+     "lon": 6.9178,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Köln-Ehrenfeld"
+    },
+    {
+     "name": "Bonn Hbf",
+     "lat": 50.732,
+     "lon": 7.097,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Bonn Hbf"
+    }
+   ]
+  },
+  "stuttgart": {
+   "tz": "Europe/Berlin",
+   "clock24": true,
+   "feeds": {},
+   "hubs": [
+    {
+     "name": "Stuttgart Hbf",
+     "lat": 48.784,
+     "lon": 9.182,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Stuttgart Hbf"
+    },
+    {
+     "name": "Charlottenplatz",
+     "lat": 48.776,
+     "lon": 9.1827,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Charlottenplatz, Stuttgart"
+    },
+    {
+     "name": "Schwabstraße",
+     "lat": 48.7686,
+     "lon": 9.1655,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Schwabstraße, Stuttgart"
+    },
+    {
+     "name": "Bad Cannstatt",
+     "lat": 48.802,
+     "lon": 9.215,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Stuttgart-Bad Cannstatt"
+    },
+    {
+     "name": "Vaihingen",
+     "lat": 48.7262,
+     "lon": 9.11,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Stuttgart-Vaihingen"
+    },
+    {
+     "name": "Flughafen/Messe",
+     "lat": 48.6898,
+     "lon": 9.195,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Flughafen/Messe, Stuttgart"
+    }
+   ]
+  },
+  "rome": {
+   "tz": "Europe/Rome",
+   "clock24": true,
+   "feeds": {},
+   "hubs": [
+    {
+     "name": "Roma Termini",
+     "lat": 41.901,
+     "lon": 12.5016,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Roma Termini"
+    },
+    {
+     "name": "Roma Tiburtina",
+     "lat": 41.9105,
+     "lon": 12.531,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Roma Tiburtina"
+    },
+    {
+     "name": "Ostiense / Piramide",
+     "lat": 41.8725,
+     "lon": 12.483,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Roma Ostiense"
+    },
+    {
+     "name": "Roma Trastevere",
+     "lat": 41.871,
+     "lon": 12.4686,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Roma Trastevere"
+    },
+    {
+     "name": "Ottaviano",
+     "lat": 41.909,
+     "lon": 12.458,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Ottaviano, Roma"
+    },
+    {
+     "name": "Flaminio",
+     "lat": 41.9115,
+     "lon": 12.4765,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Flaminio, Roma"
+    }
+   ]
+  }
+ }
+}
