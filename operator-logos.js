@@ -257,7 +257,18 @@
     ':root[data-style="signal"] .tb-op-plaque{border-radius:0}' +
     ':root[data-style="signal"] .tb-op-mark{letter-spacing:.1em}' +
     ':root[data-style="signal"] .tb-op-svc{font-family:var(--mono,ui-monospace,monospace);' +
-    "font-variant-numeric:tabular-nums}";
+    "font-variant-numeric:tabular-nums}" +
+    /* ---- the card version --------------------------------------------------
+       The same wordmark, inline at the head of a row's sub-line. It has to sit
+       INSIDE the line box the sub-line already has, because the cards are
+       measured and tiled by fit-cards.js: a tag that is one pixel taller than
+       the text beside it grows every row, which grows the tile, which re-runs
+       the whole fitter. Hence a 9px face on a 12px line, which is shorter than
+       the 11px text it sits next to, and no vertical padding at all. */
+    ".tb-op-tag{display:inline-block;vertical-align:baseline;margin-right:5px;padding:0 4px;" +
+    "border-radius:3px;max-width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" +
+    "letter-spacing:.06em;text-transform:uppercase;font:800 9px/12px " + WORD_FONT + "}" +
+    ':root[data-style="signal"] .tb-op-tag{border-radius:0}';
 
   function injectCss() {
     if (typeof document === "undefined" || document.getElementById("tbOpCss")) return;
@@ -293,9 +304,21 @@
       "px;border-left:3px solid " + (o.color || "#9fb4d8") + '">' + rows + "</span>";
   }
 
+  /* The wordmark on its own, for a departure row rather than a marker. Returns
+     "" when no railway can be named, so a caller can concatenate it
+     unconditionally and get nothing where there is nothing to say. */
+  function tagHTML(o) {
+    o = o || {};
+    injectCss();
+    var op = of(o.agency, o.service, o.home);
+    if (!op) return "";
+    return '<span class="tb-op-tag" style="background:' + op.bg + ";color:" + op.ink +
+      '" title="' + esc(o.agency || op.mark) + '">' + esc(op.mark) + "</span>";
+  }
+
   /* So a caller can tell whether a plaque would say anything an ordinary chip
      does not, and fall back to the chip when it would not. */
   function has(agency, service, home) { return !!of(agency, service, home); }
 
-  root.TBOp = { of: of, has: has, plaqueHTML: plaqueHTML, operators: OPS };
+  root.TBOp = { of: of, has: has, plaqueHTML: plaqueHTML, tagHTML: tagHTML, operators: OPS };
 })(typeof window !== "undefined" ? window : this);

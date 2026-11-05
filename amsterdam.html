@@ -40,7 +40,7 @@
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="vehicle-icons.js?v=5"></script>
-<script src="operator-logos.js?v=2"></script>
+<script src="operator-logos.js?v=3"></script>
 <script src="delays.js?v=2"></script>
 <script src="transitous.js?v=7"></script>
 <script src="licence-proxy.js?v=1"></script>
@@ -2306,7 +2306,15 @@ function renderIntlLive(b){
       if(p && p.pct>0 && p.pct<100 && p.next && p.next.name) sub.push("nu bij "+p.next.name);
     }
     if(d.platform) sub.push("spoor "+d.platform);
-    mid.appendChild(el("div","sub", sub.filter(Boolean).join(" · ")));
+    /* The railway running it, the same wordmark the map marker carries. At the
+       head of the sub-line, which every row already has, so it costs no layout
+       and cannot change a card's measured height -- see operator-logos.js. */
+    const subEl=el("div","sub");
+    const subTxt=sub.filter(Boolean).join(" · ");
+    const opTag=window.TBOp
+      ? TBOp.tagHTML({agency:(tr&&tr.agency)||d.agency, service:line, home:HOME_OPERATOR}) : "";
+    if(opTag) subEl.innerHTML = opTag + esc(subTxt); else subEl.textContent = subTxt;
+    mid.appendChild(subEl);
     const times=el("div","times");
     const rel=Math.round((d.when-Date.now())/60000);
     const t=el("div","live"); t.style.color=col;

@@ -41,7 +41,7 @@
 <script src="cityswitch.js?v=3"></script>
 <script src="config.js?v=2"></script>
 <script src="vehicle-icons.js?v=5"></script>
-<script src="operator-logos.js?v=2"></script>
+<script src="operator-logos.js?v=3"></script>
 <script src="delays.js?v=2"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
@@ -2228,8 +2228,19 @@ async function refreshTransit(){
       b.style.background=FAMILY_COL[key]; b.style.color="#0b0b0b";
       const mid=el("div");
       mid.appendChild(el("div","dest", d.headsign||"—"));
-      mid.appendChild(el("div","sub",
-        [d.label, d.stop&&d.stop.name, d.platform?("Pl. "+d.platform):""].filter(Boolean).join(" · ")));
+      /* The mainline rows name their railway, the same wordmark the map marker
+         carries. It goes at the head of the sub-line rather than in a column of
+         its own: the row is a four-column grid the whole board shares, and the
+         sub-line already exists on every row, so this costs no layout and
+         cannot change a card's measured height (see operator-logos.js on why
+         the tag is drawn shorter than the text beside it). */
+      const subTxt=[d.label, d.stop&&d.stop.name, d.platform?("Pl. "+d.platform):""]
+        .filter(Boolean).join(" · ");
+      const sub=el("div","sub");
+      const opTag=((key==="intl"||key==="ld") && window.TBOp)
+        ? TBOp.tagHTML({agency:d.agency, service:d.route||d.label, home:HOME_OPERATOR}) : "";
+      if(opTag) sub.innerHTML = opTag + esc(subTxt); else sub.textContent = subTxt;
+      mid.appendChild(sub);
       const times=el("div","times");
       const mins=transitMinutes(d.when);
       const t=el("div","live", d.cancelled? "cancelled" : transitWhen(d.when, mins));
