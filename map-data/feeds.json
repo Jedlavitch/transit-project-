@@ -159,6 +159,17 @@
       "feeds": [
         "vvs"
       ]
+    },
+    "rome": {
+      "bounds": [
+        41.35,
+        11.7,
+        42.5,
+        13.2
+      ],
+      "feeds": [
+        "roma"
+      ]
     }
   },
   "feeds": {
@@ -320,6 +331,17 @@
       "name": "MTA Staten Island Bus",
       "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_si.zip",
       "busLimit": 8
+    },
+    "roma": {
+      "name": "Roma Mobilit\u00e0 / ATAC",
+      "url": "https://romamobilita.it/sites/default/files/rome_static_gtfs.zip",
+      "busLimit": 20,
+      "displayRefs": {
+        "MEA": "A",
+        "MEB": "B",
+        "MEB1": "B1",
+        "MEC": "C"
+      }
     }
   },
   "geoSources": {
