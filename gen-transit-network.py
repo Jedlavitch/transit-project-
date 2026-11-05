@@ -126,7 +126,11 @@ def build_feed(fid,config,z,bounds):
         if ref in rapid:m='brt'
         ref=config.get('displayRefs',{}).get(ref,ref)
         if not geometries[rid]:missing.append(ref);continue
-        color=r.get('route_color','');color='#'+color if len(color)==6 and all(c in '0123456789abcdefABCDEF' for c in color) else COLORS[m]
+        # Operators that publish no route_color at all (Cotral is one) would
+        # otherwise collapse to a single per-mode grey-purple, so a feed may
+        # name its own colours -- keyed by the ref AFTER displayRefs renaming,
+        # which is the name the legend and the map label actually show.
+        color=r.get('route_color','');color='#'+color if len(color)==6 and all(c in '0123456789abcdefABCDEF' for c in color) else config.get('colors',{}).get(ref,COLORS[m])
         features.append({'type':'Feature','properties':{'id':fid+':'+rid,'feed':fid,'ref':ref,'name':r.get('route_long_name') or ref,'agency':config['name'],'mode':m,'color':color,'url':r.get('route_url') if r.get('route_url','').startswith('https://') else '', 'weekdayTrips':counts[rid]},'geometry':{'type':'MultiLineString','coordinates':geometries[rid]}})
     stations=[];station_seen=set()
     for sid,rids in rail_stops.items():

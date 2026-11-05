@@ -168,7 +168,8 @@
         13.2
       ],
       "feeds": [
-        "roma"
+        "roma",
+        "cotral-ferro"
       ]
     }
   },
@@ -331,6 +332,20 @@
       "name": "MTA Staten Island Bus",
       "url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_si.zip",
       "busLimit": 8
+    },
+    "cotral-ferro": {
+      "name": "Cotral",
+      "url": "http://travel.mob.cotralspa.it:7777/GTFS/GTFS_FERRO.zip",
+      "displayRefs": {
+        "ROMALIDO": "Metromare",
+        "RVURB": "Roma\u2013Viterbo urbana",
+        "RVEXT": "Roma\u2013Viterbo"
+      },
+      "colors": {
+        "Metromare": "#b5006e",
+        "Roma\u2013Viterbo urbana": "#7b3fa0",
+        "Roma\u2013Viterbo": "#4f2b73"
+      }
     },
     "roma": {
       "name": "Roma Mobilit\u00e0 / ATAC",
