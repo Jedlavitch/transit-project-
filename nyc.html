@@ -1169,7 +1169,13 @@ function declutterLabels(){
   const box=state.map.getContainer().getBoundingClientRect();
   const cx=box.left+box.width/2, cy=box.top+box.height/2;
   const items=[];
+  /* What was on screen a moment ago, so a label that is already showing can
+     be allowed to keep showing. Keyed on the label's own text rather than on
+     the element, because an icon is rebuilt (setIcon) whenever its contents
+     change and the old node -- and anything stored on it -- goes with it. */
+  const prevOn=state._lblOn || (state._lblOn=new Set());
   labels.forEach(el=>{
+    const wasOn = el.style.visibility!=="hidden";
     el.style.visibility="";                 // measure unhidden, or rects go stale
     const r=el.getBoundingClientRect();
     if(!r.width) return;
@@ -1179,9 +1185,26 @@ function declutterLabels(){
        kept their place in the tally. */
     if(r.right < box.left || r.left > box.right ||
        r.bottom < box.top || r.top > box.bottom){ el.style.visibility="hidden"; return; }
-    items.push({el, r, d:Math.hypot(r.left+r.width/2-cx, r.top+r.height/2-cy)});
+    items.push({el, r, on: wasOn && prevOn.has(el.textContent),
+                d:Math.hypot(r.left+r.width/2-cx, r.top+r.height/2-cy)});
   });
-  items.sort((a,b)=>a.d-b.d);
+  /* ---- stickiness ------------------------------------------------------
+     Ranking on distance alone made the set of labels twitch while nothing
+     much was happening: every vehicle is moving a little, the cap is a hard
+     line, and two labels a pixel either side of it swap places every time
+     this runs -- which is once a second and after every paint. Measured on
+     Cologne standing still: nine changes to the visible set in 38 seconds,
+     none of which told anyone anything.
+
+     So a label that is already showing counts as if it were a quarter nearer
+     the middle. It still loses its place to something clearly better -- a
+     train that pulls into the centre of the map, a plaque -- but not to a
+     neighbour that drifted a pixel closer. Hysteresis, in the same sense a
+     thermostat uses it, and for the same reason: the input is noisy and the
+     output is something a person is looking at. */
+  const STICKY=0.74;
+  const score=it=> it.on ? it.d*STICKY : it.d;
+  items.sort((a,b)=>score(a)-score(b));
   const kept=[];
   /* Real breathing room, not merely "not overlapping". At +2/+1 a label only had
      to miss its neighbour by a hair to qualify, so a dense centre kept twenty of
@@ -1202,10 +1225,12 @@ function declutterLabels(){
      pixels, bounded so neither extreme goes silly. */
   const area=box.width*box.height;
   const LABEL_MAX=Math.max(6, Math.min(22, Math.round(area/55000)));
+  const nowOn=new Set();
   items.forEach(it=>{
     if(kept.length>=LABEL_MAX || kept.some(k=>hits(it.r,k))) it.el.style.visibility="hidden";
-    else kept.push(it.r);
+    else { kept.push(it.r); nowOn.add(it.el.textContent); }
   });
+  state._lblOn=nowOn;
 }
 let declutterPending=0;
 function scheduleDeclutter(){
