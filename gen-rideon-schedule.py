@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
 """
-Regenerate rideon-schedule.json from Montgomery County's published Ride On GTFS,
-filtered to just the routes this board tracks (see ROUTES below).
+Regenerate rideon-schedule.json from Montgomery County's published Ride On GTFS:
+EVERY route in the county (ROUTES = None), or a subset if ROUTES names some.
 
-Ride On has NO public real-time feed (only a private, key-gated Swiftly API),
-so — exactly like MARC — the board places buses on the map by interpolating
-each trip's position between stops from its *scheduled* times, and shows next
-departures from the same data. No API key, no Worker, no proxy.
+Ride On publishes no public real-time feed. Its "developer page"
+(rideonrealtime.net) now just redirects to the rider app at rideon.app, and
+neither Transitland nor the Mobility Database lists a GTFS-RT feed for it
+(checked 2026-11-06). So, exactly like MARC, the board places buses on the map
+by interpolating each trip between stops from its *scheduled* times, and shows
+next departures from the same data. No API key, no Worker, no proxy.
 
-The full county-wide GTFS is huge (~700k stop_times rows), so this filters to
-only the routes you actually want tracked. Add more short names to ROUTES
-and re-run to track additional lines.
+The whole county is ~17,500 trips / ~700k stop_times rows: 10.8 MB as plain
+JSON. That is why the output is written pattern-compressed ("v":2, see
+compress-bundle.py): 263 distinct stop sequences and ~2,100 running-time
+profiles cover every trip, so it lands at ~1.8 MB (~200 KB gzipped on the
+wire). Every page that reads it runs expandBundle() on load.
 
 Re-run whenever Ride On changes its timetable:  python3 gen-rideon-schedule.py
 """
-import csv, io, json, os, urllib.request, zipfile, datetime
+import csv, io, json, os, runpy, urllib.request, zipfile, datetime
 
 GTFS_URL = "https://www.montgomerycountymd.gov/DOT-Transit/Resources/Files/GTFS/RideOnGTFS.zip"
 OUT = os.path.join(os.path.dirname(__file__), "rideon-schedule.json")
-ROUTES = {"23", "29"}   # Ride On route_short_names to bundle
+ROUTES = None   # None = every Ride On route; or a set of route_short_names, e.g. {"23", "29"}
 
 def rows(zf, name):
     with zf.open(name) as fh:
@@ -31,7 +35,8 @@ def main():
     req = urllib.request.Request(GTFS_URL, headers={"User-Agent": "Mozilla/5.0 (compatible; transit-board-schedule-fetch/1.0)"})
     zf = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen(req, timeout=120).read()))
     routes = {r["route_id"]: r for r in rows(zf, "routes.txt")}
-    target_ids = {rid for rid, r in routes.items() if (r.get("route_short_name") or "").strip() in ROUTES}
+    target_ids = {rid for rid, r in routes.items()
+                  if ROUTES is None or (r.get("route_short_name") or "").strip() in ROUTES}
     if not target_ids:
         raise SystemExit(f"No routes matched {ROUTES} — check route_short_name values in routes.txt")
 
@@ -80,8 +85,13 @@ def main():
         (e["add"] if c["exception_type"] == "1" else e["rem"]).append(c["service_id"])
 
     out = {"generated": datetime.date.today().isoformat(),
-           "note": f"Ride On GTFS ({GTFS_URL}), routes {sorted(ROUTES)}",
+           "note": f"Ride On GTFS ({GTFS_URL}), " + ("all routes" if ROUTES is None else f"routes {sorted(ROUTES)}"),
            "stations": stations, "svc": svc, "exc": exc, "trips": trips_out}
+    # Pattern-compress in the generator itself, so refresh-schedules.py and the
+    # CI refresh can never publish the 10 MB uncompressed form.
+    compress = runpy.run_path(os.path.join(os.path.dirname(os.path.abspath(__file__)), "compress-bundle.py"),
+                              run_name="compress_bundle")["compress"]
+    out = compress(out)[0]
     with open(OUT, "w") as fh:
         json.dump(out, fh, separators=(",", ":"))
     print(f"Wrote {OUT}: {len(trips_out)} trips, {len(stations)} stations, {os.path.getsize(OUT)} bytes")

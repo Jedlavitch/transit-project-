@@ -912,9 +912,23 @@ const kmToMi = km => km*0.621371;
    "timetable out of date" warning about a file that had in fact been refreshed
    in the repo days before. The bundle was fine; the copy in the browser was
    not. San Francisco and Boston already did this; everyone else does now. */
+/* Bundled timetables may ship pattern-deduplicated ("v":2, compress-bundle.py):
+   stop sequences and running-time profiles stored once, referenced by index.
+   Expand back to {line,hs,s,st:[[stop,min],...]} on load so nothing downstream
+   changes. Any other JSON passes through untouched. Same as flipboard.html. */
+function expandBundle(s){
+  if(!s || s.v!==2 || !Array.isArray(s.pats)) return s;
+  const pats=s.pats, offs=s.offs||[];
+  s.trips=(s.trips||[]).map(t=>{
+    const ids=pats[t.p]||[], off=offs[t.o]||[], base=t.t||0;
+    return { line:t.l, hs:t.h, s:t.s, st:ids.map((sid,i)=>[sid, base + (off[i]||0)]) };
+  });
+  delete s.pats; delete s.offs;
+  return s;
+}
 async function getJSON(url, timeout=12000, cache){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(), timeout);
-  try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return await r.json(); }
+  try{ const r=await fetch(url,{signal:c.signal, cache}); if(!r.ok) throw new Error(r.status+" "+r.statusText); return expandBundle(await r.json()); }
   finally{ clearTimeout(t); }
 }
 const wmata = (path) => `https://api.wmata.com/${path}${path.includes("?")?"&":"?"}api_key=${encodeURIComponent(state.wmataKey)}`;
