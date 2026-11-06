@@ -611,6 +611,17 @@
     :root[data-style="glass"].tb-grid body .card:not(.mini) .list{ flex:1 1 auto; min-height:0; max-height:none !important; height:auto !important }
   }
 
+  /* Large screens: the map is the point, so it gets most of the height.
+     The boxes below re-flow into whatever is left (settings-ui.js picks
+     the columns), which on a wide screen is usually one row of tall boxes.
+     Laptop-height screens get a smaller step so each box keeps two rows. */
+  @media (min-width:1221px){
+    :root[data-style="glass"]{ --glass-band:clamp(360px, 50dvh, 900px) }
+  }
+  @media (min-width:1221px) and (min-height:950px){
+    :root[data-style="glass"]{ --glass-band:clamp(360px, 58dvh, 1100px) }
+  }
+
   /* Phones scroll the page instead of fitting it; the band stays a map. */
   @media (max-width:480px){
     :root[data-style="glass"]{ --glass-band:max(230px,34dvh) }
