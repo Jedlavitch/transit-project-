@@ -459,3 +459,23 @@ function renderLocSuggestions(box, list, current, onPick) {
     setTimeout(lift, 3500);
   })();
 })();
+
+/* The one aircraft feed that shared flight links may use.
+
+   Sky needs an aircraft feed, and most people who open a shared link have
+   none. So a link made on a screen whose feed is listed here carries that
+   feed, and Sky (night.html) and the share page (share.html) use it — but
+   only that feed, and Sky only while watching the shared flight. A link that
+   names any other host is ignored: a feed's answers are drawn on the page, so
+   an unlisted one could put anything there.
+
+   This is the site owner's own proxy (adsb-proxy.py, upstream adsb.fi, whose
+   terms are personal and non-commercial). Remove it here to switch link
+   sharing off for anyone without a feed of their own. */
+window.TBSharedFeed = {
+  url: "https://142.93.200.253.sslip.io",
+  credit: "Aircraft data adsb.fi",
+  allowed: function (u) {
+    try { var x = new URL(u); return x.protocol === "https:" && x.host === new URL(this.url).host; } catch (e) { return false; }
+  }
+};

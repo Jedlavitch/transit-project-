@@ -1,4 +1,4 @@
-/* Sky — "On this route". Glass Sky only (night.html sets data-sky-glass).
+/* Sky — "On this route". Every Sky, Glass and original alike.
 
    A hand-picked list of things worth looking down at — national parks, big
    mountains, great lakes and rivers, famous landmarks, major cities — with
@@ -15,7 +15,6 @@
 (function () {
   "use strict";
   var root = document.documentElement;
-  if (!root.hasAttribute("data-sky-glass")) return;
 
   // [name, lat, lon, radius nm]
   var PLACES = [

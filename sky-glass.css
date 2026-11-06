@@ -249,7 +249,7 @@
 .sg-plane-wrap:hover .sg-plane-lbl{ background:#FF3D77; color:#fff }
 .sg-plane-wrap{ cursor:pointer }
 /* At wide zooms the labels would pile up; keep the planes, drop the names. */
-:root[data-sky-glass] .sg-zoomed-out .sg-plane-lbl{ display:none }
+.sg-zoomed-out .sg-plane-lbl{ display:none }
 
 /* The map's own zoom buttons, as glass chips. */
 :root[data-sky-glass] body > #miniMap .leaflet-top.leaflet-right{ margin-top:calc(var(--sg-head, 84px) + 54px); margin-right:clamp(4px,3vw,38px) }
@@ -286,7 +286,7 @@
 .sg-poi-lbl{ position:absolute; left:22px; top:1px; white-space:nowrap; pointer-events:none;
   font:600 11px/1.2 "IBM Plex Sans",system-ui,sans-serif; color:#111318;
   text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff }
-:root[data-sky-glass] .sg-zoomed-out .sg-poi:not(.next) + .sg-poi-lbl{ display:none }
+.sg-zoomed-out .sg-poi:not(.next) + .sg-poi-lbl{ display:none }
 
 #sgRoute{ display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin-top:12px; padding-top:10px;
   border-top:1px solid var(--sg-edge); font:400 clamp(.8rem,1.25vw,1.05rem)/1.35 var(--body); color:var(--sg-muted) }
@@ -382,3 +382,118 @@
   background:rgba(12,14,18,.82); box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.35);
   transition:opacity .2s ease, transform .2s ease; pointer-events:none }
 #sgToast.show{ opacity:1; transform:translate(-50%,0) }
+
+
+/* =====================================================================
+   THE ORIGINAL SKY (any board style other than Glass): the same features,
+   in its own starfield look, with the text moved onto the board fonts.
+   ===================================================================== */
+:root:not([data-sky-glass]){
+  --sg-ink:var(--city); --sg-muted:var(--muted); --sg-edge:var(--faint);
+  --sg-tint:var(--panel); --sg-tint-soft:var(--panel2);
+}
+
+/* Type: Archivo for names, Plex Mono for numbers, Plex Sans for prose —
+   the colours and gradients stay as they were. */
+:root:not([data-sky-glass]) header .tag{ font-family:var(--display); font-weight:800; letter-spacing:.28em }
+:root:not([data-sky-glass]) header .clock{ font-family:var(--mono); letter-spacing:-.03em }
+:root:not([data-sky-glass]) header a, :root:not([data-sky-glass]) header button{ font-family:var(--body); font-weight:600; letter-spacing:0 }
+:root:not([data-sky-glass]) .airline,
+:root:not([data-sky-glass]) .route .city{ font-family:var(--display); font-weight:800; letter-spacing:-.03em }
+:root:not([data-sky-glass]) .flight,
+:root:not([data-sky-glass]) .dist,
+:root:not([data-sky-glass]) .route .code,
+:root:not([data-sky-glass]) .progress .lbl,
+:root:not([data-sky-glass]) .status{ font-family:var(--mono); letter-spacing:0 }
+:root:not([data-sky-glass]) .subcity{ font-family:var(--body); font-weight:400 }
+:root:not([data-sky-glass]) footer{ font-family:var(--mono); letter-spacing:0 }
+:root:not([data-sky-glass]) #settings, :root:not([data-sky-glass]) #fleetPanel, :root:not([data-sky-glass]) #logPanel{ font-family:var(--body) }
+:root:not([data-sky-glass]) #settings h3, :root:not([data-sky-glass]) #fleetPanel h3, :root:not([data-sky-glass]) #logPanel h3{ font-family:var(--display); letter-spacing:-.01em }
+
+/* Planes on the dark card map: pale planes, and names only on hover —
+   the card is small and fifty callsigns would bury it. */
+:root:not([data-sky-glass]) .sg-plane path{ fill:#DCEBFF; stroke:#0A1220; stroke-width:1 }
+:root:not([data-sky-glass]) .sg-plane{ width:18px; height:18px }
+:root:not([data-sky-glass]) .sg-plane svg{ width:18px; height:18px }
+:root:not([data-sky-glass]) .sg-plane-lbl{ display:none }
+:root:not([data-sky-glass]) .sg-plane-wrap:hover .sg-plane-lbl{ display:block }
+:root:not([data-sky-glass]) .sg-poi-lbl{ color:#F7F8FA; text-shadow:0 0 3px #000, 0 0 3px #000, 0 1px 2px #000 }
+
+/* The chip, as the panel's top row. */
+:root:not([data-sky-glass]).sky-pinned #sgPinChip{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; width:fit-content; max-width:100%;
+  margin:0 0 1vmin; padding:5px 5px 5px 12px; border-radius:10px; color:var(--city);
+  font:500 clamp(12px,1.4vw,15px)/1.2 var(--body); background:rgba(0,224,198,.1);
+  box-shadow:inset 0 0 0 1px rgba(0,224,198,.45);
+}
+:root:not([data-sky-glass]) #sgRoute{ border-top-color:var(--faint) }
+
+/* The "in range" list: rows you can click. */
+:root:not([data-sky-glass]) #fleetPanel .row[data-hex]{ cursor:pointer; border-radius:8px; padding-left:6px; padding-right:6px }
+:root:not([data-sky-glass]) #fleetPanel .row[data-hex]:hover{ background:rgba(125,184,255,.10) }
+:root:not([data-sky-glass]) #fleetPanel .row b{ font-family:var(--mono) }
+:root:not([data-sky-glass]) #fleetPanel .row .when{ font-family:var(--mono) }
+
+/* With the photo hidden, the card map can't borrow the photo's height (it
+   collapsed to 2px in the stacked layout). It has its own now. */
+:root:not([data-sky-glass]) #miniMap{ min-height:180px }
+@media (max-width:760px), (orientation:portrait){
+  :root:not([data-sky-glass]).no-photo #miniMap{ height:34vh; max-height:none; flex:1 1 auto }
+}
+:root:not([data-sky-glass]).no-photo .side{ height:min(50vh,100%) }
+
+/* ---- Sky's settings panel, in the boards' look ---------------------------
+   Graphite panel, Archivo headings, brand-pink primary actions, teal for the
+   "on" side of a switch. Both Skys (the panel is shared). Selectors carry the
+   panel's own id and !important where settings-ui.js's injected rules do. */
+:root #settings.tbset{ background:rgba(8,10,14,.6) !important }
+:root #settings.tbset .panel{
+  background:#14171C !important; border:1px solid #2C3038 !important; border-radius:18px !important;
+  box-shadow:0 30px 90px rgba(0,0,0,.6) !important; color:#F7F8FA !important; position:relative; overflow:hidden;
+}
+:root #settings.tbset .panel::before{
+  content:""; position:absolute; left:22px; top:0; width:104px; height:3px; z-index:2;
+  background:linear-gradient(90deg,#FF3D77 0,#FF3D77 33.333%,#00E0C6 33.333%,#00E0C6 66.666%,#2F7BFF 66.666%);
+}
+:root #settings.tbset .tbset-head, :root #settings.tbset .tbset-tabs{ background:#14171C !important; border-color:#2C3038 !important }
+:root #settings.tbset .tbset-head h3, :root #settings.tbset h3{ font-family:var(--display) !important; font-weight:800 !important; letter-spacing:-.02em !important; color:#F7F8FA !important }
+:root #settings.tbset .tbset-head input{ background:#0F1115 !important; border:1px solid #2C3038 !important; color:#F7F8FA !important; border-radius:10px !important }
+:root #settings.tbset .tbset-head button{ background:transparent !important; border:1px solid #2C3038 !important; color:#A8AFBA !important; border-radius:10px !important }
+:root #settings.tbset .tbset-head button:hover{ color:#F7F8FA !important; border-color:#FF3D77 !important }
+/* Tabs: quiet pills; the open one is solid white ink on graphite with a pink underline. */
+:root #settings.tbset .tbset-tab{
+  font-family:var(--body) !important; font-weight:600 !important; letter-spacing:0 !important;
+  background:transparent !important; color:#A8AFBA !important; border:1px solid #2C3038 !important;
+}
+:root #settings.tbset .tbset-tab[aria-selected="true"], :root #settings.tbset .tbset-tab.active{
+  background:#22262E !important; color:#F7F8FA !important; border-color:#3A3F4A !important;
+  box-shadow:inset 0 -3px 0 #FF3D77 !important;
+}
+:root #settings.tbset .lbl, :root #settings.tbset .accent-lbl{
+  font-family:var(--body) !important; font-weight:600 !important; color:#F7F8FA !important; letter-spacing:0 !important; text-transform:none !important;
+}
+/* Switches: one track, the chosen side teal. */
+:root #settings.tbset .seg{ border-radius:10px !important; overflow:hidden; border:1px solid #2C3038 !important; background:#0F1115 !important; gap:0 !important }
+:root #settings.tbset .seg button{
+  font-family:var(--body) !important; font-weight:600 !important; border:0 !important; border-radius:0 !important;
+  background:transparent !important; color:#A8AFBA !important;
+}
+:root #settings.tbset .seg button + button{ box-shadow:inset 1px 0 0 #2C3038 !important }
+:root #settings.tbset .seg button:hover{ color:#F7F8FA !important }
+:root #settings.tbset .seg button.active{ background:#00E0C6 !important; color:#0F1115 !important }
+/* Fields and actions. */
+:root #settings.tbset .locrow input, :root #settings.tbset .locrow select{
+  background:#0F1115 !important; border:1px solid #2C3038 !important; color:#F7F8FA !important; border-radius:10px !important; font-family:var(--body) !important;
+}
+:root #settings.tbset .locrow input:focus{ border-color:#00E0C6 !important; outline:none }
+:root #settings.tbset .locrow button, :root #settings.tbset .done{
+  background:#FF3D77 !important; color:#12101A !important; border:0 !important; font-family:var(--body) !important; font-weight:700 !important;
+}
+:root #settings.tbset .locrow button:hover, :root #settings.tbset .done:hover{ background:#FF6A97 !important }
+:root #settings.tbset .ghostbtn{ border-color:#2C3038 !important; color:#A8AFBA !important; font-family:var(--body) !important }
+:root #settings.tbset .ghostbtn:hover{ color:#F7F8FA !important; border-color:#00E0C6 !important }
+:root #settings.tbset .sw.active{ border-color:#F7F8FA !important }
+/* No empty band under "Watch a flight" when there's nothing to say. */
+:root #settings.tbset #watchMsg:empty, :root #settings.tbset #skyAddrMsg:empty, :root #settings.tbset #goveeMsg:empty{ min-height:0 !important; margin:0 !important }
+:root #settings.tbset .tbset-sec{ border-bottom-color:#2C3038 !important }
+:root #settings.tbset .tbset-foot{ background:#14171C !important; border-top-color:#2C3038 !important }

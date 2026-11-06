@@ -13,8 +13,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=35" />
-<link rel="stylesheet" href="sky-glass.css?v=1" />
-<script src="cityswitch.js?v=5"></script>
+<link rel="stylesheet" href="sky-glass.css?v=2" />
+<script src="cityswitch.js?v=6"></script>
 <script>/* Sky follows the board style: Glass (the default, i.e. nothing saved, or
    "glass") gets the Glass Sky; any other chosen style keeps the original. Set
    before first paint so the page never flashes the other layout. */
@@ -506,6 +506,7 @@
         <button id="watchGo">Watch</button>
       </div>
       <div id="watchMsg" style="font-size:12.5px;min-height:16px;margin:4px 0 2px;color:var(--amber-dim)"></div>
+      <a id="shareOwnLink" href="share.html" style="display:inline-block;margin:2px 0 6px;font-size:13px;font-weight:600;color:var(--amber);text-decoration:none">Share the flight you're on ›</a>
       <div class="lbl">Weather radar</div>
       <div class="seg" id="radarSeg">
         <button data-radar="on">On</button>
@@ -1162,9 +1163,11 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
   // the rest of the fleet as faint dots, so "nearest of N" is visible on the map
   if(!miniFleetLayer) miniFleetLayer=L.layerGroup().addTo(miniMap);
   miniFleetLayer.clearLayers();
-  const glassSky=document.documentElement.hasAttribute("data-sky-glass");
+  /* Every Sky now draws the fleet as clickable planes; the old faint dots are
+     only a fallback for vehicles with no transponder (trains, buses). */
+  const glassSky=true;
   (fleet||[]).slice(0,80).forEach(v=>{ if(!v.ll) return;
-    /* Glass Sky: every aircraft is a real marker — pointed along its track,
+    /* Every aircraft is a real marker — pointed along its track,
        labelled with its callsign, and clickable to make it the subject. */
     if(glassSky && v.hex){
       if(id==="p"+v.hex) return;                    // the subject has its own marker
@@ -1547,6 +1550,25 @@ function showPlanesUnconfigured(){
     + 'See AIRCRAFT-FEED.md \u2014 it takes a few minutes and runs on your own machine.</span></div>';
   const c=document.querySelector("#planeCount"); if(c) c.textContent="";
 }
+/* A shared flight link may carry the sharer's feed (&feed=). Accepted only if
+   cityswitch.js's TBSharedFeed allowlist names it, kept for this visit only,
+   and used only while watching that shared flight — it never becomes this
+   screen's feed for "nearest". */
+const sharedFeed=(()=>{ try{
+  const SF=window.TBSharedFeed; if(!SF) return "";
+  const q=new URLSearchParams(location.search).get("feed");
+  if(q && SF.allowed(q)){ sessionStorage.setItem("tb.sharedFeed", q); return q.replace(/\/+$/,""); }
+  const kept=sessionStorage.getItem("tb.sharedFeed");
+  return kept && SF.allowed(kept) ? kept.replace(/\/+$/,"") : "";
+}catch(e){ return ""; } })();
+/* The feed a link made HERE may carry: this screen's own, if it's the listed one. */
+function shareFeedParam(){
+  try{ const own=(localStorage.getItem("tb.adsbUrl")||"").trim().replace(/\/+$/,"");
+    if(own && window.TBSharedFeed && TBSharedFeed.allowed(own)) return own;
+    if(!own && sharedFeed) return sharedFeed;                    // passing a shared link on
+  }catch(e){} return "";
+}
+let sharedCredited=false;
 function adsbBase(){
   /* NO DEFAULT, on purpose. This used to fall back to adsb.lol, which is
      free and CORS-open and PROHIBITS COMMERCIAL USE — so a product that ships
@@ -1561,6 +1583,17 @@ function adsbBase(){
      is the setup. Unset, the card says so and nothing is fetched. */
   try{ var u=(localStorage.getItem("tb.adsbUrl")||"").trim().replace(/\/+$/,"");
        if(u) return u+"/v2"; }catch(e){}
+  if(watch && sharedFeed){
+    // The data's licence travels with it: credit the source on screen.
+    if(!sharedCredited && !document.getElementById("tbAdsbCredit")){
+      sharedCredited=true;
+      const d=document.createElement("div"); d.id="tbAdsbCredit";
+      d.textContent=(window.TBSharedFeed&&TBSharedFeed.credit)||"Aircraft data via a shared feed";
+      d.style.cssText="position:fixed;left:10px;bottom:4px;z-index:3;font:600 10px/1.3 system-ui,sans-serif;color:rgba(255,255,255,.75);text-shadow:0 1px 2px #000;pointer-events:none";
+      document.body.appendChild(d);
+    }
+    return sharedFeed+"/v2";
+  }
   return "";
 }
 /* Throws when no feed is configured, so the callers below fail into their
@@ -1574,9 +1607,8 @@ function adsbRequire(){
    ?flight=DAL392 and/or ?hex=a1b2c3, optionally &lat=&lon= of where it was
    when the link was made. The feeds only answer "aircraft near a point", so
    the watcher searches around the flight's LAST KNOWN position and moves that
-   point with it every tick — an airliner covers ~8 nm a minute, well inside a
-   90 nm search. Without a position (a typed flight number) it searches 250 nm
-   around this screen. Passenger flight numbers (DL392) are turned into the
+   point with it every tick (see the 40 nm note in producePlane). Without a
+   position (a typed flight number) it searches 40 nm around this screen. Passenger flight numbers (DL392) are turned into the
    ICAO callsign the aircraft actually broadcasts (DAL392). */
 const IATA_ICAO={AA:"AAL",DL:"DAL",UA:"UAL",WN:"SWA",B6:"JBU",AS:"ASA",NK:"NKS",F9:"FFT",G4:"AAY",HA:"HAL",
   SY:"SCX",MX:"MXY",XP:"VXP",YX:"RPA",OO:"SKW",MQ:"ENY","9E":"EDV",OH:"JIA",YV:"ASH",QX:"QXE",G7:"GJS",ZW:"AWI",
@@ -1631,19 +1663,33 @@ async function producePlane(){
   if(!adsbBase()) return { none:true, note:"No aircraft feed is set up on this screen. Trains, buses and the ISS still work." };
   let data;
   if(watch){
-    const c = watch.lat!=null ? {lat:watch.lat, lon:watch.lon} : loc, r = watch.lat!=null ? 90 : 250;
+    /* 40 nm, centred where the plane should be NOW. Measured against the
+       site's feed: every search up to 40 nm found a given aircraft, while a
+       60 nm one came back empty and a 90 nm one came back capped without it,
+       so wide searches can't be trusted to hold on to anything. Instead the
+       last fix is carried forward along its track at its ground speed — an
+       airliner covers ~2 nm between ticks, so it never leaves the circle. */
+    let c = watch.lat!=null ? {lat:watch.lat, lon:watch.lon} : loc;
+    if(watch.lat!=null && watch.gs>40 && typeof watch.trk==="number" && watch.t){
+      const d=Math.min(30, watch.gs*(Date.now()-watch.t)/3600000), R=Math.PI/180;
+      c={ lat:watch.lat + d/60*Math.cos(watch.trk*R),
+          lon:watch.lon + d/60*Math.sin(watch.trk*R)/Math.max(.2, Math.cos(watch.lat*R)) };
+    }
+    const r = 40;
     data=await getJSON(`${adsbRequire()}/point/${c.lat.toFixed(4)}/${c.lon.toFixed(4)}/${r}`);
     const name=watch.flight||watch.hex;
     const m=(data.ac||[]).find(a=>typeof a.lat==="number" && typeof a.lon==="number" &&
       ((watch.hex && a.hex===watch.hex) || (watch.flight && (a.flight||"").trim().toUpperCase()===watch.flight)));
     if(!m){
-      // Lost it near the last fix three times running: widen to the area around this screen.
-      if(++watch.misses>=3 && watch.lat!=null){ watch.lat=null; watch.lon=null; }
+      /* Lost it three ticks running: drop the dead reckoning and search the
+         last real fix again (it may have slowed, turned or landed). It is not
+         widened — the feed's wide searches are the unreliable ones. */
+      if(++watch.misses>=3){ watch.gs=0; watch.misses=0; }
       return { none:true, note:`Looking for ${name}… it isn't within reach of this screen's aircraft feed right now. Trying again.` };
     }
     watch.misses=0; watch.hex=m.hex; watch.flight=(m.flight||"").trim().toUpperCase()||watch.flight;
-    watch.lat=m.lat; watch.lon=m.lon;
-    if(m.alt_baro==="ground") return { none:true, note:`${watch.flight||m.r||m.hex} is on the ground.` };
+    watch.lat=m.lat; watch.lon=m.lon; watch.gs=m.gs||0; watch.trk=m.track; watch.t=Date.now();
+    if(m.alt_baro==="ground") return { none:true, note:`${watch.flight||m.r||m.hex} is on the ground${(m.gs||0)>5?", taxiing":""}. Sky will follow it as soon as it takes off.` };
     pinnedHex=m.hex;
   } else {
     data=await getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
@@ -1709,7 +1755,11 @@ async function producePlane(){
     title: airlineName(route,a), sub:[(a.flight||"").trim(), a.desc||a.t, a.r].filter(Boolean).join("  ·  "),
     oCity: route?(route.origin.municipality||route.origin.iata_code):null,
     dCity: route?(route.destination.municipality||route.destination.iata_code):null,
-    subline: route?`${route.origin.iata_code||""} ${route.origin.name||""}  →  ${route.destination.iata_code||""} ${route.destination.name||""}`.trim():(a.ownOp||"General aviation — no scheduled route"),
+    endHint: route?null:nearbyEnd(a),
+    subline: route?`${route.origin.iata_code||""} ${route.origin.name||""}  →  ${route.destination.iata_code||""} ${route.destination.name||""}`.trim()
+      : /^[A-Z]{3}\d/.test((a.flight||"").trim())
+        ? "Route not published for this flight today"
+        : (tidyOwner(a.ownOp) ? `${tidyOwner(a.ownOp)} · private or unscheduled` : "General aviation — no scheduled route"),
     oLL, dLL, posLL:{lat:a.lat,lon:a.lon}, oCode:route?route.origin.iata_code:"", dCode:route?route.destination.iata_code:"",
     progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
     statusHtml: emergencyBadge(a)
@@ -2684,11 +2734,72 @@ function phaseOf(a){
   if(alt>=28000) return "cruising";
   return "en route";
 }
+/* Airline names from the callsign prefix (DAL → Delta Air Lines). When the
+   route lookup fails or is rejected, the feed's ownOp is the REGISTERED OWNER
+   — "DELTA AIR LINES INC", "WILMINGTON TRUST CO TRUSTEE" (a leasing trust) —
+   which reads like a form, not a flight. The callsign names the operator. */
+const ICAO_AIRLINE={AAL:"American Airlines",DAL:"Delta Air Lines",UAL:"United Airlines",SWA:"Southwest Airlines",
+  JBU:"JetBlue Airways",ASA:"Alaska Airlines",NKS:"Spirit Airlines",FFT:"Frontier Airlines",AAY:"Allegiant Air",
+  HAL:"Hawaiian Airlines",SCX:"Sun Country Airlines",MXY:"Breeze Airways",VXP:"Avelo Airlines",RPA:"Republic Airways",
+  SKW:"SkyWest Airlines",ENY:"Envoy Air",EDV:"Endeavor Air",JIA:"PSA Airlines",ASH:"Mesa Airlines",QXE:"Horizon Air",
+  GJS:"GoJet Airlines",AWI:"Piedmont Airlines",PDT:"Piedmont Airlines",UCA:"CommuteAir",ACA:"Air Canada",JZA:"Jazz",
+  WJA:"WestJet",POE:"Porter Airlines",AMX:"Aeroméxico",VOI:"Volaris",CMP:"Copa Airlines",AVA:"Avianca",LAN:"LATAM",
+  BAW:"British Airways",VIR:"Virgin Atlantic",AFR:"Air France",KLM:"KLM",DLH:"Lufthansa",SWR:"Swiss",AUA:"Austrian",
+  BEL:"Brussels Airlines",IBE:"Iberia",ITY:"ITA Airways",EIN:"Aer Lingus",SAS:"SAS",FIN:"Finnair",TAP:"TAP Air Portugal",
+  LOT:"LOT Polish Airlines",EZY:"easyJet",EJU:"easyJet Europe",RYR:"Ryanair",WZZ:"Wizz Air",VLG:"Vueling",EWG:"Eurowings",
+  CFG:"Condor",UAE:"Emirates",QTR:"Qatar Airways",ETD:"Etihad Airways",THY:"Turkish Airlines",SVA:"Saudia",
+  QFA:"Qantas",ANZ:"Air New Zealand",ANA:"All Nippon Airways",JAL:"Japan Airlines",KAL:"Korean Air",AAR:"Asiana",
+  CPA:"Cathay Pacific",SIA:"Singapore Airlines",CAL:"China Airlines",EVA:"EVA Air",AIC:"Air India",ETH:"Ethiopian",
+  FDX:"FedEx",UPS:"UPS",GTI:"Atlas Air",ABX:"ABX Air",ATN:"Air Transport International",CKS:"Kalitta Air",
+  NJE:"NetJets Europe",EJA:"NetJets",LXJ:"Flexjet",XOJ:"XO",DLA:"Air Dolomiti",BCS:"European Air Transport",
+  CLX:"Cargolux",GEC:"Lufthansa Cargo",EDW:"Edelweiss",CTN:"Croatia Airlines",AEE:"Aegean"};
+function tidyOwner(o){
+  // "DELTA AIR LINES INC" → "Delta Air Lines"; trusts and banks say nothing useful
+  const t=String(o||"").replace(/\b(INC|CO|CORP|CORPORATION|LLC|LTD|LP|NA)\b\.?/gi,"").replace(/\s{2,}/g," ").trim();
+  if(!t || /TRUST|BANK|LEASING|CAPITAL|FINANCE|HOLDINGS/i.test(t)) return "";
+  return t===t.toUpperCase() ? t.toLowerCase().replace(/\b([a-z])/g,c=>c.toUpperCase()) : t;
+}
 function airlineName(route, a){
   if(route && route.airline && route.airline.name) return route.airline.name;
-  if(a.ownOp) return a.ownOp;
-  const cs=(a.flight||"").trim();
+  const cs=(a.flight||"").trim(), pre=cs.slice(0,3).toUpperCase();
+  if(/^[A-Z]{3}\d/.test(cs) && ICAO_AIRLINE[pre]) return ICAO_AIRLINE[pre];
+  const own=tidyOwner(a.ownOp);
+  if(own) return own;
   return cs || a.r || "Unknown aircraft";
+}
+/* When there is no believable route, the one end we CAN know: a plane low over
+   an airport near here is climbing out of it, landing at it, or sitting on it.
+   A short list — the airports around the twelve boards plus the big hubs —
+   because this only ever has to recognise somewhere close to you. */
+const NEAR_AIRPORTS=[
+  ["DCA","Washington",38.8521,-77.0377],["IAD","Washington Dulles",38.9531,-77.4565],["BWI","Baltimore",39.1774,-76.6684],
+  ["PHL","Philadelphia",39.8744,-75.2424],["EWR","Newark",40.6895,-74.1745],["JFK","New York JFK",40.6413,-73.7781],
+  ["LGA","New York LaGuardia",40.7769,-73.8740],["TEB","Teterboro",40.8501,-74.0608],["HPN","White Plains",41.0670,-73.7076],
+  ["ISP","Long Island",40.7952,-73.1002],["BOS","Boston",42.3656,-71.0096],["PVD","Providence",41.7267,-71.4204],
+  ["ACY","Atlantic City",39.4576,-74.5772],["RIC","Richmond",37.5052,-77.3197],["ORF","Norfolk",36.8946,-76.2012],
+  ["MDT","Harrisburg",40.1935,-76.7634],["ABE","Allentown",40.6524,-75.4404],["BDL","Hartford",41.9389,-72.6832],
+  ["LAX","Los Angeles",33.9416,-118.4085],["BUR","Burbank",34.2007,-118.3585],["LGB","Long Beach",33.8177,-118.1516],
+  ["SNA","Orange County",33.6762,-117.8675],["ONT","Ontario",34.0560,-117.6012],["VNY","Van Nuys",34.2098,-118.4899],
+  ["SFO","San Francisco",37.6213,-122.3790],["OAK","Oakland",37.7126,-122.2197],["SJC","San Jose",37.3639,-121.9289],
+  ["AMS","Amsterdam",52.3105,4.7683],["RTM","Rotterdam",51.9569,4.4372],["ZRH","Zurich",47.4582,8.5555],
+  ["BSL","Basel",47.5896,7.5299],["CGN","Cologne Bonn",50.8659,7.1427],["DUS","Düsseldorf",51.2895,6.7668],
+  ["FRA","Frankfurt",50.0379,8.5622],["STR","Stuttgart",48.6899,9.2220],["MUC","Munich",48.3538,11.7861],
+  ["FCO","Rome Fiumicino",41.8003,12.2389],["CIA","Rome Ciampino",41.7994,12.5949],
+  ["ATL","Atlanta",33.6407,-84.4277],["ORD","Chicago O'Hare",41.9742,-87.9073],["DFW","Dallas–Fort Worth",32.8998,-97.0403],
+  ["DEN","Denver",39.8561,-104.6737],["SEA","Seattle",47.4502,-122.3088],["MIA","Miami",25.7959,-80.2870],
+  ["MCO","Orlando",28.4312,-81.3081],["CLT","Charlotte",35.2140,-80.9431],["LHR","London Heathrow",51.4700,-0.4543],
+  ["CDG","Paris",49.0097,2.5479]];
+function nearbyEnd(a){
+  if(typeof a.lat!=="number") return null;
+  const onGround = a.alt_baro==="ground";
+  const alt = typeof a.alt_baro==="number" ? a.alt_baro : (onGround?0:null);
+  if(alt==null || alt>9000) return null;
+  let best=null, bd=1e9;
+  for(const ap of NEAR_AIRPORTS){ const d=haversineNm({lat:a.lat,lon:a.lon},{lat:ap[2],lon:ap[3]}); if(d<bd){ bd=d; best=ap; } }
+  if(!best || bd > (onGround?3:Math.max(8, alt/350))) return null;     // ~25 nm at 9,000 ft
+  const rate=typeof a.baro_rate==="number"?a.baro_rate:0;
+  const how = onGround ? "at" : rate>250 ? "from" : rate<-250 ? "to" : null;
+  return how ? { how, code:best[0], city:best[1], ll:{lat:best[2],lon:best[3]} } : null;
 }
 /* ---- live telemetry chips (planes) ----
    These read fields the ADS-B feed already returns but the view was throwing
@@ -2940,6 +3051,11 @@ function render(s){
   if(s.dCity){
     routeEl.innerHTML = (s.oCity?`<span class="city">${escapeHtml(s.oCity)}</span><span class="arrow">→</span>`:`<span class="arrow">→</span>`)
       + `<span class="city">${escapeHtml(s.dCity)}</span>`;
+    routeEl.style.display="";
+  } else if(s.endHint){
+    // No believable route, but we can see one end of it: "From Washington", "To Boston", "At Newark".
+    const h=s.endHint, w={from:"From",to:"To",at:"At"}[h.how];
+    routeEl.innerHTML = `<span class="code">${w}</span><span class="city">${escapeHtml(h.city)}</span><span class="code">${escapeHtml(h.code)}</span>`;
     routeEl.style.display="";
   } else routeEl.style.display="none";
   const subEl=$("#subcity"); subEl.textContent=s.subline||""; subEl.style.display=s.subline?"":"none";
@@ -3452,6 +3568,7 @@ function initSettings(){
     if(watchFlight(v)){ msg.textContent=`Looking for ${normalizeFlight(v)}…`; $("#settings").classList.remove("show"); }
     else msg.textContent="That doesn't look like a flight number."; };
   $("#watchGo").addEventListener("click", goWatch);
+  { const c=new URLSearchParams(location.search).get("city"); if(c) $("#shareOwnLink").href="share.html?city="+encodeURIComponent(c); }
   $("#watchInput").addEventListener("keydown", e=>{ if(e.key==="Enter") goWatch(); });
   $("#photoShowSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPhotoShow(b.dataset.show==="on"); });
   const paintRadar=()=>document.querySelectorAll("#radarSeg button").forEach(b=>b.classList.toggle("active",(b.dataset.radar==="on")===radarShown()));
@@ -3634,8 +3751,8 @@ function boot(){
 function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
-<script src="sky-glass.js?v=1" defer></script>
-<script src="sky-landmarks.js?v=1" defer></script>
+<script src="sky-glass.js?v=2" defer></script>
+<script src="sky-landmarks.js?v=2" defer></script>
 <script src="mascot.js?v=3" defer></script>
 <script src="mascot-buddy.js?v=9" defer></script>
 </body>

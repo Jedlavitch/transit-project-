@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Share your flight — Transit Project</title>
+<meta name="description" content="Send a link that lets anyone follow your flight live in Transit Project's Sky view.">
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script src="cityswitch.js?v=6"></script>
+<style>
+  /* Share your flight. Find the plane you're on (or about to board) among the
+     aircraft near you, or by its flight number, and get a link that opens
+     Sky following it — for anyone, with no setup on their side.
+
+     The feeds answer only "aircraft near a point", so this has to find the
+     flight while it's near you: at the gate, taxiing, or overhead. The link
+     then carries where it was, and Sky follows it from there for the whole
+     trip. */
+  :root{
+    --bg:#0F1115; --panel:#181B21; --panel2:#13161B; --line:#2C3038; --line2:#3A3F4A;
+    --ink:#F7F8FA; --muted:#A8AFBA; --pink:#FF3D77; --teal:#00E0C6; --blue:#2F7BFF;
+    --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;min-height:100dvh;padding:max(20px,env(safe-area-inset-top)) 16px 40px;
+    background:radial-gradient(120% 60% at 50% -10%, #12305e 0%, rgba(15,17,21,0) 60%), var(--bg)}
+  body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:3px;pointer-events:none;
+    background:linear-gradient(90deg,var(--pink) 0,var(--pink) 33.333%,var(--teal) 33.333%,var(--teal) 66.666%,var(--blue) 66.666%)}
+  .wrap{max-width:560px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  header img{width:40px;height:40px}
+  .kick{font:500 10px/1.3 var(--mono);letter-spacing:.14em;color:var(--muted)}
+  h1{margin:3px 0 0;font:800 clamp(26px,6vw,34px)/1.05 var(--display);letter-spacing:-.03em}
+  .back{margin-left:auto;color:var(--muted);text-decoration:none;font-weight:600;font-size:14px;
+    border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+  .back:hover{color:var(--ink);border-color:var(--blue)}
+  .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;overflow:hidden}
+  .card::before{content:"";position:absolute;left:18px;top:0;width:72px;height:3px;
+    background:linear-gradient(90deg,var(--pink) 0,var(--pink) 33.333%,var(--teal) 33.333%,var(--teal) 66.666%,var(--blue) 66.666%)}
+  .lede{margin:0 0 14px;color:var(--muted);font-size:14px;line-height:1.5}
+  label{display:block;font-weight:600;font-size:14px;margin:0 0 8px}
+  .row{display:flex;gap:8px}
+  input[type=text]{flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--ink);font:500 16px/1.2 var(--mono);letter-spacing:.02em;text-transform:uppercase}
+  input[type=text]::placeholder{text-transform:none;font-family:var(--body);color:#6c7380}
+  input[type=text]:focus{outline:none;border-color:var(--teal)}
+  button{font-family:var(--body);cursor:pointer}
+  .btn{flex:none;border:0;border-radius:12px;padding:0 18px;min-height:46px;font-weight:700;font-size:15px;
+    background:var(--pink);color:#12101A}
+  .btn:hover{background:#FF6A97}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.ghost:hover{border-color:var(--teal);background:rgba(0,224,198,.08)}
+  .msg{min-height:0;margin:10px 0 0;font-size:13.5px;line-height:1.45;color:var(--muted)}
+  .msg:empty{display:none}
+  .msg.bad{color:#ff8a8a}
+  .near-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 6px}
+  .near-h b{font:700 15px/1.2 var(--display);letter-spacing:-.01em}
+  .near-h span{font:500 12px/1.3 var(--mono);color:var(--muted)}
+  .list{display:flex;flex-direction:column;margin:0 -8px}
+  .pl{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;
+    padding:10px 8px;border:0;border-radius:10px;background:none;color:var(--ink);text-align:left;width:100%}
+  .pl + .pl{box-shadow:0 -1px 0 var(--line)}
+  .pl:hover,.pl:focus-visible{background:rgba(0,224,198,.1);box-shadow:none;outline:none}
+  .tag{min-width:84px;text-align:center;padding:4px 8px;border-radius:6px;font:600 13px/1.2 var(--mono);
+    background:rgba(255,255,255,.07);box-shadow:inset 0 -2px 0 var(--blue)}
+  .pl.ground .tag{box-shadow:inset 0 -2px 0 var(--teal)}
+  .what{min-width:0}
+  .what b{display:block;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .what span{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .far{font:500 12px/1.2 var(--mono);color:var(--muted);white-space:nowrap}
+  .empty{padding:14px 8px;color:var(--muted);font-size:14px}
+  .where{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;font-size:13px;color:var(--muted)}
+  .where select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-family:var(--body)}
+  .linkbox{display:none}
+  .linkbox.show{display:block}
+  .flight{margin:2px 0 4px;font:800 clamp(24px,5.4vw,32px)/1.05 var(--display);letter-spacing:-.03em}
+  .sub{font:500 13px/1.4 var(--mono);color:var(--muted);margin-bottom:14px}
+  .url{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--muted);font:400 12px/1.3 var(--mono);margin:12px 0 0}
+  .acts{display:flex;flex-wrap:wrap;gap:8px}
+  .acts .btn{flex:1 1 160px}
+  .fine{color:#6c7380;font-size:12px;line-height:1.5;margin:18px 4px 0}
+  .credit{position:fixed;left:10px;bottom:8px;font:600 10px/1.3 var(--body);color:#6c7380}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="index.html" aria-label="Transit Project"><img src="brand/mark-on-dark.svg" alt=""></a>
+    <div><div class="kick">TRANSIT PROJECT / SKY</div><h1>Share your flight</h1></div>
+    <a class="back" id="backSky" href="night.html">‹ Sky</a>
+  </header>
+
+  <section class="card" id="findCard">
+    <p class="lede">Find the plane you're on, then send the link to anyone. It opens Sky following your flight, live, for the whole trip, and they don't need to set anything up.</p>
+    <label for="fl">Your flight number</label>
+    <div class="row">
+      <input type="text" id="fl" placeholder="e.g. DL392 or DAL392" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button class="btn" id="find">Find it</button>
+    </div>
+    <p class="msg" id="findMsg"></p>
+  </section>
+
+  <section class="card">
+    <div class="near-h"><b>Or tap your plane</b><span id="nearInfo">near you</span></div>
+    <div class="list" id="near"><div class="empty">Looking for aircraft near you…</div></div>
+    <div class="where">
+      <span>Searching near</span>
+      <select id="whereSel" aria-label="Search near"></select>
+      <button class="btn ghost" id="gps" style="min-height:34px;padding:0 12px;font-size:13px">Use my location</button>
+    </div>
+  </section>
+
+  <section class="card linkbox" id="linkCard" aria-live="polite">
+    <div class="kick">YOUR LINK</div>
+    <div class="flight" id="lkFlight">—</div>
+    <div class="sub" id="lkSub"></div>
+    <div class="acts">
+      <button class="btn" id="shareBtn">Share link</button>
+      <a class="btn ghost" id="openSky" href="#" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Watch it in Sky</a>
+    </div>
+    <input class="url" id="lkUrl" readonly aria-label="Your link">
+    <p class="msg" id="lkMsg"></p>
+  </section>
+
+  <p class="fine">Planes broadcast their position for anyone to receive, and this only finds a flight while it's near you: at the gate, taxiing or overhead. Once found, the link keeps up with it wherever it goes. Some private and military aircraft don't share a flight number.</p>
+</div>
+<div class="credit" id="credit"></div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  function esc(t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  /* Where to look. Sky's ?city= keys, so a link from Sky keeps its city. */
+  var CITIES = {
+    dc: ["Washington DC", 38.8977, -77.0365], philly: ["Philadelphia", 39.9526, -75.1652],
+    nj: ["New Jersey", 40.7357, -74.1724], nyc: ["New York", 40.7128, -74.0060],
+    boston: ["Boston", 42.3523, -71.0552], la: ["Los Angeles", 34.0522, -118.2437],
+    sf: ["San Francisco", 37.7749, -122.4194], amsterdam: ["Amsterdam", 52.3791, 4.9003],
+    zurich: ["Zurich", 47.3779, 8.5403], cologne: ["Cologne", 50.9430, 6.9589],
+    stuttgart: ["Stuttgart", 48.7840, 9.1829], rome: ["Rome", 41.9010, 12.5016]
+  };
+  var params = new URLSearchParams(location.search);
+  var cityKey = CITIES[params.get("city")] ? params.get("city") : "dc";
+  var here = { lat: CITIES[cityKey][1], lon: CITIES[cityKey][2], label: CITIES[cityKey][0] };
+  var sel = $("#whereSel");
+  Object.keys(CITIES).forEach(function (k) {
+    var o = document.createElement("option"); o.value = k; o.textContent = CITIES[k][0];
+    if (k === cityKey) o.selected = true; sel.appendChild(o);
+  });
+  $("#backSky").href = "night.html?city=" + cityKey;
+
+  /* The feed: this device's own, or the site's shared one (cityswitch.js). */
+  var own = ""; try { own = (localStorage.getItem("tb.adsbUrl") || "").trim().replace(/\/+$/, ""); } catch (e) {}
+  var SF = window.TBSharedFeed;
+  var feed = own || (SF && SF.url) || "";
+  var linkFeed = own ? (SF && SF.allowed(own) ? own : "") : (SF ? SF.url : "");
+  if (!own && SF) $("#credit").textContent = SF.credit;
+
+  /* Flight numbers as people say them (DL392) to the callsign planes send (DAL392). */
+  var IATA = {AA:"AAL",DL:"DAL",UA:"UAL",WN:"SWA",B6:"JBU",AS:"ASA",NK:"NKS",F9:"FFT",G4:"AAY",HA:"HAL",SY:"SCX",MX:"MXY",
+    YX:"RPA",OO:"SKW",MQ:"ENY","9E":"EDV",OH:"JIA",YV:"ASH",QX:"QXE",G7:"GJS",ZW:"AWI",PT:"PDT",C5:"UCA",AC:"ACA",WS:"WJA",
+    PD:"POE",AM:"AMX",Y4:"VOI",CM:"CMP",AV:"AVA",LA:"LAN",BA:"BAW",VS:"VIR",AF:"AFR",KL:"KLM",LH:"DLH",LX:"SWR",OS:"AUA",
+    SN:"BEL",IB:"IBE",AZ:"ITY",EI:"EIN",SK:"SAS",AY:"FIN",TP:"TAP",LO:"LOT",U2:"EZY",FR:"RYR",W6:"WZZ",VY:"VLG",EW:"EWG",
+    DE:"CFG",EK:"UAE",QR:"QTR",EY:"ETD",TK:"THY",SV:"SVA",QF:"QFA",NZ:"ANZ",NH:"ANA",JL:"JAL",KE:"KAL",OZ:"AAR",CX:"CPA",
+    SQ:"SIA",CI:"CAL",BR:"EVA",AI:"AIC",ET:"ETH"};
+  function normalize(raw) {
+    var f = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (/^[A-Z]{3}\d{1,4}[A-Z]?$/.test(f)) return f;
+    var m = f.match(/^([A-Z0-9]{2})(\d{1,4}[A-Z]?)$/);
+    if (m && IATA[m[1]]) return IATA[m[1]] + m[2].replace(/^0+(?=\d)/, "");
+    return f;
+  }
+  function nm(a, b) {
+    var R = 3440.065, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function get(lat, lon, radius) {
+    if (!feed) return Promise.reject(new Error("no feed"));
+    return fetch(feed + "/v2/point/" + lat.toFixed(4) + "/" + lon.toFixed(4) + "/" + radius, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("feed " + r.status); return r.json(); })
+      .then(function (d) { return (d.ac || []).filter(function (a) { return typeof a.lat === "number" && typeof a.lon === "number"; }); });
+  }
+  function status(a) {
+    if (a.alt_baro === "ground") return (a.gs || 0) > 5 ? "taxiing" : "at the gate";
+    return typeof a.alt_baro === "number" ? a.alt_baro.toLocaleString() + " ft" : "airborne";
+  }
+
+  /* The nearby list: airport traffic first — the plane you're sitting in is
+     on the ground, close, and usually the one you want. */
+  var nearby = [];
+  function drawNear() {
+    var box = $("#near");
+    if (!feed) { box.innerHTML = '<div class="empty">No aircraft feed is available on this device.</div>'; return; }
+    if (!nearby.length) { box.innerHTML = '<div class="empty">No aircraft near ' + esc(here.label) + ' right now.</div>'; return; }
+    box.innerHTML = nearby.slice(0, 30).map(function (a, i) {
+      var call = (a.flight || "").trim() || a.r || a.hex;
+      return '<button type="button" class="pl' + (a.alt_baro === "ground" ? " ground" : "") + '" data-i="' + i + '">' +
+        '<span class="tag">' + esc(call) + "</span>" +
+        '<span class="what"><b>' + esc(a.desc || a.t || "Aircraft") + "</b><span>" + esc(status(a)) + "</span></span>" +
+        '<span class="far">' + a._nm.toFixed(1) + " nm</span></button>";
+    }).join("");
+  }
+  function loadNear() {
+    $("#nearInfo").textContent = "near " + here.label;
+    get(here.lat, here.lon, 40).then(function (ac) {
+      ac.forEach(function (a) { a._nm = nm(here, a); });
+      nearby = ac.sort(function (x, y) {
+        var gx = x.alt_baro === "ground" ? 0 : 1, gy = y.alt_baro === "ground" ? 0 : 1;
+        return gx - gy || x._nm - y._nm;
+      });
+      drawNear();
+    }).catch(function () {
+      $("#near").innerHTML = '<div class="empty">' + (feed ? "The aircraft feed isn't answering. Try again in a moment." : "No aircraft feed is available on this device.") + "</div>";
+    });
+  }
+  $("#near").addEventListener("click", function (e) {
+    var b = e.target.closest(".pl"); if (b) pick(nearby[+b.getAttribute("data-i")]);
+  });
+  sel.addEventListener("change", function () {
+    cityKey = sel.value; here = { lat: CITIES[cityKey][1], lon: CITIES[cityKey][2], label: CITIES[cityKey][0] };
+    $("#backSky").href = "night.html?city=" + cityKey; loadNear();
+  });
+  $("#gps").addEventListener("click", function () {
+    if (!navigator.geolocation) return;
+    $("#gps").textContent = "Locating…";
+    navigator.geolocation.getCurrentPosition(function (p) {
+      here = { lat: p.coords.latitude, lon: p.coords.longitude, label: "you" };
+      $("#gps").textContent = "Using your location"; loadNear();
+    }, function () { $("#gps").textContent = "Location unavailable"; }, { maximumAge: 120000, timeout: 10000 });
+  });
+
+  /* Find by flight number: the nearby list first, then a wide search. */
+  function find() {
+    var want = normalize($("#fl").value), msg = $("#findMsg");
+    msg.className = "msg";
+    if (!want) { msg.textContent = "Type your flight number, like DL392."; return; }
+    var hit = nearby.filter(function (a) { return (a.flight || "").trim().toUpperCase() === want || (a.r || "").toUpperCase() === want; })[0];
+    if (hit) { msg.textContent = ""; pick(hit); return; }
+    msg.textContent = "Looking for " + want + "…";
+    // 40 nm: the feed's wider searches are capped and miss aircraft (measured)
+    get(here.lat, here.lon, 40).then(function (ac) {
+      var h = ac.filter(function (a) { return (a.flight || "").trim().toUpperCase() === want || (a.r || "").toUpperCase() === want; })[0];
+      if (h) { h._nm = nm(here, h); msg.textContent = ""; pick(h); return; }
+      msg.className = "msg bad";
+      msg.textContent = want + " isn't near " + here.label + " right now. Try once you're at the gate or on board, or check the flight number.";
+    }).catch(function () { msg.className = "msg bad"; msg.textContent = "The aircraft feed isn't answering. Try again in a moment."; });
+  }
+  $("#find").addEventListener("click", find);
+  $("#fl").addEventListener("keydown", function (e) { if (e.key === "Enter") find(); });
+
+  /* The link: the same format Sky's own Share button makes. */
+  var current = null;
+  function pick(a) {
+    if (!a) return;
+    var call = (a.flight || "").trim();
+    var u = new URL("night.html", location.href);
+    u.searchParams.set("city", cityKey);
+    if (call) u.searchParams.set("flight", call);
+    u.searchParams.set("hex", a.hex);
+    u.searchParams.set("lat", a.lat.toFixed(3));
+    u.searchParams.set("lon", a.lon.toFixed(3));
+    if (linkFeed) u.searchParams.set("feed", linkFeed);
+    current = { url: u.toString(), call: call || a.r || a.hex };
+    $("#lkFlight").textContent = current.call;
+    $("#lkSub").textContent = [a.desc || a.t, a.r, status(a)].filter(Boolean).join(" · ");
+    $("#lkUrl").value = current.url;
+    $("#openSky").href = current.url;
+    $("#lkMsg").textContent = "";
+    $("#linkCard").classList.add("show");
+    $("#linkCard").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  $("#shareBtn").addEventListener("click", function () {
+    if (!current) return;
+    var t = "Follow " + current.call + " live";
+    if (navigator.share) { navigator.share({ title: t, text: t + " on Transit Project", url: current.url }).catch(function () {}); return; }
+    var ok = function () { $("#lkMsg").textContent = "Link copied. Paste it into a message to anyone."; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(current.url).then(ok, function () { $("#lkUrl").select(); $("#lkMsg").textContent = "Copy the link above."; });
+    else { $("#lkUrl").select(); $("#lkMsg").textContent = "Copy the link above."; }
+  });
+  $("#lkUrl").addEventListener("focus", function () { this.select(); });
+
+  if (params.get("flight")) { $("#fl").value = params.get("flight"); }
+  loadNear();
+  if (params.get("flight")) setTimeout(find, 600);
+})();
+</script>
+</body>
+</html>

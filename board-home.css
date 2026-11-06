@@ -335,6 +335,10 @@
   position:relative; z-index:6; background:transparent; box-shadow:none;
   border-image:none; border-bottom:0;
 }
+/* The header sits a layer above the stat strip: both were z6, and the strip
+   comes later in the page, so the Views menu (which hangs out of the header)
+   opened BEHIND the stat pills. */
+:root[data-style="glass"] body #app > header{ z-index:8 }
 :root[data-style="glass"] body #app > header::after,
 :root[data-style="glass"] body #statStrip::before{
   content:""; position:absolute; top:0; right:0; bottom:0; left:0; z-index:-1;

@@ -1,5 +1,10 @@
-/* Sky — Glass behaviour (styles in sky-glass.css). Runs only when night.html's
-   pre-paint check set data-sky-glass, i.e. the board style is Glass.
+/* Sky behaviour (styles in sky-glass.css).
+
+   Two layers. The FEATURES run in every Sky — Glass and the original
+   starfield one alike: a draggable, zoomable map that waits 30 s after you
+   touch it, the "Following / Watching" chip with its way back, Esc, and the
+   Share flight button. The GLASS LOOK runs only when night.html's pre-paint
+   check set data-sky-glass (board style Glass, the default):
 
    1. Moves the live map out to <body> as the full-screen backdrop. The flight
       panel animates with a transform on every change of subject, and a
@@ -14,13 +19,13 @@
 (function () {
   "use strict";
   var root = document.documentElement;
-  if (!root.hasAttribute("data-sky-glass")) return;
+  var glass = root.hasAttribute("data-sky-glass");
 
   function $(s) { return document.querySelector(s); }
 
   /* 1 — the map becomes the background */
   var mapEl = document.getElementById("miniMap");
-  if (mapEl && mapEl.parentNode !== document.body) document.body.insertBefore(mapEl, document.body.firstChild);
+  if (glass && mapEl && mapEl.parentNode !== document.body) document.body.insertBefore(mapEl, document.body.firstChild);
 
   /* 2 — fit around the overlay. `miniMap` is a top-level `let` in night.html:
      a lexical global, reachable by name from here but not as window.miniMap. */
@@ -63,7 +68,7 @@
     try {
       m.dragging.enable(); m.scrollWheelZoom.enable(); m.touchZoom.enable();
       m.doubleClickZoom.enable(); m.boxZoom.enable(); m.keyboard.enable();
-      L.control.zoom({ position: "topright" }).addTo(m);
+      L.control.zoom({ position: glass ? "topright" : "topleft" }).addTo(m);
     } catch (e) {}
     var c = m.getContainer();
     var labels = function () { c.classList.toggle("sg-zoomed-out", m.getZoom() < 8); };
@@ -83,6 +88,7 @@
     var fit = m.fitBounds;
     m.fitBounds = function (bounds, opts) {
       if (userHolding()) return this;
+      if (!glass) return fit.apply(this, arguments);       // the original Sky's card map frames itself
       var o = {}, k;
       for (k in (opts || {})) o[k] = opts[k];
       delete o.padding;
@@ -96,6 +102,7 @@
     m.setView = function (center, zoom, opts) {
       if (userHolding()) return this;
       var r = setView.apply(this, arguments);
+      if (!glass) return r;
       try {
         var p = overlayPadding(), dx = (p.paddingTopLeft[0] - p.paddingBottomRight[0]) / 2,
             dy = (p.paddingTopLeft[1] - p.paddingBottomRight[1]) / 2;
@@ -112,6 +119,7 @@
   var tries = 0, poll = setInterval(function () { if (patchMap() || ++tries > 200) clearInterval(poll); }, 300);
   var fitTimer = 0;
   function headEdge() {
+    if (!glass) return;
     var h = $("header");
     if (h) root.style.setProperty("--sg-head", Math.round(h.getBoundingClientRect().bottom) + "px");
   }
@@ -148,13 +156,13 @@
     if (e.target.closest && e.target.closest(".sg-plane-wrap")) userAt = 0;
   }, true);
 
-  /* 3a — idle fade */
+  /* 3a — idle fade (Glass) */
   var IDLE_MS = 3500, idleTimer = 0;
   function busy() {
     return ["#settings.show", "#fleetPanel.show", "#logPanel.show"].some(function (s) { return !!$(s); }) ||
       (document.activeElement && document.activeElement.closest && !!document.activeElement.closest("header"));
   }
-  function sleep() { if (busy()) { wake(); return; } root.classList.add("sg-idle"); }
+  function sleep() { if (!glass) return; if (busy()) { wake(); return; } root.classList.add("sg-idle"); }
   function wake() {
     root.classList.remove("sg-idle");
     clearTimeout(idleTimer); idleTimer = setTimeout(sleep, IDLE_MS);
@@ -178,7 +186,7 @@
     queueRefit();
   }
   var gear = document.getElementById("setBtn");
-  if (gear && !document.getElementById("sgHideBtn")) {
+  if (glass && gear && !document.getElementById("sgHideBtn")) {
     var hb = document.createElement("button");
     hb.id = "sgHideBtn"; hb.type = "button";
     gear.parentNode.insertBefore(hb, gear);
@@ -197,6 +205,8 @@
     u.searchParams.set("hex", sub.hex);
     u.searchParams.set("lat", sub.posLL.lat.toFixed(3));
     u.searchParams.set("lon", sub.posLL.lon.toFixed(3));
+    // so the person you send it to doesn't need a feed of their own
+    try { var f = typeof shareFeedParam === "function" ? shareFeedParam() : ""; if (f) u.searchParams.set("feed", f); } catch (e) {}
     return { url: u.toString(), title: (sub.callsign || "A flight") + " on Transit Project" };
   }
   function toast(t) {
@@ -212,7 +222,8 @@
     gear.parentNode.insertBefore(sb, gear);
     sb.addEventListener("click", function () {
       var l = shareLink();
-      if (!l) { toast("Only aircraft can be shared, once one is on screen."); return; }
+      // Nothing on screen to share (trains, the ISS, an empty sky): go to the page for sharing your own flight.
+      if (!l) { var c = new URLSearchParams(location.search).get("city"); location.href = "share.html" + (c ? "?city=" + encodeURIComponent(c) : ""); return; }
       if (navigator.share) { navigator.share({ title: l.title, url: l.url }).catch(function () {}); return; }
       var done = function () { toast("Link copied — send it to anyone."); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(l.url).then(done, function () { prompt("Copy this link:", l.url); });
@@ -221,9 +232,10 @@
   }
 
   var bare = false;
-  try { bare = localStorage.getItem(KEY) === "1"; } catch (e) {}
-  setBare(bare);
+  try { bare = glass && localStorage.getItem(KEY) === "1"; } catch (e) {}
+  if (glass) setBare(bare);
   addEventListener("keydown", function (e) {
+    if (!glass) return;
     if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== "h" && e.key !== "H")) return;
     var t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
