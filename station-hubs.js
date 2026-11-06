@@ -87,7 +87,10 @@
   /* One hub's rows from one bundle. Trains that finish anywhere in the hub are
      arrivals, not departures, and a train calling at two platforms of one hub counts once. */
   function extract(bundle,hub,key,feed){
-    var here={},names={};(bundle.stations||[]).forEach(function(s){names[s.id]=s.name;if(metres(hub.lat,hub.lon,s.lat,s.lon)<=hub.r)here[s.id]=1;});
+    /* `near` points the bundle at a station away from the dot: JFK's LIRR trains
+       leave from Jamaica, an AirTrain ride from the terminals. */
+    var at=hub.near||hub;
+    var here={},names={};(bundle.stations||[]).forEach(function(s){names[s.id]=s.name;if(metres(at.lat,at.lon,s.lat,s.lon)<=at.r)here[s.id]=1;});
     var out=[],pats=bundle.pats,offs=bundle.offs||[];
     (bundle.trips||[]).forEach(function(t){
       var ids,times,line,hs;
@@ -96,8 +99,8 @@
          reach Philadelphia airport at Terminal A and run on to E & F, which made every
          one of them a departure "to Airport Terminals E & F". */
       /* A loop that starts and ends here is still a departure. */
-      var at=function(x){return x!=null&&here[pats&&bundle.v===2?x:x[0]];};
-      if(at(ids[ids.length-1])&&!at(ids[0]))return;
+      var inHub=function(x){return x!=null&&here[pats&&bundle.v===2?x:x[0]];};
+      if(inHub(ids[ids.length-1])&&!inHub(ids[0]))return;
       for(var i=0;i<ids.length-1;i++){
         var id=pats&&bundle.v===2?ids[i]:ids[i][0];
         if(!here[id])continue;
@@ -164,6 +167,32 @@
         });
         return rows;
       });
+    }
+    /* NYC subway, live, for stations the bundle doesn't reach (it stops short of
+       Queens' airport stations). mta-live.js already decodes MTA's CORS-open feeds;
+       it is loaded only when one of these hubs is tapped. */
+    var mtaReady=null;
+    function mta(){
+      if(!mtaReady)mtaReady=Promise.all([
+        global.TBMta?Promise.resolve():new Promise(function(ok,no){var s=document.createElement('script');s.src=new URL('mta-live.js?v=2',root).href;s.onload=ok;s.onerror=function(){mtaReady=null;no(Error('mta-live'));};document.head.appendChild(s);}),
+        fetch(new URL('mta-stations.json',root)).then(function(r){return r.json();}).then(function(d){return d.stations||d;})
+      ]).then(function(x){return x[1];});
+      return mtaReady;
+    }
+    function mtaRows(hub){
+      return mta().then(function(names){return global.TBMta.fetchAll().then(function(feed){
+        if(!feed.feedsOk)throw Error('no feeds');
+        var rows=[];
+        hub.mta.split(',').forEach(function(id){
+          var from=(names[id]&&names[id].n||id).replace(/-JFK Airport$/,'');
+          global.TBMta.arrivalsAt(feed.updates,id,{horizonMin:60}).forEach(function(a){
+            if(a.destStation===id)return;
+            var dest=names[a.destStation];
+            rows.push({service:'Subway',color:global.TBMta.SUBWAY_COL[a.routeId]||'#808183',line:a.routeId,number:'from '+from,hs:dest?dest.n:a.destStation,when:a.atSec*1000,delay:a.delaySec>59?Math.round(a.delaySec/60):null,live:true});
+          });
+        });
+        return rows;
+      });});
     }
     function europeRows(hub){
       var T=global.TBTransitous;if(!T)return Promise.reject(Error('no source'));
@@ -278,6 +307,7 @@
       var src=state.tables.map(function(t){return t.feed.label+(t.generated?' timetable, '+t.generated:' timetable');});
       if(state.hub.wmata&&state.liveOk.wmata)src.push('WMATA live predictions, which reach about 20 minutes ahead');
       if(state.hub.amtrak&&state.liveOk.amtrak)src.push('Amtrak trains already running');
+      if(state.hub.mta&&state.liveOk.mta)src.push('MTA live subway, next hour');
       if(state.hub.airport&&state.liveOk.flights)src.push('Aircraft data adsb.lol (ODbL), routes adsbdb');
       if(state.hub.live&&state.liveOk.europe)src.push(state.hub.live==='ch'?'Swiss transport API':'Transitous')&&src.push('next 40 departures');
       panel.querySelector('.tsh-notes').innerHTML=notes.map(function(n){return '<p class="tsh-note">'+esc(n)+'</p>';}).join('')+(src.length?'<p>'+esc(src.join(' · '))+'</p>':'');
@@ -291,6 +321,7 @@
       function job(name,run,fail){state.pending++;jobs.push(run(hub).then(function(rows){live[name]=rows;state.liveOk[name]=true;state.errs[name]=null;}).catch(function(e){live[name]=state.liveBy[name]||[];state.errs[name]=fail(e);}).then(function(){state.pending--;}));}
       if(hub.amtrak)job('amtrak',amtrakRows,function(){return 'Amtrak is not answering, so its trains are missing.';});
       if(hub.wmata)job('wmata',wmataRows,function(e){return e.noKey?'Add a WMATA key in Settings to see Metro trains here.':'WMATA is not answering, so Metro trains are missing.';});
+      if(hub.mta)job('mta',mtaRows,function(){return 'The MTA subway feed is not answering, so subway trains are missing.';});
       if(hub.airport)job('flights',flightRows,function(e){return e.noFeed?'Add an aircraft feed in Settings to see flights landing and leaving here.':'The aircraft feed is not answering, so flights are missing.';});
       if(hub.live)job('europe',europeRows,function(){return 'Departures are unavailable right now. Try again in a minute.';});
       return Promise.all(jobs).then(function(){

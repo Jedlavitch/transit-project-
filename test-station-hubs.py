@@ -13,13 +13,14 @@ cache, bad = {}, 0
 for city, cfg in data["cities"].items():
     print("==", city)
     for hub in cfg["hubs"]:
-        where = (hub["lat"], hub["lon"])
+        where = (hub["near"]["lat"], hub["near"]["lon"]) if "near" in hub else (hub["lat"], hub["lon"])
+        radius = hub["near"]["r"] if "near" in hub else hub["r"]
         for key in hub["feeds"]:
             name = cfg["feeds"][key]["file"]
             if name not in cache:
                 cache[name] = json.load(open(name))
             b = cache[name]
-            near = {s["id"]: s["name"] for s in b["stations"] if far(where, (s["lat"], s["lon"])) <= hub["r"]}
+            near = {s["id"]: s["name"] for s in b["stations"] if far(where, (s["lat"], s["lon"])) <= radius}
             if b.get("v") == 2:
                 pats = b["pats"]
                 count = sum(1 for t in b["trips"] for i in pats[t["p"]][:-1] if i in near)

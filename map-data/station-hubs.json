@@ -305,6 +305,41 @@
       40.6895,
       -74.1745
      ]
+    },
+    {
+     "name": "JFK Airport",
+     "airport": "JFK",
+     "lat": 40.6441,
+     "lon": -73.7822,
+     "r": 300,
+     "feeds": [
+      "lirr"
+     ],
+     "near": {
+      "lat": 40.6996,
+      "lon": -73.8085,
+      "r": 300
+     },
+     "mta": "H03,G06",
+     "apt": [
+      40.6413,
+      -73.7781
+     ],
+     "note": "AirTrain JFK runs from the terminals to Howard Beach (A train) and Jamaica (E, J and Z trains and the LIRR). These are trains leaving those two stations; AirTrain itself is not in the timetable."
+    },
+    {
+     "name": "LaGuardia Airport",
+     "airport": "LGA",
+     "lat": 40.7769,
+     "lon": -73.874,
+     "r": 300,
+     "feeds": [],
+     "mta": "G14,712",
+     "apt": [
+      40.7769,
+      -73.874
+     ],
+     "note": "No train reaches LaGuardia. The free Q70 LaGuardia Link bus runs to Jackson Heights-Roosevelt Av and 61 St-Woodside, and these are the subway trains leaving there."
     }
    ]
   },
