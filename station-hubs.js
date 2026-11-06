@@ -6,6 +6,8 @@
    the panel says which:
      bundles    the *-schedule.json timetables, already committed. Scheduled only.
      wmata      live predictions with the board's own key. WMATA rail has no bundle.
+                A hub with `metrobus` also lists live Metrobus predictions from
+                the bus stops inside its radius (same key; no bus bundle either).
      amtrak     amtraker, which only lists trains that are already running.
      transitous European boards, which have no bundles.
    Airports are hubs too (an `airport` code in the JSON): the same panel, for the
@@ -157,7 +159,7 @@
       });
     }
     function wmataRows(hub){
-      var key='';try{key=localStorage.getItem('transitboard.wmataKey')||'';}catch(_){}
+      var key=wmataKey();
       if(!key){var e=Error('no key');e.noKey=true;return Promise.reject(e);}
       return fetchJSON('https://api.wmata.com/StationPrediction.svc/json/GetPrediction/'+hub.wmata+'?api_key='+encodeURIComponent(key),12000).then(function(d){
         var rows=[];(d.Trains||[]).forEach(function(t){
@@ -166,6 +168,63 @@
           rows.push({service:'Metro',color:WMATA[t.Line],line:t.Line,hs:t.DestinationName||t.Destination,when:Date.now()+m*60000,live:true,arriving:t.Min==='ARR'||t.Min==='BRD'});
         });
         return rows;
+      });
+    }
+    /* Metrobus, live. A hub's bus bays are many separate WMATA stops (Silver
+       Spring has 18 inside its circle), each with its own predictions call. The
+       stop list is found once per hub, then trimmed to the fewest stops that
+       still cover every route, at most MB_STOPS. One bus calling at two bays of
+       the same hub counts once, at the first. All of it goes through the board's
+       paced getJSON (fetchJSON), because WMATA answers 429 past 10 calls a second. */
+    var MB_STOPS=12,MB_GAP_MS=350;
+    function wmataKey(){var key='';try{key=localStorage.getItem('transitboard.wmataKey')||'';}catch(_){}return key;}
+    function metrobusStops(hub,key){
+      var id='mb|'+hub.name;
+      if(!cache[id])cache[id]=fetchJSON('https://api.wmata.com/Bus.svc/json/jStops?Lat='+hub.lat+'&Lon='+hub.lon+'&Radius='+hub.r+'&api_key='+encodeURIComponent(key),12000).then(function(d){
+        var stops=(d.Stops||[]).filter(function(x){return x.StopID&&x.StopID!=='0';}).map(function(x){return {id:x.StopID,name:x.Name,routes:x.Routes||[],m:metres(hub.lat,hub.lon,x.Lat,x.Lon)};}).sort(function(a,b){return a.m-b.m;});
+        var seen={},pick=[];
+        stops.forEach(function(x){if(pick.length<MB_STOPS&&x.routes.some(function(r){return !seen[r];})){pick.push(x);x.routes.forEach(function(r){seen[r]=1;});}});
+        return pick;
+      }).catch(function(e){delete cache[id];throw e;});
+      return cache[id];
+    }
+    /* WMATA names bays like "Silver Spring+Bay 219": inside the hub's own panel
+       the bay is the useful part. */
+    function bay(name){var m=/\bbay\s*([A-Z0-9]+)\b/i.exec(name||'');return m?'Bay '+m[1].toUpperCase():tidy(String(name||'').replace(/\s*\+\s*/g,' & '));}
+    function metrobusRows(hub){
+      var key=wmataKey();
+      if(!key){var e=Error('no key');e.noKey=true;return Promise.reject(e);}
+      return metrobusStops(hub,key).then(function(stops){
+        /* The 10-a-second limit is per key, and one key usually drives several
+           screens at once, so a page staying under it can still be refused. These
+           calls are spaced wider than the board's own pacing, and a stop that is
+           refused keeps the buses it last reported (absolute times, so they still
+           count down) instead of reading as a stop with no buses coming. */
+        var best={},ok=0,chain=Promise.resolve();
+        function add(stop,list){list.forEach(function(r){
+          var k=r.k;if(best[k]&&best[k].when<=r.row.when)return;best[k]={when:r.row.when,row:r.row};
+        });}
+        stops.forEach(function(stop,i){chain=chain.then(function(){
+          var last=cache['mbl|'+hub.name+'|'+stop.id];
+          return (i?new Promise(function(r){setTimeout(r,MB_GAP_MS);}):Promise.resolve()).then(function(){
+            return fetchJSON('https://api.wmata.com/NextBusService.svc/json/jPredictions?StopID='+stop.id+'&api_key='+encodeURIComponent(key),12000);
+          }).then(function(d){
+            ok++;
+            var list=[];
+            (d.Predictions||[]).forEach(function(p){
+              var m=+p.Minutes;if(isNaN(m))return;
+              list.push({k:(p.VehicleID||'')+'|'+(p.TripID||p.RouteID+'|'+m),row:{service:'Metrobus',color:'#2563eb',line:p.RouteID,number:'at '+bay(stop.name),hs:p.DirectionText||p.RouteID,when:Date.now()+m*60000,live:true,arriving:m<=0}});
+            });
+            cache['mbl|'+hub.name+'|'+stop.id]={at:Date.now(),list:list};
+            add(stop,list);
+          }).catch(function(){
+            if(last&&Date.now()-last.at<5*60000){ok++;add(stop,last.list);}
+          });
+        });});
+        return chain.then(function(){
+          if(stops.length&&!ok)throw Error('no answers');
+          return Object.keys(best).map(function(k){return best[k].row;});
+        });
       });
     }
     /* NYC subway, live, for stations the bundle doesn't reach (it stops short of
@@ -306,6 +365,7 @@
       if(state.staleFeeds&&state.staleFeeds.length)notes.push(state.staleFeeds.join(' and ')+' times are out of date: the bundled timetable has run out, so these come from the last published day of this weekday and may have changed.');
       var src=state.tables.map(function(t){return t.feed.label+(t.generated?' timetable, '+t.generated:' timetable');});
       if(state.hub.wmata&&state.liveOk.wmata)src.push('WMATA live predictions, which reach about 20 minutes ahead');
+      if(state.hub.metrobus&&state.liveOk.metrobus)src.push('WMATA live bus predictions');
       if(state.hub.amtrak&&state.liveOk.amtrak)src.push('Amtrak trains already running');
       if(state.hub.mta&&state.liveOk.mta)src.push('MTA live subway, next hour');
       if(state.hub.airport&&state.liveOk.flights)src.push('Aircraft data adsb.lol (ODbL), routes adsbdb');
@@ -321,6 +381,7 @@
       function job(name,run,fail){state.pending++;jobs.push(run(hub).then(function(rows){live[name]=rows;state.liveOk[name]=true;state.errs[name]=null;}).catch(function(e){live[name]=state.liveBy[name]||[];state.errs[name]=fail(e);}).then(function(){state.pending--;}));}
       if(hub.amtrak)job('amtrak',amtrakRows,function(){return 'Amtrak is not answering, so its trains are missing.';});
       if(hub.wmata)job('wmata',wmataRows,function(e){return e.noKey?'Add a WMATA key in Settings to see Metro trains here.':'WMATA is not answering, so Metro trains are missing.';});
+      if(hub.metrobus)job('metrobus',metrobusRows,function(e){return e.noKey?(hub.wmata?null:'Add a WMATA key in Settings to see Metrobus here.'):'WMATA is not answering, so Metrobus is missing.';});
       if(hub.mta)job('mta',mtaRows,function(){return 'The MTA subway feed is not answering, so subway trains are missing.';});
       if(hub.airport)job('flights',flightRows,function(e){return e.noFeed?'Add an aircraft feed in Settings to see flights landing and leaving here.':'The aircraft feed is not answering, so flights are missing.';});
       if(hub.live)job('europe',europeRows,function(){return 'Departures are unavailable right now. Try again in a minute.';});

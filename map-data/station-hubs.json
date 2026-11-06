@@ -11,7 +11,7 @@
     },
     "rideon": {
      "file": "rideon-schedule.json",
-     "label": "Ride On 23, 29",
+     "label": "Ride On",
      "color": "#00723F"
     }
    },
@@ -25,7 +25,8 @@
       "marc"
      ],
      "amtrak": "WAS",
-     "wmata": "B03"
+     "wmata": "B03",
+     "metrobus": true
     },
     {
      "name": "Metro Center",
@@ -33,7 +34,8 @@
      "lon": -77.0281,
      "r": 250,
      "feeds": [],
-     "wmata": "A01,C01"
+     "wmata": "A01,C01",
+     "metrobus": true
     },
     {
      "name": "Gallery Place",
@@ -41,7 +43,8 @@
      "lon": -77.0219,
      "r": 250,
      "feeds": [],
-     "wmata": "B01,F01"
+     "wmata": "B01,F01",
+     "metrobus": true
     },
     {
      "name": "L'Enfant Plaza",
@@ -49,7 +52,8 @@
      "lon": -77.0219,
      "r": 250,
      "feeds": [],
-     "wmata": "D03,F03"
+     "wmata": "D03,F03",
+     "metrobus": true
     },
     {
      "name": "Fort Totten",
@@ -57,7 +61,8 @@
      "lon": -77.0022,
      "r": 250,
      "feeds": [],
-     "wmata": "B06,E06"
+     "wmata": "B06,E06",
+     "metrobus": true
     },
     {
      "name": "Rosslyn",
@@ -65,7 +70,8 @@
      "lon": -77.072,
      "r": 250,
      "feeds": [],
-     "wmata": "C05"
+     "wmata": "C05",
+     "metrobus": true
     },
     {
      "name": "Pentagon",
@@ -73,7 +79,8 @@
      "lon": -77.0539,
      "r": 250,
      "feeds": [],
-     "wmata": "C07"
+     "wmata": "C07",
+     "metrobus": true
     },
     {
      "name": "Silver Spring",
@@ -81,9 +88,11 @@
      "lon": -77.031,
      "r": 350,
      "feeds": [
-      "marc"
+      "marc",
+      "rideon"
      ],
-     "wmata": "B08"
+     "wmata": "B08",
+     "metrobus": true
     },
     {
      "name": "Bethesda",
@@ -94,7 +103,7 @@
       "rideon"
      ],
      "wmata": "A09",
-     "note": "Only Ride On routes 23 and 29 have a timetable here."
+     "metrobus": true
     },
     {
      "name": "Rockville",
@@ -102,17 +111,21 @@
      "lon": -77.1461,
      "r": 350,
      "feeds": [
-      "marc"
+      "marc",
+      "rideon"
      ],
      "wmata": "A14",
-     "amtrak": "RKV"
+     "amtrak": "RKV",
+     "metrobus": true
     },
     {
      "name": "Shady Grove",
      "lat": 39.1199,
      "lon": -77.1646,
      "r": 350,
-     "feeds": [],
+     "feeds": [
+      "rideon"
+     ],
      "wmata": "A15"
     },
     {
