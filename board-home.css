@@ -581,6 +581,9 @@
   /* The map's own controls clear the frosted chrome above them. */
   :root[data-style="glass"] body:not(.map-full) #map .leaflet-top{ top:var(--tb-glass-top, 0px) }
   :root[data-style="glass"] body:not(.map-full) #mapFsBtn{ top:calc(var(--tb-glass-top, 0px) + 10px) }
+  /* "Following UAL2297 · Stop" lives at the map's top edge, which in Glass is
+     under the header: it sat behind the buttons, half hidden. Below them. */
+  :root[data-style="glass"] body:not(.map-full) #followBanner{ top:calc(var(--tb-glass-top, 0px) + 10px) }
 
   /* The departures sit below the band, as they do in the stacked layout. */
   :root[data-style="glass"] body #app > main > .col:last-child{

@@ -13,6 +13,14 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=35" />
+<link rel="stylesheet" href="sky-glass.css?v=1" />
+<script src="cityswitch.js?v=5"></script>
+<script>/* Sky follows the board style: Glass (the default, i.e. nothing saved, or
+   "glass") gets the Glass Sky; any other chosen style keeps the original. Set
+   before first paint so the page never flashes the other layout. */
+(function(){try{var y=localStorage.getItem("tb.style");
+  if(!y||y==="glass")document.documentElement.setAttribute("data-sky-glass","");}catch(e){
+  document.documentElement.setAttribute("data-sky-glass","");}})();</script>
 <script src="settings-ui.js?v=19" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
@@ -53,6 +61,7 @@
     --panel:#ffffff; --panel2:#f3f5fb; --btn-text:#ffffff;
   }
   :root[data-theme="day"] #sky{display:none}
+  :root.no-photo #photoWrap{display:none !important}
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
   body{
@@ -210,6 +219,9 @@
     display:flex; align-items:center; gap:14px}
   #alertBanner.show{transform:translate(-50%,0)}
   #alertBanner .ic{font-size:26px}
+  #alertBanner .x{flex:none; margin-left:6px; width:30px; height:30px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--faint); background:transparent; color:var(--muted); font-size:18px; line-height:1}
+  #alertBanner .x:hover{color:var(--city); border-color:var(--amber-dim)}
   #alertBanner .t{color:var(--city); font-weight:800; font-size:clamp(.95rem,2.2vw,1.3rem)}
   #alertBanner .s{color:var(--muted); font-weight:600; font-size:clamp(.8rem,1.8vw,1.05rem); margin-top:2px}
   #alertBanner.red{border-color:rgba(255,90,80,.6)}
@@ -414,7 +426,7 @@
     <div id="stars"></div>
     <div id="moon"></div>
   </div>
-  <div id="alertBanner"><span class="ic"></span><span><span class="t"></span><div class="s"></div></span></div>
+  <div id="alertBanner"><span class="ic"></span><span><span class="t"></span><div class="s"></div></span><button type="button" class="x" id="alertX" aria-label="Dismiss alert" title="Dismiss">×</button></div>
   <header>
     <a id="markLink" href="index.html" title="Transit Project" aria-label="Transit Project"
        onclick="window.location.href='index.html'; return false;"><img id="brandMark" src="brand/mark-on-dark.svg" alt="" width="48" height="48"></a>
@@ -488,8 +500,23 @@
         <button data-brand="on">On</button>
         <button data-brand="off">Off</button>
       </div>
+      <div class="lbl">Watch a flight</div>
+      <div class="locrow">
+        <input id="watchInput" type="text" placeholder="Flight number, e.g. DL392" autocomplete="off" spellcheck="false" />
+        <button id="watchGo">Watch</button>
+      </div>
+      <div id="watchMsg" style="font-size:12.5px;min-height:16px;margin:4px 0 2px;color:var(--amber-dim)"></div>
+      <div class="lbl">Weather radar</div>
+      <div class="seg" id="radarSeg">
+        <button data-radar="on">On</button>
+        <button data-radar="off">Off</button>
+      </div>
       <div class="lbl">Photos</div>
-      <div class="seg" id="photoSeg">
+      <div class="seg" id="photoShowSeg">
+        <button data-show="on">Show</button>
+        <button data-show="off">Hide</button>
+      </div>
+      <div class="seg" id="photoSeg" style="margin-top:8px">
         <button data-photo="slow">Slow</button>
         <button data-photo="med">Cycle</button>
         <button data-photo="off">Hold</button>
@@ -574,7 +601,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="basemap.js?v=3"></script>
+<script src="basemap.js?v=4"></script>
 <script>
 "use strict";
 /* The sky view is shared by all the boards. Which one opened it comes in
@@ -908,15 +935,21 @@ const photoCache = (function(){ try{ return JSON.parse(localStorage.getItem("nig
 function savePhotoCache(){ trimCache(photoCache,30*864e5,200); try{ localStorage.setItem("nightmode.photos", JSON.stringify(photoCache)); }catch(e){} }
 /* Returns a LIST of photos of this exact airframe (planespotters often has
    several) so the view can cycle through them instead of showing one still.
-   Cache key is versioned ("p2:") because older entries hold a single object. */
+   Cache key is versioned ("p3:"): p2 entries are in the old, unsorted order. */
 async function lookupPhoto(hex){
   if(!hex) return [];
-  const key="p2:"+hex, hit=photoCache[key];
+  const key="p3:"+hex, hit=photoCache[key];
   if(hit && Date.now()-hit.t < 864e5) return hit.v||[];        // cache 24h
   let v=[];
   try{
     const d=await getJSON(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
-    v=(d && d.photos ? d.photos : []).slice(0,6)
+    /* Newest upload first. Planespotters lists an airframe's photos in no
+       useful order, so the first one could be years old and show a livery
+       the aircraft no longer wears (an American A321 appearing in US Airways
+       colours). Photo ids rise with upload date, so sorting by id descending
+       puts the shot most likely to match what is flying right now first. */
+    v=(d && d.photos ? d.photos.slice() : [])
+      .sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0)).slice(0,6)
       .map(p=>({ src:(p.thumbnail_large||p.thumbnail||{}).src||"", link:p.link||"", cred:p.photographer||"" }))
       .filter(p=>p.src);
   }catch(e){}
@@ -1061,8 +1094,13 @@ function initMiniMap(){
   miniMap=L.map("miniMap",{ zoomControl:false, attributionControl:false, dragging:false,
     scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, fadeAnimation:false })
     .setView([0,0], 3);
-  TBBasemap.addDark(miniMap, { maxZoom:19 });
-  initRadar(miniMap, .5);                          // live precipitation overlay
+  /* Glass Sky uses the light basemap: it is the whole page there, and the
+     dark one read as a black void with a line on it. Same map as the boards. */
+  const glassMap=document.documentElement.hasAttribute("data-sky-glass");
+  // Glass Sky: basemap.js's colour set (Esri World Street Map, unfiltered)
+  if(glassMap) TBBasemap.add(miniMap, "color", { maxZoom:19 }); else TBBasemap.addDark(miniMap, { maxZoom:19 });
+  // live precipitation overlay — quieter under Glass, where the map is the page
+  initRadar(miniMap, document.documentElement.hasAttribute("data-sky-glass") ? .32 : .5);
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
   miniVehLayer=L.layerGroup().addTo(miniMap);      // vehicle marker, persists so it can glide via setLatLng
   // Same root cause as the board's own #map (see dc.html's initMap()): Leaflet
@@ -1124,7 +1162,20 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
   // the rest of the fleet as faint dots, so "nearest of N" is visible on the map
   if(!miniFleetLayer) miniFleetLayer=L.layerGroup().addTo(miniMap);
   miniFleetLayer.clearLayers();
+  const glassSky=document.documentElement.hasAttribute("data-sky-glass");
   (fleet||[]).slice(0,80).forEach(v=>{ if(!v.ll) return;
+    /* Glass Sky: every aircraft is a real marker — pointed along its track,
+       labelled with its callsign, and clickable to make it the subject. */
+    if(glassSky && v.hex){
+      if(id==="p"+v.hex) return;                    // the subject has its own marker
+      const r=typeof v.trk==="number"?v.trk:0;
+      const m=L.marker([v.ll.lat,v.ll.lon],{icon:L.divIcon({className:"sg-plane-wrap",
+        html:`<span class="sg-plane" style="--r:${r}deg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.6 7.2 7.4 4.3v2l-7.4-2.1-.6 5.1 2.4 1.8V22L12 21l-3.4 1v-1.7l2.4-1.8-.6-5.1-7.4 2.1v-2l7.4-4.3z"/></svg></span><b class="sg-plane-lbl">${escapeHtml(v.t)}</b>`,
+        iconSize:[22,22], iconAnchor:[11,11]}), title:`${v.t}${v.s?" · "+v.s:""} — click to follow`, riseOnHover:true});
+      m.on("click",()=>pinPlane(v.hex, v.ll));
+      m.addTo(miniFleetLayer);
+      return;
+    }
     L.marker([v.ll.lat,v.ll.lon],{icon:L.divIcon({className:"",html:'<span class="mini-fleet-dot"></span>',
       iconSize:[7,7], iconAnchor:[3,3]}), interactive:false}).addTo(miniFleetLayer); });
   // Only redraw endpoints/route and re-fit the view for a NEW subject (a
@@ -1136,6 +1187,10 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
      rebuilt, and labelled with the saved place name rather than a bare dot. */
   if(!miniHereLayer) miniHereLayer=L.layerGroup().addTo(miniMap);
   miniHereLayer.clearLayers();
+  if(loc && typeof loc.lat==="number" && glassSky && mode==="planes" && CFG.radiusNm && !watch){
+    L.circle([loc.lat,loc.lon],{radius:CFG.radiusNm*1852, color:"#0A9E8C", weight:1.5, opacity:.7,
+      dashArray:"3 7", fill:true, fillOpacity:.03, interactive:false}).addTo(miniHereLayer);
+  }
   if(loc && typeof loc.lat==="number"){
     L.marker([loc.lat,loc.lon],{interactive:false,icon:L.divIcon({className:"",
       html:'<span class="mini-here"></span>',iconSize:[11,11],iconAnchor:[5.5,5.5]})}).addTo(miniHereLayer);
@@ -1161,9 +1216,11 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
       const gc=greatCircle(oLL,dLL,96), k=nearestIdx(gc,posLL);
       gcPath=gc;
       // dark casing: over radar and pale coastlines a bare 2px line vanishes
-      L.polyline(gc, {color:"#05070f", weight:5.5, opacity:.55, lineCap:"round"}).addTo(miniRouteLayer);
-      if(k>0) L.polyline(gc.slice(0,k+1), {color:"#8fc0ff", weight:2.4, opacity:.9}).addTo(miniRouteLayer);
-      if(k<gc.length-1) L.polyline(gc.slice(k), {color:"#7d95c9", weight:2, opacity:.42, dashArray:"1 8"}).addTo(miniRouteLayer);
+      // Glass Sky draws on a light map: white casing, brand-blue flown, slate to go.
+      const gl=document.documentElement.hasAttribute("data-sky-glass");
+      L.polyline(gc, {color:gl?"#ffffff":"#05070f", weight:gl?7:5.5, opacity:gl?.9:.55, lineCap:"round"}).addTo(miniRouteLayer);
+      if(k>0) L.polyline(gc.slice(0,k+1), {color:gl?"#2F7BFF":"#8fc0ff", weight:gl?3.2:2.4, opacity:.95}).addTo(miniRouteLayer);
+      if(k<gc.length-1) L.polyline(gc.slice(k), {color:gl?"#3A3F4A":"#7d95c9", weight:gl?2.4:2, opacity:gl?.7:.42, dashArray:gl?"2 8":"1 8"}).addTo(miniRouteLayer);
     }
     /* Frame the WHOLE journey: origin, destination, the vehicle and you. A
        previous pass framed only you+vehicle because a long leg zooms out to
@@ -1175,7 +1232,8 @@ function renderMiniMap(id, oLL, dLL, posLL, fleet){
     // Build BOTH frames every render so the toggle is instant and always has
     // fresh positions; which one is used is the tap's business, not this code's.
     const close=[[posLL.lat,posLL.lon]];
-    if(loc && typeof loc.lat==="number") close.push([loc.lat,loc.lon]);
+    // watching a flight elsewhere: don't squash the frame to include this screen too
+    if(!watch && loc && typeof loc.lat==="number") close.push([loc.lat,loc.lon]);
     // every 8th arc point, so a bowed great circle is framed by its true
     // extent rather than by the straight line between its two ends
     let route=close.slice();
@@ -1279,7 +1337,9 @@ function updateMoon(){
    frame list is re-checked every 5 min and the layer swapped only when a
    newer frame exists (the old one lingers a beat so tiles never flash). */
 let radarTL=null;
+function radarShown(){ return localStorage.getItem("nightmode.radar")!=="off"; }
 async function refreshRadar(m, opacity){
+  if(!radarShown()){ if(radarTL){ m.removeLayer(radarTL); radarTL=null; } return; }
   try{
     const j=await getJSON("https://api.rainviewer.com/public/weather-maps.json", 10000);
     const fr=j&&j.radar&&j.radar.past&&j.radar.past[j.radar.past.length-1];
@@ -1365,8 +1425,29 @@ function setSunSky(v){
    every 9 s with a cross-fade, and the credit line tracks the current frame
    (each photo has its OWN photographer, so the credit must change with it). */
 let photoShownFor=null, photoList=[], photoIdx=0, photoTimer=null, photoRep=false, photoWant=null;
+/* Show / hide the photo (Settings → Photos). Unset means the page's default:
+   on in the original Sky, off in the Glass Sky, where the map is the picture. */
+function photoShown(){
+  const v=localStorage.getItem("nightmode.photoshow");
+  if(v==="on"||v==="off") return v==="on";
+  return !document.documentElement.hasAttribute("data-sky-glass");
+}
+function applyPhotoShow(){
+  const on=photoShown();
+  document.documentElement.classList.toggle("no-photo", !on);
+  document.querySelectorAll("#photoShowSeg button").forEach(b=>b.classList.toggle("active", (b.dataset.show==="on")===on));
+  const pace=$("#photoSeg"); if(pace){ pace.style.opacity=on?"":".4"; pace.style.pointerEvents=on?"":"none"; }
+  if(!on){ clearInterval(photoTimer); photoTimer=null; }
+  else photoShownFor=null;                                     // fetch again on the next render
+  window.dispatchEvent(new Event("resize"));                   // let the map re-frame into the space
+}
+function setPhotoShow(on){
+  try{ localStorage.setItem("nightmode.photoshow", on?"on":"off"); }catch(e){}
+  applyPhotoShow();
+}
 async function updatePhoto(key, representative, fallbackQuery){
   const wrap=$("#photoWrap");
+  if(!photoShown()){ wrap.style.display="none"; return; }      // hidden: don't even fetch
   if(photoShownFor===key || photoWant===key) return;           // same subject — keep the running slideshow
   photoWant=key;
   const v = representative ? await lookupWikiPhoto(key, fallbackQuery) : await lookupPhoto(key);
@@ -1489,18 +1570,102 @@ function adsbRequire(){
   if(!b) throw new Error("no aircraft feed configured (see AIRCRAFT-FEED.md)");
   return b;
 }
+/* ---- watch a flight from anywhere (shared links) ----
+   ?flight=DAL392 and/or ?hex=a1b2c3, optionally &lat=&lon= of where it was
+   when the link was made. The feeds only answer "aircraft near a point", so
+   the watcher searches around the flight's LAST KNOWN position and moves that
+   point with it every tick — an airliner covers ~8 nm a minute, well inside a
+   90 nm search. Without a position (a typed flight number) it searches 250 nm
+   around this screen. Passenger flight numbers (DL392) are turned into the
+   ICAO callsign the aircraft actually broadcasts (DAL392). */
+const IATA_ICAO={AA:"AAL",DL:"DAL",UA:"UAL",WN:"SWA",B6:"JBU",AS:"ASA",NK:"NKS",F9:"FFT",G4:"AAY",HA:"HAL",
+  SY:"SCX",MX:"MXY",XP:"VXP",YX:"RPA",OO:"SKW",MQ:"ENY","9E":"EDV",OH:"JIA",YV:"ASH",QX:"QXE",G7:"GJS",ZW:"AWI",
+  PT:"PDT",C5:"UCA",AC:"ACA",WS:"WJA",PD:"POE",AM:"AMX",Y4:"VOI",VB:"VIV",CM:"CMP",AV:"AVA",LA:"LAN",
+  BA:"BAW",VS:"VIR",AF:"AFR",KL:"KLM",LH:"DLH",LX:"SWR",OS:"AUA",SN:"BEL",IB:"IBE",AZ:"ITY",EI:"EIN",SK:"SAS",
+  AY:"FIN",TP:"TAP",LO:"LOT",U2:"EZY",FR:"RYR",W6:"WZZ",VY:"VLG",EW:"EWG",DE:"CFG",EK:"UAE",QR:"QTR",EY:"ETD",
+  TK:"THY",SV:"SVA",QF:"QFA",NZ:"ANZ",NH:"ANA",JL:"JAL",KE:"KAL",OZ:"AAR",CX:"CPA",SQ:"SIA",CI:"CAL",BR:"EVA",
+  AI:"AIC",ET:"ETH"};
+function normalizeFlight(raw){
+  const f=String(raw||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(/^[A-Z]{3}\d{1,4}[A-Z]?$/.test(f)) return f;                       // already ICAO
+  const m=f.match(/^([A-Z0-9]{2})(\d{1,4}[A-Z]?)$/);
+  if(m && IATA_ICAO[m[1]]) return IATA_ICAO[m[1]]+m[2].replace(/^0+(?=\d)/,"");
+  return f || null;                                                     // a registration, say
+}
+let watch=(()=>{ try{
+  const q=new URLSearchParams(location.search);
+  const hex=(q.get("hex")||"").toLowerCase().replace(/[^0-9a-f]/g,"").slice(0,6);
+  const fl=normalizeFlight(q.get("flight"));
+  if(!hex && !fl) return null;
+  const lat=parseFloat(q.get("lat")), lon=parseFloat(q.get("lon"));
+  return { hex:hex||null, flight:fl, lat:isFinite(lat)?lat:null, lon:isFinite(lon)?lon:null, misses:0 };
+}catch(e){ return null; } })();
+if(watch) mode="planes";            // a shared flight is always a plane; not saved as the default
+function watchFlight(raw){
+  const fl=normalizeFlight(raw); if(!fl) return false;
+  watch={ hex:/^[0-9a-f]{6}$/i.test(fl)?fl.toLowerCase():null, flight:/^[0-9a-f]{6}$/i.test(fl)?null:fl, lat:null, lon:null, misses:0 };
+  if(typeof setMode==="function" && mode!=="planes") setMode("planes"); else tick();
+  return true;
+}
+function stopWatching(){
+  watch=null;
+  try{ const u=new URL(location.href); ["flight","hex","lat","lon"].forEach(k=>u.searchParams.delete(k)); history.replaceState(null,"",u); }catch(e){}
+}
+/* A plane picked from the map (Glass Sky): it stays the subject while it is in
+   range, instead of whichever one happens to be nearest. Not persisted — a
+   pick is about this moment, and the next visit should start from "nearest". */
+let pinnedHex=null;
+function pinPlane(hex, ll){
+  /* While watching a far-off flight, a click on one of ITS neighbours moves
+     the watch to that plane, so the search follows the new one. */
+  if(watch){
+    const v=ll || ((currentFleet||[]).find(x=>x.hex===hex)||{}).ll;
+    watch={ hex, flight:null, lat:v?v.lat:watch.lat, lon:v?v.lon:watch.lon, misses:0 };
+  }
+  pinnedHex=hex||null; tick();
+}
+function unpinPlane(){ if(pinnedHex || watch){ pinnedHex=null; stopWatching(); tick(); } }
 async function producePlane(){
   /* Unconfigured is not the same as searching. Thrown, this landed in tick()'s
      catch and the screen pulsed "Scanning the sky…" for ever. */
   if(!adsbBase()) return { none:true, note:"No aircraft feed is set up on this screen. Trains, buses and the ISS still work." };
-  const data=await getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
-  scanAlerts(data.ac);                              // rare-bird sweep over EVERY aircraft in range
-  const acAll=coastPlanes(data.ac||[]);             // survive brief tracking gaps overhead
+  let data;
+  if(watch){
+    const c = watch.lat!=null ? {lat:watch.lat, lon:watch.lon} : loc, r = watch.lat!=null ? 90 : 250;
+    data=await getJSON(`${adsbRequire()}/point/${c.lat.toFixed(4)}/${c.lon.toFixed(4)}/${r}`);
+    const name=watch.flight||watch.hex;
+    const m=(data.ac||[]).find(a=>typeof a.lat==="number" && typeof a.lon==="number" &&
+      ((watch.hex && a.hex===watch.hex) || (watch.flight && (a.flight||"").trim().toUpperCase()===watch.flight)));
+    if(!m){
+      // Lost it near the last fix three times running: widen to the area around this screen.
+      if(++watch.misses>=3 && watch.lat!=null){ watch.lat=null; watch.lon=null; }
+      return { none:true, note:`Looking for ${name}… it isn't within reach of this screen's aircraft feed right now. Trying again.` };
+    }
+    watch.misses=0; watch.hex=m.hex; watch.flight=(m.flight||"").trim().toUpperCase()||watch.flight;
+    watch.lat=m.lat; watch.lon=m.lon;
+    if(m.alt_baro==="ground") return { none:true, note:`${watch.flight||m.r||m.hex} is on the ground.` };
+    pinnedHex=m.hex;
+  } else {
+    data=await getJSON(`${adsbRequire()}/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/${CFG.radiusNm}`);
+    scanAlerts(data.ac);                            // rare-bird sweep over EVERY aircraft in range
+  }
+  const acAll=watch ? (data.ac||[]) : coastPlanes(data.ac||[]);   // survive brief tracking gaps overhead
+  // a.dst is measured from wherever the search was centred; when watching, that isn't here
   const air=acAll.filter(a=>a.alt_baro!=="ground" && typeof a.lat==="number" && typeof a.lon==="number")
-    .map(a=>({a, nm: (a._coasted||a.dst==null) ? haversineNm(loc,{lat:a.lat,lon:a.lon}) : a.dst})).sort((x,y)=>x.nm-y.nm);
+    .map(a=>({a, nm: (watch || a._coasted || a.dst==null) ? haversineNm(loc,{lat:a.lat,lon:a.lon}) : a.dst})).sort((x,y)=>x.nm-y.nm);
   if(!air.length) return null;
   let pick=null;
-  for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,4)){
+  if(pinnedHex){
+    const px=air.find(x=>x.a.hex===pinnedHex);
+    if(px){
+      const fl=(px.a.flight||"").trim();
+      let route=fl ? await lookupRoute(fl) : null;
+      route=orientRoute(route, {lat:px.a.lat, lon:px.a.lon}, px.a.track);
+      if(route && !routePlausibleNight(route, {lat:px.a.lat, lon:px.a.lon}, px.a.alt_baro, loc)) route=null;
+      pick={...px, route};
+    } else pinnedHex=null;                          // flew out of range: back to nearest
+  }
+  if(!pick) for(const x of air.filter(x=>/^[A-Z]{3}\d/.test((x.a.flight||"").trim())).slice(0,4)){
     let route=await lookupRoute((x.a.flight||"").trim());
     // point it the way the aircraft is actually flying before anything uses it
     route=orientRoute(route, {lat:x.a.lat, lon:x.a.lon}, x.a.track);
@@ -1526,11 +1691,12 @@ async function producePlane(){
     appr=approachChips(await lookupDestWx(dLL), runwayFor(route.destination.icao_code, a.track));
   }
   return { id:"p"+a.hex, nm, unit:"nm", dir:bearingFrom(loc,{lat:a.lat,lon:a.lon}), count:air.length,
+    hex:a.hex, callsign:(a.flight||"").trim(), watched:!!watch,
     // every aircraft in range, for the click-to-expand fleet list + mini-map dots
     fleet: air.map(x=>({ t:(x.a.flight||"").trim()||x.a.r||x.a.hex, s:x.a.desc||x.a.t||"",
       nm:x.nm, unit:"nm", dir:bearingFrom(loc,{lat:x.a.lat,lon:x.a.lon}),
       x: typeof x.a.alt_baro==="number"?`${x.a.alt_baro.toLocaleString()} ft`:"",
-      ll:{lat:x.a.lat,lon:x.a.lon} })),
+      ll:{lat:x.a.lat,lon:x.a.lon}, hex:x.a.hex, trk:x.a.track })),
     acType:(a.t||"").toUpperCase(), acTypeName:a.desc||a.t, airlineNm:airlineName(route,a),
     gsKt:a.gs, altFt: typeof a.alt_baro==="number"?a.alt_baro:null,
     // altitude AND speed: "how high" without "how fast" is half the story when
@@ -2330,8 +2496,18 @@ function nextAlert(){
   b.querySelector(".t").textContent=a.t;
   b.querySelector(".s").textContent=a.s;
   b.classList.add("show");
-  setTimeout(()=>{ b.classList.remove("show"); setTimeout(nextAlert, 600); }, 9000);
+  clearTimeout(alertTimer);
+  alertTimer=setTimeout(dismissAlert, 9000);
 }
+/* × on the banner: gone now rather than in nine seconds, and the next queued
+   alert (if any) follows. The aircraft stays in alertSeen, so it won't nag. */
+let alertTimer=null;
+function dismissAlert(){
+  clearTimeout(alertTimer); alertTimer=null;
+  const b=$("#alertBanner"); if(!b.classList.contains("show")){ return; }
+  b.classList.remove("show"); setTimeout(nextAlert, 600);
+}
+document.addEventListener("click", e=>{ if(e.target && e.target.id==="alertX"){ e.stopPropagation(); dismissAlert(); } });
 function scanAlerts(ac){
   for(const a of (ac||[])){
     if(typeof a.lat!=="number" || typeof a.lon!=="number") continue;
@@ -2642,10 +2818,23 @@ function renderFleetPanel(){
   const f=currentFleet||[];
   $("#fleetTitle").textContent=`${TAGS[mode]||"In range"} — ${f.length} in range`;
   $("#fleetBody").innerHTML = f.length ? f.map(v=>
-    `<div class="row"><span><b>${escapeHtml(v.t)}</b>${v.s?` <span class="frow-sub">${escapeHtml(v.s)}</span>`:""}</span>`+
+    `<div class="row"${v.hex?` data-hex="${escapeHtml(v.hex)}" role="button" tabindex="0" title="Follow this one"`:""}><span><b>${escapeHtml(v.t)}</b>${v.s?` <span class="frow-sub">${escapeHtml(v.s)}</span>`:""}</span>`+
     `<span class="when">${v.nm.toFixed(1)} ${v.unit} ${v.dir}${v.x?` · ${escapeHtml(v.x)}`:""}</span></div>`).join("")
     : `<div class="empty2">Nothing in range right now.</div>`;
 }
+
+/* A row in the "in range" list follows that aircraft, like a click on its
+   map marker does. Planes only: rows without a hex are trains and buses. */
+document.addEventListener("click", e=>{
+  const row=e.target.closest && e.target.closest("#fleetBody .row[data-hex]"); if(!row) return;
+  $("#fleetPanel").classList.remove("show");
+  pinPlane(row.getAttribute("data-hex"));
+});
+document.addEventListener("keydown", e=>{
+  if(e.key!=="Enter" && e.key!==" ") return;
+  const row=e.target.closest && e.target.closest("#fleetBody .row[data-hex]"); if(!row) return;
+  e.preventDefault(); row.click();
+});
 
 let lastId=null;
 function render(s){
@@ -2684,6 +2873,12 @@ function render(s){
   else { $("#photoWrap").style.display="none"; photoShownFor=null; }
   currentFleet = s.fleet||null;
   renderMiniMap(s.id, s.oLL, s.dLL, s.posLL, currentFleet);
+  const watching=!!(watch && mode==="planes" && s.id==="p"+watch.hex);
+  document.documentElement.classList.toggle("sky-pinned", watching || !!(pinnedHex && mode==="planes" && s.id==="p"+pinnedHex));
+  const chipLbl=document.querySelector("#sgPinChip span");
+  if(chipLbl) chipLbl.textContent = watching ? `Watching ${s.callsign||watch.flight||"a shared flight"}, wherever it is` : "Following the plane you picked";
+  const chipBtn=document.querySelector("#sgPinChip button");
+  if(chipBtn) chipBtn.textContent = watching ? "Stop watching" : "Back to nearest";
   // swing the needle to the subject. posLL is set for every mode, so this one
   // line covers planes, trains and buses alike; hide the dial if a producer
   // ever omits a position rather than leaving the arrow pointing at stale sky.
@@ -2702,7 +2897,7 @@ function render(s){
   // the count opens the whole-fleet list when there's a list to show
   $("#dist").innerHTML = escapeHtml(distTxt) + (s.count>1
     ? (currentFleet && currentFleet.length>1
-        ? ` · <span class="fleet-btn" id="fleetBtn" title="Show everything in range">nearest of ${s.count} ▾</span>`
+        ? ` · <span class="fleet-btn" id="fleetBtn" title="Show everything in range">${s.watched?`${s.count} around it`:`nearest of ${s.count}`} ▾</span>`
         : ` · nearest of ${s.count}`)
     : "");
   if($("#fleetPanel").classList.contains("show")) renderFleetPanel();
@@ -3252,6 +3447,19 @@ function initSettings(){
   $("#skySeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setSunSky(b.dataset.sky); });
   $("#brandSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setBrand(b.dataset.brand); });
   $("#photoSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPhotoPace(b.dataset.photo); });
+  const goWatch=()=>{ const v=$("#watchInput").value.trim(); const msg=$("#watchMsg");
+    if(!v){ msg.textContent="Type a flight number like DL392 or DAL392."; return; }
+    if(watchFlight(v)){ msg.textContent=`Looking for ${normalizeFlight(v)}…`; $("#settings").classList.remove("show"); }
+    else msg.textContent="That doesn't look like a flight number."; };
+  $("#watchGo").addEventListener("click", goWatch);
+  $("#watchInput").addEventListener("keydown", e=>{ if(e.key==="Enter") goWatch(); });
+  $("#photoShowSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setPhotoShow(b.dataset.show==="on"); });
+  const paintRadar=()=>document.querySelectorAll("#radarSeg button").forEach(b=>b.classList.toggle("active",(b.dataset.radar==="on")===radarShown()));
+  $("#radarSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return;
+    try{ localStorage.setItem("nightmode.radar", b.dataset.radar); }catch(_){}
+    paintRadar(); if(miniMap) refreshRadar(miniMap, document.documentElement.hasAttribute("data-sky-glass") ? .32 : .5); });
+  paintRadar();
+  applyPhotoShow();
 }
 function clock(){ $("#clock").textContent=cityClock(Date.now()); }
 
@@ -3426,6 +3634,8 @@ function boot(){
 function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
+<script src="sky-glass.js?v=1" defer></script>
+<script src="sky-landmarks.js?v=1" defer></script>
 <script src="mascot.js?v=3" defer></script>
 <script src="mascot-buddy.js?v=9" defer></script>
 </body>

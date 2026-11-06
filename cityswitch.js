@@ -283,3 +283,179 @@ function renderLocSuggestions(box, list, current, onPick) {
     box.appendChild(b);
   });
 }
+
+/* Sky hop — the take-off between a city board and Sky mode (night.html).
+
+   Departing (the board's Sky link): a sky-blue sheet rises up the screen,
+   three brand-coloured contrails draw across it on a climbing diagonal with a
+   plane at their head, and "Taking off" names the city whose sky you are
+   about to scan. Navigation starts as soon as the sheet has covered the
+   board, so the take-off keeps playing on this page until Sky paints.
+
+   Arriving: this file loads in Sky's <head>, so the same scene is on screen
+   at its very first paint (sessionStorage carries the hop across). Once the
+   page has loaded the sheet lifts away upward, as if climbing out through
+   cloud, and the live map is underneath.
+
+   The Sky link keeps its own markup and paywall gate: this listens in the
+   capture phase, asks the gate first, and only takes over the navigation
+   when the gate says yes. Reduced motion gets a short fade instead. */
+(function () {
+  var KEY = "tb.skyHop";
+  function reduced() { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } }
+  function css() {
+    if (document.getElementById("tbSkyHopCss")) return;
+    var st = document.createElement("style"); st.id = "tbSkyHopCss";
+    st.textContent =
+      ".tbsky{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483600;overflow:hidden;pointer-events:auto;" +
+        "color:#F7F8FA;font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;contain:strict;" +
+        "background:linear-gradient(180deg,#071733 0%,#0E3A7A 46%,#2F7BFF 78%,#8EC5FF 100%);" +
+        "transform:translateY(100%);transition:transform .6s cubic-bezier(.7,0,.25,1)}" +
+      ".tbsky.in{transform:translateY(0)}" +
+      ".tbsky.out{transform:translateY(-100%);transition-duration:.75s}" +
+      ".tbsky .cl{position:absolute;left:-10%;right:-10%;height:38%;bottom:-6%;" +
+        "background:radial-gradient(60% 70% at 20% 100%,rgba(255,255,255,.55),transparent 70%)," +
+        "radial-gradient(50% 60% at 65% 100%,rgba(255,255,255,.45),transparent 70%)," +
+        "radial-gradient(40% 55% at 95% 100%,rgba(255,255,255,.4),transparent 70%);" +
+        "transform:translateY(30%);transition:transform 1.4s ease .1s}" +
+      ".tbsky.in .cl{transform:translateY(55%)}" +
+      ".tbsky svg.tr{position:absolute;top:0;left:0;width:100%;height:100%}" +
+      ".tbsky .tr path{fill:none;stroke-width:5;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;" +
+        "transition:stroke-dashoffset 1.15s cubic-bezier(.45,0,.2,1) .25s}" +
+      ".tbsky .tr path.c2{transition-delay:.31s}.tbsky .tr path.c3{transition-delay:.37s}" +
+      ".tbsky.in .tr path,.tbsky.arrived .tr path{stroke-dashoffset:0}" +
+      ".tbsky .pl{position:absolute;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;" +
+        "offset-path:path('M -60 0 L 0 0');transform:rotate(0deg)}" +
+      ".tbsky .pl svg{width:46px;height:46px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}" +
+      ".tbsky .pl path{fill:#fff}" +
+      ".tbsky .tx{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;padding:0 24px;" +
+        "opacity:0;transition:opacity .35s ease .45s}" +
+      ".tbsky.in .tx,.tbsky.arrived .tx{opacity:1}.tbsky.out .tx{opacity:0;transition-delay:0s;transition-duration:.2s}" +
+      ".tbsky .k{font-size:11px;letter-spacing:.24em;color:rgba(255,255,255,.75)}" +
+      ".tbsky .h{margin-top:10px;font:800 clamp(34px,7.5vw,84px)/1 Archivo,'Helvetica Neue',Arial,sans-serif;" +
+        "letter-spacing:-.03em;text-transform:uppercase}" +
+      ".tbsky .s{margin-top:12px;font:500 clamp(12px,1.4vw,16px)/1.3 'IBM Plex Sans',system-ui,sans-serif;color:rgba(255,255,255,.85)}" +
+      "@media (prefers-reduced-motion:reduce){.tbsky,.tbsky.in,.tbsky.out{transform:none;transition:opacity .25s}" +
+        ".tbsky{opacity:0}.tbsky.in,.tbsky.arrived{opacity:1}.tbsky.out{opacity:0}.tbsky .pl{display:none}" +
+        ".tbsky .tr path{transition:none;stroke-dashoffset:0}.tbsky .tx{transition:none;opacity:1}}";
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function esc(t) { return String(t || "").replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  /* The climb: one curve from low left to high right, three parallel trails. */
+  function build(city, arrived) {
+    css();
+    var el = document.createElement("div");
+    el.className = "tbsky" + (arrived ? " in arrived" : "");
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-label", "Opening Sky mode");
+    var W = Math.max(innerWidth, 320), H = Math.max(innerHeight, 320);
+    var d = function (dy) { return "M " + (-0.05 * W) + " " + (0.92 * H + dy) + " C " + (0.35 * W) + " " + (0.86 * H + dy) + ", " + (0.62 * W) + " " + (0.42 * H + dy) + ", " + (1.06 * W) + " " + (0.06 * H + dy); };
+    el.innerHTML =
+      '<div class="cl"></div>' +
+      '<svg class="tr" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+        '<path class="c1" pathLength="1" stroke="#FF3D77" d="' + d(-14) + '"/>' +
+        '<path class="c2" pathLength="1" stroke="#00E0C6" d="' + d(0) + '"/>' +
+        '<path class="c3" pathLength="1" stroke="#FFFFFF" stroke-opacity=".9" d="' + d(14) + '"/></svg>' +
+      '<div class="pl" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l1.6 7.2 7.4 4.3v2l-7.4-2.1-.6 5.1 2.4 1.8V22L12 21l-3.4 1v-1.7l2.4-1.8-.6-5.1-7.4 2.1v-2l7.4-4.3z"/></svg></div>' +
+      '<div class="tx"><div class="k">TRANSIT PROJECT / SKY</div><div class="h">' + (arrived ? "Nearest flight" : "Taking off") + "</div>" +
+        '<div class="s">' + (city ? "Scanning the sky over " + esc(city) : "Scanning the sky") + "</div></div>";
+    // The plane rides the middle trail (offset-path), nose along the curve.
+    var pl = el.querySelector(".pl");
+    pl.style.offsetPath = "path('" + d(0) + "')";
+    pl.style.offsetRotate = "auto 90deg";
+    if (!reduced() && pl.animate) {
+      pl.animate([{ offsetDistance: "0%" }, { offsetDistance: "100%" }],
+        { duration: arrived ? 1 : 1150, delay: arrived ? 0 : 250, easing: "cubic-bezier(.45,0,.2,1)", fill: "both" });
+      if (arrived) pl.style.offsetDistance = "100%";
+    } else pl.style.display = "none";
+    return el;
+  }
+  function cityName() {
+    var c = document.querySelector(".tb-board-city");
+    if (c && c.textContent.trim()) return c.textContent.trim();
+    var sel = document.querySelector(".city-picker select");
+    return sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent.trim() : "";
+  }
+  function depart(url) {
+    var city = cityName();
+    try { sessionStorage.setItem(KEY, JSON.stringify({ city: city, at: Date.now() })); } catch (e) {}
+    var el = build(city, false);
+    document.body.appendChild(el);
+    void el.offsetWidth;
+    el.classList.add("in");
+    setTimeout(function () { window.location.href = url; }, reduced() ? 150 : 700);
+    setTimeout(function () { if (el.parentNode) { el.classList.remove("in"); el.classList.add("out"); setTimeout(function () { el.remove(); }, 800); } }, 7000);
+  }
+  // Board side: take over the Sky link once its gate has said yes.
+  document.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest && e.target.closest("a#nightBtn");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault(); e.stopPropagation();
+    if (window.TBGate && !TBGate.require("sky")) return;   // the gate showed its own message
+    depart(a.getAttribute("href") || "night.html");
+  }, true);
+  /* Board map → Sky. A plane's popup on a city board gains "Watch in Sky ›",
+     which opens Sky following that exact aircraft (the same link format Sky's
+     own Share button makes). Added from here because every board builds its
+     popups in its own copy of buildVehiclePopup(); `state` is each board's
+     top-level lexical global, reachable by name but not as window.state. */
+  function boardState() { try { return typeof state !== "undefined" ? state : null; } catch (e) { return null; } }
+  function skyLinkFor(id, latlng, call) {
+    var a = document.getElementById("nightBtn");
+    var base = (a && a.getAttribute("href")) || "night.html";
+    var u = new URL(base, location.href);
+    u.searchParams.set("hex", String(id).replace(/^p/, ""));
+    if (call) u.searchParams.set("flight", call);
+    u.searchParams.set("lat", latlng.lat.toFixed(3));
+    u.searchParams.set("lon", latlng.lng.toFixed(3));
+    return u.pathname.split("/").pop() + u.search;
+  }
+  var hooked = false;
+  function hookBoardMap() {
+    var st = boardState();
+    if (hooked || !st || !st.map || !st.map.on) return !!hooked;
+    hooked = true;
+    st.map.on("popupopen", function (e) {
+      var c = st._clicked;
+      if (!c || c.fleet !== "plane") return;
+      var rec = st.fleets && st.fleets.plane && st.fleets.plane[c.id];
+      var box = e.popup && e.popup.getElement && e.popup.getElement();
+      var pop = box && box.querySelector(".veh-pop");
+      if (!rec || !pop || pop.querySelector(".vp-sky")) return;
+      var ll = (rec.marker && rec.marker.getLatLng) ? rec.marker.getLatLng() : (e.popup.getLatLng && e.popup.getLatLng());
+      if (!ll) return;
+      var call = String(rec.label || "").trim().split(/\s+/)[0];
+      if (!/^[A-Z]{3}\d/.test(call)) call = "";
+      var btn = document.createElement("button");
+      btn.type = "button"; btn.className = "vp-follow vp-sky"; btn.textContent = "Watch in Sky ›";
+      btn.title = "Open Sky mode following this aircraft";
+      btn.addEventListener("click", function () {
+        if (window.TBGate && !TBGate.require("sky")) return;
+        depart(skyLinkFor(c.id, ll, call));
+      });
+      pop.appendChild(btn);
+    });
+    return true;
+  }
+  var hookTries = 0, hookPoll = setInterval(function () { if (hookBoardMap() || ++hookTries > 60) clearInterval(hookPoll); }, 500);
+
+  // Sky side: the arrival.
+  (function arrive() {
+    if (!/night\.html$/i.test(location.pathname)) return;
+    var hop = null;
+    try { hop = JSON.parse(sessionStorage.getItem(KEY) || "null"); sessionStorage.removeItem(KEY); } catch (e) {}
+    if (!hop || Date.now() - hop.at > 10000) return;
+    var el = build(hop.city, true);
+    (document.body || document.documentElement).appendChild(el);
+    var shown = Date.now(), gone = false;
+    function lift() {
+      if (gone) return; gone = true;
+      setTimeout(function () {
+        el.classList.remove("in", "arrived"); el.classList.add("out");
+        setTimeout(function () { el.remove(); }, reduced() ? 300 : 900);
+      }, Math.max(0, 650 - (Date.now() - shown)));
+    }
+    window.addEventListener("load", function () { setTimeout(lift, 200); });
+    setTimeout(lift, 3500);
+  })();
+})();

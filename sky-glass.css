@@ -1,0 +1,384 @@
+/* Sky — Glass. The board's Glass design carried into Sky mode (night.html).
+
+   Applies only under :root[data-sky-glass], which night.html sets before
+   first paint when the board style is Glass (the default) — anyone who chose
+   Classic, Atlas, Paper or Signal keeps the original starfield Sky.
+
+   The live map stops being a small card beside the photo and becomes the
+   whole background (sky-glass.js moves the element out to <body>, so the
+   flight-change animation's transform can't drag a fixed map with it). The
+   flight details and the photo float over it on frosted pills; the header
+   buttons are brand chips that fade when idle; "Hide info" / H leaves just
+   the map; a 3px brand stripe runs along the bottom edge. */
+
+:root[data-sky-glass]{
+  --sg-tint:rgba(12,14,18,.62);
+  --sg-tint-soft:rgba(12,14,18,.42);
+  --sg-edge:rgba(255,255,255,.14);
+  --sg-ink:#F7F8FA; --sg-muted:#A8AFBA;
+}
+:root[data-sky-glass][data-theme="black"]{ --sg-tint:rgba(0,0,0,.66); --sg-tint-soft:rgba(0,0,0,.45) }
+:root[data-sky-glass][data-theme="day"]{
+  --sg-tint:rgba(255,255,255,.80); --sg-tint-soft:rgba(255,255,255,.6);
+  --sg-edge:rgba(20,30,50,.14); --sg-ink:#111318; --sg-muted:#5B6270;
+}
+
+/* ---- the map is the sky ---------------------------------------------------- */
+:root[data-sky-glass] #sky,
+:root[data-sky-glass] body::after{ display:none !important }
+:root[data-sky-glass] body{ background:#E6E8EB }
+:root[data-sky-glass] body > #miniMap{
+  position:fixed !important; top:0; right:0; bottom:0; left:0;
+  width:auto; height:auto; max-height:none !important; flex:none;
+  z-index:0; border:0; border-radius:0; display:block !important;
+}
+:root[data-sky-glass] body > #miniMap .leaflet-container{ background:#E6E8EB }
+:root[data-sky-glass] header,
+:root[data-sky-glass] main,
+:root[data-sky-glass] footer{ position:relative; z-index:2 }
+/* Clicks pass through the empty parts of the overlay to nothing in
+   particular (the map is a backdrop, not a control), but every real control
+   and panel takes them. */
+:root[data-sky-glass] main{ pointer-events:none }
+:root[data-sky-glass] main *{ pointer-events:auto }
+
+/* ---- header: brand chips --------------------------------------------------- */
+:root[data-sky-glass] header{ padding-top:max(2.4vmin, 14px) }
+:root[data-sky-glass] header .tag,
+:root[data-sky-glass] header .clock{
+  padding:.35em .8em; border-radius:12px;
+  background:var(--sg-tint); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  box-shadow:0 0 0 1px var(--sg-edge);
+}
+:root[data-sky-glass] header .tag{ -webkit-text-fill-color:currentColor; background-clip:border-box; -webkit-background-clip:border-box; color:var(--sg-ink) }
+:root[data-sky-glass] header .clock{ color:var(--sg-ink) }
+:root[data-sky-glass] #markLink{
+  border-radius:12px; background:var(--sg-tint); padding:2px;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); box-shadow:0 0 0 1px var(--sg-edge);
+}
+:root[data-sky-glass] header a:not(#markLink),
+:root[data-sky-glass] header button{
+  --chip:#2F7BFF;
+  color:var(--sg-ink); font-weight:600;
+  background:var(--sg-tint); border:1px solid var(--sg-edge);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  box-shadow:inset 0 -3px 0 var(--chip);
+  transition:opacity .45s ease, background-color .15s ease;
+}
+:root[data-sky-glass] header #logBtn{ --chip:#00E0C6 }
+:root[data-sky-glass] header #fsBtn{ --chip:#2F7BFF }
+:root[data-sky-glass] header #tourBtn{ --chip:#00E0C6 }
+:root[data-sky-glass] header #boardBtn{ --chip:#2F7BFF }
+:root[data-sky-glass] header #sgHideBtn{ --chip:#FF3D77 }
+@supports (color: color-mix(in srgb, red 10%, blue)){
+  :root[data-sky-glass] header a:not(#markLink):hover,
+  :root[data-sky-glass] header button:hover,
+  :root[data-sky-glass] header #sgHideBtn[aria-pressed="true"]{
+    background:color-mix(in srgb, var(--chip) 55%, #3A3F4A); border-color:var(--chip); color:#fff;
+  }
+}
+/* Settings is the one solid pink control, as on the boards. */
+:root[data-sky-glass] header #setBtn{
+  background:#FF3D77; border-color:#FF3D77; color:#12101A; box-shadow:none;
+}
+:root[data-sky-glass] header #setBtn:hover{ background:#FF6A97; border-color:#FF6A97; color:#12101A }
+
+/* Idle: the controls fade after a few seconds without input (sky-glass.js);
+   the mark, the label and the clock stay. */
+:root[data-sky-glass].sg-idle header a:not(#markLink),
+:root[data-sky-glass].sg-idle header button,
+:root[data-sky-glass].sg-idle #miniZoomBtn{ opacity:0; pointer-events:none }
+:root[data-sky-glass] #miniZoomBtn{ transition:opacity .45s ease }
+
+/* ---- the flight, on glass -------------------------------------------------- */
+:root[data-sky-glass] #flight{ grid-template-columns:minmax(0,1fr) minmax(0,.62fr); align-items:start }
+:root[data-sky-glass] #flight .txt{
+  justify-self:start; max-width:min(860px, 100%);
+  padding:clamp(14px,2.4vmin,30px) clamp(16px,2.8vmin,36px);
+  border-radius:20px;
+  background:var(--sg-tint); -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
+  box-shadow:0 0 0 1px var(--sg-edge), 0 18px 50px rgba(0,0,0,.35);
+  position:relative; overflow:hidden;
+}
+/* The brand strip rides the panel's top edge. */
+:root[data-sky-glass] #flight .txt::before{
+  content:""; position:absolute; left:clamp(16px,2.8vmin,36px); top:0; width:104px; height:3px;
+  background:linear-gradient(90deg,#FF3D77 0,#FF3D77 33.333%,#00E0C6 33.333%,#00E0C6 66.666%,#2F7BFF 66.666%);
+}
+:root[data-sky-glass] .side{ height:auto; max-height:56vh; justify-self:end; width:100% }
+:root[data-sky-glass] .photo{ flex:none; max-height:44vh }
+:root[data-sky-glass] .photo img{
+  padding:0; border-radius:16px; background:none;
+  box-shadow:0 0 0 1px var(--sg-edge), 0 18px 50px rgba(0,0,0,.4);
+}
+:root[data-sky-glass] .photo figcaption{
+  align-self:flex-end; margin-top:6px; padding:3px 9px; border-radius:8px;
+  background:var(--sg-tint-soft); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+:root[data-sky-glass] .photo a{ color:var(--sg-muted) }
+/* The loading message sits on a pill too, so it reads over the map. */
+:root[data-sky-glass] #loading{
+  align-self:flex-start; padding:12px 18px; border-radius:14px;
+  background:var(--sg-tint); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  box-shadow:0 0 0 1px var(--sg-edge); color:var(--sg-ink);
+}
+
+/* "Hide info" / H: just the map, the plane and the controls. */
+:root[data-sky-glass].sg-bare #flight,
+:root[data-sky-glass].sg-bare #loading,
+:root[data-sky-glass].sg-bare footer{ visibility:hidden }
+
+/* ---- the "Close up" toggle, now on the big map ----------------------------- */
+:root[data-sky-glass] #miniZoomBtn{
+  right:clamp(14px,4vw,48px); bottom:calc(clamp(14px,3vmin,30px) + 34px);
+  padding:8px 12px; border-radius:10px; font-weight:600;
+  background:var(--sg-tint); color:var(--sg-ink); border:1px solid var(--sg-edge);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  box-shadow:inset 0 -3px 0 #00E0C6;
+}
+
+/* ---- footer: one small pill, plus the brand stripe along the bottom -------- */
+:root[data-sky-glass] footer{
+  align-self:flex-start; margin:0 0 calc(3vmin + 3px) 4vw; padding:6px 12px; border-radius:10px;
+  background:var(--sg-tint-soft); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  color:var(--sg-muted); font-size:clamp(.7rem,1.3vw,.95rem);
+}
+:root[data-sky-glass] footer b{ color:var(--sg-ink) }
+:root[data-sky-glass] body::before{
+  content:""; position:fixed; left:0; right:0; bottom:0; height:3px; z-index:5; pointer-events:none;
+  background:linear-gradient(90deg,#FF3D77 0,#FF3D77 33.333%,#00E0C6 33.333%,#00E0C6 66.666%,#2F7BFF 66.666%);
+}
+
+/* ---- portrait and phones: the panel takes the width, the photo sits below -- */
+@media (max-width:760px), (orientation:portrait){
+  :root[data-sky-glass] #flight{ grid-template-columns:1fr }
+  :root[data-sky-glass] #flight .txt{ max-width:none; width:100% }
+  :root[data-sky-glass] .side{ max-height:30vh; justify-self:stretch }
+  :root[data-sky-glass] .photo{ max-height:30vh }
+}
+@media (prefers-reduced-motion:reduce){
+  :root[data-sky-glass] header a, :root[data-sky-glass] header button, :root[data-sky-glass] #miniZoomBtn{ transition:none }
+}
+
+/* ---- header, reorganised: title left · controls together · clock right ---- */
+:root[data-sky-glass] header{ flex-wrap:wrap; gap:10px; align-items:center }
+:root[data-sky-glass] #markLink{ order:0 }
+:root[data-sky-glass] header .tag{ order:1 }
+:root[data-sky-glass] header #boardBtn{ order:2; margin-left:auto }
+:root[data-sky-glass] header #tourBtn{ order:3 }
+:root[data-sky-glass] header #logBtn{ order:4 }
+:root[data-sky-glass] header #fsBtn{ order:5 }
+:root[data-sky-glass] header #sgHideBtn{ order:6 }
+:root[data-sky-glass] header #setBtn{ order:7 }
+:root[data-sky-glass] header .clock{ order:8; margin-left:6px }
+:root[data-sky-glass] header a:not(#markLink),
+:root[data-sky-glass] header button{
+  font:600 clamp(.8rem,1.2vw,1rem)/1.2 var(--body); letter-spacing:0; padding:.55em .9em; border-radius:10px;
+}
+/* The title, as the boards write theirs: a mono kicker over a bold name. */
+:root[data-sky-glass] header .tag{
+  display:flex; flex-direction:column; gap:3px; padding:.5em 1em .55em;
+  font:800 clamp(1rem,1.9vw,1.6rem)/1.05 var(--display); letter-spacing:-.02em; text-transform:uppercase;
+}
+:root[data-sky-glass] header .tag::before{
+  content:"TRANSIT PROJECT / SKY"; font:500 clamp(8px,.75vw,10px)/1.3 var(--mono);
+  letter-spacing:.13em; color:var(--sg-muted);
+}
+:root[data-sky-glass] header .clock{
+  font:500 clamp(1rem,2vw,1.7rem)/1.15 var(--mono); letter-spacing:-.04em; padding:.4em .8em;
+}
+
+/* ---- type: the boards' faces, solid colours (no gradient fills) ----------- */
+:root[data-sky-glass] #flight .txt{ color:var(--sg-ink); letter-spacing:0 }
+:root[data-sky-glass] .airline,
+:root[data-sky-glass] .route .city{
+  font-family:var(--display); font-weight:800; letter-spacing:-.03em;
+  background:none; -webkit-text-fill-color:currentColor; color:var(--sg-ink);
+}
+:root[data-sky-glass] .flight{ font-family:var(--mono); font-weight:500; letter-spacing:.02em; color:var(--sg-muted) }
+:root[data-sky-glass] .route .arrow{ color:#00E0C6 }
+:root[data-sky-glass] .route .code{ font-family:var(--mono); color:var(--sg-muted) }
+:root[data-sky-glass] .subcity{ font-family:var(--body); font-weight:400; color:var(--sg-muted) }
+:root[data-sky-glass] .dist{ font-family:var(--mono); font-weight:500; color:var(--sg-muted) }
+:root[data-sky-glass] .status{ font-family:var(--mono); font-weight:600; letter-spacing:-.01em }
+:root[data-sky-glass] .status .phase{ color:var(--sg-ink) }
+:root[data-sky-glass] .progress .lbl{ font-family:var(--mono); color:var(--sg-muted) }
+:root[data-sky-glass] .progress .fill{ background:linear-gradient(90deg,#FF3D77,#2F7BFF 55%,#00E0C6) }
+
+/* Alerts drop in just under the header, as a glass card, instead of sliding
+   down from the very top over the controls. --sg-head is the header's bottom
+   edge (sky-glass.js). */
+:root[data-sky-glass] #alertBanner{
+  top:calc(var(--sg-head, 84px) + 8px); transform:translate(-50%,-10px); opacity:0; pointer-events:none;
+  transition:transform .35s ease, opacity .35s ease;
+  background:var(--sg-tint); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  border:1px solid var(--sg-edge); border-radius:14px; box-shadow:inset 3px 0 0 #FF3D77, 0 14px 40px rgba(0,0,0,.4);
+}
+:root[data-sky-glass] #alertBanner.show{ transform:translate(-50%,0); opacity:1; pointer-events:auto }
+:root[data-sky-glass] #alertBanner .t{ color:var(--sg-ink); font-family:var(--body) }
+
+/* Phones: keep the map in view — a small photo, no footer pill (the range
+   and place are in the panel's own first line), a slimmer clock. */
+@media (max-width:600px){
+  :root[data-sky-glass] .side{ max-height:20vh }
+  :root[data-sky-glass] .photo{ max-height:20vh }
+  :root[data-sky-glass] .photo img{ max-height:17vh; object-fit:cover }
+  :root[data-sky-glass] footer{ display:none }
+  :root[data-sky-glass] header .clock{ font-size:.95rem; padding:.35em .7em }
+  :root[data-sky-glass] #flight .txt{ padding:14px 16px }
+  :root[data-sky-glass] #alertBanner{ width:calc(100vw - 32px); max-width:none }
+}
+
+/* Photo hidden (Settings → Photos → Hide, the Glass default): the side column
+   goes too, so the map has the whole right of the screen. */
+:root[data-sky-glass].no-photo .side{ display:none }
+:root[data-sky-glass].no-photo #flight{ grid-template-columns:minmax(0,1fr) }
+
+/* ---- a map with more in it ------------------------------------------------- */
+/* Every aircraft in range: pointed along its track, callsign beside it,
+   brighter on hover, and a click makes it the subject. */
+.sg-plane-wrap{ background:none; border:0 }
+.sg-plane{ display:block; width:22px; height:22px; transform:rotate(var(--r,0deg)); transition:transform 1s linear }
+.sg-plane svg{ width:22px; height:22px; display:block; overflow:visible;
+  filter:drop-shadow(0 0 3px rgba(0,0,0,.9)) }
+.sg-plane path{ fill:#1B1F27; stroke:#FFFFFF; stroke-width:1.1 }
+.sg-plane-lbl{ position:absolute; left:24px; top:3px; white-space:nowrap;
+  font:600 10px/1.2 "IBM Plex Mono",ui-monospace,monospace; color:#F7F8FA; letter-spacing:.02em;
+  padding:1px 5px; border-radius:4px; background:rgba(12,14,18,.62); pointer-events:none }
+.sg-plane-wrap:hover .sg-plane path{ fill:#FF3D77 }
+.sg-plane-wrap:hover .sg-plane-lbl{ background:#FF3D77; color:#fff }
+.sg-plane-wrap{ cursor:pointer }
+/* At wide zooms the labels would pile up; keep the planes, drop the names. */
+:root[data-sky-glass] .sg-zoomed-out .sg-plane-lbl{ display:none }
+
+/* The map's own zoom buttons, as glass chips. */
+:root[data-sky-glass] body > #miniMap .leaflet-top.leaflet-right{ margin-top:calc(var(--sg-head, 84px) + 54px); margin-right:clamp(4px,3vw,38px) }
+:root[data-sky-glass] body > #miniMap .leaflet-bar{ border:0; box-shadow:0 0 0 1px var(--sg-edge) }
+:root[data-sky-glass] body > #miniMap .leaflet-bar a{
+  background:var(--sg-tint); color:var(--sg-ink); border-color:var(--sg-edge);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+:root[data-sky-glass].sg-idle body > #miniMap .leaflet-control-zoom{ opacity:0; pointer-events:none }
+:root[data-sky-glass] body > #miniMap .leaflet-control-zoom{ transition:opacity .45s ease }
+
+/* "Following the plane you picked · Back to nearest" */
+#sgPinChip{ display:none }
+:root[data-sky-glass].sky-pinned #sgPinChip{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin:-2px 0 10px; padding:5px 5px 5px 12px; border-radius:10px; color:var(--sg-ink);
+  font:500 12px/1.2 var(--body,system-ui); background:rgba(0,224,198,.12);
+  box-shadow:inset 0 0 0 1px rgba(0,224,198,.45);
+}
+#sgPinChip button{ border:0; border-radius:8px; padding:6px 10px; cursor:pointer;
+  font:600 12px/1.2 var(--body,system-ui); background:#00E0C6; color:#0F1115 }
+
+/* On the light map: your own spot and the subject plane need dark ink. */
+:root[data-sky-glass] .mini-here-label{ color:#111318; text-shadow:0 0 3px #fff, 0 0 2px #fff }
+:root[data-sky-glass] .mini-veh-icon path, :root[data-sky-glass] .mini-veh-icon rect{ fill:#FF3D77; stroke:#fff; stroke-width:1 }
+:root[data-sky-glass] .mini-veh-icon svg{ filter:drop-shadow(0 0 4px rgba(255,61,119,.6)) }
+:root[data-sky-glass] .mini-endpt{ background:#2F7BFF; border-color:#fff }
+
+/* ---- "On this route": stars on the map, one line in the panel ------------ */
+.sg-poi-wrap{ background:none; border:0 }
+.sg-poi{ display:flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%;
+  font-size:11px; line-height:1; color:#fff; background:#FFB020; box-shadow:0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35) }
+.sg-poi.next{ background:#FF3D77; box-shadow:0 0 0 2px #fff, 0 0 0 6px rgba(255,61,119,.25), 0 2px 6px rgba(0,0,0,.35) }
+.sg-poi-lbl{ position:absolute; left:22px; top:1px; white-space:nowrap; pointer-events:none;
+  font:600 11px/1.2 "IBM Plex Sans",system-ui,sans-serif; color:#111318;
+  text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff }
+:root[data-sky-glass] .sg-zoomed-out .sg-poi:not(.next) + .sg-poi-lbl{ display:none }
+
+#sgRoute{ display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin-top:12px; padding-top:10px;
+  border-top:1px solid var(--sg-edge); font:400 clamp(.8rem,1.25vw,1.05rem)/1.35 var(--body); color:var(--sg-muted) }
+#sgRoute .sg-route-k{ font:600 clamp(9px,.8vw,11px)/1.3 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:#FFB020 }
+#sgRoute .sg-next{ color:var(--sg-ink) }
+#sgRoute .sg-next b{ color:#FF3D77; font-weight:700 }
+:root[data-theme="day"] #sgRoute .sg-route-k{ color:#B7791F }
+
+/* ---- compact flight card -------------------------------------------------
+   The panel kept the original Sky's poster-sized type, which on a map page
+   covered most of the map. Here it is a card: about half the type size,
+   at most ~560px wide, parked bottom-left so the map has the rest. Sizes
+   still go through --fit, so night.html's own overflow fitter keeps working. */
+:root[data-sky-glass] main{ justify-content:flex-end; padding-bottom:clamp(10px,2vmin,22px) }
+:root[data-sky-glass] #flight{ grid-template-columns:minmax(0,1fr) !important; align-items:end }
+:root[data-sky-glass] #flight .txt{
+  width:min(560px, 100%); max-width:none; justify-self:start;
+  padding:clamp(12px,1.8vmin,20px) clamp(14px,2vmin,22px);
+}
+:root[data-sky-glass] #flight .txt::before{ left:clamp(14px,2vmin,22px); width:72px }
+:root[data-sky-glass] .compass{ width:clamp(26px,min(3vw,3.6vh),40px) }
+:root[data-sky-glass] .dist{ font-size:clamp(.72rem,min(1.1vw,1.4vh),.95rem) }
+:root[data-sky-glass] #airlineLogo{ height:clamp(18px,min(2.2vw,2.8vh),30px); padding:3px 5px; border-radius:6px }
+:root[data-sky-glass] .airline{ font-size:calc(var(--fit,1)*clamp(1.25rem,min(3.2vw,4.2vh),2.4rem)) }
+:root[data-sky-glass] .flight{ font-size:calc(var(--fit,1)*clamp(.72rem,min(1.15vw,1.5vh),.95rem)) }
+:root[data-sky-glass] .route{ gap:.5em; margin-top:.2em }
+:root[data-sky-glass] .route .city{ font-size:calc(var(--fit,1)*clamp(1.05rem,min(2.6vw,3.4vh),2rem)) }
+:root[data-sky-glass] .route .arrow{ font-size:calc(var(--fit,1)*clamp(.95rem,min(2.2vw,2.8vh),1.6rem)) }
+:root[data-sky-glass] .route .code{ font-size:clamp(.75rem,1.2vw,1rem) }
+:root[data-sky-glass] .subcity{ font-size:calc(var(--fit,1)*clamp(.7rem,min(1vw,1.3vh),.88rem)) }
+:root[data-sky-glass] .status{ font-size:calc(var(--fit,1)*clamp(.78rem,min(1.25vw,1.6vh),1.05rem)); gap:.55em; margin-top:.5em }
+:root[data-sky-glass] .progress{ margin-top:.5em }
+:root[data-sky-glass] .progress .lbl{ font-size:clamp(.65rem,.9vw,.8rem) }
+:root[data-sky-glass] #sgRoute{ font-size:clamp(.72rem,1vw,.88rem); margin-top:9px; padding-top:8px }
+:root[data-sky-glass] footer{ display:none }   /* the range ring and your labelled spot on the map say the same */
+/* Controls on the map sit top-right, under the header, clear of the card. */
+:root[data-sky-glass] #miniZoomBtn{ top:calc(var(--sg-head, 84px) + 10px); bottom:auto }
+/* Lift the card clear of the map/aircraft credit lines in the corner. */
+:root[data-sky-glass] main{ padding-bottom:calc(clamp(10px,2vmin,22px) + 30px) }
+@media (max-width:600px){
+  :root[data-sky-glass] #flight .txt{ width:100% }
+}
+
+/* Alerts stay out of the way of an open panel, and close with their ×. */
+:root[data-sky-glass] body:has(#fleetPanel.show, #logPanel.show, #settings.show) #alertBanner{ opacity:0 !important; pointer-events:none !important }
+:root[data-sky-glass] #alertBanner .x{ border-color:var(--sg-edge); color:var(--sg-muted) }
+:root[data-sky-glass] #alertBanner .x:hover{ color:var(--sg-ink); border-color:#FF3D77 }
+
+/* ---- the "in range" list, redone as a glass card ------------------------- */
+:root[data-sky-glass] #fleetPanel, :root[data-sky-glass] #logPanel{ background:rgba(12,14,18,.35) }
+:root[data-sky-glass] #fleetPanel .panel, :root[data-sky-glass] #logPanel .panel{
+  max-width:560px; padding:18px 18px 14px; border-radius:18px; border:0;
+  background:var(--sg-tint); -webkit-backdrop-filter:blur(16px) saturate(1.2); backdrop-filter:blur(16px) saturate(1.2);
+  box-shadow:0 0 0 1px var(--sg-edge), 0 24px 70px rgba(0,0,0,.45); color:var(--sg-ink);
+  position:relative;
+}
+:root[data-sky-glass] #fleetPanel .panel::before, :root[data-sky-glass] #logPanel .panel::before{
+  content:""; position:absolute; left:18px; top:0; width:72px; height:3px;
+  background:linear-gradient(90deg,#FF3D77 0,#FF3D77 33.333%,#00E0C6 33.333%,#00E0C6 66.666%,#2F7BFF 66.666%);
+}
+:root[data-sky-glass] #fleetPanel h3, :root[data-sky-glass] #logPanel h3{
+  font:800 clamp(1.05rem,1.6vw,1.35rem)/1.15 var(--display); letter-spacing:-.02em; color:var(--sg-ink);
+  margin:4px 4px 10px;
+}
+:root[data-sky-glass] #fleetPanel .row{
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px;
+  padding:8px 10px; margin:0 -6px; border:0; border-radius:10px;
+  font:400 13px/1.3 var(--body);
+}
+:root[data-sky-glass] #fleetPanel .row + .row{ box-shadow:0 -1px 0 var(--sg-edge) }
+:root[data-sky-glass] #fleetPanel .row > span:first-child{ display:flex; align-items:center; gap:10px; min-width:0 }
+:root[data-sky-glass] #fleetPanel .row b{
+  flex:none; min-width:74px; text-align:center; padding:3px 7px; border-radius:6px;
+  font:600 12px/1.2 var(--mono); letter-spacing:.02em; color:var(--sg-ink);
+  background:rgba(255,255,255,.08); box-shadow:inset 0 -2px 0 #2F7BFF;
+}
+:root[data-sky-glass][data-theme="day"] #fleetPanel .row b{ background:rgba(17,19,24,.06) }
+:root[data-sky-glass] #fleetPanel .row .frow-sub{
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--sg-muted);
+}
+:root[data-sky-glass] #fleetPanel .row .when{ font:500 12px/1.2 var(--mono); color:var(--sg-muted); white-space:nowrap; text-align:right }
+:root[data-sky-glass] #fleetPanel .row[data-hex]{ cursor:pointer }
+:root[data-sky-glass] #fleetPanel .row[data-hex]:hover,
+:root[data-sky-glass] #fleetPanel .row[data-hex]:focus-visible{ background:rgba(0,224,198,.12); box-shadow:none; outline:none }
+:root[data-sky-glass] #fleetPanel .row[data-hex]:hover b{ box-shadow:inset 0 -2px 0 #00E0C6 }
+:root[data-sky-glass] #fleetPanel .actions, :root[data-sky-glass] #logPanel .actions{ margin-top:14px }
+:root[data-sky-glass] #fleetPanel .done2, :root[data-sky-glass] #logPanel .done2{ background:#FF3D77; color:#12101A; border-radius:10px }
+
+/* Share flight: a teal chip beside Hide info, and a small toast for "copied". */
+:root[data-sky-glass] header #sgShareBtn{ --chip:#00E0C6; order:6 }
+#sgToast{ position:fixed; left:50%; bottom:28px; z-index:90; transform:translate(-50%,12px); opacity:0;
+  padding:9px 14px; border-radius:10px; font:500 13px/1.2 var(--body,system-ui); color:#F7F8FA;
+  background:rgba(12,14,18,.82); box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.35);
+  transition:opacity .2s ease, transform .2s ease; pointer-events:none }
+#sgToast.show{ opacity:1; transform:translate(-50%,0) }

@@ -40,6 +40,14 @@
     dark: {
       base: ESRI + "World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
       ref:  ESRI + "World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+    },
+    /* A map with colour in it — green parks, blue water, coloured roads —
+       for the one place the map IS the page (the Glass Sky view). Same keyless
+       provider; its names are drawn into the tiles, so there is no separate
+       reference layer, and it is never run through the dark-theme filters. */
+    color: {
+      base: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+      ref:  null
     }
   };
 
@@ -73,7 +81,7 @@
 
   /* "day" is the only light board theme; "dark" and "black" both want the dark
      canvas, and are separated below by how hard the filter pushes it. */
-  function setFor(theme) { return theme === "day" ? SETS.light : SETS.dark; }
+  function setFor(theme) { return theme === "color" ? SETS.color : theme === "day" ? SETS.light : SETS.dark; }
 
   /* Esri's dark canvas renders as a mid grey where CARTO's Dark Matter was
      nearly black, so a filter takes it back to the tone the boards are built
@@ -131,7 +139,9 @@
       '[data-theme="black"] .tb-basemap-hi{filter:invert(1) hue-rotate(180deg) brightness(.56) contrast(1) saturate(.14)}' +
       /* Day is a light board and this is a light map: it needs no correction
          at all, which is the one case where the close-up matches perfectly. */
-      '[data-theme="day"] .tb-basemap-hi{filter:none}';
+      '[data-theme="day"] .tb-basemap-hi{filter:none}' +
+      /* The colour set is shown as it comes, in every theme. */
+      ".tb-basemap-color .tb-basemap-pane,.tb-basemap-color .tb-basemap-hi{filter:none !important}";
     (document.head || document.documentElement).appendChild(s);
   }
 
@@ -197,7 +207,8 @@
 
     var set = setFor(theme);
     var base = global.L.tileLayer(set.base, baseOpts).addTo(map);
-    var ref  = global.L.tileLayer(set.ref, refOpts).addTo(map);
+    var ref  = set.ref ? global.L.tileLayer(set.ref, refOpts).addTo(map) : null;
+    map.getContainer().classList.toggle("tb-basemap-color", theme === "color");
     var hi   = global.L.tileLayer(DETAIL, hiOpts).addTo(map);
 
     /* One class toggle drives the crossfade; the transition is in the CSS, so
@@ -220,7 +231,11 @@
       setTheme: function (t) {
         var n = setFor(t);
         base.setUrl(n.base);
-        ref.setUrl(n.ref);
+        if (n.ref) {
+          if (ref) ref.setUrl(n.ref);
+          else { ref = global.L.tileLayer(n.ref, refOpts).addTo(map); this.ref = ref; }
+        } else if (ref) { map.removeLayer(ref); ref = null; this.ref = null; }
+        map.getContainer().classList.toggle("tb-basemap-color", t === "color");
         /* hi keeps its URL: one light street map serves every theme, and only
            the filter above changes. */
       }
