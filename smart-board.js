@@ -12,9 +12,10 @@
       var p = JSON.parse(localStorage.getItem(key) || "null");
       if (p && typeof p === "object") return { mode: p.mode === "all" || p.mode === "pick" ? p.mode : "smart", paused: p.paused === true,
         pins: Array.isArray(p.pins) ? p.pins.filter(ok).slice(0, 2) : [],
-        picked: Array.isArray(p.picked) ? p.picked.filter(ok).slice(0, 40) : null };
+        picked: Array.isArray(p.picked) ? p.picked.filter(ok).slice(0, 40) : null,
+        excluded: Array.isArray(p.excluded) ? p.excluded.filter(ok).slice(0, 40) : [] };
     } catch (_) {}
-    return { mode: "smart", paused: false, pins: [], picked: null };
+    return { mode: "smart", paused: false, pins: [], picked: null, excluded: [] };
   }
   function ok(id) { return typeof id === "string" && /^[\w-]+$/.test(id); }
   function save() { try { localStorage.setItem(key, JSON.stringify(prefs)); return true; } catch (_) { return false; } }
@@ -102,7 +103,7 @@
     }
     [].slice.call(ctl.querySelectorAll("[data-sb-turn],.sb-pause")).forEach(function(b){b.hidden=false;});
     if (!on) {
-      all.forEach(function(c){c.classList.remove("sb-resting","sb-alert");});
+      all.forEach(function(c){c.classList.remove("sb-alert"); c.classList.toggle("sb-resting", prefs.mode==="smart" && prefs.excluded.indexOf(c.id)>=0);});
       bar.querySelector(".sb-status").textContent=prefs.mode==="smart"?"All boxes · rotation starts on wider screens":"All boxes";
       bar.querySelector(".sb-status").title="Choose Customize to pick exactly which boxes show.";
       [].slice.call(ctl.querySelectorAll("[data-sb-turn],.sb-pause")).forEach(function(b){b.hidden=true;});
@@ -113,6 +114,10 @@
     var eligible=[], fixed=[], waiting=[];
     all.forEach(function(c){
       if(c.classList.contains("user-hidden") || c.style.display==="none") return;
+      /* Unticked in Customize while on Smart rotate: out of the rotation, and
+         that wins over "urgent" too — an active alert used to force the
+         Service alerts box back on however many times you turned it off. */
+      if(prefs.excluded.indexOf(c.id)>=0){ c.classList.remove("sb-alert"); reasons[c.id]="Turned off in Customize"; return; }
       var a=activity(c), pinned=prefs.pins.indexOf(c.id)>=0;
       c.classList.toggle("sb-alert",!!a.urgent);
       if(a.urgent || pinned || c.contains(document.activeElement)) fixed.push(c);
@@ -154,7 +159,14 @@
       list.dataset.cards=sig;
       list.innerHTML=offered.map(function(c){return '<label><input type="checkbox" data-sb-pick="'+esc(c.id)+'"><span>'+esc(label(c))+'</span></label>';}).join("");
     }
-    var chosen=picking()?prefs.picked:offered.filter(function(c){return !c.classList.contains("sb-resting");}).map(function(c){return c.id;});
+    // Smart rotate: a tick means "in the rotation". My boxes: "on screen". All: everything.
+    var chosen=picking()?prefs.picked
+      : prefs.mode==="smart" ? offered.map(function(c){return c.id;}).filter(function(id){return prefs.excluded.indexOf(id)<0;})
+      : offered.map(function(c){return c.id;});
+    var note=picker.querySelector(".sb-pick-note");
+    if(note) note.textContent = prefs.mode==="smart"
+      ? "Smart rotate: untick a box to keep it out of the rotation, alerts included. Boxes turned off in Settings → Show on board aren\u2019t listed."
+      : "Boxes turned off in Settings → Show on board aren\u2019t listed. Saved for this city.";
     [].slice.call(list.querySelectorAll("input")).forEach(function(n){n.checked=chosen.indexOf(n.dataset.sbPick)>=0;});
     [].slice.call(picker.querySelectorAll("[data-sb-mode]")).forEach(function(b){var on=b.dataset.sbMode===(picking()?"pick":prefs.mode==="pick"?"all":prefs.mode);b.classList.toggle("active",on);b.setAttribute("aria-pressed",String(on));});
   }
@@ -175,12 +187,24 @@
           if(b.dataset.sbMode==="pick" && !prefs.picked) prefs.picked=choosable().filter(function(c){return !c.classList.contains("sb-resting");}).map(function(c){return c.id;});
           prefs.mode=b.dataset.sbMode;save();lastTurn=Date.now();update();renderPicker();requestAnimationFrame(refit);return;
         }
-        if(b.dataset.sbBulk){prefs.picked=b.dataset.sbBulk==="all"?choosable().map(function(c){return c.id;}):[];prefs.mode="pick";save();update();renderPicker();requestAnimationFrame(refit);}
+        if(b.dataset.sbBulk){
+          var everyId=choosable().map(function(c){return c.id;});
+          if(prefs.mode==="smart") prefs.excluded = b.dataset.sbBulk==="all" ? [] : everyId;
+          else { prefs.picked = b.dataset.sbBulk==="all" ? everyId : []; prefs.mode="pick"; }
+          save();update();renderPicker();requestAnimationFrame(refit);
+        }
       });
       picker.addEventListener("change",function(e){
         if(!e.target.matches("[data-sb-pick]"))return;
-        prefs.picked=[].slice.call(picker.querySelectorAll("[data-sb-pick]:checked")).map(function(n){return n.dataset.sbPick;});
-        prefs.mode="pick";save();update();renderPicker();
+        var boxes=[].slice.call(picker.querySelectorAll("[data-sb-pick]"));
+        if(prefs.mode==="smart"){
+          // stay on Smart rotate; unticked boxes leave the rotation
+          prefs.excluded=boxes.filter(function(n){return !n.checked;}).map(function(n){return n.dataset.sbPick;});
+        } else {
+          prefs.picked=boxes.filter(function(n){return n.checked;}).map(function(n){return n.dataset.sbPick;});
+          prefs.mode="pick";
+        }
+        save();update();renderPicker();
         requestAnimationFrame(refit);
       });
       document.addEventListener("keydown",function(e){if(e.key==="Escape" && picker && !picker.hidden){closePicker();ctl.querySelector(".sb-customize").focus();}});
