@@ -594,6 +594,23 @@
   :root[data-style="glass"] body.map-full #app > footer,
   :root[data-style="glass"] body.map-full #app > main > .col:last-child{ display:none }
 
+  /* Tablet and up: the boxes FILL the space under the map. The fitter caps
+     tile height when everything already fits, which on a big screen left
+     a band of black under one short row. Here the rows are 1fr of the
+     column, the column count comes from settings-ui.js (--tb-glass-cols,
+     chosen so rows come out even), and each list takes its box's full
+     height — trimmed to whole rows by the same script. */
+  @media (min-width:481px){
+    :root[data-style="glass"] body #app > main > .col:last-child{ display:flex; flex-direction:column; overflow:hidden }
+    :root[data-style="glass"] body #app > main > .col:last-child > .cards{ flex:1 1 auto; min-height:0 }
+    :root[data-style="glass"].tb-grid body .cards{
+      grid-template-columns:repeat(var(--tb-glass-cols, var(--tb-card-cols, 3)), minmax(0,1fr)) !important;
+      grid-auto-rows:minmax(0,1fr) !important; align-content:stretch !important;
+    }
+    :root[data-style="glass"].tb-grid body .card:not(.mini){ height:auto !important; min-height:0; display:flex; flex-direction:column }
+    :root[data-style="glass"].tb-grid body .card:not(.mini) .list{ flex:1 1 auto; min-height:0; max-height:none !important; height:auto !important }
+  }
+
   /* Phones scroll the page instead of fitting it; the band stays a map. */
   @media (max-width:480px){
     :root[data-style="glass"]{ --glass-band:max(230px,34dvh) }

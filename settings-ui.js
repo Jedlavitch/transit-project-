@@ -751,20 +751,70 @@
      which oscillates forever; the zoom is an input nothing here changes. */
   function setTight(root) {
     var z = parseFloat(getComputedStyle(root).getPropertyValue("--ui-zoom")) || 1;
-    if (z >= 1.4) root.classList.add("atlas-tight");
-    else root.classList.remove("atlas-tight");
+    /* contains() first: classList writes the attribute even when nothing
+       changes, and the <html> attribute observer below would loop on it. */
+    var want = z >= 1.4;
+    if (want !== root.classList.contains("atlas-tight")) root.classList.toggle("atlas-tight", want);
+  }
+
+  /* Glass: the lists scroll, so hiding the rows that overflow would make
+     them unreachable. Instead the list's height is trimmed to the bottom of
+     the last row that fits whole: nothing is drawn sliced, and the rest are
+     still a scroll away. Re-measured from the fitter's own height on every
+     pass (the inline cap is cleared first), so it follows the fitter rather
+     than fighting it, and it never changes the card's size, only the list's,
+     so it cannot feed back into the layout. */
+  var SNAP = "data-glass-snap";
+  function unsnapAll() {
+    var l = document.querySelectorAll("[" + SNAP + "]");
+    for (var i = 0; i < l.length; i++) { l[i].style.removeProperty("max-height"); l[i].removeAttribute(SNAP); }
+  }
+  function snapList(card) {
+    var list = card.querySelector(".list");
+    if (!list || list.hasAttribute("data-scroll-list") || list.scrollTop > 0) return;
+    if (list.hasAttribute(SNAP)) { list.style.removeProperty("max-height"); list.removeAttribute(SNAP); }
+    var lb = list.getBoundingClientRect();
+    if (!lb.height || list.scrollHeight <= list.clientHeight + 1) return;   // nothing overflows
+    var scale = lb.height / (list.offsetHeight || lb.height) || 1, fit = lb.top;
+    var items = list.children;
+    for (var i = 0; i < items.length; i++) {
+      var r = items[i].getBoundingClientRect();
+      if (!r.height) continue;
+      if (r.bottom <= lb.bottom + 1) fit = Math.max(fit, r.bottom); else break;
+    }
+    if (fit > lb.top && fit < lb.bottom - 1) {
+      /* important: the fitter sizes lists with !important rules, which a
+         plain inline value does not beat. */
+      list.style.setProperty("max-height", Math.floor((fit - lb.top) / scale) + "px", "important");
+      list.setAttribute(SNAP, "1");
+    }
+  }
+  function trimKids(card, head, bottom) {
+    var kids = card.children;
+    for (var k = 0; k < kids.length; k++) {
+      var kid = kids[k];
+      if (kid === head || (kid.classList && kid.classList.contains("list"))) continue;
+      if (kid.getBoundingClientRect().bottom > bottom + 1) hide(kid);
+      else if (kid.hasAttribute(TAG)) show(kid);
+    }
   }
 
   function trim() {
     timer = 0;
     var root = document.documentElement;
     var marked = document.querySelectorAll("[" + TAG + "]"), i;
-    if (root.getAttribute("data-style") !== "atlas") {
+    /* Glass needs the same guarantee: its boxes are sized by the fitter
+       and their lists clipped to fit, so the last row was being sliced in
+       half (and a card's prose cut through a line) on every Glass board. */
+    var style = root.getAttribute("data-style");
+    if (style !== "glass") unsnapAll();
+    if (style !== "atlas" && style !== "glass") {
       for (i = 0; i < marked.length; i++) show(marked[i]);   /* switched away */
-      root.classList.remove("atlas-tight");
+      if (root.classList.contains("atlas-tight")) root.classList.remove("atlas-tight");
       return;
     }
-    setTight(root);
+    if (style === "atlas") setTight(root);
+    else if (root.classList.contains("atlas-tight")) root.classList.remove("atlas-tight");
     var cards = document.querySelectorAll(".card"),
         rail = document.querySelector("main > .col:last-child"),
         railBottom = Infinity;
@@ -784,6 +834,7 @@
          200% zoom this left "AMTRAK — REGIONAL RAIL" cut through the middle
          against the bottom of the rail. */
       var head = card.querySelector("h2, .hd, header");
+      if (style === "glass") { snapList(card); trimKids(card, head, box.bottom); continue; }
       if (box.top >= railBottom - 1 ||
           (head && head.getBoundingClientRect().bottom > railBottom + 1)) {
         hide(card);
@@ -882,6 +933,16 @@
       if (!allFromMap(recs)) schedule();
     }).observe(document.documentElement,
       { childList: true, subtree: true, characterData: true });
+  }
+  /* The fitter publishes its sizes as custom properties on <html>
+     (--tb-list-h, --tb-card-h), which is an attribute write the observer
+     above does not see. Glass caps each list to whole rows from those
+     sizes, so it must re-measure whenever they change, or a stale cap
+     survives the re-fit and slices rows again. Only <html>'s own
+     attributes: our writes land on the lists, so this cannot loop. */
+  if (window.MutationObserver) {
+    new MutationObserver(schedule).observe(document.documentElement,
+      { attributes: true, attributeFilter: ["style", "class", "data-style"] });
   }
   window.addEventListener("resize", schedule);
   setInterval(schedule, 10000);          /* backstop for silent re-layouts */
@@ -1099,7 +1160,42 @@
     setBare(!root.classList.contains("tb-glass-bare"));
   });
 
+  /* Glass column count: as many columns as fit at a readable width, then
+     the arrangement whose rows come out even (six boxes → 3×2, not 5+1),
+     breaking ties toward a box shape near 1.6:1. Only <html>'s variable is
+     written, and only when it changes. */
+  var colsQueued = 0;
+  function glassCols() {
+    colsQueued = 0;
+    var box = document.querySelector(".cards");
+    if (!on() || !box || innerWidth <= 480) { if (root.style.getPropertyValue("--tb-glass-cols")) root.style.removeProperty("--tb-glass-cols"); return; }
+    var n = 0, kids = box.children;
+    for (var i = 0; i < kids.length; i++) if (kids[i].classList.contains("card") && kids[i].offsetParent !== null) n++;
+    if (!n) return;
+    var W = box.clientWidth, H = box.clientHeight, gap = 12;
+    if (!W || !H) return;
+    var maxC = Math.max(1, Math.min(n, Math.floor((W + gap) / (300 + gap)))), best = 1, bestScore = Infinity;
+    for (var c = 1; c <= maxC; c++) {
+      var r = Math.ceil(n / c), w = (W - gap * (c - 1)) / c, h = (H - gap * (r - 1)) / r;
+      if (h < 120 && c < maxC) continue;                       // too short to read; try wider
+      var score = (c * r - n) * 10 + Math.abs(Math.log((w / h) / 1.6));
+      if (score < bestScore) { bestScore = score; best = c; }
+    }
+    if (root.style.getPropertyValue("--tb-glass-cols") !== String(best)) root.style.setProperty("--tb-glass-cols", String(best));
+  }
+  function queueCols() { if (!colsQueued) { colsQueued = 1; (window.requestAnimationFrame || setTimeout)(glassCols); } }
+
   function start() {
+    var cardsBox = document.querySelector(".cards");
+    if (cardsBox) {
+      if (window.ResizeObserver) new ResizeObserver(queueCols).observe(cardsBox);
+      if (window.MutationObserver) new MutationObserver(queueCols).observe(cardsBox, { childList: true, attributes: true, attributeFilter: ["class", "hidden"], subtree: false });
+      [].slice.call(cardsBox.children).forEach(function (c) {
+        if (window.MutationObserver) new MutationObserver(queueCols).observe(c, { attributes: true, attributeFilter: ["class", "style"] });
+      });
+    }
+    window.addEventListener("resize", queueCols);
+    queueCols();
     addHideButton();
     placeLogo();
     measure();
@@ -1112,7 +1208,7 @@
       window.addEventListener("resize", measure);
     }
     if (window.MutationObserver) {
-      new MutationObserver(function () { placeLogo(); measure(); }).observe(root, { attributes: true, attributeFilter: ["data-style"] });
+      new MutationObserver(function () { placeLogo(); measure(); queueCols(); }).observe(root, { attributes: true, attributeFilter: ["data-style"] });
     }
   }
   /* Idle: hide the controls after IDLE_MS without input (board-home.css).
