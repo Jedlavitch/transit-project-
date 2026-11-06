@@ -303,7 +303,11 @@
          (FR 8526 to Bolzano listed itself twice at Termini). Identical line,
          destination and minute is one train as far as a passenger can tell. */
       if (!isItalian(x.tripId)) return true;
-      return !all.slice(0, i).some(y => y.route === x.route && y.headsign === x.headsign && y.when === x.when);
+      /* The same train can also arrive filed under two routes: the Fiumicino airport
+         trains come once as REG 4659 and again as RV 4659, same minute, same
+         destination. One number at one minute is one train. */
+      return !all.slice(0, i).some(y => y.headsign === x.headsign && y.when === x.when &&
+        (y.route === x.route || (x.trainNo && y.trainNo === x.trainNo)));
     });
   }
   async function departures(stopId, n) {

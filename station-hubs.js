@@ -8,6 +8,11 @@
      wmata      live predictions with the board's own key. WMATA rail has no bundle.
      amtrak     amtraker, which only lists trains that are already running.
      transitous European boards, which have no bundles.
+   Airports are hubs too (an `airport` code in the JSON): the same panel, for the
+   trains and buses that leave them, plus the flights landing and leaving right
+   now. Nothing open publishes airline schedules, so flights come from the
+   board's own aircraft feed (Settings, AIRCRAFT-FEED.md) with routes from
+   adsbdb, and only while they are in the air near the airport.
    A bundle is big and most clicks never need it, so nothing loads until a dot is
    tapped, and only that hub's own rows are kept afterwards. */
 (function(global){
@@ -16,6 +21,7 @@
   var WMATA={RD:'#BF0D3E',OR:'#ED8B00',BL:'#009CDE',SV:'#919D9D',GR:'#00B140',YL:'#FFD100'};
   var FAMILY={rail:'Trains',metro:'Metro',tram:'Trams',bus:'Buses',ferry:'Ferries'};
   var PAGE=40,LIVE_MS=60000;
+  var PLANE='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 15.5v-2l-8-5V3.6a1.6 1.6 0 0 0-3.2 0v4.9l-8 5v2l8-2.5v5.2l-2 1.5V21l3.6-1 3.6 1v-1.3l-2-1.5V13z" transform="translate(.6 0)"/></svg>';
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function ink(color){var n=parseInt(String(color).replace('#',''),16);return (((n>>16)&255)*.299+((n>>8)&255)*.587+(n&255)*.114)>155?'#14202b':'#fff';}
@@ -78,14 +84,20 @@
     return tab.days[day.ymd]={act:act,borrowed:borrowed,stale:stale};
   }
 
-  /* One hub's rows from one bundle. Trains that finish here are arrivals, not
-     departures, and a train calling at two platforms of one hub counts once. */
+  /* One hub's rows from one bundle. Trains that finish anywhere in the hub are
+     arrivals, not departures, and a train calling at two platforms of one hub counts once. */
   function extract(bundle,hub,key,feed){
     var here={},names={};(bundle.stations||[]).forEach(function(s){names[s.id]=s.name;if(metres(hub.lat,hub.lon,s.lat,s.lon)<=hub.r)here[s.id]=1;});
     var out=[],pats=bundle.pats,offs=bundle.offs||[];
     (bundle.trips||[]).forEach(function(t){
       var ids,times,line,hs;
       if(bundle.v===2&&pats){ids=pats[t.p]||[];times=offs[t.o]||[];line=t.l;hs=t.h;}else{ids=t.st;line=t.line;hs=t.hs;}
+      /* "Finishes here" means anywhere in the hub, not only its last stop: city trains
+         reach Philadelphia airport at Terminal A and run on to E & F, which made every
+         one of them a departure "to Airport Terminals E & F". */
+      /* A loop that starts and ends here is still a departure. */
+      var at=function(x){return x!=null&&here[pats&&bundle.v===2?x:x[0]];};
+      if(at(ids[ids.length-1])&&!at(ids[0]))return;
       for(var i=0;i<ids.length-1;i++){
         var id=pats&&bundle.v===2?ids[i]:ids[i][0];
         if(!here[id])continue;
@@ -115,6 +127,7 @@
       if(on&&!map.hasLayer(group))group.addTo(map);
       if(!on&&map.hasLayer(group))map.removeLayer(group);
       mapEl.classList.toggle('tsh-named',map.getZoom()>=13);
+      mapEl.classList.toggle('tsh-on',on);
     }
     function routeColor(feed,line){
       var api=mapEl._transitMap,net=api&&api.getNetwork&&api.getNetwork();
@@ -158,6 +171,57 @@
       return got.then(function(rows){return rows.map(function(r){return {service:/^S\s?\d/.test(r.route||'')?FAMILY.rail:FAMILY[r.family]||FAMILY[r.group]||'Other',color:r.lineColor||'#536878',textColor:r.lineTextColor,line:r.route||r.label,hs:r.headsign,when:r.when,delay:r.realTime?r.delayMin:null,live:!!r.realTime,cancelled:r.cancelled};});});
     }
 
+    /* Flights: live aircraft near the airport, not a schedule. adsbdb's route for a
+       callsign is often stale or stored backwards (see the planes card in dc.html),
+       so the aircraft's own motion decides arriving or leaving, and the route only
+       has to name this airport at one end. A plane whose route doesn't is left out
+       rather than guessed at: three airports share DC's sky. */
+    var RT_KEY='tb.flightRoutes2',RT_TTL=30*864e5;
+    function routes(){try{return JSON.parse(localStorage.getItem(RT_KEY)||'{}');}catch(_){return {};}}
+    function lookup(cs){
+      return fetch('https://api.adsbdb.com/v0/callsign/'+encodeURIComponent(cs)).then(function(r){return r.ok||r.status===404?r.json():null;}).catch(function(){return null;}).then(function(r){
+        var fr=r&&r.response&&r.response.flightroute,o=fr&&fr.origin,d=fr&&fr.destination,e={t:Date.now()};
+        if(!r)e.soft=1;
+        if(fr){e.airline=(fr.airline&&fr.airline.name)||'';e.iata=(fr.airline&&fr.airline.iata)||'';
+          if(o&&d)Object.assign(e,{from:o.iata_code||o.icao_code||'',to:d.iata_code||d.icao_code||'',fromName:o.municipality||o.name||'',toName:d.municipality||d.name||'',flat:o.latitude,flon:o.longitude,tlat:d.latitude,tlon:d.longitude});}
+        /* Merge into what is stored now, not what was read earlier: the board's planes card writes the same key. */
+        var all=routes();all[cs]=e;try{localStorage.setItem(RT_KEY,JSON.stringify(all));}catch(_){}
+        return e;
+      });
+    }
+    function bearing(a,b,c,d){var r=Math.PI/180,y=Math.sin((d-b)*r)*Math.cos(c*r),x=Math.cos(a*r)*Math.sin(c*r)-Math.sin(a*r)*Math.cos(c*r)*Math.cos((d-b)*r);return (Math.atan2(y,x)/r+360)%360;}
+    function flightRows(hub){
+      var base='';try{base=(localStorage.getItem('tb.adsbUrl')||'').trim().replace(/\/+$/,'');}catch(_){}
+      if(!base){var e=Error('no feed');e.noFeed=true;return Promise.reject(e);}
+      var code=hub.airport,apt=hub.apt||[hub.lat,hub.lon];
+      return fetchJSON(base+'/v2/point/'+apt[0].toFixed(4)+'/'+apt[1].toFixed(4)+'/40',12000).then(function(d){
+        var ac=(d&&d.ac||[]).filter(function(a){return a.lat!=null&&(a.flight||'').trim();}),have=routes(),now=Date.now();
+        var need=ac.map(function(a){return a.flight.trim();}).filter(function(cs){var h=have[cs];return !h||now-(h.t||0)>(h.soft?6*36e5:RT_TTL);}).slice(0,16);
+        return Promise.all(need.map(function(cs){return lookup(cs).then(function(e){have[cs]=e;});})).then(function(){
+          var rows=[];
+          ac.forEach(function(a){
+            var cs=a.flight.trim(),rt=have[cs];if(!rt||!rt.from)return;
+            var other=rt.to===code?'from':rt.from===code?'to':null;if(!other)return;
+            var nm=metres(a.lat,a.lon,apt[0],apt[1])/1852,ground=a.alt_baro==='ground',alt=ground?0:+a.alt_baro||0,gs=+a.gs||0,vs=+(a.baro_rate!=null?a.baro_rate:a.geom_rate)||0;
+            var turn=a.track==null?90:Math.abs((bearing(a.lat,a.lon,apt[0],apt[1])-a.track+540)%360-180);
+            var kind;
+            if(ground||alt<300&&gs<60){if(nm>3)return;kind='gnd';}
+            else if(turn<70&&vs<=300&&alt<20000)kind='arr';
+            else if(turn>100&&nm<40&&(vs>300||alt<6000))kind='dep';
+            else return;
+            /* Moving tells the route's ends apart better than adsbdb does. */
+            var far=kind==='arr'?(rt.to===code?rt.fromName:rt.toName):kind==='dep'?(rt.from===code?rt.toName:rt.fromName):(other==='from'?rt.fromName:rt.toName);
+            var farCode=kind==='arr'?(rt.to===code?rt.from:rt.to):kind==='dep'?(rt.from===code?rt.to:rt.from):rt[other];
+            var num=(/\d+[A-Z]?$/.exec(cs)||[''])[0],label=rt.iata&&num?rt.iata+' '+num:cs;
+            var eta=kind==='arr'?Math.max(1,Math.round(nm/Math.max(gs,140)*60+2)):0;
+            var airline=String(rt.airline||'').split(/ - |, /)[0],detail=(airline?airline+' · ':'')+(ground?'on the ground':Math.round(nm)+' nm out · '+(Math.round(alt/100)*100).toLocaleString('en-US')+' ft');
+            rows.push({service:'Flights',color:'#2c3e55',line:label,hs:(kind==='arr'||kind==='gnd'&&other==='from'?'From ':'To ')+(far||farCode)+(farCode&&far?' ('+farCode+')':''),detail:detail,flight:kind,when:now+eta*60000,live:true});
+          });
+          return rows;
+        });
+      });
+    }
+
     /* ---------- rows ---------- */
     function scheduled(state){
       var now=cityNow(cfg.tz),today=shift(now.ymd,0),out=[];state.staleFeeds=[];
@@ -175,13 +239,13 @@
       return out;
     }
     function allRows(state){
-      var live=state.live.map(function(r){var x=Object.assign({},r);x.inMin=Math.round((r.when-Date.now())/60000);x.time=clockMs(r.when,cfg);return x;}).filter(function(r){return r.inMin>=-1;});
+      var live=state.live.map(function(r){var x=Object.assign({},r);x.inMin=Math.round((r.when-Date.now())/60000);x.time=r.flight&&r.flight!=='arr'?(r.flight==='dep'?'Departed':'At airport'):clockMs(r.when,cfg);if(r.flight&&r.flight!=='arr')x.inMin=-1;return x;}).filter(function(r){return r.inMin>=-1;});
       return scheduled(state).concat(live).sort(function(a,b){return a.inMin-b.inMin;});
     }
-    function untilText(r){if(r.arriving)return 'Now';if(r.inMin<=0)return 'Now';if(r.inMin<60)return 'in '+r.inMin+' min';var h=Math.floor(r.inMin/60);return 'in '+h+' h'+(r.inMin%60?' '+(r.inMin%60)+' min':'');}
+    function untilText(r){if(r.flight==='arr')return 'lands in ~'+r.inMin+' min';if(r.flight==='dep')return 'just departed';if(r.flight==='gnd')return 'on the ground';if(r.arriving)return 'Now';if(r.inMin<=0)return 'Now';if(r.inMin<60)return 'in '+r.inMin+' min';var h=Math.floor(r.inMin/60);return 'in '+h+' h'+(r.inMin%60?' '+(r.inMin%60)+' min':'');}
     function rowHtml(r){
       var status=r.cancelled?'<span class="tsh-late">Cancelled</span>':r.delay>0?'<span class="tsh-late">'+r.delay+' min late</span>':r.live?'<span class="tsh-live">Live</span>':'';
-      return '<li class="tsh-dep'+(r.cancelled?' tsh-cancelled':'')+'"><span class="tsh-line" style="background:'+esc(r.color)+';color:'+esc(r.textColor||ink(r.color))+'" title="'+esc(r.line)+'">'+esc(r.line)+'</span><span class="tsh-where"><strong>'+esc(r.hs||'—')+'</strong><small>'+esc(r.service)+(r.number?' · '+esc(r.number):'')+'</small></span><span class="tsh-when"><strong>'+esc(r.time)+'</strong><small>'+untilText(r)+(status?' · '+status:'')+'</small></span></li>';
+      return '<li class="tsh-dep'+(r.cancelled?' tsh-cancelled':'')+'"><span class="tsh-line" style="background:'+esc(r.color)+';color:'+esc(r.textColor||ink(r.color))+'" title="'+esc(r.line)+'">'+esc(r.line)+'</span><span class="tsh-where"><strong>'+esc(r.hs||'—')+'</strong><small>'+esc(r.detail||r.service+(r.number?' · '+r.number:''))+'</small></span><span class="tsh-when"><strong>'+esc(r.time)+'</strong><small>'+untilText(r)+(status?' · '+status:'')+'</small></span></li>';
     }
     function draw(){
       var state=current;if(!state||!panel)return;
@@ -189,7 +253,8 @@
       rows.forEach(function(r){if(services.indexOf(r.service)<0)services.push(r.service);});
       if(state.service&&services.indexOf(state.service)<0&&!state.pending){state.service=null;state.line=null;}
       var shown=state.service?rows.filter(function(r){return r.service===state.service;}):rows;
-      if(state.service||services.length===1)shown.forEach(function(r){if(lines.indexOf(r.line)<0)lines.push(r.line);});
+      /* Flight numbers are not lines: a chip per flight filters nothing anyone wants. */
+      if((state.service||services.length===1)&&state.service!=='Flights')shown.forEach(function(r){if(lines.indexOf(r.line)<0)lines.push(r.line);});
       if(state.line&&lines.indexOf(state.line)<0)state.line=null;
       if(state.line)shown=shown.filter(function(r){return r.line===state.line;});
       var chips='';
@@ -208,13 +273,16 @@
       var notes=[];
       if(state.hub.note)notes.push(state.hub.note);
       state.errors.forEach(function(e){notes.push(e);});
+      if(state.hub.airport&&state.liveOk.flights)notes.push('Flights are aircraft at or near the airport right now, not a schedule. One whose route can’t be confirmed is left out.');
       if(state.staleFeeds&&state.staleFeeds.length)notes.push(state.staleFeeds.join(' and ')+' times are out of date: the bundled timetable has run out, so these come from the last published day of this weekday and may have changed.');
       var src=state.tables.map(function(t){return t.feed.label+(t.generated?' timetable, '+t.generated:' timetable');});
       if(state.hub.wmata&&state.liveOk.wmata)src.push('WMATA live predictions, which reach about 20 minutes ahead');
       if(state.hub.amtrak&&state.liveOk.amtrak)src.push('Amtrak trains already running');
+      if(state.hub.airport&&state.liveOk.flights)src.push('Aircraft data adsb.lol (ODbL), routes adsbdb');
       if(state.hub.live&&state.liveOk.europe)src.push(state.hub.live==='ch'?'Swiss transport API':'Transitous')&&src.push('next 40 departures');
       panel.querySelector('.tsh-notes').innerHTML=notes.map(function(n){return '<p class="tsh-note">'+esc(n)+'</p>';}).join('')+(src.length?'<p>'+esc(src.join(' · '))+'</p>':'');
-      panel.querySelector('.tsh-sub').textContent=state.tables.length?(state.live.length?'Scheduled and live times':'Scheduled times'):(state.hub.live?'Next departures':'Live times');
+      var sub=state.tables.length?(state.live.length?'Scheduled and live times':'Scheduled times'):(state.hub.live?'Next departures':'Live times');
+      panel.querySelector('.tsh-sub').textContent=state.hub.airport?'Flights now, and trains and buses leaving · '+sub.toLowerCase():sub;
     }
 
     /* ---------- loading ---------- */
@@ -223,6 +291,7 @@
       function job(name,run,fail){state.pending++;jobs.push(run(hub).then(function(rows){live[name]=rows;state.liveOk[name]=true;state.errs[name]=null;}).catch(function(e){live[name]=state.liveBy[name]||[];state.errs[name]=fail(e);}).then(function(){state.pending--;}));}
       if(hub.amtrak)job('amtrak',amtrakRows,function(){return 'Amtrak is not answering, so its trains are missing.';});
       if(hub.wmata)job('wmata',wmataRows,function(e){return e.noKey?'Add a WMATA key in Settings to see Metro trains here.':'WMATA is not answering, so Metro trains are missing.';});
+      if(hub.airport)job('flights',flightRows,function(e){return e.noFeed?'Add an aircraft feed in Settings to see flights landing and leaving here.':'The aircraft feed is not answering, so flights are missing.';});
       if(hub.live)job('europe',europeRows,function(){return 'Departures are unavailable right now. Try again in a minute.';});
       return Promise.all(jobs).then(function(){
         if(current!==state)return;
@@ -237,6 +306,8 @@
       var state=current={hub:hub,marker:marker,tables:[],live:[],liveBy:{},liveOk:{},errs:{},errors:[],pending:0,limit:PAGE,service:null,line:null};
       panel.dataset.look=look();panel.hidden=false;
       panel.querySelector('h2').textContent=hub.name;
+      panel.querySelector('.tsh-kicker').textContent=hub.airport?'AIRPORT · '+hub.airport:'STATION TIMETABLE';
+      panel.setAttribute('aria-label',(hub.airport?'Airport':'Station')+' timetable');
       panel.querySelector('.tsh-filters').innerHTML='';panel.querySelector('.tsh-list').scrollTop=0;
       hub.feeds.forEach(function(key){
         state.pending++;
@@ -274,10 +345,15 @@
     var ready=fetch(new URL('map-data/station-hubs.json',root)).then(function(r){if(!r.ok)throw Error(r.status);return r.json();}).then(function(data){
       if(dead)return;cfg=data.cities[city];if(!cfg)return;
       cfg.hubs.forEach(function(hub){
-        var m=L.marker([hub.lat,hub.lon],{pane:'tshHubs',title:hub.name+' timetable',alt:hub.name+' timetable',riseOnHover:true,icon:L.divIcon({className:'tsh-hub',iconSize:[28,28],iconAnchor:[14,14],html:'<span class="tsh-dot"></span><span class="tsh-name">'+esc(hub.name)+'</span>'})});
+        var m=L.marker([hub.lat,hub.lon],{pane:'tshHubs',title:hub.name+' timetable',alt:hub.name+' timetable',riseOnHover:true,icon:L.divIcon({className:'tsh-hub'+(hub.airport?' tsh-airport':''),iconSize:[28,28],iconAnchor:[14,14],html:'<span class="tsh-dot">'+(hub.airport?PLANE:'')+'</span><span class="tsh-name">'+esc(hub.name)+'</span>'})});
         m.on('click',function(){open(hub,m);});
         m.addTo(group);markers.push(m);
       });
+      /* The boards already mark nearby airports with a small coded dot. Where a hub
+         now stands for that airport, two marks for one place reads as two places,
+         so the old one steps aside whenever the hubs are showing. */
+      var codes=cfg.hubs.map(function(h){return h.airport;}).filter(Boolean);
+      if(codes.length){var css=document.createElement('style');css.textContent=codes.map(function(c){return '.tsh-on .airport-mark .ap[data-ap="'+c+'"],.tsh-on .airport-mark .ap[data-ap="'+c+'"]~.apc';}).join(',')+'{display:none}';document.head.appendChild(css);}
       refresh();mapEl.dataset.stationHubs=String(markers.length);
     }).catch(function(e){console.warn('Station hubs unavailable',e);});
     return {refresh:function(){refresh();if(panel&&current)panel.dataset.look=look();},ready:ready,open:function(name){var i=cfg&&cfg.hubs.findIndex(function(h){return h.name===name;});if(i>=0)open(cfg.hubs[i],markers[i]);},close:close};

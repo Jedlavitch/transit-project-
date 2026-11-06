@@ -114,6 +114,48 @@
      "r": 350,
      "feeds": [],
      "wmata": "A15"
+    },
+    {
+     "name": "Reagan National Airport",
+     "airport": "DCA",
+     "lat": 38.8534,
+     "lon": -77.0438,
+     "r": 250,
+     "wmata": "C10",
+     "feeds": [],
+     "apt": [
+      38.8512,
+      -77.0402
+     ]
+    },
+    {
+     "name": "Dulles Airport",
+     "airport": "IAD",
+     "lat": 38.9547,
+     "lon": -77.4482,
+     "r": 250,
+     "wmata": "N12",
+     "feeds": [],
+     "apt": [
+      38.9531,
+      -77.4565
+     ]
+    },
+    {
+     "name": "BWI Airport",
+     "airport": "BWI",
+     "lat": 39.1923,
+     "lon": -76.6946,
+     "r": 250,
+     "feeds": [
+      "marc"
+     ],
+     "amtrak": "BWI",
+     "note": "Trains leave from BWI Rail Station, a free shuttle bus ride from the terminal.",
+     "apt": [
+      39.1754,
+      -76.6683
+     ]
     }
    ]
   },
@@ -247,6 +289,22 @@
       "path"
      ],
      "amtrak": "NWK"
+    },
+    {
+     "name": "Newark Airport",
+     "airport": "EWR",
+     "lat": 40.7044,
+     "lon": -74.1907,
+     "r": 250,
+     "feeds": [
+      "njt"
+     ],
+     "amtrak": "EWR",
+     "note": "AirTrain Newark links this station to the terminals.",
+     "apt": [
+      40.6895,
+      -74.1745
+     ]
     }
    ]
   },
@@ -352,6 +410,21 @@
      "r": 300,
      "feeds": [
       "subway"
+     ]
+    },
+    {
+     "name": "Philadelphia Airport",
+     "airport": "PHL",
+     "lat": 39.8778,
+     "lon": -75.2423,
+     "r": 420,
+     "feeds": [
+      "rail"
+     ],
+     "note": "The Airport Line calls at every terminal. SEPTA buses here are not in the timetable.",
+     "apt": [
+      39.8729,
+      -75.2437
      ]
     }
    ]
@@ -470,6 +543,21 @@
      "feeds": [
       "subway",
       "cr"
+     ]
+    },
+    {
+     "name": "Logan Airport",
+     "airport": "BOS",
+     "lat": 42.3743,
+     "lon": -71.0304,
+     "r": 200,
+     "feeds": [
+      "subway"
+     ],
+     "note": "Blue Line trains from Airport station, a free shuttle bus ride from the terminals. The Silver Line SL1 is not in the timetable.",
+     "apt": [
+      42.3656,
+      -71.0096
      ]
     }
    ]
@@ -598,6 +686,35 @@
      "feeds": [
       "bart"
      ]
+    },
+    {
+     "name": "SFO Airport",
+     "airport": "SFO",
+     "lat": 37.6161,
+     "lon": -122.392,
+     "r": 250,
+     "feeds": [
+      "bart"
+     ],
+     "apt": [
+      37.6213,
+      -122.379
+     ]
+    },
+    {
+     "name": "Oakland Airport",
+     "airport": "OAK",
+     "lat": 37.7133,
+     "lon": -122.2122,
+     "r": 250,
+     "feeds": [
+      "bart"
+     ],
+     "note": "The BART link runs to Coliseum, where it meets the main lines.",
+     "apt": [
+      37.7126,
+      -122.2197
+     ]
     }
    ]
   },
@@ -653,6 +770,12 @@
      "r": 250,
      "feeds": [
       "rail"
+     ],
+     "airport": "LAX",
+     "note": "The terminals are a shuttle or people-mover ride from this station.",
+     "apt": [
+      33.9416,
+      -118.4085
      ]
     },
     {
@@ -691,6 +814,22 @@
       "metrolink"
      ],
      "amtrak": "ANA"
+    },
+    {
+     "name": "Hollywood Burbank Airport",
+     "airport": "BUR",
+     "lat": 34.1996,
+     "lon": -118.3513,
+     "r": 800,
+     "feeds": [
+      "metrolink"
+     ],
+     "amtrak": "BUR",
+     "note": "Two stations: South for the Ventura County Line and Amtrak, North for the Antelope Valley Line.",
+     "apt": [
+      34.2007,
+      -118.3587
+     ]
     }
    ]
   },
@@ -781,6 +920,22 @@
       "rail"
      ],
      "amtrak": "TRE"
+    },
+    {
+     "name": "Newark Airport",
+     "airport": "EWR",
+     "lat": 40.7044,
+     "lon": -74.1907,
+     "r": 250,
+     "feeds": [
+      "rail"
+     ],
+     "amtrak": "EWR",
+     "note": "AirTrain Newark links this station to the terminals.",
+     "apt": [
+      40.6895,
+      -74.1745
+     ]
     }
    ]
   },
@@ -879,6 +1034,11 @@
      "feeds": [
       "rail",
       "intl"
+     ],
+     "airport": "AMS",
+     "apt": [
+      52.3105,
+      4.7683
      ]
     }
    ]
@@ -940,7 +1100,12 @@
      "r": 250,
      "feeds": [],
      "live": "ch",
-     "station": "Zürich Flughafen"
+     "station": "Zürich Flughafen",
+     "airport": "ZRH",
+     "apt": [
+      47.4582,
+      8.5555
+     ]
     }
    ]
   },
@@ -993,6 +1158,20 @@
      "feeds": [],
      "live": "transitous",
      "station": "Bonn Hbf"
+    },
+    {
+     "name": "Köln/Bonn Flughafen",
+     "airport": "CGN",
+     "lat": 50.8788,
+     "lon": 7.1194,
+     "r": 250,
+     "live": "transitous",
+     "station": "Flughafen Köln/Bonn Bf",
+     "feeds": [],
+     "apt": [
+      50.8659,
+      7.1427
+     ]
     }
    ]
   },
@@ -1053,7 +1232,12 @@
      "r": 250,
      "feeds": [],
      "live": "transitous",
-     "station": "Flughafen/Messe, Stuttgart"
+     "station": "Flughafen/Messe, Stuttgart",
+     "airport": "STR",
+     "apt": [
+      48.6899,
+      9.222
+     ]
     }
    ]
   },
@@ -1115,6 +1299,35 @@
      "feeds": [],
      "live": "transitous",
      "station": "Flaminio, Roma"
+    },
+    {
+     "name": "Fiumicino Airport",
+     "airport": "FCO",
+     "lat": 41.7936,
+     "lon": 12.2517,
+     "r": 250,
+     "live": "transitous",
+     "station": "Fiumicino Aeroporto",
+     "feeds": [],
+     "apt": [
+      41.8003,
+      12.2389
+     ]
+    },
+    {
+     "name": "Ciampino Airport",
+     "airport": "CIA",
+     "lat": 41.7991,
+     "lon": 12.5905,
+     "r": 250,
+     "live": "transitous",
+     "station": "Aeroporto Ciampino",
+     "note": "Buses only: Ciampino has no railway station of its own.",
+     "feeds": [],
+     "apt": [
+      41.7994,
+      12.5949
+     ]
     }
    ]
   }

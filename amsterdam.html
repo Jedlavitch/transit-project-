@@ -42,7 +42,7 @@
 <script src="vehicle-icons.js?v=5"></script>
 <script src="operator-logos.js?v=3"></script>
 <script src="delays.js?v=2"></script>
-<script src="transitous.js?v=7"></script>
+<script src="transitous.js?v=8"></script>
 <script src="licence-proxy.js?v=1"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="mascot.js?v=3" defer></script>
@@ -3367,7 +3367,7 @@ function drawBigStops(){
   if(here) BIGSTOP_AIRPORTS.forEach(a=>{
     if(bigStopMi(here,a)>70) return;                    // only airports near this board
     L.marker([a.lat,a.lon],{interactive:true, icon:L.divIcon({className:"airport-mark",
-      html:`<span class="ap" role="img" aria-label="airport"></span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
+      html:`<span class="ap" role="img" aria-label="airport" data-ap="${a.c}"></span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
       iconSize:[0,0], iconAnchor:[8,8]})}).bindTooltip(`<b>${a.c}</b> — ${a.n}`,{sticky:true}).addTo(layer);
   });
 }

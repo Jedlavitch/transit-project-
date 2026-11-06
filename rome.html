@@ -55,7 +55,7 @@
 <script src="locpicker.js?v=1" defer></script>
 <script src="feedback.js?v=5" defer></script>
 <script src="admin.js?v=5" defer></script>
-<script src="transitous.js?v=7"></script>
+<script src="transitous.js?v=8"></script>
 <script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=3" defer></script>
 <script src="departures.js?v=2" defer></script>
@@ -3545,7 +3545,7 @@ function drawBigStops(){
   if(here) BIGSTOP_AIRPORTS.forEach(a=>{
     if(bigStopMi(here,a)>70) return;                    // only airports near this board
     L.marker([a.lat,a.lon],{interactive:true, icon:L.divIcon({className:"airport-mark",
-      html:`<span class="ap" role="img" aria-label="airport"></span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
+      html:`<span class="ap" role="img" aria-label="airport" data-ap="${a.c}"></span>${showLabels?`<span class="apc">${a.c}</span>`:""}`,
       iconSize:[0,0], iconAnchor:[8,8]})}).bindTooltip(`<b>${a.c}</b> — ${a.n}`,{sticky:true}).addTo(layer);
   });
 }

@@ -96,7 +96,7 @@
     document.addEventListener('pointerdown',dismiss,true);window.addEventListener('keydown',keyboard,true);window.addEventListener('resize',closePanel);
     paintControls();
     var hubs=null;
-    (function(){var css=document.createElement('link');css.rel='stylesheet';css.href=new URL('station-hubs.css?v=2',root).href;document.head.appendChild(css);var js=document.createElement('script');js.src=new URL('station-hubs.js?v=6',root).href;js.onload=function(){if(!dead)hubs=global.TBStationHubs.attach(map,{city:city,enabled:function(){return p.hubs;}});};document.head.appendChild(js);})();
+    (function(){var css=document.createElement('link');css.rel='stylesheet';css.href=new URL('station-hubs.css?v=3',root).href;document.head.appendChild(css);var js=document.createElement('script');js.src=new URL('station-hubs.js?v=12',root).href;js.onload=function(){if(!dead)hubs=global.TBStationHubs.attach(map,{city:city,enabled:function(){return p.hubs;}});};document.head.appendChild(js);})();
     var api={setTheme:function(theme){currentTheme=theme;if(p.look==='auto')loadVector();},getVectorMap:function(){return gl;},getNetwork:function(){return network;},getPreferences:function(){return Object.assign({},p);}};
     mapEl._transitMap=api;
     loadVector();
