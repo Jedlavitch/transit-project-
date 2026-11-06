@@ -5,12 +5,15 @@
   "use strict";
   var city = location.pathname.split("/").pop().replace(/\.html$/, "");
   var key = "tb.cityLook." + city;
-  var defaults = { theme: "dark", style: "classic", rows: "normal", accent: "#4ea1ff" };
+  /* Glass is the default design. A visitor who explicitly chose another
+     style (including "classic") has it saved and keeps it; only someone who
+     never chose falls through to this. */
+  var defaults = { theme: "dark", style: "glass", rows: "normal", accent: "#4ea1ff" };
   var shared = {}, saved = read();
   function valid(name, value) {
     if (typeof value !== "string") return false;
     if (name === "accent") return /^#[0-9a-f]{6}$/i.test(value);
-    var allowed = { theme: ["dark", "black", "day"], style: ["classic", "atlas", "paper", "signal"], rows: ["normal", "more", "fewer"] };
+    var allowed = { theme: ["dark", "black", "day"], style: ["classic", "atlas", "paper", "signal", "glass"], rows: ["normal", "more", "fewer"] };
     return allowed[name] && allowed[name].indexOf(value) >= 0;
   }
   function read() {
@@ -32,7 +35,7 @@
   function get(name) {
     if (saved.local && valid(name, saved.look[name])) return saved.look[name];
     try { var v = localStorage.getItem("tb." + name); if (valid(name, v)) return v; } catch (_) {}
-    return shared[name] || null;
+    return shared[name] || (name === "style" ? defaults.style : null);
   }
   function set(name, value) {
     if (!valid(name, value)) return false;

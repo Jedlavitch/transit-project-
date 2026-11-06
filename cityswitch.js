@@ -26,6 +26,12 @@
    navigations, which never touch the outer fullscreen session. */
 function switchCity(url, forceShell) {
   var fs = document.fullscreenElement || document.webkitFullscreenElement;
+  /* Board → board gets the city-hop card; anything else navigates plainly. */
+  if (window.TBCityHop && TBCityHop.depart(url, function () { switchCity._go(url, forceShell); })) return;
+  switchCity._go(url, forceShell);
+}
+switchCity._go = function (url, forceShell) {
+  var fs = document.fullscreenElement || document.webkitFullscreenElement;
   if (!fs && !forceShell) { window.location.href = url; return; }
   try {
     // Silence this board so the shell doesn't double-fetch/tick underneath:
@@ -37,14 +43,193 @@ function switchCity(url, forceShell) {
     f.allow = "fullscreen"; f.allowFullscreen = true;
     f.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;inset:0;width:100vw;height:100vh;border:0;z-index:2147483000;background:#081020";
     f.src = url;
-    f.onload = function () { try { document.title = f.contentDocument.title; f.contentWindow.focus(); } catch (e) {} };
+    f.onload = function () {
+      try { document.title = f.contentDocument.title; f.contentWindow.focus(); } catch (e) {}
+      // The board inside the shell plays its own arrival; the outer card steps aside.
+      if (window.TBCityHop) TBCityHop.dismiss(true);
+    };
     document.body.appendChild(f);
     try { history.replaceState(null, "", url); } catch (e) {}
   } catch (e) {
     try { sessionStorage.setItem("kioskFS", "1"); } catch (_) {}
     window.location.href = url;
   }
-}
+};
+
+/* City hop — the card that plays between two city boards.
+
+   Departing: three brand stripes sweep in, a route line draws from the city
+   you are leaving to the one you chose, and the destination's name settles
+   letter by letter. Navigation starts while that is still playing, and the
+   old page keeps painting until the new one commits, so there is no blank
+   frame. Arriving: this file runs in <head> on every board, so the same card
+   is already on screen at the new board's very first paint (sessionStorage
+   carries the hop across); it holds until the page has loaded and then the
+   stripes sweep off to reveal the board.
+
+   Never in the way: the whole thing is capped (it gives up and reveals the
+   board after a few seconds even if load never fires), it ignores clicks only
+   while it is covering the screen, and prefers-reduced-motion gets a plain
+   fade with no flapping letters. Pages that are not city boards navigate
+   exactly as before. */
+(function () {
+  var CITIES = {
+    dc:           { n: "Washington DC", lat: 38.8977, lon: -77.0365, tz: "America/New_York", mi: 1 },
+    philadelphia: { n: "Philadelphia",  lat: 39.9526, lon: -75.1652, tz: "America/New_York", mi: 1 },
+    newjersey:    { n: "New Jersey",    lat: 40.7357, lon: -74.1724, tz: "America/New_York", mi: 1 },
+    nyc:          { n: "New York",      lat: 40.7128, lon: -74.0060, tz: "America/New_York", mi: 1 },
+    boston:       { n: "Boston",        lat: 42.3523, lon: -71.0552, tz: "America/New_York", mi: 1 },
+    losangeles:   { n: "Los Angeles",   lat: 34.0522, lon: -118.2437, tz: "America/Los_Angeles", mi: 1 },
+    sanfrancisco: { n: "San Francisco", lat: 37.7749, lon: -122.4194, tz: "America/Los_Angeles", mi: 1 },
+    amsterdam:    { n: "Amsterdam",     lat: 52.3791, lon: 4.9003,  tz: "Europe/Amsterdam" },
+    zurich:       { n: "Zurich",        lat: 47.3779, lon: 8.5403,  tz: "Europe/Zurich" },
+    cologne:      { n: "Cologne",       lat: 50.9430, lon: 6.9589,  tz: "Europe/Berlin" },
+    stuttgart:    { n: "Stuttgart",     lat: 48.7840, lon: 9.1829,  tz: "Europe/Berlin" },
+    rome:         { n: "Rome",          lat: 41.9010, lon: 12.5016, tz: "Europe/Rome" }
+  };
+  var KEY = "tb.cityHop";
+  function idOf(url) {
+    var m = String(url || "").split(/[?#]/)[0].split("/").pop().match(/^([a-z]+)\.html$/i);
+    return m && CITIES[m[1].toLowerCase()] ? m[1].toLowerCase() : null;
+  }
+  function reduced() { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } }
+  function miles(a, b) {
+    var R = 3958.8, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function localTime(tz) {
+    try { return new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit", timeZone: tz }).format(new Date()); } catch (e) { return ""; }
+  }
+  function css() {
+    if (document.getElementById("tbHopCss")) return;
+    var st = document.createElement("style"); st.id = "tbHopCss";
+    st.textContent =
+      ".tbhop{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483600;overflow:hidden;pointer-events:auto;" +
+        "font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;color:#FFFCF5;contain:strict}" +
+      ".tbhop .hb{position:absolute;top:-20%;bottom:-20%;left:-30%;width:160%;transform:translateX(-120%) skewX(-14deg);" +
+        "transition:transform .5s cubic-bezier(.7,0,.25,1)}" +
+      ".tbhop .hb1{background:#FF3D77}.tbhop .hb2{background:#00E0C6;transition-delay:.07s}" +
+      ".tbhop .hb3{background:#2F7BFF;transition-delay:.14s}.tbhop .hb4{background:#0F1115;transition-delay:.21s}" +
+      ".tbhop.in .hb{transform:translateX(0) skewX(-14deg)}" +
+      ".tbhop.out .hb{transform:translateX(120%) skewX(-14deg)}" +
+      ".tbhop.out .hb4{transition-delay:0s}.tbhop.out .hb3{transition-delay:.07s}.tbhop.out .hb2{transition-delay:.14s}.tbhop.out .hb1{transition-delay:.21s}" +
+      ".tbhop .hc{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;" +
+        "gap:18px;padding:24px;opacity:0;transition:opacity .25s ease .3s;text-align:center}" +
+      ".tbhop.in .hc{opacity:1}.tbhop.out .hc{opacity:0;transition-delay:0s;transition-duration:.15s}" +
+      ".tbhop .hk{font-size:11px;letter-spacing:.22em;color:#A8AFBA}" +
+      ".tbhop .hr{width:min(560px,86vw);height:70px;overflow:visible}" +
+      ".tbhop .hr .trk{fill:none;stroke:#2C3038;stroke-width:3;stroke-dasharray:2 8;stroke-linecap:round}" +
+      ".tbhop .hr .run{fill:none;stroke:url(#tbHopGrad);stroke-width:4;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;" +
+        "transition:stroke-dashoffset .9s cubic-bezier(.5,0,.2,1) .35s}" +
+      ".tbhop.in .hr .run,.tbhop.arrived .hr .run{stroke-dashoffset:0}" +
+      ".tbhop .hr .stn{fill:#0F1115;stroke:#FFFCF5;stroke-width:3}" +
+      ".tbhop .hr .to{stroke:#00E0C6}" +
+      ".tbhop .hr text{fill:#A8AFBA;font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.08em}" +
+      ".tbhop .hn{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;max-width:94vw}" +
+      ".tbhop .hn span{position:relative;display:inline-block;min-width:.72em;padding:.08em .1em;border-radius:6px;" +
+        "background:#181B21;box-shadow:inset 0 0 0 1px #2C3038;font:800 clamp(30px,7.4vw,78px)/1.05 Archivo,'Helvetica Neue',Arial,sans-serif;" +
+        "text-transform:uppercase;letter-spacing:0;color:#FFFCF5}" +
+      ".tbhop .hn span::after{content:'';position:absolute;left:0;right:0;top:50%;height:2px;background:#0F1115;opacity:.85}" +
+      ".tbhop .hn span.sp{background:none;box-shadow:none;min-width:.32em}.tbhop .hn span.sp::after{display:none}" +
+      ".tbhop .hn span.flip{color:#FF91B1}" +
+      ".tbhop .hm{font-size:12px;letter-spacing:.06em;color:#CDD2DA}" +
+      ".tbhop .hm b{color:#00E0C6;font-weight:600}" +
+      "@media (prefers-reduced-motion:reduce){.tbhop .hb{display:none}.tbhop{background:#0F1115;opacity:0;transition:opacity .25s}" +
+        ".tbhop.in,.tbhop.arrived{opacity:1}.tbhop.out{opacity:0}.tbhop .hc{transition:none;opacity:1}.tbhop .hr .run{transition:none;stroke-dashoffset:0}}";
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function build(fromId, toId, arrived) {
+    css();
+    var from = CITIES[fromId], to = CITIES[toId];
+    var el = document.createElement("div");
+    el.className = "tbhop" + (arrived ? " in arrived" : "");
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-label", "Switching to " + to.n);
+    var d = from ? miles(from, to) : 0;
+    var dist = !from ? "" : to.mi && from.mi ? Math.round(d).toLocaleString() + " mi" : Math.round(d * 1.609344).toLocaleString() + " km";
+    var t = localTime(to.tz);
+    var letters = to.n.toUpperCase().split("").map(function (c) {
+      return c === " " ? '<span class="sp"> </span>' : '<span data-c="' + c + '">' + (arrived || reduced() ? c : "&#8203;") + "</span>";
+    }).join("");
+    el.innerHTML =
+      '<div class="hb hb1"></div><div class="hb hb2"></div><div class="hb hb3"></div><div class="hb hb4"></div>' +
+      '<div class="hc">' +
+        '<div class="hk">TRANSIT PROJECT · ' + (arrived ? "NOW ARRIVING" : "NOW DEPARTING") + "</div>" +
+        '<svg class="hr" viewBox="0 0 560 70" aria-hidden="true"><defs><linearGradient id="tbHopGrad" x1="0" x2="1">' +
+          '<stop offset="0" stop-color="#FF3D77"/><stop offset=".5" stop-color="#2F7BFF"/><stop offset="1" stop-color="#00E0C6"/></linearGradient></defs>' +
+          '<path class="trk" d="M24 50 C 180 -6, 380 -6, 536 50"/>' +
+          '<path class="run" pathLength="1" d="M24 50 C 180 -6, 380 -6, 536 50"/>' +
+          '<circle class="stn" cx="24" cy="50" r="7"/><circle class="stn to" cx="536" cy="50" r="7"/>' +
+          '<text x="24" y="70" text-anchor="start">' + (from ? from.n.toUpperCase() : "") + "</text>" +
+          '<text x="536" y="70" text-anchor="end">' + to.n.toUpperCase() + "</text></svg>" +
+        '<div class="hn">' + letters + "</div>" +
+        '<div class="hm">' + (dist ? dist + " · " : "") + (t ? "local time <b>" + t + "</b>" : "") + "</div>" +
+      "</div>";
+    return el;
+  }
+  /* Letters cycle through the alphabet and land left to right. */
+  function flap(el, done) {
+    var spans = [].slice.call(el.querySelectorAll(".hn span[data-c]"));
+    if (reduced()) { done && done(); return; }
+    var A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", tick = 0;
+    var timer = setInterval(function () {
+      tick++;
+      var settled = 0;
+      spans.forEach(function (s, i) {
+        if (tick > 4 + i * 1.6) { s.textContent = s.dataset.c; s.classList.remove("flip"); settled++; }
+        else { s.textContent = A.charAt((Math.random() * 26) | 0); s.classList.add("flip"); }
+      });
+      if (settled === spans.length) { clearInterval(timer); done && done(); }
+    }, 45);
+  }
+  var current = null;
+  function dismiss(instant) {
+    var el = current; current = null;
+    if (!el) return;
+    if (instant) { el.remove(); return; }
+    el.classList.remove("in", "arrived");
+    el.classList.add("out");
+    setTimeout(function () { el.remove(); }, reduced() ? 300 : 800);
+  }
+  function depart(url, go) {
+    var toId = idOf(url), fromId = idOf(location.pathname);
+    if (!toId || toId === fromId || !document.body) return false;
+    try { sessionStorage.setItem(KEY, JSON.stringify({ from: fromId, to: toId, at: Date.now() })); } catch (e) {}
+    if (current) current.remove();
+    var el = build(fromId, toId, false);
+    current = el;
+    document.body.appendChild(el);
+    void el.offsetWidth;
+    el.classList.add("in");
+    flap(el);
+    // Go once the stripes have covered the screen; the card keeps playing
+    // on this page until the next one paints its own copy.
+    setTimeout(go, reduced() ? 150 : 650);
+    // If navigation is blocked (a beforeunload prompt, say), don't strand it.
+    setTimeout(function () { if (current === el) dismiss(); }, 6000);
+    return true;
+  }
+  function arrive() {
+    var hop = null;
+    try { hop = JSON.parse(sessionStorage.getItem(KEY) || "null"); sessionStorage.removeItem(KEY); } catch (e) {}
+    var here = idOf(location.pathname);
+    if (!hop || !here || hop.to !== here || Date.now() - hop.at > 10000) return;
+    var el = build(hop.from, hop.to, true);
+    current = el;
+    (document.body || document.documentElement).appendChild(el);
+    var shown = Date.now(), gone = false;
+    function reveal() {
+      if (gone) return; gone = true;
+      // Hold the arrival long enough to read, never longer than needed.
+      setTimeout(function () { if (current === el) dismiss(); }, Math.max(0, 700 - (Date.now() - shown)));
+    }
+    window.addEventListener("load", function () { setTimeout(reveal, 150); });
+    setTimeout(reveal, 3500);
+  }
+  window.TBCityHop = { depart: depart, dismiss: dismiss };
+  arrive();
+})();
 
 /* "Account" — the account/licence page, in every board's header.
 

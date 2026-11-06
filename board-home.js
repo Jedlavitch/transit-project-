@@ -27,7 +27,7 @@
     var secondaryIds = ["alertCard", "commuteCard", "cityAdvisoryCard", "spotCard", "leaderCard", "ontimeCard"];
     function isClassic() {
       var style = document.documentElement.getAttribute("data-style");
-      return !style || style === "classic";
+      return !style || style === "classic" || style === "glass";
     }
     function syncCardOrder() {
       if (!cards) return;

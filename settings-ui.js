@@ -529,6 +529,7 @@
      those twelve have. Offering it where it cannot apply would be a setting
      that does nothing. */
   var BOARD_STYLES = [
+    { id: "glass", name: "Glass", detail: "Default · map behind clear controls" },
     { id: "classic", name: "Classic", detail: "Original dashboard" },
     { id: "atlas", name: "Atlas", detail: "Map-first · wide screens" },
     { id: "paper", name: "Paper", detail: "Quiet, editorial panels" },
@@ -584,8 +585,8 @@
     row.setAttribute("role", "group");
     row.setAttribute("aria-label", "Board style");
 
-    var saved = "classic";
-    try { saved = (window.TBBoardPreferences ? TBBoardPreferences.get("style") : localStorage.getItem("tb.style")) || "classic"; } catch (e) {}
+    var saved = "glass";
+    try { saved = (window.TBBoardPreferences ? TBBoardPreferences.get("style") : localStorage.getItem("tb.style")) || "glass"; } catch (e) {}
 
     BOARD_STYLES.forEach(function (style) {
       var b = document.createElement("button");
@@ -616,7 +617,46 @@
     themeRow.parentNode.insertBefore(hint, themeRow.nextSibling);
     themeRow.parentNode.insertBefore(row, hint);
     themeRow.parentNode.insertBefore(lbl, row);
+    addStatsSwitch(panel, hint);
     addLookScope(panel, lbl);
+  }
+
+  /* The stat strip already folds away from its own ▴ tab, but that tab is
+     small, and in Glass it fades with the other controls. A plain switch in
+     Settings drives the same per-board setStatsMin(), so both stay in step. */
+  function addStatsSwitch(panel, after) {
+    if (typeof window.setStatsMin !== "function" || panel.querySelector("#tbStatsSwitch")) return;
+    var lab = document.createElement("label");
+    lab.className = "card-toggle";
+    lab.id = "tbStatsSwitch";
+    lab.style.cssText = "display:flex;align-items:center;gap:8px;margin:10px 0 2px;font-size:12px";
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !document.body.classList.contains("stats-min");
+    cb.addEventListener("change", function () { window.setStatsMin(!cb.checked); });
+    var tog = document.getElementById("statsToggle");
+    if (tog) tog.addEventListener("click", function () {
+      setTimeout(function () { cb.checked = !document.body.classList.contains("stats-min"); }, 0);
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode("Show statistics (Tracking, Air, Rail…)"));
+    after.parentNode.insertBefore(lab, after.nextSibling);
+
+    /* Glass only (hidden by CSS otherwise): the title and clock over the map. */
+    var tl = document.createElement("label");
+    tl.className = "card-toggle";
+    tl.id = "tbTitleSwitch";
+    tl.style.cssText = lab.style.cssText;
+    var tcb = document.createElement("input");
+    tcb.type = "checkbox";
+    tcb.checked = !document.documentElement.classList.contains("tb-glass-notitle");
+    tcb.addEventListener("change", function () {
+      document.documentElement.classList.toggle("tb-glass-notitle", !tcb.checked);
+      try { localStorage.setItem("tb.glassTitle", tcb.checked ? "1" : "0"); } catch (e) {}
+    });
+    tl.appendChild(tcb);
+    tl.appendChild(document.createTextNode("Show title & clock over the map"));
+    lab.parentNode.insertBefore(tl, lab.nextSibling);
   }
 
   function addLookScope(panel, before) {
@@ -649,7 +689,7 @@
         if (typeof setBoardTheme === "function") setBoardTheme(prefs.get("theme") || "dark");
         if (typeof setBoardAccent === "function") setBoardAccent(prefs.get("accent") || "#4ea1ff");
         if (typeof setBoardRows === "function") setBoardRows(prefs.get("rows") || "normal");
-        setBoardStyle(prefs.get("style") || "classic");
+        setBoardStyle(prefs.get("style") || "glass");
         if (typeof buildAccentSwatches === "function") buildAccentSwatches();
         paint();
         if (!stored) message.textContent += " Browser storage is unavailable; this choice lasts for this visit.";
@@ -940,4 +980,164 @@
   /* The boards build their settings groups lazily, the first time the panel is
      opened, so there is nothing to reorder until someone opens it. */
   document.addEventListener("click", function () { setTimeout(hoist, 0); }, true);
+})();
+
+/* ------------------------------------------------------------------ *
+ * Glass: tell the map how much of its top is under the chrome.
+ *
+ * In Glass the map column spans the header, button row and stat strip
+ * (board-designs.css), so Leaflet's own top controls (zoom, Map layers,
+ * fullscreen) would sit behind the frosted header. CSS cannot know the
+ * header's height — it wraps to two or three lines on a phone — so this
+ * publishes it as --tb-glass-top, and the map's controls drop below it.
+ * offsetHeight is in #app's own (pre-zoom) pixels, which is the same
+ * space #map lives in, so --ui-zoom needs no correction here.
+ * ------------------------------------------------------------------ */
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  function on() { return root.getAttribute("data-style") === "glass"; }
+  var last = -1;
+  function measure() {
+    if (!on()) { if (last !== -1) { root.style.removeProperty("--tb-glass-top"); last = -1; } return; }
+    var h = document.querySelector("#app > header");
+    var s = document.getElementById("statStrip");
+    var top = (h ? h.offsetHeight : 0) + (s && s.offsetParent ? s.offsetHeight : 0);
+    if (top === last) return;
+    last = top;
+    root.style.setProperty("--tb-glass-top", top + "px");
+    try {
+      var board = typeof state !== "undefined" ? state : window.state;
+      if (board && board.map) board.map.invalidateSize();
+    } catch (e) {}
+  }
+  try { if (localStorage.getItem("tb.glassTitle") === "0") root.classList.add("tb-glass-notitle"); } catch (e) {}
+
+  /* Glass has no footer bar. Its contents move to places that cover
+     neither the map nor the boxes, and move back when Glass is turned off:
+       logo            → right end of the "Departures & details" heading
+       live status     → under the clock, inside its pill
+       aircraft credit → the map's own attribution corner (with the OSM credit)
+       non-affiliation → the bottom of Settings, and the logo's hover text */
+  var moved = [];   // {el, home, next}
+  function park(el, dest, atStart) {
+    if (!el || !dest) return;
+    if (!moved.some(function (m) { return m.el === el; })) moved.push({ el: el, home: el.parentNode, next: el.nextSibling });
+    if (el.parentNode !== dest) { if (atStart) dest.insertBefore(el, dest.firstChild); else dest.appendChild(el); }
+  }
+  function unparkAll() {
+    moved.forEach(function (m) { if (m.el.parentNode !== m.home && m.home) m.home.insertBefore(m.el, m.next && m.next.parentNode === m.home ? m.next : null); });
+  }
+  var creditText = null;
+  function boardMap() { try { var b = typeof state !== "undefined" ? state : window.state; return b && b.map; } catch (e) { return null; } }
+  function placeChrome() {
+    var map = boardMap(), ac = map && map.attributionControl;
+    if (!on()) {
+      unparkAll();
+      if (ac && creditText) { ac.removeAttribution(creditText); creditText = null; }
+      return;
+    }
+    var logo = document.querySelector(".homelink");
+    var heading = document.querySelector(".tb-departure-heading");
+    park(document.querySelector(".sb-bar .sb-controls"), heading);
+    park(logo, heading);
+    var stat = document.querySelector(".sb-status"), cust = document.querySelector(".sb-customize");
+    if (stat && cust) cust.title = stat.textContent + " — choose which boxes show";
+    var sp = document.querySelector("#app > footer .sp") || (moved.filter(function (m) { return m.el.classList && m.el.classList.contains("sp"); })[0] || {}).el;
+    if (logo && sp) logo.title = "Transit Project — all cities. " + sp.textContent.trim();
+    var clock = document.querySelector("#app > header .clock");
+    if (clock) {
+      var row = clock.querySelector(".tb-glass-status");
+      if (!row) { row = document.createElement("div"); row.className = "tb-glass-status"; clock.appendChild(row); }
+      park(document.getElementById("statusDot"), row);
+      park(document.getElementById("statusText"), row);
+    }
+    var setup = document.getElementById("setup");
+    var host = setup && (setup.querySelector(".tbset-body,.box,.panel") || setup.firstElementChild);
+    if (host && sp) {
+      var about = host.querySelector("#tbGlassAbout");
+      if (!about) { about = document.createElement("div"); about.id = "tbGlassAbout"; host.appendChild(about); }
+      park(sp, about);
+    }
+    var foot = document.querySelector("#app > footer"), cityName = document.querySelector(".tb-board-city");
+    if (foot && cityName) foot.setAttribute("data-city", cityName.textContent.trim().toUpperCase());
+    var credit = document.getElementById("tbAdsbCredit");
+    if (ac && credit && !creditText) { creditText = credit.textContent.trim(); if (creditText) ac.addAttribution(creditText); }
+  }
+  function placeLogo() { placeChrome(); }
+  /* The board's map, the credit and the headings appear a little after
+     DOMContentLoaded; retry for a few seconds so Glass catches them. */
+  var tries = 0;
+  var settle = setInterval(function () { placeChrome(); if (++tries > 20) clearInterval(settle); }, 500);
+
+  /* The one-click "hide info" button, injected beside Settings, and H. */
+  try { if (localStorage.getItem("tb.glassBare") === "1") root.classList.add("tb-glass-bare"); } catch (e) {}
+  function setBare(bare) {
+    root.classList.toggle("tb-glass-bare", bare);
+    try { localStorage.setItem("tb.glassBare", bare ? "1" : "0"); } catch (e) {}
+    var b = document.getElementById("tbGlassHideBtn");
+    if (b) {
+      b.setAttribute("aria-pressed", String(bare));
+      b.textContent = bare ? "Show info" : "Hide info";
+      b.title = bare ? "Show the title, clock and stats again (H)" : "Hide the title, clock and stats for a clear map (H)";
+    }
+    measure();
+  }
+  function addHideButton() {
+    var gear = document.getElementById("settingsBtn");
+    if (!gear || document.getElementById("tbGlassHideBtn")) return;
+    var b = document.createElement("button");
+    b.type = "button"; b.id = "tbGlassHideBtn";
+    gear.parentNode.insertBefore(b, gear);
+    b.addEventListener("click", function () { setBare(!root.classList.contains("tb-glass-bare")); });
+    setBare(root.classList.contains("tb-glass-bare"));
+  }
+  document.addEventListener("keydown", function (e) {
+    if (!on() || e.metaKey || e.ctrlKey || e.altKey || (e.key !== "h" && e.key !== "H")) return;
+    var t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    setBare(!root.classList.contains("tb-glass-bare"));
+  });
+
+  function start() {
+    addHideButton();
+    placeLogo();
+    measure();
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(measure);
+      var h = document.querySelector("#app > header"), s = document.getElementById("statStrip");
+      if (h) ro.observe(h);
+      if (s) ro.observe(s);
+    } else {
+      window.addEventListener("resize", measure);
+    }
+    if (window.MutationObserver) {
+      new MutationObserver(function () { placeLogo(); measure(); }).observe(root, { attributes: true, attributeFilter: ["data-style"] });
+    }
+  }
+  /* Idle: hide the controls after IDLE_MS without input (board-home.css).
+     Not while a menu is open or the Settings panel is showing. */
+  var IDLE_MS = 3500, timer = 0;
+  function busy() {
+    if (document.querySelector(".tb-board-views[open]")) return true;
+    var setup = document.getElementById("setup");
+    return !!(setup && setup.offsetParent !== null && getComputedStyle(setup).display !== "none");
+  }
+  function sleep() {
+    timer = 0;
+    if (on() && busy()) { wake(); return; }
+    if (on()) root.classList.add("tb-glass-idle");
+  }
+  function wake() {
+    root.classList.remove("tb-glass-idle");
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(sleep, IDLE_MS);
+  }
+  ["pointermove", "mousemove", "pointerdown", "mousedown", "keydown", "touchstart", "wheel", "focusin"].forEach(function (type) {
+    window.addEventListener(type, wake, { passive: true, capture: true });
+  });
+  wake();
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();
