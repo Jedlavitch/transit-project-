@@ -1378,6 +1378,113 @@
      ]
     }
    ]
+  },
+  "chicago": {
+   "tz": "America/Chicago",
+   "clock24": false,
+   "feeds": {},
+   "hubs": [
+    {
+     "name": "Chicago Union Station",
+     "lat": 41.8787,
+     "lon": -87.6403,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Chicago Union Station",
+     "note": "Amtrak and six Metra lines. Amtrak times are the timetable until a train is running."
+    },
+    {
+     "name": "Ogilvie Transportation Center",
+     "lat": 41.8832,
+     "lon": -87.6407,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Chicago OTC",
+     "note": "Metra's Union Pacific North, Northwest and West lines."
+    },
+    {
+     "name": "Millennium Station",
+     "lat": 41.8843,
+     "lon": -87.6243,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Millennium Station",
+     "note": "Metra Electric and the South Shore Line, below Randolph Street."
+    },
+    {
+     "name": "LaSalle Street Station",
+     "lat": 41.8755,
+     "lon": -87.6318,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "LaSalle Street",
+     "note": "Metra's Rock Island line."
+    },
+    {
+     "name": "Clark/Lake",
+     "lat": 41.8857,
+     "lon": -87.6309,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Clark/Lake",
+     "note": "Blue Line below; Brown, Green, Orange, Pink and Purple on the Loop above."
+    },
+    {
+     "name": "Roosevelt",
+     "lat": 41.8674,
+     "lon": -87.627,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Roosevelt",
+     "note": "Red Line below; Green and Orange on the elevated platform."
+    },
+    {
+     "name": "Howard",
+     "lat": 42.019,
+     "lon": -87.6728,
+     "r": 250,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Howard",
+     "note": "Red, Purple and Yellow lines meet at the city's northern edge."
+    },
+    {
+     "name": "O'Hare Airport",
+     "lat": 41.9773,
+     "lon": -87.9045,
+     "r": 300,
+     "feeds": [],
+     "live": "transitous",
+     "station": "O'Hare",
+     "airport": "ORD",
+     "apt": [
+      41.9786,
+      -87.9048
+     ],
+     "note": "The Blue Line station is under the parking garage, a walk from Terminals 1, 2 and 3."
+    },
+    {
+     "name": "Midway Airport",
+     "lat": 41.7868,
+     "lon": -87.7378,
+     "r": 300,
+     "feeds": [],
+     "live": "transitous",
+     "station": "Midway",
+     "airport": "MDW",
+     "apt": [
+      41.7868,
+      -87.7522
+     ],
+     "note": "The Orange Line terminal is joined to the airport by a covered walkway."
+    }
+   ]
   }
  }
 }
