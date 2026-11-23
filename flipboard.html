@@ -260,6 +260,42 @@
     width:100%; text-align:right;
     text-shadow:0 0 8px color-mix(in srgb, var(--metro-ink,#ffb02e) 45%, transparent);
   }
+  /* ---- CTA platform arrival signs (Chicago) ----
+     After the CTA's own arrival screens: black, one panel per station, each
+     arrival a line-coloured pill, "to <destination>", and the wait in whole
+     minutes or "Due". Buses and Metra/Amtrak get panels of their own in the
+     same voice, since the real signs show only the 'L'. */
+  #ctaBoard{ display:none }
+  :root[data-style="cta"] #boardRows, :root[data-style="cta"] .board-head{ display:none }
+  :root[data-style="cta"] #ctaBoard{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); align-content:start;
+    gap:12px; flex:1; min-height:0; overflow:hidden; padding:12px; background:#000;
+    font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  }
+  .cta-panel{ background:#0d0d0d; border:1px solid #262626; border-radius:6px; overflow:hidden; min-width:0 }
+  .cta-panel h3{
+    margin:0; display:flex; align-items:center; gap:10px; padding:8px 14px;
+    background:#1f1f1f; color:#fff; font-weight:700; letter-spacing:.01em;
+    font-size:calc(var(--flap-font) * .62 * var(--cta-scale,1));
+    border-bottom:3px solid var(--cta-stripe,#3a3a3a);
+  }
+  .cta-panel h3 .cta-kind{ margin-left:auto; color:#9a9a9a; font-weight:600; font-size:.7em; text-transform:uppercase; letter-spacing:.08em }
+  .cta-row{
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:14px; align-items:center;
+    padding:7px 14px; border-top:1px solid #1d1d1d; color:#fff; white-space:nowrap;
+    font-size:calc(var(--flap-font) * .66 * var(--cta-scale,1)); font-weight:700;
+  }
+  .cta-row:first-of-type{ border-top:0 }
+  .cta-pill{ min-width:4.6em; text-align:center; padding:.12em .5em; border-radius:.3em; font-weight:800; font-size:.78em }
+  .cta-pill.bus{ min-width:2.6em; background:#fff; color:#111 }
+  .cta-pill.rail{ background:#3d4b57; color:#fff; min-width:3.2em }
+  .cta-to{ overflow:hidden; text-overflow:ellipsis }
+  .cta-to small{ color:#9a9a9a; font-weight:600; font-size:.62em; margin-left:.5em }
+  .cta-min{ text-align:right; font-variant-numeric:tabular-nums; font-size:1.06em }
+  .cta-min.due{ color:#ffd84a }
+  .cta-min small{ display:block; color:#9a9a9a; font-size:.5em; font-weight:600; letter-spacing:.06em; text-transform:uppercase }
+  .cta-min small.late{ color:#ff8f6b } .cta-min small.live{ color:#7fe0a0 }
+  .cta-empty{ color:#9a9a9a; padding:20px; font:600 15px "Helvetica Neue",Helvetica,Arial,sans-serif }
   /* ---- SEPTA Regional Rail LED matrix ---- */
   #septaBoard{ display:none }
   :root[data-style="septa"] #boardRows, :root[data-style="septa"] .board-head{ display:none }
@@ -492,6 +528,7 @@
     </div>
     <div class="board-rows" id="boardRows"></div>
     <div id="septaBoard"></div>
+    <div id="ctaBoard"></div>
     <div id="septaTicker"><div class="sp-tick-in"><span></span><span></span></div></div>
   </main>
   <footer>
@@ -1031,7 +1068,8 @@ async function collectTransitousAll(){
     try{
       const stops=await TBTransitous.cityBoard(loc.lat, loc.lon,
         {stops:4, perStop:14, source:CITY_CFG.transitSource, mainStation:CITY_CFG.mainStation, ensureModes:CITY_CFG.ensureModes, maxAheadMs:CITY_CFG.maxAheadMs});
-      const all=[]; stops.forEach(st=>st.deps.forEach(d=>all.push(d)));
+      // each departure remembers its stop: the CTA style panels by station
+      const all=[]; stops.forEach(st=>st.deps.forEach(d=>all.push(Object.assign({}, d, {stopName:st.name}))));
       /* Long-distance asked for separately, mode-filtered: at a big station the
          next departures are all trams and the ICEs never make the list. */
       try{
@@ -1396,7 +1434,7 @@ class FlapField{
 
 /* A departure hall board is a long list; a platform display is a handful of
    lines you read from thirty feet away. */
-const ROW_COUNTS = { euro:16, usa:16, metro:8, septa:0 };
+const ROW_COUNTS = { euro:16, usa:16, metro:8, septa:0, cta:0 };
 let ROW_COUNT = 16;
 const TIME_CHARS=7;                 // must match the FlapField built below
 /* The time column is sized from the flaps it has to hold, not guessed. It was a
@@ -1688,6 +1726,85 @@ function renderSepta(rows){
      grid has placed them. */
   requestAnimationFrame(fitSeptaPanels);
 }
+/* ---------- CTA arrival signs (Chicago) -------------------------------------
+   Reads the departures straight from collectTransitousAll() rather than from
+   the flap rows, because a platform sign is grouped by STATION and the flap
+   rows have already lost which stop each departure leaves from. */
+const CTA_PILL = {Red:"#c60c30", Blue:"#00a1de", Brown:"#62361b", Green:"#009b3a",
+                  Orange:"#f9461c", Purple:"#522398", Pink:"#e27ea6", Yellow:"#f9e300"};
+function ctaWait(d){
+  const min=Math.round((d.when-Date.now())/60000);
+  return min<=1 ? {txt:"Due", due:true} : {txt:min<90 ? min+" min" : cityClock(d.when), due:false};
+}
+function ctaNote(d){
+  if(d.cancelled) return `<small class="late">cancelled</small>`;
+  if(d.realTime && d.delayMin>=3) return `<small class="late">${d.delayMin} min late</small>`;
+  if(d.realTime) return `<small class="live">live</small>`;
+  return `<small>scheduled</small>`;
+}
+function ctaRow(pill, d, extra){
+  const w=ctaWait(d);
+  return `<div class="cta-row">${pill}
+    <span class="cta-to">to ${esc(d.headsign||"?")}${extra?`<small>${esc(extra)}</small>`:""}</span>
+    <span class="cta-min${w.due?" due":""}">${esc(w.txt)}${ctaNote(d)}</span></div>`;
+}
+function ctaPanel(title, kind, stripe, rows){
+  return `<section class="cta-panel" style="--cta-stripe:${stripe}">
+    <h3>${esc(title)}<span class="cta-kind">${esc(kind)}</span></h3>${rows.join("")}</section>`;
+}
+let ctaTimer=null;
+async function renderCta(){
+  const host=$("#ctaBoard"); if(!host) return;
+  const all=(await collectTransitousAll()).filter(d=>d.when && d.when>Date.now()-60000)
+                                          .sort((a,b)=>a.when-b.when);
+  const on=id=>systemVisible(id);
+  const panels=[];
+  /* 'L': one panel per station, soonest first, line colour from the feed. */
+  if(on("metro")){
+    const byStop={};
+    all.filter(d=>d.family==="metro").forEach(d=>{ (byStop[d.stopName||"'L'"]=byStop[d.stopName||"'L'"]||[]).push(d); });
+    Object.entries(byStop).forEach(([stop,deps])=>{
+      const lines=[...new Set(deps.map(d=>d.route))];
+      const stripe=lines.length===1 ? (deps[0].lineColor||CTA_PILL[lines[0]]||"#3a3a3a")
+        : `linear-gradient(90deg,${lines.map(l=>CTA_PILL[l]||"#555").join(",")})`;
+      panels.push(ctaPanel(stop, "'L'", lines.length===1?stripe:"#3a3a3a", deps.slice(0,10).map(d=>{
+        const bg=d.lineColor||CTA_PILL[d.route]||"#4ea1ff", fg=d.lineTextColor||(d.route==="Yellow"?"#111":"#fff");
+        return ctaRow(`<span class="cta-pill" style="background:${bg};color:${fg}">${esc(d.route||"'L'")}</span>`, d);
+      })));
+    });
+  }
+  /* Buses: one panel, the route number in a white plate. */
+  if(on("bus")){
+    const bus=all.filter(d=>d.family==="bus").slice(0,10);
+    if(bus.length) panels.push(ctaPanel("Buses nearby", "Bus", "#8a8a8a",
+      bus.map(d=>ctaRow(`<span class="cta-pill bus">${esc(d.route||"Bus")}</span>`, d, d.stopName))));
+  }
+  /* Metra and Amtrak: the commuter boards read in clock time, so the stop rides
+     along as the small grey note. */
+  const rail=all.filter(d=>(d.family==="regional"&&on("regio"))||(d.family==="longdistance"&&on("ld"))).slice(0,10);
+  if(rail.length) panels.push(ctaPanel("Metra & Amtrak", "Rail", "#3d4b57",
+    rail.map(d=>ctaRow(`<span class="cta-pill rail">${esc(d.route||d.label||"")}</span>`, d,
+      (d.family==="longdistance"?"Amtrak":"Metra")+(d.stopName?" · "+d.stopName:"")))));
+  host.innerHTML = panels.length ? panels.join("") : `<div class="cta-empty">No departures near ${esc(loc.label||"here")} right now.</div>`;
+  requestAnimationFrame(fitCta);
+  /* Countdowns move every minute even between refreshes. */
+  clearTimeout(ctaTimer); ctaTimer=setTimeout(()=>{ if(STYLE==="cta") renderCta(); }, 30000);
+}
+/* Same rule as the SEPTA board: trim the deepest panels before shrinking type,
+   and never below one arrival a panel or 75% type. */
+function fitCta(){
+  const host=$("#ctaBoard"); if(!host || host.clientHeight<40) return;
+  host.style.setProperty("--cta-scale", 1);
+  const panels=[...host.querySelectorAll(".cta-panel")];
+  for(let g=0; g<8 && host.scrollHeight>host.clientHeight+1; g++){
+    const deepest=Math.max(...panels.map(p=>p.querySelectorAll(".cta-row").length));
+    if(deepest<=1) break;
+    panels.forEach(p=>{ const r=p.querySelectorAll(".cta-row"); if(r.length===deepest) r[r.length-1].remove(); });
+  }
+  for(let sc=1; sc>0.75 && host.scrollHeight>host.clientHeight+1; ){
+    sc=Math.round((sc-0.05)*100)/100; host.style.setProperty("--cta-scale", sc);
+  }
+}
 function esc(x){ return String(x==null?"":x).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 const EURO_CITIES = new Set(["zurich","cologne","stuttgart","amsterdam","rome"]);
@@ -1695,6 +1812,7 @@ const LS_STYLE = "flipboard.style";
 function resolveStyle(pref){
   if (pref && pref !== "auto") return pref;
   if (CITY === "philly") return "septa";       // its real board is this one
+  if (CITY === "chicago") return "cta";        // and Chicago's is the CTA arrival sign
   return EURO_CITIES.has(CITY) ? "euro" : "usa";
 }
 /* ?style= overrides the saved setting without writing to it, which is what a
@@ -1707,7 +1825,7 @@ let STYLE = resolveStyle(STYLE_PARAM || localStorage.getItem(LS_STYLE) || "auto"
 
 const TIME_COL = `calc(var(--flap-w) * ${TIME_CHARS} + ${(TIME_CHARS-1)*2}px)`;
 const STYLE_COLS = {
-  septa: `1fr`,
+  septa: `1fr`, cta: `1fr`,
   /* DB reading order: time, the train-number chip, the via-stops, then the
      destination large, then Gleis. The row's children are in a different order
      in the DOM (shared with the other styles), so euro places them explicitly
@@ -1717,7 +1835,7 @@ const STYLE_COLS = {
   metro: `0px 120px minmax(0,1fr) 150px`,
 };
 const STYLE_HEADS = {
-  septa: [],
+  septa: [], cta: [],
   /* Bilingual, as they are on the real thing. */
   euro:  CITY==="rome"
     ? ["Ora <i>Time</i>","Treno <i>Train</i>","Destinazione <i>Destination</i>","Binario <i>Pl.</i>","Avvisi <i>Note</i>"]
@@ -1927,6 +2045,7 @@ async function tick(){
   try{
     const rows=await collectAllRows();
     if(STYLE==="septa"){ await refreshSeptaLive(); renderSepta(rows); }
+    else if(STYLE==="cta") await renderCta();
     else renderRows(rows);
     $("#statusText").textContent="live — "+CITY_CFG.board.replace(".html","");
   }catch(e){
@@ -2034,6 +2153,7 @@ function applyStyle(pref){
   fitWidths=null; buildRows();
   requestAnimationFrame(measureAndRefit);
   if(lastRows) renderRows(lastRows);
+  if(STYLE==="cta") renderCta();
 }
 function applySound(on){
   soundOn=on;
@@ -2084,6 +2204,7 @@ function boot(){
     clearTimeout(rt);
     rt=setTimeout(()=>{
       if(STYLE==="septa"){ if(lastSeptaRows) renderSepta(lastSeptaRows); }
+      else if(STYLE==="cta") renderCta();
       else measureAndRefit();
     }, 150);
   });
