@@ -651,3 +651,16 @@
 :root[data-sky-glass] header #sgMenu #fsBtn{ font-size:0 !important }
 :root[data-sky-glass] header #sgMenu #fsBtn > *{ display:none }
 :root[data-sky-glass] header #sgMenu #fsBtn::after{ content:"Full screen" !important; font-size:14px; font-weight:600 }
+/* ATC: ▶ plays the right feed in LiveATC's own pop-up; ▾ lists the others. */
+:root[data-sky-glass] #sgCam .sg-cam-atcmore{ padding:9px 9px !important; margin-left:-4px }
+#sgAtcList{ position:fixed; z-index:60; width:240px; padding:6px; border-radius:14px;
+  background:rgba(16,18,23,.96); border:1px solid rgba(255,255,255,.14); box-shadow:0 18px 50px rgba(0,0,0,.45);
+  font-family:var(--body, system-ui, sans-serif) }
+#sgAtcList[hidden]{ display:none }
+#sgAtcList .sg-atc-h{ font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#9AA3B2; padding:6px 10px 4px }
+#sgAtcList button, #sgAtcList a{ display:block; width:100%; text-align:left; border:0; background:none; color:#F7F8FA;
+  font:600 14px/1.2 var(--body, system-ui, sans-serif); padding:10px; border-radius:9px; cursor:pointer; text-decoration:none }
+#sgAtcList button:hover, #sgAtcList a:hover{ background:rgba(255,255,255,.08) }
+#sgAtcList button.on{ color:#00E0C6 }
+#sgAtcList button.on::before{ content:"\25B6  " }
+#sgAtcList .sg-atc-all{ color:#7FB2FF; font-weight:500; font-size:13px; border-top:1px solid rgba(255,255,255,.1); border-radius:0 0 9px 9px; margin-top:4px }

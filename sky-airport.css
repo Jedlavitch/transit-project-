@@ -232,3 +232,7 @@
   #sgAp .leaflet-bottom.leaflet-left{ bottom:calc(36vh + 6px) }
 }
 #sgAp .ap-stats dt{ white-space:nowrap } #sgAp .ap-stats div{ flex:none }
+#sgAp .ap-atc{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px }
+#sgAp .ap-atc button{ border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:#F7F8FA; border-radius:9px;
+  padding:8px 10px; font-weight:600; font-size:13px; font-family:inherit; cursor:pointer }
+#sgAp .ap-atc button:hover{ border-color:#00E0C6 }

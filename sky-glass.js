@@ -317,10 +317,10 @@
     var o = s.oIcao, d = s.dIcao, p = s.posLL, ph = (s.phase || "").toLowerCase();
     if (!o && !d) return nearestAtc(p);
     var dn = d && s.dLL ? nmBetween(p, s.dLL) : 1e9, on = o && s.oLL ? nmBetween(p, s.oLL) : 1e9;
-    if (d && (/descen|approach|final|landing/.test(ph) || dn < 60)) return { icao: d, why: "arrival" };
-    if (o && (/climb|depart|takeoff|take-off/.test(ph) || on < 40)) return { icao: o, why: "departure" };
-    if (d && dn <= on) return { icao: d, why: "destination" };
-    return o ? { icao: o, why: "origin" } : { icao: d, why: "destination" };
+    if (d && (/descen|approach|final|landing/.test(ph) || dn < 60)) return { icao: d, why: "arrival", nm: dn };
+    if (o && (/climb|depart|takeoff|take-off/.test(ph) || on < 40)) return { icao: o, why: "departure", nm: on };
+    if (d && dn <= on) return { icao: d, why: "destination", nm: dn };
+    return o ? { icao: o, why: "origin", nm: on } : { icao: d, why: "destination", nm: dn };
   }
   /* No route (the callsign lookup is often down or rate-limited): the
      nearest major airport to the plane within 40 nm, else the one nearest
@@ -345,18 +345,86 @@
       if (!n || n.nm > 60) return null;
     }
     var c = n.ap[0];
-    return { icao: ICAO[c] || (/^[A-Z]{3}$/.test(c) ? "K" + c : c), why: why };
+    // a plane this close and this low is usually landing there or just off it
+    var why2 = why;
+    try { var sb = subject(); if (why === "nearest airport" && sb && n.nm < 15 && typeof sb.altFt === "number" && sb.altFt < 6000) why2 = /climb/.test(sb.phase || "") ? "departure" : "arrival"; } catch (e) {}
+    return { icao: ICAO[c] || (/^[A-Z]{3}$/.test(c) ? "K" + c : c), why: why2, nm: n.nm };
   }
+
+  /* LiveATC feeds for the home airports, so one tap plays the RIGHT one in
+     LiveATC's own player pop-up (liveatc.net/hlisten.php, the window their
+     Listen button opens). Never embedded or re-streamed here: LiveATC
+     prohibits third-party use of its live audio, so it plays on their site.
+     Read by hand from their airport pages (their server refuses scripts, and
+     that refusal is respected); other airports open LiveATC's search page.
+     k: twr / app / dep / gnd / atis / combo. */
+  var FEEDS = {
+    KDCA: [["Tower", "kdca1_twr", "twr"], ["Tower + Approach", "kdca", "combo"], ["Approach (DCA Final)", "kdca1_app_final", "app"],
+           ["Departure", "kdca1_dep", "dep"], ["Ground", "kdca1_gnd", "gnd"], ["ATIS", "kdca1_atis", "atis"]],
+    KIAD: [["Tower 1C/19C", "kiad1_twr_1c19c_120250", "twr"], ["Tower 1L/19R, 12/30", "kiad1_twr_1l19r_134425", "twr"],
+           ["Tower 1R/19L", "kiad1_twr_1r19l_120100", "twr"], ["Approach (Final East)", "kiad1_app_final_east_125800", "app"],
+           ["Approach (Final West)", "kiad1_app_final_west_134200", "app"], ["Departure North", "kiad1_dep_n_asper_125050", "dep"],
+           ["Departure South", "kiad1_dep_s_tilly_126650", "dep"], ["Ground East", "kiad1_gnd_east_121900", "gnd"],
+           ["Ground West", "kiad1_gnd_west_121625", "gnd"], ["ATIS", "kiad1_atis", "atis"]],
+    KBWI: [["Tower", "kbwi_es_twr", "twr"], ["Approach (BWI Final)", "kbwi_es_final", "app"], ["Approach (GRACO)", "kbwi_es_app_124550", "app"],
+           ["Ground", "kbwi_es_gnd", "gnd"], ["Clearance Delivery", "kbwi_del", "del"]]
+  };
+  function feedUrl(icao, mount) { return "https://www.liveatc.net/hlisten.php?mount=" + encodeURIComponent(mount) + "&icao=" + encodeURIComponent(icao.toLowerCase()); }
+  function playFeed(icao, mount) {
+    // the same window, size and name LiveATC's own Listen button uses
+    var w = null;
+    try { w = window.open(feedUrl(icao, mount), mount, "status=1,height=540,width=750,resizable=0"); } catch (e) {}
+    if (!w) location.href = feedUrl(icao, mount);   // pop-ups blocked (or a TV browser): go there instead
+  }
+  /* Which feed: Tower when the plane is close in (landing or just airborne),
+     Approach/Final further out on the way down, Departure on the way up,
+     else the combined Tower + Approach feed where there is one. */
+  function bestFeed(t) {
+    var list = FEEDS[t.icao]; if (!list) return null;
+    var k = function (kind) { for (var i = 0; i < list.length; i++) if (list[i][2] === kind) return list[i]; return null; };
+    if (t.why === "arrival") return (t.nm < 8 ? k("twr") : k("app")) || k("combo") || k("twr");
+    if (t.why === "departure") return (t.nm < 5 ? k("twr") : k("dep")) || k("combo") || k("twr");
+    return k("combo") || k("app") || k("twr") || list[0];
+  }
+  window.TBAtc = { feeds: function (icao) { return FEEDS[String(icao || "").toUpperCase()] || null; }, play: playFeed, url: feedUrl };
   function paintAtc() {
     var a = camBar && camBar.querySelector(".sg-cam-atc");
     if (!a) return;
     var t = atcTarget(subject());
     a.hidden = !t;
     if (!t) return;
-    var href = "https://www.liveatc.net/search/?icao=" + encodeURIComponent(t.icao);
+    var f = bestFeed(t), more = camBar.querySelector(".sg-cam-atcmore");
+    var href = f ? feedUrl(t.icao, f[1]) : "https://www.liveatc.net/search/?icao=" + encodeURIComponent(t.icao);
     if (a.getAttribute("href") !== href) a.setAttribute("href", href);
-    a.textContent = "ATC · " + t.icao;
-    a.title = "Open LiveATC's live feeds for " + t.icao + " (" + t.why + ") in a new tab";
+    a.setAttribute("data-icao", t.icao); a.setAttribute("data-mount", f ? f[1] : "");
+    a.textContent = f ? "\u25B6 " + t.icao.replace(/^K/, "") + " " + f[0].replace(/ \(.*\)$/, "") : "ATC \u00b7 " + t.icao;
+    a.title = f ? "Listen to " + t.icao + " " + f[0] + " live on LiveATC (" + t.why + ")" : "Open LiveATC's feeds for " + t.icao + " in a new tab";
+    more.hidden = !f;
+    if (atcList && !atcList.hidden && atcList.getAttribute("data-icao") !== t.icao) atcList.hidden = true;
+  }
+  var atcList = null;
+  function toggleAtcList() {
+    var a = camBar.querySelector(".sg-cam-atc"), icao = a.getAttribute("data-icao"), list = FEEDS[icao];
+    if (!list) return;
+    if (!atcList) {
+      atcList = document.createElement("div"); atcList.id = "sgAtcList"; atcList.setAttribute("role", "menu");
+      document.body.appendChild(atcList);
+      atcList.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-mount]"); if (!b) return;
+        playFeed(atcList.getAttribute("data-icao"), b.getAttribute("data-mount")); atcList.hidden = true;
+      });
+      document.addEventListener("click", function (e) { if (atcList && !atcList.contains(e.target) && !e.target.closest(".sg-cam-atcmore")) atcList.hidden = true; });
+    }
+    if (!atcList.hidden && atcList.getAttribute("data-icao") === icao) { atcList.hidden = true; return; }
+    atcList.setAttribute("data-icao", icao);
+    var cur = a.getAttribute("data-mount");
+    atcList.innerHTML = '<div class="sg-atc-h">' + icao + ' on LiveATC</div>' + list.map(function (x) {
+      return '<button type="button" role="menuitem" data-mount="' + x[1] + '"' + (x[1] === cur ? ' class="on"' : "") + ">" + x[0] + "</button>";
+    }).join("") + '<a class="sg-atc-all" target="_blank" rel="noopener" href="https://www.liveatc.net/search/?icao=' + icao + '">All ' + icao + " feeds \u2197</a>";
+    var r = camBar.getBoundingClientRect();
+    atcList.style.left = Math.max(8, Math.min(r.right - 240, innerWidth - 248)) + "px";
+    atcList.style.top = (r.bottom + 8) + "px";
+    atcList.hidden = false;
   }
 
   if (glass) {
@@ -366,10 +434,16 @@
       '<button type="button" class="sg-cam-recentre" hidden>Re-centre</button>' +
       '<button type="button" class="sg-cam-follow" aria-pressed="false"></button>' +
       '<button type="button" class="sg-cam-next" title="Follow the next plane in range (N)">Next ›</button>' +
-      '<a class="sg-cam-atc" target="_blank" rel="noopener" hidden></a>';
+      '<a class="sg-cam-atc" target="_blank" rel="noopener" hidden></a>' +
+      '<button type="button" class="sg-cam-atcmore" aria-label="Other ATC feeds" title="Other ATC feeds" hidden>\u25BE</button>';
     document.body.appendChild(camBar);
     camBar.querySelector(".sg-cam-follow").addEventListener("click", function () { setFollow(!cam.on); });
     camBar.querySelector(".sg-cam-next").addEventListener("click", function () { if (!cam.on) setFollow(true); nextPlane(); });
+    camBar.querySelector(".sg-cam-atc").addEventListener("click", function (e) {
+      var m = this.getAttribute("data-mount"); if (!m) return;      // no feed list: let the link open the search page
+      e.preventDefault(); playFeed(this.getAttribute("data-icao"), m);
+    });
+    camBar.querySelector(".sg-cam-atcmore").addEventListener("click", function (e) { e.stopPropagation(); toggleAtcList(); });
     camBar.querySelector(".sg-cam-recentre").addEventListener("click", function () { userAt = 0; recentre(); paintCam(); });
     root.classList.toggle("sg-following", cam.on);
     paintCam();

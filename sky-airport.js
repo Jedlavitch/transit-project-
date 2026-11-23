@@ -125,6 +125,8 @@
       if (tb) setTab(tb.getAttribute("data-tab"));
       var pl = e.target.closest && e.target.closest("li[data-at]");
       if (pl) { var at = pl.getAttribute("data-at").split(","); map.setView([+at[0], +at[1]], Math.max(map.getZoom(), 17)); }
+      var fb = e.target.closest && e.target.closest(".ap-atc button[data-mount]");
+      if (fb && window.TBAtc) window.TBAtc.play(ap.icao, fb.getAttribute("data-mount"));
       var th = e.target.closest && e.target.closest(".ap-term > h4");
       if (th) th.parentNode.classList.toggle("open");
     });
@@ -544,6 +546,14 @@
       (o == null ? "" : '<span class="open ' + (o ? "yes" : "no") + '">' + (o ? "open" : "closed") + "</span>") +
       (meta ? '<span class="meta">' + esc(meta) + "</span>" : "") + "</li>";
   }
+  /* ATC: the home airports' feeds play in one tap in LiveATC's own pop-up
+     (sky-glass.js holds the list); elsewhere, LiveATC's search page. */
+  function atcLinks() {
+    var f = null; try { f = window.TBAtc && window.TBAtc.feeds(ap.icao); } catch (e) {}
+    if (!f) return '<li><a target="_blank" rel="noopener" href="https://www.liveatc.net/search/?icao=' + esc(ap.icao) + '">Listen to ATC</a><span>LiveATC tower and approach feeds</span></li>';
+    return '<li><span class="ap-tsa">Listen to ATC</span><span>plays live on LiveATC, in its own player</span><div class="ap-atc">' +
+      f.map(function (x) { return '<button type="button" data-mount="' + esc(x[1]) + '">\u25B6 ' + esc(x[0]) + "</button>"; }).join("") + "</div></li>";
+  }
   function paintInfo() {
     var P = $(".ap-pane-info", el), h = [];
     drawTerminals();
@@ -571,7 +581,7 @@
     var yt = "https://www.youtube.com/results?search_query=" + encodeURIComponent(ap.name + " live webcam") + "&sp=EgJAAQ%253D%253D";
     h.push('<section><h3>Links</h3><ul class="ap-links">' +
       (info && info.website ? '<li><a target="_blank" rel="noopener" href="' + esc(info.website) + '">Airport website</a><span>security wait times, parking, maps</span></li>' : "") +
-      '<li><a target="_blank" rel="noopener" href="https://www.liveatc.net/search/?icao=' + esc(ap.icao) + '">Listen to ATC</a><span>LiveATC tower and approach feeds</span></li>' +
+      atcLinks() +
       '<li><a target="_blank" rel="noopener" href="' + yt + '">Live webcams</a><span>live streams on YouTube</span></li>' +
       (/^K/.test(ap.icao) ? '<li><span class="ap-tsa">TSA wait times</span><span>TSA has no public live feed; its MyTSA app shows crowd-reported waits, and many airports post theirs on their website.</span></li>' : "") +
       "</ul></section>");
