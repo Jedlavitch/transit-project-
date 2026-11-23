@@ -95,6 +95,7 @@
       '<div class="ap-top">' +
         '<button type="button" class="ap-back" title="Back to Sky (Esc)">‹ Sky</button>' +
         '<div class="ap-title"><b class="ap-code"></b><span class="ap-name"></span><span class="ap-rwy"></span></div>' +
+        '<button type="button" class="ap-cam" hidden>Live camera</button>' +
         '<select class="ap-pick" aria-label="Choose an airport"></select>' +
       '</div>' +
       '<aside class="ap-side">' +
@@ -117,6 +118,10 @@
       '</aside>';
     document.body.appendChild(el);
     $(".ap-back", el).addEventListener("click", close);
+    // a live camera with the planes marked, where this airport has one (sky-cams.js)
+    $(".ap-cam", el).addEventListener("click", function () {
+      var c = window.TBCams && window.TBCams.forIcao(ap.icao)[0]; if (c) window.TBCams.open(c, ap);
+    });
     $(".ap-pick", el).addEventListener("change", function () { var a = find(this.value); if (a) show(a); });
     el.addEventListener("click", function (e) {
       var li = e.target.closest && e.target.closest("li[data-hex]");
@@ -615,6 +620,8 @@
     ops = { opened: Date.now(), land: [], off: [], around: [] }; wx = null; wxAt = 0; info = null;
     termLayer.clearLayers(); poiLayer.clearLayers();
     $(".ap-code", el).textContent = a.iata;
+    var cams = window.TBCams ? window.TBCams.forIcao(a.icao) : [];
+    $(".ap-cam", el).hidden = !cams.length;
     $(".ap-name", el).textContent = a.name;
     $(".ap-rwy", el).textContent = "";
     fillPicker();

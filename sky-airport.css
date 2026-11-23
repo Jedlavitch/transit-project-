@@ -10,7 +10,7 @@
 #sgApMap{ position:absolute; top:0; right:0; bottom:0; left:0 }
 #sgAp .leaflet-container{ background:inherit }
 /* Everything under the layer stops animating behind it. */
-:root.sg-airport-on body > *:not(#sgAp){ visibility:hidden }
+:root.sg-airport-on body > *:not(#sgAp):not(#sgCv){ visibility:hidden }
 
 #sgAp .ap-top{
   position:absolute; z-index:1000; top:max(12px, env(safe-area-inset-top)); left:12px; right:12px;

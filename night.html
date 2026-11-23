@@ -14,7 +14,8 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=35" />
 <link rel="stylesheet" href="sky-glass.css?v=8" />
-<link rel="stylesheet" href="sky-airport.css?v=4" />
+<link rel="stylesheet" href="sky-airport.css?v=5" />
+<link rel="stylesheet" href="sky-cams.css?v=2" />
 <script src="cityswitch.js?v=6"></script>
 <script>/* Sky follows the board style: Glass (the default, i.e. nothing saved, or
    "glass") gets the Glass Sky; any other chosen style keeps the original.
@@ -2796,7 +2797,7 @@ const NEAR_AIRPORTS=[
   ["BSL","Basel",47.5896,7.5299],["CGN","Cologne Bonn",50.8659,7.1427],["DUS","Düsseldorf",51.2895,6.7668],
   ["FRA","Frankfurt",50.0379,8.5622],["STR","Stuttgart",48.6899,9.2220],["MUC","Munich",48.3538,11.7861],
   ["FCO","Rome Fiumicino",41.8003,12.2389],["CIA","Rome Ciampino",41.7994,12.5949],
-  ["ATL","Atlanta",33.6407,-84.4277],["ORD","Chicago O'Hare",41.9742,-87.9073],["DFW","Dallas–Fort Worth",32.8998,-97.0403],
+  ["ATL","Atlanta",33.6407,-84.4277],["ORD","Chicago O'Hare",41.9742,-87.9073],["MDW","Chicago Midway",41.7868,-87.7522],["DFW","Dallas–Fort Worth",32.8998,-97.0403],
   ["DEN","Denver",39.8561,-104.6737],["SEA","Seattle",47.4502,-122.3088],["MIA","Miami",25.7959,-80.2870],
   ["MCO","Orlando",28.4312,-81.3081],["CLT","Charlotte",35.2140,-80.9431],["LHR","London Heathrow",51.4700,-0.4543],
   ["CDG","Paris",49.0097,2.5479]];
@@ -3763,7 +3764,8 @@ function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retry
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
 <script src="sky-glass.js?v=8" defer></script>
-<script src="sky-airport.js?v=5" defer></script>
+<script src="sky-airport.js?v=6" defer></script>
+<script src="sky-cams.js?v=4" defer></script>
 <script src="sky-landmarks.js?v=2" defer></script>
 <script src="mascot.js?v=3" defer></script>
 <script src="mascot-buddy.js?v=9" defer></script>
