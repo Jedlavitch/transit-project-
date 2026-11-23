@@ -100,6 +100,7 @@ CITY_BUNDLES = {
     "cologne":   [],
     "stuttgart": [],
     "rome":      [],
+    "chicago":   [],   # transitous, like the European boards: no bundle to report on
 }
 
 # The proxy returns empty for rapid successive calls. Measured: nine back-to-back

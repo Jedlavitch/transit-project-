@@ -17,7 +17,8 @@ COLORS={'rail':'#8562bd','metro':'#147bc1','tram':'#169879','bus':'#d59028','brt
 def rows(z,name):
     path=next((n for n in z.namelist() if n.rsplit('/',1)[-1]==name),None)
     if path is None:return iter(())
-    return csv.DictReader(io.TextIOWrapper(z.open(path),encoding='utf-8-sig'))
+    # skipinitialspace: Metra writes 'service_id, monday, ...', a space after every comma
+    return csv.DictReader(io.TextIOWrapper(z.open(path),encoding='utf-8-sig'),skipinitialspace=True)
 
 def mode(r):
     n=int(r.get('route_type') or 3)

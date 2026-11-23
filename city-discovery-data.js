@@ -110,5 +110,14 @@ window.TBCityDiscoveryData = {
       {id:"borghese",name:"Villa Borghese",kind:"outdoors",lat:41.9144,lon:12.4848,address:"Villa Borghese, Rome, Italy",blurb:"Trade the traffic for shaded avenues, a small lake and long views over the city.",prompt:"Walk until you can no longer hear the road.",url:"https://www.turismoroma.it/en/places/villa-borghese"},
       {id:"testaccio",name:"Testaccio Market",kind:"food",lat:41.8776,lon:12.4734,address:"Via Aldo Manuzio, Rome, Italy",blurb:"Browse the neighbourhood's covered market of food stalls and everyday shopping.",prompt:"Order something you cannot name, and then find out what it was.",url:"https://www.mercatoditestaccio.it/"}
     ]
+  },
+  chicago: {
+    edition:"Lakefront art, a river walk, breakfast by the station.",
+    adventure:{name:"Art, then the river",note:"Start at Millennium Park, walk across to the Art Institute, then follow the Riverwalk west.",stops:["millennium","artinstitute"]},
+    places:[
+      {id:"millennium",name:"Millennium Park",kind:"outdoors",lat:41.8826,lon:-87.6226,address:"201 E Randolph St, Chicago, IL",blurb:"Gardens, open lawns and the city's most photographed sculpture, a short walk from the Loop 'L'.",prompt:"Find your own reflection in the skyline.",url:"https://www.chicago.gov/city/en/depts/dca/supp_info/millennium_park.html"},
+      {id:"artinstitute",name:"Art Institute of Chicago",kind:"culture",lat:41.8796,lon:-87.6237,address:"111 S Michigan Ave, Chicago, IL",blurb:"One of the country's great art museums, on Michigan Avenue. Check current hours and tickets.",prompt:"Pick one painting and stay with it for five minutes.",url:"https://www.artic.edu/"},
+      {id:"riverwalk",name:"Chicago Riverwalk",kind:"outdoors",lat:41.8875,lon:-87.6260,address:"Chicago Riverwalk, Chicago, IL",blurb:"A path along the river's main branch, under the bridges and past the boats.",prompt:"Count the bridges you pass under.",url:"https://www.chicagoriverwalk.us/"}
+    ]
   }
 };

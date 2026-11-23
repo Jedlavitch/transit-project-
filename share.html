@@ -8,7 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<script src="cityswitch.js?v=6"></script>
+<script src="cityswitch.js?v=7"></script>
 <style>
   /* Share your flight. Find the plane you're on (or about to board) among the
      aircraft near you, or by its flight number, and get a link that opens
@@ -145,7 +145,8 @@
     boston: ["Boston", 42.3523, -71.0552], la: ["Los Angeles", 34.0522, -118.2437],
     sf: ["San Francisco", 37.7749, -122.4194], amsterdam: ["Amsterdam", 52.3791, 4.9003],
     zurich: ["Zurich", 47.3779, 8.5403], cologne: ["Cologne", 50.9430, 6.9589],
-    stuttgart: ["Stuttgart", 48.7840, 9.1829], rome: ["Rome", 41.9010, 12.5016]
+    stuttgart: ["Stuttgart", 48.7840, 9.1829], rome: ["Rome", 41.9010, 12.5016],
+    chicago: ["Chicago", 41.8786, -87.6359]
   };
   var params = new URLSearchParams(location.search);
   var cityKey = CITIES[params.get("city")] ? params.get("city") : "dc";

@@ -239,6 +239,29 @@ window.TBCityShortcutsData = {
       { label: "VVS journey planner", url: "https://www.vvs.de/" }
     ]
   },
+  chicago: {
+    name: "Chicago",
+    tagline: "Two airports on the 'L' and the downtown stations Metra and Amtrak run from.",
+    places: [
+      { id: "ord", label: "O'Hare · Blue Line", lat: 41.9773, lon: -87.9045, kind: "airport",
+        note: "The Blue Line station is under the parking garage, a walk from Terminals 1, 2 and 3; Terminal 5 is by airport transit.",
+        source: "https://www.flychicago.com/ohare/ToFrom/public/Pages/default.aspx" },
+      { id: "mdw", label: "Midway · Orange Line", lat: 41.7868, lon: -87.7378, kind: "airport",
+        note: "The Orange Line terminal is joined to the airport by a covered walkway.",
+        source: "https://www.flychicago.com/midway/ToFrom/public/Pages/default.aspx" },
+      { id: "cus", label: "Chicago Union Station", lat: 41.8787, lon: -87.6403, kind: "station",
+        note: "Amtrak and six Metra lines; the nearest 'L' is Clinton (Blue) or Quincy (Loop).",
+        source: "https://chicagounionstation.com/" },
+      { id: "otc", label: "Ogilvie Transportation Center", lat: 41.8832, lon: -87.6407, kind: "station",
+        note: "Metra's Union Pacific North, Northwest and West lines; Clinton on the Green and Pink is a short walk north.",
+        source: "https://metra.com/" }
+    ],
+    resources: [
+      { label: "CTA service alerts", url: "https://www.transitchicago.com/alerts/" },
+      { label: "CTA accessibility", url: "https://www.transitchicago.com/accessibility/" },
+      { label: "Metra", url: "https://metra.com/" }
+    ]
+  },
   rome: {
     name: "Rome",
     tagline: "Two airports, three metro lines and the stations that join them.",

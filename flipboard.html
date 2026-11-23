@@ -451,7 +451,7 @@
     <a id="boardBtn" href="dc.html" title="Back to the board" onclick="window.location.href=this.href; return false;">‹ board</a>
     <script>(function(){try{var m={dc:"dc.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
-      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html",rome:"rome.html"};
+      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html",rome:"rome.html",chicago:"chicago.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
       if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
@@ -498,7 +498,7 @@
     <span id="updated">—</span>
   </footer>
 
-<script src="transitous.js?v=8"></script>
+<script src="transitous.js?v=9"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <script>
@@ -528,6 +528,13 @@ const CITY_CONFIG = {
     lsWmataKey:null, lsHidden:"transitboardstuttgart.hiddenCards",
     transitSource:"", mainStation:"Stuttgart Hauptbahnhof",
     tz:"Europe/Berlin", clock24:true,
+  },
+  chicago: {
+    defaultLoc:{ lat:41.8786, lon:-87.6359, label:"The Loop, Chicago" },
+    lsLoc:"transitboardchicago.loc", board:"chicago.html", cityLabel:"Chicago",
+    lsWmataKey:null, lsHidden:"transitboardchicago.hiddenCards",
+    transitSource:"", mainStation:"Chicago Union Station", ensureModes:["SUBWAY"],
+    tz:"America/Chicago", clock24:false,
   },
   rome: {
     defaultLoc:{ lat:41.9009, lon:12.5015, label:"Roma Termini" },
@@ -1105,6 +1112,13 @@ const SYSTEM_DEFS_BY_CITY = {
     {id:"bus", logo:"BUS", label:"Buses", collect:()=>collectTransitousRows("bus",5)},
     {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
   ],
+  chicago: [
+    {id:"ld", logo:"AMTRAK", label:"Amtrak", collect:()=>collectTransitousRows("longdistance",6)},
+    {id:"regio", logo:"METRA", label:"Metra", collect:()=>collectTransitousRows("regional",6)},
+    {id:"metro", logo:"CTA", label:"CTA 'L'", collect:()=>collectTransitousRows("metro",6)},
+    {id:"bus", logo:"BUS", label:"CTA buses", collect:()=>collectTransitousRows("bus",5)},
+    {id:"planes", logo:"FLIGHT", label:"Planes", collect:()=>collectPlaneRows(6)},
+  ],
   rome: [
     {id:"ld", logo:"RAIL", label:"Long-distance", collect:()=>collectTransitousRows("longdistance",6)},
     {id:"regio", logo:"REGIO", label:"Regional rail", collect:()=>collectTransitousRows("regional",6)},
@@ -1496,6 +1510,9 @@ const METRO_SKINS = {
                lines:{ } },
   /* No lines listed, like Cologne and Stuttgart: ATAC's feed publishes real
      colours for the metro (A e27439, B 0570b5, C 008456). */
+  /* CTA publishes its own 'L' colours in the feed, so no lines listed here. */
+  chicago:   { op:"CTA",       ink:"#eef2f7", bg:"#0b0f16", bullet:"tab",
+               lines:{ } },
   rome:      { op:"ATAC",      ink:"#fdf0e4", bg:"#150d09", bullet:"tab",
                lines:{ } },
 };

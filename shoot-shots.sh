@@ -60,6 +60,7 @@ shoot flipboard-nyc-usa   2560 1440 "flipboard.html?city=nyc&style=usa"
 shoot board-cologne-new    2560 1440 "cologne.html"
 shoot board-stuttgart-new  2560 1440 "stuttgart.html"
 shoot board-rome-new       2560 1440 "rome.html"
+shoot board-chicago-new    2560 1440 "chicago.html"
 
 echo
 echo "done:"

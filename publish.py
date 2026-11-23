@@ -78,6 +78,7 @@ CITY_LABELS = {
     "nyc": "New York", "boston": "Boston", "amsterdam": "Amsterdam",
     "la": "Los Angeles", "sf": "San Francisco", "zurich": "Zurich",
     "cologne": "Cologne", "stuttgart": "Stuttgart", "rome": "Rome",
+    "chicago": "Chicago",
 }
 
 

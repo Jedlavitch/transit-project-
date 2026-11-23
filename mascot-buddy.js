@@ -347,6 +347,15 @@
       "The 64 goes to the Vatican. Hold on to your bag.",
       "All roads lead here, and so do most of the buses.",
     ],
+    "chicago.html": [
+      "The Loop is called the Loop because the 'L' goes round it. That is the whole joke.",
+      "Five lines share the Loop tracks. Brown, Green, Orange, Pink and Purple take turns.",
+      "Blue Line to O'Hare, Orange to Midway. Two airports, two colours, no taxi.",
+      "\u266a Red Line, twenty-four hours, Howard to 95th \u266a",
+      "Union Station has a Great Hall. Ogilvie, across the river, has the Metra to the north.",
+      "Every Metra line ends downtown. Getting from one suburb to another is the hard part.",
+      "Watch the Midway runway cam in Sky view. The planes come in right over the houses.",
+    ],
     "stuttgart.html": [
       "They have been rebuilding the station since before this board existed.",
       "The S-Bahn goes underground here and comes back up a different mood.",

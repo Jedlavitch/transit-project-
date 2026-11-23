@@ -101,6 +101,7 @@
     { file: "newjersey.html",    id: "nj",        label: "New Jersey"    },
     { file: "nyc.html",          id: "nyc",       label: "New York"      },
     { file: "boston.html",       id: "boston",    label: "Boston"        },
+    { file: "chicago.html",      id: "chicago",   label: "Chicago"       },
     { file: "amsterdam.html",    id: "amsterdam", label: "Amsterdam"     },
     { file: "losangeles.html",   id: "la",        label: "Los Angeles"   },
     { file: "sanfrancisco.html", id: "sf",        label: "San Francisco" },

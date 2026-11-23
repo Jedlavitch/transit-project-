@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="sky-glass.css?v=8" />
 <link rel="stylesheet" href="sky-airport.css?v=5" />
 <link rel="stylesheet" href="sky-cams.css?v=3" />
-<script src="cityswitch.js?v=6"></script>
+<script src="cityswitch.js?v=7"></script>
 <script>/* Sky follows the board style: Glass (the default, i.e. nothing saved, or
    "glass") gets the Glass Sky; any other chosen style keeps the original.
    The view switch in the header (sky-glass.js) overrides that for Sky alone:
@@ -47,7 +47,7 @@
 <script src="keepalive.js?v=2" defer></script>
 <script src="gate.js?v=3" defer></script>
 <script src="delays.js?v=2"></script>
-<script src="transitous.js?v=8"></script>
+<script src="transitous.js?v=9"></script>
 <script src="schedule-health.js?v=1"></script>
 <script src="worker-health.js?v=1"></script>
 <style>
@@ -449,7 +449,7 @@
     <script>/* set the back-link from ?city= immediately, before any other JS can fail */
     (function(){try{var m={dc:"dc.html",philly:"philadelphia.html",nj:"newjersey.html",
       nyc:"nyc.html",boston:"boston.html",amsterdam:"amsterdam.html",la:"losangeles.html",
-      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html",rome:"rome.html"};
+      sf:"sanfrancisco.html",zurich:"zurich.html",cologne:"cologne.html",stuttgart:"stuttgart.html",rome:"rome.html",chicago:"chicago.html"};
       var c=new URLSearchParams(location.search).get("city"), a=document.getElementById("boardBtn");
       if(a && m[c]) a.setAttribute("href", m[c]);}catch(e){}})();</script>
   </header>
@@ -653,6 +653,16 @@ const CITY_CONFIG = {
     transitSource:"", mainStation:"Roma Termini",
     tz:"Europe/Rome", clock24:true,
     cityLabel:"Rome" },
+  /* Chicago runs on the same transitous timetable as Europe, so Sky places its
+     nearest train and bus the same way. Midway's runway cam is in sky-cams.js. */
+  chicago: { defaultLoc:{ lat:41.8786, lon:-87.6359, label:"The Loop, Chicago" },
+    lsLoc:"transitboardchicago.loc", lsManual:"transitboardchicago.locManual", board:"chicago.html",
+    busSchedule:null, busTag:"Nearest bus", busRange:"",
+    lsMarcUrl:null, lsSeptaUrl:null, lsBusUrl:null, lsWmataKey:null,
+    localRailSystem:null, localBusSystem:null, noLocalVehicles:true,
+    transitSource:"", mainStation:"Chicago Union Station",
+    tz:"America/Chicago", clock24:false,
+    cityLabel:"Chicago" },
   stuttgart: { defaultLoc:{ lat:48.7838, lon:9.1817, label:"Stuttgart Hauptbahnhof" },
     lsLoc:"transitboardstuttgart.loc", lsManual:"transitboardstuttgart.locManual", board:"stuttgart.html",
     busSchedule:null, busTag:"Nearest bus", busRange:"",
@@ -3768,6 +3778,6 @@ if(document.readyState === "loading"){ document.addEventListener("DOMContentLoad
 <script src="sky-cams.js?v=7" defer></script>
 <script src="sky-landmarks.js?v=2" defer></script>
 <script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=9" defer></script>
+<script src="mascot-buddy.js?v=10" defer></script>
 </body>
 </html>

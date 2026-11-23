@@ -171,6 +171,19 @@
         "roma",
         "cotral-ferro"
       ]
+    },
+    "chicago": {
+      "bounds": [
+        41.45,
+        -88.35,
+        42.45,
+        -87.45
+      ],
+      "feeds": [
+        "cta",
+        "metra",
+        "amtrak"
+      ]
     }
   },
   "feeds": {
@@ -285,7 +298,8 @@
       "excludeBus": true,
       "excludeNames": [
         "Commuter Rail",
-        "Thruway Connecting Service"
+        "Thruway Connecting Service",
+        "Illinois Zephyr"
       ]
     },
     "nl": {
@@ -357,6 +371,15 @@
         "MEB1": "B1",
         "MEC": "C"
       }
+    },
+    "cta": {
+      "name": "CTA",
+      "url": "https://www.transitchicago.com/downloads/sch_data/google_transit.zip",
+      "busLimit": 25
+    },
+    "metra": {
+      "name": "Metra",
+      "url": "https://schedules.metrarail.com/gtfs/schedule.zip"
     }
   },
   "geoSources": {

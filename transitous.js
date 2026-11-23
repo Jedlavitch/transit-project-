@@ -1,5 +1,6 @@
 /* ============================================================================
-   transitous.js — departures for the European boards (Zurich, Cologne, Stuttgart, Rome).
+   transitous.js — departures for the European boards (Zurich, Cologne, Stuttgart, Rome)
+   and Chicago.
 
    One source for all three: api.transitous.org, a community-run MOTIS instance
    that aggregates Europe's public GTFS and GTFS-Realtime feeds. Free, no
@@ -89,6 +90,25 @@
   const IT_MODE_WORD = { "U-Bahn":"Metro", "S-Bahn":"Treno", "ICE":"Alta velocità", "RB":"Regionale", "RE":"Regionale" };
   function italianLabel(label) { return IT_MODE_WORD[label] || label; }
 
+  /* US feeds (Chicago) arrive through the same German-default captions: a CTA
+     train read "U-Bahn", Metra "RB" and Amtrak "IC". Scoped by the us- feed
+     prefix, like the Italian ones, so no European board changes. */
+  function isAmerican(id) { return /(^|_)us-/.test(String(id || "")); }
+  const US_MODE_WORD = { "U-Bahn":"Subway", "S-Bahn":"Commuter", "RB":"Commuter", "RE":"Commuter",
+                         "IC":"Amtrak", "ICE":"Amtrak", "Night":"Amtrak", "Tram":"Streetcar" };
+  function americanLabel(label, id) {
+    const s = String(id || "");
+    if (/us-il-CTA/.test(s) && label === "U-Bahn") return "'L'";
+    if (/us-il-Metra/.test(s) && US_MODE_WORD[label] === "Commuter") return "Metra";
+    return US_MODE_WORD[label] || label;
+  }
+  /* One place that picks the caption for a trip id, whichever country it is in. */
+  function localLabel(label, id) {
+    if (isItalian(id)) return italianLabel(label);
+    if (isAmerican(id)) return americanLabel(label, id);
+    return label;
+  }
+
   /* ATAC and Trenitalia publish names in capitals ("STAZ.NE METRO CIPRO (MA)",
      "ROMA TERMINI") and COTRAL appends an internal code ("Roma | Porta Maggiore
      # f00067"). Shouting forty bus stops at a wall display is the one thing none of
@@ -121,6 +141,10 @@
     /* Rome's metro lines arrive as MEA/MEB/MEB1/MEC; a rider knows them as A, B, B1, C. */
     const me = r.match(/^ME([ABC]\d?)$/i);
     if (me) return me[1].toUpperCase();
+    /* CTA names its 'L' lines in full, "Blue Line", which a seven-character badge
+       clips to "Blue Li". The colour is the name a Chicagoan uses. */
+    const ln = r.match(/^(Red|Blue|Brown|Green|Orange|Pink|Purple|Yellow) Line$/i);
+    if (ln) return ln[1];
     /* An Italian regional's number changes every train and overflows the seven-
        character badge: "REG 12741" would be cut to "REG 127". The category is the
        thing a passenger reads. Long-distance keeps its number, since FR 9641 is
@@ -260,7 +284,7 @@
         /* cleanRoute drops a regional's number from the badge, but it is the one
            thing that ties this row to Trenitalia's own live record of the train. */
         trainNo: italian ? (/\b(\d{3,6})\b/.exec(String(t.routeShortName || t.tripShortName || "")) || [])[1] || "" : "",
-        label: italian ? italianLabel(label) : label,
+        label: localLabel(label, t.tripId),
         headsign,
         when: realMs || schedMs,
         scheduled: schedMs,
@@ -597,7 +621,7 @@
                    route: cleanRoute(leg.routeShortName || leg.tripShortName),
                    label: (function () {
                      const l = labelFor(leg.mode || "OTHER", leg.routeShortName || leg.tripShortName);
-                     return isItalian(tripId) ? italianLabel(l) : l;
+                     return localLabel(l, tripId);
                    })(),
                    mode: leg.mode || "OTHER", agency: leg.agencyName || "",
                    realTime: !!leg.realTime,
@@ -783,8 +807,7 @@
       id: t.tripId, stops: stops, from: stops[0], to: stops[1],
       start: dep, end: arr, live: !!live,
       route: cleanRoute(t.routeShortName), mode: mode,
-      label: isItalianId(t.tripId) ? italianLabelOf(labelFor(mode, t.routeShortName))
-                                   : labelFor(mode, t.routeShortName),
+      label: localLabel(labelFor(mode, t.routeShortName), t.tripId),
       family: familyOf(mode, t.routeShortName),
       headsign: "",
       agency: "", realTime: !!seg.realTime,
@@ -801,10 +824,6 @@
   }
 
 
-  /* Rome's two tidy-ups live in this file only when the Rome board does; both
-     helpers degrade to identity so areaTrips stays one version for every city. */
-  function isItalianId(id) { return typeof isItalian === "function" ? isItalian(id) : false; }
-  function italianLabelOf(l) { return typeof italianLabel === "function" ? italianLabel(l) : l; }
 
   const R_KM = 6371;
   function kmBetween(a, b) {

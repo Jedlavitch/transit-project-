@@ -79,6 +79,7 @@ switchCity._go = function (url, forceShell) {
     newjersey:    { n: "New Jersey",    lat: 40.7357, lon: -74.1724, tz: "America/New_York", mi: 1 },
     nyc:          { n: "New York",      lat: 40.7128, lon: -74.0060, tz: "America/New_York", mi: 1 },
     boston:       { n: "Boston",        lat: 42.3523, lon: -71.0552, tz: "America/New_York", mi: 1 },
+    chicago:      { n: "Chicago",       lat: 41.8786, lon: -87.6359, tz: "America/Chicago", mi: 1 },
     losangeles:   { n: "Los Angeles",   lat: 34.0522, lon: -118.2437, tz: "America/Los_Angeles", mi: 1 },
     sanfrancisco: { n: "San Francisco", lat: 37.7749, lon: -122.4194, tz: "America/Los_Angeles", mi: 1 },
     amsterdam:    { n: "Amsterdam",     lat: 52.3791, lon: 4.9003,  tz: "Europe/Amsterdam" },
