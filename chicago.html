@@ -2012,73 +2012,6 @@ function transitWhen(ms, mins){
   return dayOf(d) === dayOf(new Date()) ? at
        : at + " " + d.toLocaleDateString("en-GB", {weekday:"short", timeZone:CFG.tz});
 }
-/* ---------- Amtrak live (amtraker, no key) --------------------------------
-   Transitous has Amtrak as a timetable only, and Chicago is where most of
-   Amtrak's long-distance trains start or end. amtraker (the same free,
-   CORS-open source Philadelphia and DC use) gives every running train's GPS and
-   its estimated time at each stop. Two uses:
-     - the map draws real positions for trains within AMTRAK_RADIUS_MI, in
-       place of the timetable estimates, while the feed is fresh;
-     - a departure on the Amtrak card picks up a real delay when amtraker lists
-       the same train number with the same scheduled minute at that station.
-   amtraker only lists trains already underway, so a train still waiting to
-   leave Union Station keeps its scheduled time: no lateness is invented. */
-const AMTRAK_EVERY_MS = 30000;
-const AMTRAK_RADIUS_MI = 120;
-const AMTRAK_STALE_MS = 150000;
-function amtrakLive(){ return !!(state._amtrakAt && Date.now()-state._amtrakAt < AMTRAK_STALE_MS); }
-async function refreshAmtrakLive(){
-  if(document.hidden) return;
-  let data;
-  try{ data=await getJSON("https://api-v3.amtraker.com/v3/trains", 15000); }catch(e){ return; }
-  if(!data || typeof data!=="object") return;
-  const trains=[];
-  Object.values(data).forEach(arr=>(arr||[]).forEach(t=>{
-    if(t && typeof t.lat==="number" && typeof t.lon==="number") trains.push(t);
-  }));
-  state._amtrak=trains; state._amtrakAt=Date.now(); state.lastAmtrakOk=Date.now();
-  const here=state.loc;
-  updateFleet("ld", trains.filter(t=>t.trainState==="Active" &&
-      kmToMi(haversine(here,{lat:t.lat,lon:t.lon})) <= AMTRAK_RADIUS_MI).map(t=>{
-    const ns=(t.stations||[]).find(x=>x.status!=="Departed");
-    const late=amtrakStopLate(ns);
-    const line=String(t.trainNum||""), dest=t.destName||"";
-    const label=[line,dest].filter(Boolean).join(" → ");
-    return { id:"amtk"+(t.trainID||t.trainNum), lat:t.lat, lon:t.lon,
-      icon:()=>operatorIcon(FAMILY_COL.ld, line, dest, "Amtrak", FAMILY_MODE.ld), ik:label+"|Amtrak",
-      tip:[`${t.routeName||"Amtrak"} ${line} → ${dest}`, ns?("next: "+ns.name):"",
-           "live GPS, amtraker"+(late!=null?(late>0?` · ${late} min late`:" · on time"):"")].filter(Boolean).join(" · "),
-      label, color:FAMILY_COL.ld };
-  }), AMTRAK_EVERY_MS);
-}
-/* Minutes late at one stop, from amtraker's estimate against the timetable.
-   Departure first: at Union Station that is the time that matters. */
-function amtrakStopLate(st){
-  if(!st) return null;
-  const sch=Date.parse(st.schDep||st.schArr), est=Date.parse(st.dep||st.arr);
-  if(!isFinite(sch) || !isFinite(est)) return null;
-  return Math.round((est-sch)/60000);
-}
-function applyAmtrakLive(all){
-  if(!amtrakLive()) return;
-  const byNum={};
-  (state._amtrak||[]).forEach(t=>{ (byNum[String(t.trainNum)]=byNum[String(t.trainNum)]||[]).push(t); });
-  all.forEach(d=>{
-    if(d.family!=="longdistance" || d.realTime) return;
-    const code=/us-Amtrak_([A-Z]{3})$/.exec((d.stop&&d.stop.id)||"");
-    const cands=byNum[String(d.route||"")]; if(!code || !cands || !d.scheduled) return;
-    for(const t of cands){
-      const st=(t.stations||[]).find(x=>x.code===code[1]); if(!st) continue;
-      if(Math.abs(Date.parse(st.schDep||st.schArr)-d.scheduled) > 180000) continue;   // a different day's run
-      if(st.status==="Departed") return;
-      const late=amtrakStopLate(st); if(late==null) return;
-      d.delayMin=late; d.when=d.scheduled+late*60000; d.realTime=true;
-      if(st.platform) d.platform=st.platform;
-      return;
-    }
-  });
-}
-
 /* ---------- CTA live data (cta-worker.js) ----------------------------------
    Optional, like every other live Worker on these boards. Transitous has CTA
    only as a timetable, so without a Worker URL the board stays on scheduled
@@ -2332,7 +2265,6 @@ async function refreshTransit(){
      the card — would be listed and never drawn. */
   state._extraDeps = extra;
   await applyCtaLive(all, stops);
-  applyAmtrakLive(all);
 
   /* Transitous publishes both halves of an on-time record — minutes late against
      the operator's own timetable, and an explicit cancelled flag — so this board
@@ -2785,7 +2717,6 @@ function tickTransitVehicles(){
   FAMILY_CARDS.forEach(([key])=>{
     // CTA's GPS owns these while it is fresh; see refreshCtaTrains / refreshCtaBuses
     if(key==="metro" && ctaTrainsLive()) return;
-    if(key==="ld" && amtrakLive()) return;      // amtraker's GPS; see refreshAmtrakLive
     if(key==="busx" && ctaBusesLive()) return;
     const items=[];
     (state._trips[key]||[]).forEach(({dep,trip})=>{
@@ -3535,7 +3466,6 @@ function boot(){
   setInterval(refreshTransit, 45000);   // the feed updates about every 30s
   // positions come from cached trips, so this tick costs nothing on the network
   setInterval(tickTransitVehicles, VEHICLE_TICK_MS);
-  refreshAmtrakLive(); setInterval(refreshAmtrakLive, AMTRAK_EVERY_MS);
   if(CTA_LIVE_URL){
     refreshCtaTrains(); setInterval(refreshCtaTrains, CTA_TRAINS_EVERY_MS);
     setTimeout(refreshCtaBuses, 4000);   // after the first departures name the nearby routes
