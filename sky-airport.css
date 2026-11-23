@@ -91,3 +91,52 @@
 
 /* The way in, as one of Glass's camera-bar chips */
 :root[data-sky-glass] #sgCam #sgApBtn{ box-shadow:inset 0 -3px 0 #FFD37A }
+
+/* ---- status card: how the airport is running -------------------------------- */
+#sgAp .ap-health{ border-radius:12px; padding:10px 12px 8px; margin:0 0 10px; background:rgba(46,204,113,.10);
+  box-shadow:inset 3px 0 0 #2ECC71 }
+#sgAp .ap-health.ap-minor{ background:rgba(255,211,122,.12); box-shadow:inset 3px 0 0 #FFD37A }
+#sgAp .ap-health.ap-bad{ background:rgba(255,140,60,.14); box-shadow:inset 3px 0 0 #FF8C3C }
+#sgAp .ap-health.ap-stop{ background:rgba(255,61,119,.16); box-shadow:inset 3px 0 0 #FF3D77 }
+#sgAp .ap-pill{ display:inline-block; font-weight:800; font-size:17px; letter-spacing:.01em; color:#2ECC71 }
+#sgAp .ap-minor .ap-pill{ color:#FFD37A } #sgAp .ap-bad .ap-pill{ color:#FF8C3C } #sgAp .ap-stop .ap-pill{ color:#FF6A97 }
+#sgAp .ap-why{ display:block; font-size:12px; color:#C9CFD8; margin:2px 0 8px; line-height:1.35 }
+#sgAp .ap-stats{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px 12px; margin:0 }
+#sgAp .ap-stats div{ min-width:0 }
+#sgAp .ap-stats dt{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#A8AFBA }
+#sgAp .ap-stats dd{ margin:0; font:600 13px/1.25 "IBM Plex Mono",ui-monospace,monospace; overflow-wrap:anywhere }
+
+/* ---- tabs ---------------------------------------------------------------------- */
+#sgAp .ap-tabs{ display:flex; gap:4px; margin:0 0 6px; padding:3px; border-radius:10px; background:rgba(255,255,255,.06) }
+#sgAp .ap-tabs button{ flex:1; border:0; border-radius:8px; padding:8px; cursor:pointer; background:none; color:#C9CFD8;
+  font-weight:700; font-size:13px; font-family:inherit }
+#sgAp .ap-tabs button[aria-selected="true"]{ background:#2F7BFF; color:#fff }
+
+/* ---- the Airport tab ---------------------------------------------------------- */
+#sgAp .ap-facts{ font-size:12px; color:#C9CFD8; margin:2px 0 8px }
+#sgAp .ap-rw{ width:100%; border-collapse:collapse; font:12px/1.3 "IBM Plex Mono",ui-monospace,monospace }
+#sgAp .ap-rw th{ text-align:left; font-weight:600; font-size:10px; line-height:1.2; letter-spacing:.08em; text-transform:uppercase; color:#A8AFBA; padding:4px 0 }
+#sgAp .ap-rw td{ padding:4px 0; border-top:1px solid rgba(255,255,255,.08) }
+#sgAp .ap-lounges{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px }
+#sgAp .ap-lounges span{ cursor:pointer; padding:6px 9px; border-radius:8px; background:rgba(183,140,255,.16);
+  box-shadow:inset 0 0 0 1px rgba(183,140,255,.5); font-size:12px; font-weight:600 }
+#sgAp .ap-lounges small{ font-weight:400; color:#C9CFD8 }
+#sgAp .ap-term{ border-top:1px solid rgba(255,255,255,.08) }
+#sgAp .ap-term > h4{ margin:0; padding:10px 0; font-size:14px; cursor:pointer; display:flex; justify-content:space-between; gap:8px; align-items:baseline }
+#sgAp .ap-term > h4::after{ content:"\25B8"; color:#A8AFBA } #sgAp .ap-term.open > h4::after{ content:"\25BE" }
+#sgAp .ap-term > h4 small{ font-weight:400; font-size:11px; color:#A8AFBA; margin-left:auto }
+#sgAp .ap-term > ol{ display:none; padding-bottom:8px } #sgAp .ap-term.open > ol{ display:block }
+#sgAp .ap-term li{ grid-template-columns:1fr auto }
+#sgAp .ap-term li .cs{ font-weight:600; font-size:13px; line-height:1.25; font-family:inherit }
+#sgAp .ap-term li.ap-lounge{ box-shadow:inset 3px 0 0 #B78CFF; padding-left:11px }
+#sgAp .ap-term li.ap-food{ box-shadow:inset 3px 0 0 #FF9F43; padding-left:11px }
+#sgAp .ap-term li.ap-shop{ box-shadow:inset 3px 0 0 #7FA7FF; padding-left:11px }
+#sgAp .ap-term li .open{ font:700 10px/1 "IBM Plex Mono",monospace; padding:3px 6px; border-radius:5px; text-transform:uppercase }
+#sgAp .ap-term li .open.yes{ background:rgba(46,204,113,.2); color:#5BE08F }
+#sgAp .ap-term li .open.no{ background:rgba(255,255,255,.08); color:#A8AFBA }
+#sgAp .ap-links{ list-style:none; margin:0; padding:0 }
+#sgAp .ap-links li{ display:block; cursor:default; padding:6px 0; margin:0 }
+#sgAp .ap-links li:hover{ background:none }
+#sgAp .ap-links a, #sgAp .ap-tsa{ font-weight:700; font-size:14px; color:#7FB2FF; text-decoration:none; display:block }
+#sgAp .ap-tsa{ color:#F7F8FA }
+#sgAp .ap-links li > span:last-child{ font-size:12px; color:#A8AFBA }

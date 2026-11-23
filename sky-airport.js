@@ -80,6 +80,8 @@
 
   /* ---- the layer ----------------------------------------------------------- */
   var el = null, map = null, base = null, rwyLayer = null, pathLayer = null, planeLayer = null, trailLayer = null;
+  var termLayer = null, poiLayer = null, info = null, tab = "traffic", wx = null, wxAt = 0;
+  var ops = { opened: 0, land: [], off: [], around: [] };   // timestamps of what this screen has seen happen
   var ap = null, poll = 0, raf = 0, planes = {}, landed = [], firstFix = true, lastOk = 0, focusHex = null;
 
   function build() {
@@ -96,12 +98,21 @@
         '<select class="ap-pick" aria-label="Choose an airport"></select>' +
       '</div>' +
       '<aside class="ap-side">' +
+        '<div class="ap-health"><span class="ap-pill">Checking…</span><span class="ap-why"></span>' +
+          '<dl class="ap-stats"></dl></div>' +
+        '<div class="ap-tabs" role="tablist">' +
+          '<button type="button" role="tab" data-tab="traffic" aria-selected="true">Traffic</button>' +
+          '<button type="button" role="tab" data-tab="info" aria-selected="false">Airport</button>' +
+        '</div>' +
+        '<div class="ap-pane ap-pane-traffic">' +
         '<div class="ap-status" role="status"></div>' +
         '<section class="ap-landed" hidden><h3>Just happened</h3><ol></ol></section>' +
         '<section class="ap-sec-arr"><h3>Arriving <span class="n"></span></h3><ol></ol><p class="ap-empty">Nothing on approach right now.</p></section>' +
         '<section class="ap-sec-dep"><h3>Departing <span class="n"></span></h3><ol></ol><p class="ap-empty">No departures climbing out right now.</p></section>' +
         '<p class="ap-gnd"></p>' +
         '<p class="ap-note">Runways are inferred from each plane\'s track and position. Positions glide between 8-second fixes.</p>' +
+        '</div>' +
+        '<div class="ap-pane ap-pane-info" hidden></div>' +
       '</aside>';
     document.body.appendChild(el);
     $(".ap-back", el).addEventListener("click", close);
@@ -109,6 +120,12 @@
     el.addEventListener("click", function (e) {
       var li = e.target.closest && e.target.closest("li[data-hex]");
       if (li) focus(li.getAttribute("data-hex"));
+      var tb = e.target.closest && e.target.closest(".ap-tabs button");
+      if (tb) setTab(tb.getAttribute("data-tab"));
+      var pl = e.target.closest && e.target.closest("li[data-at]");
+      if (pl) { var at = pl.getAttribute("data-at").split(","); map.setView([+at[0], +at[1]], Math.max(map.getZoom(), 17)); }
+      var th = e.target.closest && e.target.closest(".ap-term > h4");
+      if (th) th.parentNode.classList.toggle("open");
     });
     map = L.map("sgApMap", { zoomControl: false, attributionControl: true, fadeAnimation: false, worldCopyJump: true });
     L.control.zoom({ position: "bottomleft" }).addTo(map);
@@ -117,6 +134,8 @@
     try { base = TBBasemap.add(map, dark() ? "dark" : "color", { maxZoom: 19 }); } catch (e) {}
     rwyLayer = L.layerGroup().addTo(map);
     pathLayer = L.layerGroup().addTo(map);
+    termLayer = L.layerGroup().addTo(map);
+    poiLayer = L.layerGroup();
     trailLayer = L.layerGroup().addTo(map);
     planeLayer = L.layerGroup().addTo(map);
     map.on("zoomend", function () { el.classList.toggle("ap-far", map.getZoom() < 10); });
@@ -226,11 +245,25 @@
       if (!o) { o = planes[a.hex] = { p: p, fix: p, fixAt: now, shown: { lat: p.lat, lon: p.lon }, from: null, blendAt: now, trail: [] }; addMarker(o); }
       else {
         // a touchdown or a lift-off between two fixes
-        if (!firstFix && o.p.kind === "arr" && p.kind === "ground" && p.d < 3) note("landed", p, o.p.rwy);
-        if (!firstFix && o.p.ground && !p.ground && p.d < 4) note("took off", p, p.rwy);
+        if (!firstFix && o.p.kind === "arr" && p.kind === "ground" && p.d < 3) { note("landed", p, o.p.rwy); ops.land.push(Date.now()); }
+        if (!firstFix && o.p.ground && !p.ground && p.d < 4) { note("took off", p, p.rwy); ops.off.push(Date.now()); }
+        /* A go-around: low on approach (under 1,000 ft above the field, within
+           5 nm), then climbing hard without having touched down. */
+        if (!firstFix && o.lowAgl != null && o.lowAgl < 1000 && !p.ground && p.d < 5 && p.vr > 800 && p.agl - o.lowAgl > 400 && !o.wentAround) {
+          o.wentAround = true; note("went around", p, o.p.rwy); ops.around.push(Date.now());
+        }
         if (p.lat !== o.fix.lat || p.lon !== o.fix.lon) { o.from = o.shown; o.blendAt = now; o.fix = p; o.fixAt = now; }
         o.p = p;
       }
+      if (p.kind === "arr" && p.agl != null) o.lowAgl = o.lowAgl == null ? p.agl : Math.min(o.lowAgl, p.agl);
+      if (p.ground) { o.lowAgl = null; o.wentAround = false; }
+      /* Holding: 330 deg or more of turning in the last four minutes while
+         still well above the field. That is a racetrack, not a vector. */
+      o.trks = (o.trks || []).filter(function (x) { return Date.now() - x.t < 240000; });
+      o.trks.push({ t: Date.now(), trk: p.trk });
+      var turn = 0;
+      for (var i = 1; i < o.trks.length; i++) { var dd = o.trks[i].trk - o.trks[i - 1].trk; dd = ((dd + 540) % 360) - 180; turn += Math.abs(dd); }
+      p.holding = turn >= 330 && p.agl != null && p.agl > 2500 && p.d < 40;
       if (p.kind === "arr" || p.kind === "dep") {
         o.trail.push([p.lat, p.lon]); if (o.trail.length > 40) o.trail.shift();
       } else o.trail = [];
@@ -344,8 +377,196 @@
     if (off.length) txt.push("Departing " + off.slice(0, 2).join(" & "));
     $(".ap-rwy", el).textContent = txt.join(" · ");
     drawPath(land.slice(0, 2));
+    paintHealth(all, land[0]);
     status(all.length ? "" : "No aircraft within 30 nm of " + ap.iata + " right now.");
   }
+  /* ---- how the airport is running ------------------------------------------------
+     Like a flight-tracking app's airport status: the FAA's own word first
+     (ground stops, ground delay programs, closures, departure delays — the
+     same nasstatus.faa.gov feed the deploy publishes as faa-delays.json),
+     then what this screen can see for itself. */
+  function faaHere() {
+    try { return (typeof faaFor === "function" ? faaFor(ap.iata) : []) || []; } catch (e) { return []; }
+  }
+  function perHour(list, now) {
+    var win = Math.min(60, Math.max(1, (now - ops.opened) / 60000));
+    var n = list.filter(function (t) { return now - t < 3600000; }).length;
+    return { n: n, min: Math.round(win), rate: win >= 10 ? Math.round(n * 60 / win) : null };
+  }
+  function components(rwyId) {
+    if (!wx || wx.wspd == null || !rwyId) return null;
+    var h = null;
+    ap.rwy.forEach(function (r) { if (r.le === rwyId) h = r.leH; if (r.he === rwyId) h = r.heH; });
+    if (typeof h !== "number") return null;
+    var a = (wx.wdir - h) * R;
+    return { head: Math.round(wx.wspd * Math.cos(a)), cross: Math.round(Math.abs(wx.wspd * Math.sin(a))), side: Math.sin(a) > 0 ? "R" : "L" };
+  }
+  function paintHealth(all, rwyInUse) {
+    var now = Date.now(), faa = faaHere();
+    var holding = all.filter(function (p) { return p.holding; });
+    var around = ops.around.filter(function (t) { return now - t < 1800000; }).length;
+    var lvl = "ok", label = "Normal", why = "No FAA delay programs. Traffic is moving.";
+    var worst = null;
+    faa.forEach(function (e) {
+      var k = (e.kind || "") + " " + (e.text || e.label || "");
+      var sev = /ground stop|closed|closure/i.test(k) ? 3 : (e.severity === "major" || /ground delay|gdp/i.test(k)) ? 2 : 1;
+      if (!worst || sev > worst.sev) worst = { sev: sev, e: e };
+    });
+    if (worst) {
+      lvl = worst.sev === 3 ? "stop" : worst.sev === 2 ? "bad" : "minor";
+      label = worst.sev === 3 ? (/closed|closure/i.test(worst.e.kind + worst.e.text) ? "Closed" : "Ground stop") : worst.sev === 2 ? "Delays" : "Minor delays";
+      why = [worst.e.text || worst.e.label, worst.e.reason].filter(Boolean).join(" \u2014 ");
+    } else if (holding.length >= 3) {
+      lvl = "minor"; label = "Holding"; why = holding.length + " planes are circling in holding patterns \u2014 often the first sign of a delay.";
+    } else if (around >= 2) {
+      lvl = "minor"; label = "Go-arounds"; why = around + " go-arounds in the last 30 minutes.";
+    }
+    var H = $(".ap-health", el);
+    H.className = "ap-health ap-" + lvl;
+    $(".ap-pill", H).textContent = label;
+    $(".ap-why", H).textContent = why;
+    var L1 = perHour(ops.land, now), T1 = perHour(ops.off, now);
+    var stats = [];
+    stats.push(["Landings", L1.rate != null ? L1.rate + "/hr" : L1.n + " in " + L1.min + " min"]);
+    stats.push(["Take-offs", T1.rate != null ? T1.rate + "/hr" : T1.n + " in " + T1.min + " min"]);
+    stats.push(["On approach", String(all.filter(function (p) { return p.kind === "arr"; }).length)]);
+    stats.push(["Holding", String(holding.length)]);
+    if (around) stats.push(["Go-arounds", around + " (30 min)"]);
+    // spacing between arrivals lined up on the same runway, nearest first
+    var lined = all.filter(function (p) { return p.kind === "arr" && p.rwy === rwyInUse; }).sort(function (a, b) { return a.d - b.d; });
+    if (lined.length >= 2) {
+      var gaps = []; for (var i = 1; i < lined.length; i++) gaps.push(lined[i].d - lined[i - 1].d);
+      stats.push(["Spacing", (gaps.reduce(function (a, b) { return a + b; }, 0) / gaps.length).toFixed(1) + " nm"]);
+    }
+    if (wx && wx.wspd != null) {
+      var w = (wx.wspd < 3 ? "calm" : ("00" + wx.wdir).slice(-3) + "\u00b0 " + wx.wspd + " kt" + (wx.wgst && wx.wgst > wx.wspd + 4 ? " G" + wx.wgst : ""));
+      stats.push(["Wind", w]);
+      var c = wx.wspd >= 3 ? components(rwyInUse) : null;
+      if (c) stats.push(["On " + rwyInUse, (c.head >= 0 ? c.head + " kt head" : -c.head + " kt TAIL") + ", " + c.cross + " kt cross " + c.side]);
+      if (wx.visMi != null) stats.push(["Visibility", wx.visMi >= 10 ? "10+ mi" : wx.visMi.toFixed(1) + " mi"]);
+    }
+    $(".ap-stats", H).innerHTML = stats.map(function (x) { return "<div><dt>" + esc(x[0]) + "</dt><dd>" + esc(x[1]) + "</dd></div>"; }).join("");
+  }
+  function refreshWx() {
+    if (!ap || Date.now() - wxAt < 600000) return;
+    wxAt = Date.now();
+    var want = ap;
+    try {
+      if (typeof lookupDestWx === "function") lookupDestWx({ lat: ap.lat, lon: ap.lon }).then(function (v) { if (want === ap) wx = v; });
+      if (typeof refreshFaa === "function") refreshFaa();
+    } catch (e) {}
+  }
+
+  /* ---- the Airport tab: terminals, food, lounges, links ---------------------------- */
+  function setTab(t) {
+    tab = t;
+    [].forEach.call(el.querySelectorAll(".ap-tabs button"), function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-tab") === t)); });
+    $(".ap-pane-traffic", el).hidden = t !== "traffic";
+    $(".ap-pane-info", el).hidden = t !== "info";
+    if (t === "info") { if (!map.hasLayer(poiLayer)) poiLayer.addTo(map); loadInfo(); }
+    else if (map.hasLayer(poiLayer)) map.removeLayer(poiLayer);
+  }
+  /* "Open now" from OSM opening_hours, for the common forms only:
+     "24/7", "06:00-22:00", "Mo-Fr 05:00-19:00; Sa,Su 06:00-18:00". Anything
+     fancier shows the raw hours and no verdict, rather than a wrong one. */
+  var DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  function openNow(h) {
+    if (!h) return null;
+    if (/^\s*24\/7\s*$/.test(h)) return true;
+    var d = new Date(), day = d.getDay(), mins = d.getHours() * 60 + d.getMinutes(), verdict = null;
+    var rules = h.split(";");
+    for (var i = 0; i < rules.length; i++) {
+      var r = rules[i].trim(); if (!r) continue;
+      var m = r.match(/^((?:(?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?,?\s*)+)?\s*((?:\d\d:\d\d-\d\d:\d\d,?\s*)+|off|closed)$/);
+      if (!m) return null;
+      var applies = true;
+      if (m[1]) {
+        applies = false;
+        m[1].split(",").forEach(function (part) {
+          var ab = part.trim().split("-"), a = DAYS.indexOf(ab[0]), b = ab[1] ? DAYS.indexOf(ab[1]) : a;
+          if (a < 0 || b < 0) return;
+          for (var k = a; ; k = (k + 1) % 7) { if (k === day) applies = true; if (k === b) break; }
+        });
+      }
+      if (!applies) continue;
+      if (/off|closed/.test(m[2])) { verdict = false; continue; }
+      verdict = false;
+      m[2].split(",").forEach(function (span) {
+        var t = span.trim().match(/(\d\d):(\d\d)-(\d\d):(\d\d)/); if (!t) return;
+        var a = +t[1] * 60 + +t[2], b = +t[3] * 60 + +t[4];
+        if (b <= a ? (mins >= a || mins < b) : (mins >= a && mins < b)) verdict = true;
+      });
+    }
+    return verdict;
+  }
+  function loadInfo() {
+    if (!ap) return;
+    if (info && info.icao === ap.icao) return paintInfo();
+    var want = ap;
+    $(".ap-pane-info", el).innerHTML = '<p class="ap-empty">Loading terminals\u2026</p>';
+    fetch("airport-info/" + ap.icao + ".json?v=1").then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (d) { if (want === ap) { info = d; paintInfo(); } })
+      .catch(function () { if (want === ap) { info = { icao: ap.icao, terminals: [], none: true }; paintInfo(); } });
+  }
+  function drawTerminals() {
+    termLayer.clearLayers(); poiLayer.clearLayers();
+    if (!info || !info.terminals) return;
+    info.terminals.forEach(function (t) {
+      t.rings.forEach(function (ring) {
+        L.polygon(ring, { color: "#FFD37A", weight: 1.5, opacity: .8, fillColor: "#FFD37A", fillOpacity: .12, interactive: false }).addTo(termLayer);
+      });
+      t.places.forEach(function (p) {
+        L.circleMarker(p.at, { radius: p.k === "lounge" ? 6 : 4, weight: 1.5, color: "#fff",
+          fillColor: p.k === "lounge" ? "#B78CFF" : p.k === "food" ? "#FF9F43" : "#7FA7FF", fillOpacity: 1 })
+          .bindTooltip(esc(p.n) + (p.u ? " \u00b7 " + esc(p.u) : ""), { direction: "top" }).addTo(poiLayer);
+      });
+    });
+  }
+  function placeRow(p) {
+    var o = openNow(p.h);
+    var meta = [p.k === "shop" ? p.s : p.c, p.u ? "near " + p.u : "", o == null ? p.h : ""].filter(Boolean).join(" \u00b7 ");
+    return '<li data-at="' + p.at.join(",") + '" class="ap-' + p.k + '"><span class="cs">' + esc(p.n) + "</span>" +
+      (o == null ? "" : '<span class="open ' + (o ? "yes" : "no") + '">' + (o ? "open" : "closed") + "</span>") +
+      (meta ? '<span class="meta">' + esc(meta) + "</span>" : "") + "</li>";
+  }
+  function paintInfo() {
+    var P = $(".ap-pane-info", el), h = [];
+    drawTerminals();
+    var rw = ap.rwy.map(function (r) {
+      return "<tr><td>" + esc(r.le + "/" + r.he) + "</td><td>" + r.len.toLocaleString() + " ft</td><td>" +
+        (typeof r.leH === "number" ? Math.round(r.leH) + "\u00b0/" + Math.round(r.heH) + "\u00b0" : "") + "</td></tr>";
+    }).join("");
+    h.push('<section><h3>The field</h3><p class="ap-facts"><b>' + esc(ap.icao) + "</b> \u00b7 " + esc(ap.iata) + " \u00b7 elevation " + ap.elev.toLocaleString() + " ft</p>" +
+      '<table class="ap-rw"><thead><tr><th>Runway</th><th>Length</th><th>True hdg</th></tr></thead><tbody>' + rw + "</tbody></table></section>");
+    if (info && info.terminals && info.terminals.length) {
+      var c = info.counts || {};
+      h.push("<section><h3>Terminals</h3><p class=\"ap-facts\">" + info.terminals.length + " terminals \u00b7 " + (c.food || 0) + " places to eat & drink \u00b7 " + (c.lounges || 0) + " lounges \u00b7 " + (c.shops || 0) + " shops</p>");
+      var lg = [];
+      info.terminals.forEach(function (t) { t.places.forEach(function (p) { if (p.k === "lounge") lg.push({ p: p, t: t.name }); }); });
+      if (lg.length) h.push('<div class="ap-lounges">' + lg.map(function (x) { return '<span data-at="' + x.p.at.join(",") + '">' + esc(x.p.n) + " <small>" + esc(x.t) + "</small></span>"; }).join("") + "</div>");
+      info.terminals.forEach(function (t, i) {
+        var food = t.places.filter(function (p) { return p.k !== "shop"; }), shops = t.places.filter(function (p) { return p.k === "shop"; });
+        h.push('<div class="ap-term' + (i === 0 ? " open" : "") + '"><h4>' + esc(t.name) + " <small>" + (t.gates ? t.gates + " gates \u00b7 " : "") + food.length + " food & lounges \u00b7 " + shops.length + " shops</small></h4>" +
+          "<ol>" + food.map(placeRow).join("") + shops.map(placeRow).join("") + "</ol></div>");
+      });
+      h.push("</section>");
+    } else {
+      h.push('<section><h3>Terminals</h3><p class="ap-empty">' + (info && info.none ? "No terminal map for this airport yet." : "OpenStreetMap has no terminal outlines here.") + "</p></section>");
+    }
+    var yt = "https://www.youtube.com/results?search_query=" + encodeURIComponent(ap.name + " live webcam") + "&sp=EgJAAQ%253D%253D";
+    h.push('<section><h3>Links</h3><ul class="ap-links">' +
+      (info && info.website ? '<li><a target="_blank" rel="noopener" href="' + esc(info.website) + '">Airport website</a><span>security wait times, parking, maps</span></li>' : "") +
+      '<li><a target="_blank" rel="noopener" href="https://www.liveatc.net/search/?icao=' + esc(ap.icao) + '">Listen to ATC</a><span>LiveATC tower and approach feeds</span></li>' +
+      '<li><a target="_blank" rel="noopener" href="' + yt + '">Live webcams</a><span>live streams on YouTube</span></li>' +
+      (/^K/.test(ap.icao) ? '<li><span class="ap-tsa">TSA wait times</span><span>TSA has no public live feed; its MyTSA app shows crowd-reported waits, and many airports post theirs on their website.</span></li>' : "") +
+      "</ul></section>");
+    h.push('<p class="ap-note">Terminals and places: \u00a9 OpenStreetMap contributors' + (info && info.built ? ", as of " + esc(info.built) : "") + ". Hours are as mapped; check before you rely on them.</p>");
+    P.innerHTML = h.join("");
+    [].forEach.call(P.querySelectorAll(".ap-lounges span"), function (s) {
+      s.addEventListener("click", function () { var at = s.getAttribute("data-at").split(","); map.setView([+at[0], +at[1]], 17); });
+    });
+  }
+
   function focus(hex) {
     focusHex = focusHex === hex ? null : hex;
     var o = planes[hex];
@@ -366,6 +587,8 @@
     ap = a;
     Object.keys(planes).forEach(drop);
     landed = []; firstFix = true; focusHex = null;
+    ops = { opened: Date.now(), land: [], off: [], around: [] }; wx = null; wxAt = 0; info = null;
+    termLayer.clearLayers(); poiLayer.clearLayers();
     $(".ap-code", el).textContent = a.iata;
     $(".ap-name", el).textContent = a.name;
     $(".ap-rwy", el).textContent = "";
@@ -375,7 +598,10 @@
     map.invalidateSize();
     map.setView([a.lat, a.lon], 11, { animate: false });
     setUrl(a.icao);
-    clearInterval(poll); fetchOnce(); poll = setInterval(fetchOnce, 8000);
+    clearInterval(poll); fetchOnce(); refreshWx(); poll = setInterval(function () { fetchOnce(); refreshWx(); }, 8000);
+    // terminal outlines draw in either tab; the list fills when the tab opens
+    loadInfo();
+    if (tab === "info") setTab("info");
   }
   function open(code) {
     loadData().then(function () {
