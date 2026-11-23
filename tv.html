@@ -357,6 +357,8 @@ var VIEWS = [
   /* perCity:false — home.html reads the saved location, not a ?city=. Its
      transit is DC-area (WMATA, Ride On, MARC); weather, sky and lights work anywhere. */
   {icon:"HOME", name:"Home",  desc:"Smart display: when to leave, the room light, the weather", file:"home.html", perCity:false, sys:"#ff9f43"},
+  /* perCity:false — reads the saved location; the sky works anywhere, the track is WMATA. */
+  {icon:"PROJ", name:"Projector", desc:"The real sky overhead, thrown on a wall or ceiling", file:"projector.html", perCity:false, sys:"#7c9cff"},
   {icon:"TOUR", name:"Tour",  desc:"Every city's vehicles on one map",     file:"tour.html",       perCity:false, sys:"#3ad0c8"},
   {icon:"SPOT", name:"Spot",  desc:"Log what you see — phone app",         file:"spot.html",       perCity:false, sys:"#33d17a"},
   /* `action` rather than a file: a tile that does something instead of going

@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<meta name="theme-color" content="#000000">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Transit Project — Projector</title>
+<!--
+  projector.html — the sky above you, thrown onto the room.
+
+  A projector is not a screen. Black costs nothing (it is the absence of
+  light), so the page is black almost everywhere and only things that are
+  actually there are lit: stars, the moon, aircraft, trains. And it is aimed
+  at a surface, so the picture has to describe where the surface points.
+
+  Two surfaces:
+
+    CEILING   A planetarium dome. The zenith is the centre of the circle and
+              the horizon is its rim, drawn as seen FROM BELOW (east is left
+              of north, like a star chart held overhead). Turn "North" until
+              the N on the rim points at the room's real north and every
+              star, the moon and every aircraft is right where it is through
+              the roof. Next departures circle the rim.
+
+    WALL      A window. Say which way the wall faces and the page renders the
+              view through it in true perspective (90 degree lens): the
+              horizon, the stars and aircraft in that direction, a skyline,
+              and a track with the nearest Metro station's trains sliding in
+              to it in real time.
+
+  Projector controls (S or the gear): keystone corner-pin (drag the corners,
+  or 1-4 + arrows on a remote), mirror for rear / bounced projection,
+  brightness, constellation lines and labels. Everything persists in
+  localStorage under tb.proj.*.
+
+  Data (all optional — a missing source says so and steps aside):
+    Location   transitboard.loc (the boards' saved location), else Bethesda
+    Aircraft   the operator's own feed, tb.adsbUrl — never a default (see
+               adsbBase() in night.html for why)
+    Metro      WMATA live predictions (transitboard.wmataKey / config.js)
+    Weather    Open-Meteo, no key
+    Sky        computed here: ~110 bright stars, moon + phase, sun for twilight
+
+  URL:  projector.html?surface=ceiling|wall&face=180&demo=1
+        demo=1 fills an empty sky with sample aircraft and trains, labelled
+        as a demo on screen.
+-->
+<script src="polyfills.js?v=1"></script>
+<script src="feed-backoff.js?v=1"></script>
+<script src="paywall.js"></script>
+<script src="license.js?v=3" defer></script>
+<script src="kiosk-reload.js?v=1" defer></script>
+<script src="keepalive.js?v=2" defer></script>
+<script src="gate.js?v=3" defer></script>
+<script src="wake.js?v=1"></script>
+<script src="config.js?v=2"></script>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#cfd6ff;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
+  body.idle{cursor:none}
+  /* keystone wrapper -> mirror -> canvas. The wrapper gets the corner-pin
+     matrix3d, the inner one only ever flips, so the two never fight. */
+  #ks{position:fixed;left:0;top:0;width:100vw;height:100vh;transform-origin:0 0}
+  #flip{position:absolute;inset:0}
+  #sky{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #ks.editing{outline:2px dashed rgba(124,156,255,.6);outline-offset:-2px}
+
+  .pj-handle{position:fixed;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;
+    border:2px solid #7c9cff;background:rgba(124,156,255,.18);z-index:20;touch-action:none;cursor:grab;
+    display:none;align-items:center;justify-content:center;font:700 13px system-ui;color:#fff}
+  .pj-handle.on{background:#7c9cff;color:#000}
+  body.ks-edit .pj-handle{display:flex}
+
+  #gear{position:fixed;right:14px;top:14px;z-index:15;width:44px;height:44px;border-radius:50%;
+    border:1px solid rgba(207,214,255,.25);background:rgba(10,12,24,.7);color:#cfd6ff;font-size:22px;
+    cursor:pointer;opacity:0;transition:opacity .4s}
+  body:not(.idle) #gear{opacity:1}
+
+  #panel{position:fixed;right:14px;top:68px;z-index:16;width:min(340px,calc(100vw - 28px));max-height:calc(100vh - 90px);
+    overflow:auto;background:rgba(8,10,22,.94);border:1px solid rgba(124,156,255,.3);border-radius:14px;
+    padding:14px 16px;font-size:14px;display:none;box-shadow:0 10px 40px #000}
+  #panel.open{display:block}
+  #panel h2{margin:0 0 10px;font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:#7c9cff}
+  #panel .row{margin:12px 0}
+  #panel .lab{font-size:12px;color:#8c93b8;margin-bottom:6px;display:flex;justify-content:space-between}
+  #panel .seg{display:flex;flex-wrap:wrap;gap:6px}
+  #panel button.b{flex:1 1 auto;min-width:44px;padding:8px 10px;border-radius:9px;border:1px solid rgba(207,214,255,.18);
+    background:rgba(255,255,255,.04);color:#cfd6ff;font:600 13px system-ui;cursor:pointer}
+  #panel button.b.on{background:#7c9cff;border-color:#7c9cff;color:#05060c}
+  #panel button.b:focus-visible{outline:2px solid #fff}
+  #panel input[type=range]{width:100%}
+  #panel .note{font-size:12px;color:#8c93b8;line-height:1.45}
+  #panel .note b{color:#cfd6ff}
+  #panel kbd{font:600 11px ui-monospace,monospace;border:1px solid #444a6a;border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+<div id="ks"><div id="flip"><canvas id="sky"></canvas></div></div>
+<button id="gear" aria-label="Projector settings" title="Settings (S)">⚙</button>
+
+<div id="panel" role="dialog" aria-label="Projector settings">
+  <h2>Projector</h2>
+  <div class="row"><div class="lab">Pointed at</div>
+    <div class="seg" id="surfSeg">
+      <button class="b" data-surf="ceiling">Ceiling</button>
+      <button class="b" data-surf="wall">Wall</button>
+    </div></div>
+  <div class="row" id="faceRow"><div class="lab"><span>The wall faces</span><span id="faceVal"></span></div>
+    <div class="seg" id="faceSeg"></div>
+    <input type="range" id="face" min="0" max="359" step="1" aria-label="Wall direction in degrees"></div>
+  <div class="row" id="northRow"><div class="lab"><span>Turn until N points at real north</span><span id="northVal"></span></div>
+    <input type="range" id="north" min="0" max="359" step="1" aria-label="Ceiling rotation in degrees"></div>
+  <div class="row"><div class="lab"><span>Brightness</span><span id="brightVal"></span></div>
+    <input type="range" id="bright" min="25" max="100" step="5" aria-label="Brightness"></div>
+  <div class="row"><div class="seg">
+      <button class="b" id="mirrorBtn" title="M">Mirror</button>
+      <button class="b" id="linesBtn">Constellations</button>
+      <button class="b" id="labelsBtn">Labels</button>
+    </div></div>
+  <div class="row"><div class="lab">Keystone</div>
+    <div class="seg">
+      <button class="b" id="ksBtn" title="K">Adjust corners</button>
+      <button class="b" id="ksReset">Reset</button>
+      <button class="b" id="fsBtn" title="F">Full screen</button>
+    </div></div>
+  <div class="row note" id="status"></div>
+  <div class="row note">
+    <kbd>S</kbd> settings · <kbd>C</kbd>/<kbd>W</kbd> ceiling/wall · <kbd>←</kbd><kbd>→</kbd> turn ·
+    <kbd>M</kbd> mirror · <kbd>K</kbd> keystone (<kbd>1</kbd>–<kbd>4</kbd> pick a corner, arrows nudge) · <kbd>F</kbd> full screen
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ======================================================================= */
+const $ = s => document.querySelector(s);
+const lsGet = (k,d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(e){ return d; } };
+const lsSet = (k,v) => { try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} };
+const lsJSON = (k,d) => { try{ const v=JSON.parse(localStorage.getItem(k)||"null"); return v==null?d:v; }catch(e){ return d; } };
+const Q = new URLSearchParams(location.search);
+const DEMO = Q.get("demo")==="1";
+
+const DEFAULT_LOC = { lat:38.9582, lon:-77.1080, label:"Bethesda, MD" };   // dc.html's default
+const loc = (()=>{ const s=lsJSON("transitboard.loc",null); return s&&s.lat ? s : DEFAULT_LOC; })();
+const wmataKey = lsGet("transitboard.wmataKey","") || ((window.TB_CONFIG||{}).wmataKey||"");
+const adsbUrl = (lsGet("tb.adsbUrl","")||"").trim().replace(/\/+$/,"");
+
+const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
+const RAIL_NAMES  = { RD:"Red", BL:"Blue", YL:"Yellow", OR:"Orange", GR:"Green", SV:"Silver" };
+
+/* ---- settings ----------------------------------------------------------- */
+const S = {
+  surface: (Q.get("surface")||lsGet("tb.proj.surface","ceiling"))==="wall" ? "wall" : "ceiling",
+  face:  +((Q.get("face")!=null ? Q.get("face") : lsGet("tb.proj.face","180"))) % 360,
+  north: +lsGet("tb.proj.north","0") % 360,
+  bright:+lsGet("tb.proj.bright","85"),
+  mirror: lsGet("tb.proj.mirror","0")==="1",
+  lines:  lsGet("tb.proj.lines","1")==="1",
+  labels: lsGet("tb.proj.labels","1")==="1",
+  ks:     lsJSON("tb.proj.keystone", null)      // [[fx,fy] x4] fractions of the viewport
+};
+function save(){
+  lsSet("tb.proj.surface", S.surface); lsSet("tb.proj.face", String(S.face));
+  lsSet("tb.proj.north", String(S.north)); lsSet("tb.proj.bright", String(S.bright));
+  lsSet("tb.proj.mirror", S.mirror?"1":"0"); lsSet("tb.proj.lines", S.lines?"1":"0");
+  lsSet("tb.proj.labels", S.labels?"1":"0");
+  lsSet("tb.proj.keystone", S.ks ? JSON.stringify(S.ks) : null);
+}
+
+/* ---- astronomy ----------------------------------------------------------
+   Low-precision, plenty for a picture: positions good to well under a
+   degree. Precession since J2000 (~0.35 degrees) is ignored. */
+const D2R=Math.PI/180, R2D=180/Math.PI;
+const wrap360=a=>((a%360)+360)%360;
+const wrap180=a=>{ a=wrap360(a); return a>180?a-360:a; };
+const jdays = t => t/864e5 + 2440587.5 - 2451545.0;          // days since J2000
+function lstDeg(t){ return wrap360(280.46061837 + 360.98564736629*jdays(t) + loc.lon); }
+function raDecToAltAz(raDeg, decDeg, lst){
+  const ha=(lst-raDeg)*D2R, dec=decDeg*D2R, lat=loc.lat*D2R;
+  const sa=Math.sin(dec)*Math.sin(lat)+Math.cos(dec)*Math.cos(lat)*Math.cos(ha);
+  const alt=Math.asin(sa);
+  const az=Math.atan2(-Math.sin(ha)*Math.cos(dec), Math.cos(lat)*Math.sin(dec)-Math.sin(lat)*Math.cos(dec)*Math.cos(ha));
+  return { alt:alt*R2D, az:wrap360(az*R2D) };
+}
+function eclToEq(lonDeg, latDeg){
+  const e=23.439*D2R, l=lonDeg*D2R, b=latDeg*D2R;
+  const ra=Math.atan2(Math.sin(l)*Math.cos(e)-Math.tan(b)*Math.sin(e), Math.cos(l));
+  const dec=Math.asin(Math.sin(b)*Math.cos(e)+Math.cos(b)*Math.sin(e)*Math.sin(l));
+  return { ra:wrap360(ra*R2D), dec:dec*R2D };
+}
+function sunEcl(t){
+  const d=jdays(t), g=(357.529+0.98560028*d)*D2R, q=280.459+0.98564736*d;
+  return wrap360(q+1.915*Math.sin(g)+0.020*Math.sin(2*g));
+}
+function moonEcl(t){
+  const d=jdays(t);
+  const L=218.316+13.176396*d, M=(134.963+13.064993*d)*D2R, F=(93.272+13.229350*d)*D2R;
+  const D=(297.850+12.190749*d)*D2R;
+  return { lon:wrap360(L+6.289*Math.sin(M)+1.274*Math.sin(2*D-M)+0.658*Math.sin(2*D)), lat:5.128*Math.sin(F) };
+}
+
+/* ~110 bright stars: [name, RA hours, Dec deg, magnitude]. Named ones are the
+   ones worth a label; "" keeps a star in the sky without one. */
+const STARS=[
+ ["Sirius",6.752,-16.716,-1.46],["Canopus",6.399,-52.696,-0.74],["Rigil Kent",14.660,-60.834,-0.27],["Arcturus",14.261,19.182,-0.05],
+ ["Vega",18.616,38.784,0.03],["Capella",5.278,45.998,0.08],["Rigel",5.242,-8.202,0.13],["Procyon",7.655,5.225,0.34],
+ ["Achernar",1.629,-57.237,0.46],["Betelgeuse",5.919,7.407,0.5],["Hadar",14.064,-60.373,0.61],["Altair",19.846,8.868,0.77],
+ ["Acrux",12.443,-63.099,0.77],["Aldebaran",4.599,16.509,0.86],["Antares",16.490,-26.432,0.96],["Spica",13.420,-11.161,0.97],
+ ["Pollux",7.755,28.026,1.14],["Fomalhaut",22.961,-29.622,1.16],["Deneb",20.690,45.280,1.25],["Mimosa",12.795,-59.689,1.25],
+ ["Regulus",10.139,11.967,1.35],["Adhara",6.977,-28.972,1.5],["Castor",7.577,31.888,1.58],["Shaula",17.560,-37.104,1.62],
+ ["Bellatrix",5.419,6.350,1.64],["Elnath",5.438,28.608,1.65],["Miaplacidus",9.220,-69.717,1.67],["Alnilam",5.604,-1.202,1.69],
+ ["Alnair",22.137,-46.961,1.74],["Alnitak",5.679,-1.943,1.74],["Alioth",12.900,55.960,1.77],["Dubhe",11.062,61.751,1.79],
+ ["Mirfak",3.405,49.861,1.79],["Wezen",7.140,-26.393,1.83],["Regor",8.159,-47.337,1.83],["Kaus Australis",18.403,-34.385,1.85],
+ ["Avior",8.375,-59.509,1.86],["Alkaid",13.792,49.313,1.86],["Sargas",17.622,-42.998,1.86],["Menkalinan",5.992,44.948,1.9],
+ ["Alhena",6.628,16.399,1.93],["Peacock",20.427,-56.735,1.94],["Polaris",2.530,89.264,1.98],["Mirzam",6.378,-17.956,1.98],
+ ["Alphard",9.460,-8.659,1.98],["Hamal",2.120,23.462,2.0],["Algieba",10.333,19.842,2.08],["Diphda",0.727,-17.987,2.04],
+ ["Nunki",18.921,-26.297,2.05],["Mirach",1.162,35.621,2.05],["Alpheratz",0.140,29.091,2.06],["Saiph",5.796,-9.670,2.07],
+ ["Kochab",14.845,74.156,2.08],["Rasalhague",17.582,12.560,2.08],["Algol",3.136,40.956,2.1],["Almach",2.065,42.330,2.1],
+ ["Denebola",11.818,14.572,2.13],["Suhail",9.133,-43.433,2.21],["Sadr",20.370,40.257,2.23],["Mizar",13.399,54.925,2.23],
+ ["Mintaka",5.533,-0.299,2.23],["Alphecca",15.578,26.715,2.23],["Schedar",0.675,56.537,2.24],["Eltanin",17.943,51.489,2.24],
+ ["Caph",0.153,59.150,2.28],["Dschubba",16.006,-22.622,2.29],["Merak",11.031,56.382,2.37],["Izar",14.750,27.074,2.37],
+ ["Enif",21.736,9.875,2.39],["Scheat",23.063,28.083,2.42],["Sabik",17.173,-15.725,2.43],["Phecda",11.897,53.695,2.44],
+ ["Aludra",7.402,-29.303,2.45],["Alderamin",21.310,62.586,2.45],["Navi",0.945,60.717,2.47],["Gienah",20.770,33.970,2.48],
+ ["Markab",23.079,15.205,2.49],["Menkar",3.038,4.090,2.53],["Zosma",11.235,20.524,2.56],["Acrab",16.091,-19.806,2.62],
+ ["Unukalhai",15.738,6.426,2.63],["Ruchbah",1.430,60.235,2.68],["Muphrid",13.911,18.398,2.68],["Porrima",12.694,-1.449,2.74],
+ ["Rasalgethi",17.244,14.390,2.78],["Algenib",0.221,15.184,2.83],["Vindemiatrix",13.036,10.959,2.83],["Alcyone",3.791,24.105,2.87],
+ ["Fawaris",19.750,45.131,2.87],["Cor Caroli",12.934,38.318,2.9],["Albireo",19.512,27.960,3.08],["Sulafat",18.982,32.690,3.24],
+ ["Megrez",12.257,57.033,3.31],["Segin",1.907,63.670,3.37],["Sheliak",18.835,33.363,3.52],["Tejat",6.383,22.514,2.87],
+ ["Wasat",7.335,21.982,3.53],["Mebsuta",6.732,25.131,3.06],["Alzirr",6.755,12.896,3.36],["Ain",4.477,19.181,3.53],
+ ["Ras Elased",9.764,23.774,2.98],["Chertan",11.237,15.430,3.33],["Seginus",14.535,38.308,3.03],["Nekkar",15.032,40.390,3.5],
+ ["Kornephoros",16.504,21.490,2.78],["Rastaban",17.507,52.301,2.79],["Matar",22.717,30.221,2.94],["Homam",22.691,10.831,3.4],
+ ["Tarazed",19.771,10.613,2.72],["Alshain",19.922,6.407,3.71],["Ascella",19.043,-29.880,2.6],["Kaus Media",18.350,-29.828,2.7],
+ ["Kaus Borealis",18.466,-25.422,2.81],["Gacrux",12.519,-57.113,1.63],["Alnasl",18.097,-30.424,2.98],["Lesath",17.513,-37.296,2.7]
+];
+const STAR_IDX={}; STARS.forEach((s,i)=>STAR_IDX[s[0]]=i);
+const CONST=[
+ ["Orion",[["Betelgeuse","Bellatrix"],["Bellatrix","Mintaka"],["Mintaka","Alnilam"],["Alnilam","Alnitak"],["Betelgeuse","Alnitak"],["Alnitak","Saiph"],["Mintaka","Rigel"],["Rigel","Saiph"]]],
+ ["Big Dipper",[["Dubhe","Merak"],["Merak","Phecda"],["Phecda","Megrez"],["Megrez","Dubhe"],["Megrez","Alioth"],["Alioth","Mizar"],["Mizar","Alkaid"]]],
+ ["Cassiopeia",[["Caph","Schedar"],["Schedar","Navi"],["Navi","Ruchbah"],["Ruchbah","Segin"]]],
+ ["Cygnus",[["Deneb","Sadr"],["Sadr","Albireo"],["Gienah","Sadr"],["Sadr","Fawaris"]]],
+ ["Lyra",[["Vega","Sheliak"],["Sheliak","Sulafat"],["Sulafat","Vega"]]],
+ ["Pegasus",[["Markab","Scheat"],["Scheat","Alpheratz"],["Alpheratz","Algenib"],["Algenib","Markab"],["Markab","Homam"],["Homam","Enif"],["Scheat","Matar"]]],
+ ["Andromeda",[["Alpheratz","Mirach"],["Mirach","Almach"]]],
+ ["Leo",[["Regulus","Algieba"],["Algieba","Ras Elased"],["Algieba","Zosma"],["Zosma","Denebola"],["Denebola","Chertan"],["Chertan","Regulus"]]],
+ ["Gemini",[["Castor","Mebsuta"],["Mebsuta","Tejat"],["Pollux","Wasat"],["Wasat","Alhena"],["Castor","Pollux"],["Wasat","Alzirr"]]],
+ ["Taurus",[["Aldebaran","Ain"],["Ain","Elnath"]]],
+ ["Boötes",[["Arcturus","Izar"],["Izar","Nekkar"],["Nekkar","Seginus"],["Seginus","Arcturus"],["Arcturus","Muphrid"]]],
+ ["Scorpius",[["Acrab","Dschubba"],["Dschubba","Antares"],["Antares","Sargas"],["Sargas","Shaula"],["Shaula","Lesath"]]],
+ ["Sagittarius",[["Kaus Australis","Kaus Media"],["Kaus Media","Kaus Borealis"],["Kaus Borealis","Nunki"],["Nunki","Ascella"],["Ascella","Kaus Australis"],["Kaus Media","Alnasl"],["Alnasl","Kaus Australis"]]],
+ ["Aquila",[["Tarazed","Altair"],["Altair","Alshain"]]],
+ ["Hercules",[["Kornephoros","Rasalgethi"]]],
+ ["Draco",[["Eltanin","Rastaban"]]],
+ ["Crux",[["Acrux","Gacrux"],["Mimosa","Acrux"]]],
+ ["Summer Triangle",[["Vega","Deneb"],["Deneb","Altair"],["Altair","Vega"]], true]
+];
+
+/* ---- canvas + projection ------------------------------------------------ */
+const cv=$("#sky"), cx=cv.getContext("2d");
+let W=0, H=0, DPR=1;
+function resize(){
+  DPR=Math.min(2, window.devicePixelRatio||1);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  buildSkyline(); applyKeystone(); placeHandles();
+}
+/* Geometry of the current surface, recomputed each frame (it is cheap). */
+let G={};
+function geom(){
+  if(S.surface==="ceiling"){
+    const R=Math.min(W,H)/2*0.97;
+    G={ kind:"ceiling", cx:W/2, cy:H/2, R, Rs:R*0.885, fs:Math.max(11,R*0.042) };
+  }else{
+    const hfov=90*D2R;
+    G={ kind:"wall", focal:(W/2)/Math.tan(hfov/2), hy:H*0.70, fs:Math.max(11,Math.min(W,H)*0.024) };
+  }
+}
+/* az/alt (degrees) -> screen point, or null when it is not on this surface. */
+function proj(az, alt){
+  if(G.kind==="ceiling"){
+    if(alt < -1) return null;
+    const r=(90-alt)/90*G.Rs, th=(az+S.north)*D2R;
+    // Seen from below: north up puts east on the LEFT.
+    return { x:G.cx - Math.sin(th)*r, y:G.cy - Math.cos(th)*r };
+  }
+  const daz=wrap180(az-S.face)*D2R, el=alt*D2R;
+  const f=Math.cos(el)*Math.cos(daz);
+  if(f<0.08) return null;
+  const rt=Math.cos(el)*Math.sin(daz), up=Math.sin(el);
+  return { x:W/2 + rt/f*G.focal, y:G.hy - up/f*G.focal };
+}
+const onScreen=p=>p && p.x>-60 && p.x<W+60 && p.y>-60 && p.y<H+60;
+
+/* ---- live data ---------------------------------------------------------- */
+async function getJSON(url, ms=12000){
+  const c=new AbortController(), t=setTimeout(()=>c.abort(), ms);
+  try{ const r=await fetch(url,{signal:c.signal}); if(!r.ok) throw new Error("HTTP "+r.status); return await r.json(); }
+  finally{ clearTimeout(t); }
+}
+const src={};    // name -> {state, note}
+function setSrc(k,state,note){ src[k]={state,note}; renderStatus(); }
+
+function hav(a,b){
+  const R=6371000, t=x=>x*D2R, dLa=t(b.lat-a.lat), dLo=t(b.lon-a.lon);
+  const h=Math.sin(dLa/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function bearingDeg(a,b){
+  const y=Math.sin((b.lon-a.lon)*D2R)*Math.cos(b.lat*D2R);
+  const x=Math.cos(a.lat*D2R)*Math.sin(b.lat*D2R)-Math.sin(a.lat*D2R)*Math.cos(b.lat*D2R)*Math.cos((b.lon-a.lon)*D2R);
+  return wrap360(Math.atan2(y,x)*R2D);
+}
+function moveLL(p, brgDeg, m){
+  const R=6371000, d=m/R, b=brgDeg*D2R, la=p.lat*D2R, lo=p.lon*D2R;
+  const la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(b));
+  const lo2=lo+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la), Math.cos(d)-Math.sin(la)*Math.sin(la2));
+  return { lat:la2*R2D, lon:lo2*R2D };
+}
+/* Where an aircraft appears from here: azimuth, elevation (with the earth's
+   curvature taken off), and slant distance. */
+function lookAngles(p){
+  const d=hav(loc,p), hm=(p.alt||0)*0.3048;
+  const drop=d*d/(2*6371000);
+  return { az:bearingDeg(loc,p), alt:Math.atan2(hm-drop, Math.max(1,d))*R2D, d };
+}
+
+/* Aircraft. Each poll is a fix; between polls every plane flies on along its
+   track at its ground speed, so motion is continuous instead of a 10 s hop. */
+const planes=new Map();     // hex -> {call,type,alt,gs,trk,lat,lon,at,trail:[{lat,lon,alt}],color,seen}
+let brands=null;
+async function loadBrands(){
+  if(brands) return brands;
+  const c=lsJSON("tb.home.brands",null);         // home.html caches night.html's airline colours here
+  if(c && Date.now()-c.t<864e5){ brands=c.b; return brands; }
+  try{
+    const txt=await (await fetch("night.html")).text(), i=txt.indexOf("const AIRLINE_BRAND={");
+    const block=i<0?"":txt.slice(i, txt.indexOf("};",i)), b={};
+    block.replace(/"?([A-Z0-9]{2,3})"?\s*:\s*"(#[0-9A-Fa-f]{6})"/g,(m,k,v)=>{ b[k]=v; return m; });
+    brands=b; lsSet("tb.home.brands", JSON.stringify({t:Date.now(), b}));
+  }catch(e){ brands={}; }
+  return brands;
+}
+function brandOf(call){ const k=String(call||"").trim().toUpperCase().slice(0,3).replace(/[^A-Z0-9]/g,""); return (brands&&brands[k])||""; }
+
+function ingest(list, now){
+  const seen=new Set();
+  list.forEach(a=>{
+    if(a.alt_baro==="ground" || typeof a.lat!=="number") return;
+    const hex=a.hex||a.flight; seen.add(hex);
+    let p=planes.get(hex);
+    if(!p){ p={trail:[]}; planes.set(hex,p); }
+    p.call=(a.flight||"").trim()||a.r||hex; p.type=a.t||""; p.desc=a.desc||"";
+    p.alt=typeof a.alt_baro==="number"?a.alt_baro:(a.alt_geom||p.alt||0);
+    p.gs=a.gs||0; p.trk=a.track!=null?a.track:(a.true_heading||0);
+    p.lat=a.lat; p.lon=a.lon; p.at=now; p.color=brandOf(p.call);
+  });
+  for(const [k,p] of planes) if(!seen.has(k) && now-p.at>30000) planes.delete(k);
+}
+function planeNow(p, now){
+  const dt=Math.min(60, (now-p.at)/1000);
+  const pos=moveLL(p, p.trk, p.gs*0.514444*dt);
+  return { lat:pos.lat, lon:pos.lon, alt:p.alt };
+}
+async function refreshPlanes(){
+  if(DEMO && !adsbUrl){ demoPlanes(); setSrc("Aircraft","demo","Sample aircraft (demo)"); return; }
+  if(!adsbUrl){ setSrc("Aircraft","off","No aircraft feed set up — add one in the Sky view's settings (AIRCRAFT-FEED.md)"); return; }
+  try{
+    await loadBrands();
+    const j=await getJSON(`${adsbUrl}/v2/point/${loc.lat.toFixed(4)}/${loc.lon.toFixed(4)}/35`);
+    ingest(j.ac||[], Date.now());
+    setSrc("Aircraft","ok",`${planes.size} aircraft within 35 nm`);
+  }catch(e){ setSrc("Aircraft","bad","Aircraft feed not answering"); }
+}
+let demoSeeded=false;
+function demoPlanes(){
+  const now=Date.now();
+  if(!demoSeeded){
+    demoSeeded=true;
+    const D=[["UAL1432","B739",34000,460,62,14,250],["AAL2210","A321",28000,430,231,9,40],["DAL881","A320",11000,290,195,6,330],
+             ["SWA3107","B38M",5200,210,152,4,10],["JBU622","A20N",37000,470,300,22,120],["FDX1204","B763",19000,380,88,16,280],
+             ["N512CS","C172",2500,105,20,2,180]];
+    D.forEach((d,i)=>{
+      const start=moveLL(loc, d[6], d[5]*1852);
+      planes.set("demo"+i,{call:d[0],type:d[1],alt:d[2],gs:d[3],trk:d[4],lat:start.lat,lon:start.lon,at:now,trail:[],color:""});
+    });
+    loadBrands().then(()=>planes.forEach(p=>p.color=brandOf(p.call)));
+    return;
+  }
+  // re-fix each demo plane where it has flown to; loop it back once it leaves
+  planes.forEach(p=>{
+    const n=planeNow(p,now); p.lat=n.lat; p.lon=n.lon; p.at=now;
+    if(hav(loc,p)>30*1852){ const s=moveLL(loc, wrap360(p.trk+180), 26*1852); p.lat=s.lat; p.lon=s.lon; p.trail=[]; }
+  });
+}
+
+/* Metro: nearest station(s), live predictions. */
+let stations=null, trains=[];   // trains: {line,dest,min,at,group,stop}
+async function nearStations(){
+  if(stations) return stations;
+  let c=lsJSON("tb.home.wmataStations",null);      // shared with home.html
+  if(!c || Date.now()-c.t > 7*864e5){
+    const j=await getJSON(`https://api.wmata.com/Rail.svc/json/jStations?api_key=${encodeURIComponent(wmataKey)}`);
+    c={ t:Date.now(), list:(j.Stations||[]).map(s=>({c:s.Code, n:s.Name, lat:s.Lat, lon:s.Lon, t1:s.StationTogether1||""})) };
+    lsSet("tb.home.wmataStations", JSON.stringify(c));
+  }
+  const seen=new Set();
+  stations=c.list.map(s=>({...s, m:hav(loc,s)})).sort((a,b)=>a.m-b.m)
+    .filter(s=>{ if(seen.has(s.n)) return false; seen.add(s.n); return true; })
+    .filter(s=>s.m<=4500).slice(0,2);
+  return stations;
+}
+async function refreshTrains(){
+  if(!wmataKey){
+    if(DEMO){ demoTrains(); setSrc("Metro","demo","Sample trains (demo)"); }
+    else setSrc("Metro","off","Metro: add a WMATA key on the DC board");
+    return;
+  }
+  try{
+    const st=await nearStations();
+    if(!st.length){ trains=[]; setSrc("Metro","off","No Metro station nearby"); return; }
+    const codes=[...new Set(st.flatMap(s=>[s.c,s.t1].filter(Boolean)))].join(",");
+    const j=await getJSON(`https://api.wmata.com/StationPrediction.svc/json/GetPrediction/${codes}?api_key=${encodeURIComponent(wmataKey)}`);
+    const at=Date.now();
+    trains=(j.Trains||[]).filter(t=>t.Line && t.Line!=="--" && t.Line!=="No" &&
+        !/^(no passenger|train|ssenger)$/i.test((t.DestinationName||"").trim()))
+      .map(t=>{
+        const s=st.find(x=>x.c===t.LocationCode||x.t1===t.LocationCode)||st[0];
+        const min=(t.Min==="BRD"||t.Min==="ARR")?0:parseInt(t.Min,10);
+        return { line:t.Line, dest:t.DestinationName||t.Destination, min, at, group:String(t.Group||"1"), stop:s.n };
+      }).filter(d=>isFinite(d.min)).sort((a,b)=>a.min-b.min);
+    setSrc("Metro","ok",`Metro live · ${st.map(s=>s.n).join(", ")}`);
+  }catch(e){ setSrc("Metro","bad","Metro feed not answering"); }
+}
+function demoTrains(){
+  if(trains.length && trains.some(t=>liveMin(t)>-0.5)) {
+    trains=trains.filter(t=>liveMin(t)>-0.6);
+    if(trains.length>=4) return;
+  }
+  const at=Date.now(), pick=[["RD","Shady Grove","1"],["RD","Glenmont","2"]];
+  stations=[{n:"Bethesda"}];
+  while(trains.length<5){
+    const p=pick[trains.length%2], last=trains.filter(t=>t.group===p[2]).reduce((m,t)=>Math.max(m,liveMin(t)),-2);
+    trains.push({line:p[0], dest:p[1], min:last+4+Math.random()*6, at, group:p[2], stop:"Bethesda"});
+  }
+  trains.sort((a,b)=>liveMin(a)-liveMin(b));
+}
+const liveMin=t=>t.min-(Date.now()-t.at)/60000;
+
+/* Weather: just a corner line, and cloud cover to say whether the real
+   sky looks like the projected one tonight. */
+let wx=null;
+async function refreshWx(){
+  try{
+    const j=await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(3)}&longitude=${loc.lon.toFixed(3)}&current=temperature_2m,cloud_cover,weather_code&temperature_unit=fahrenheit`);
+    wx=j.current||null; setSrc("Weather","ok","");
+  }catch(e){ setSrc("Weather","bad","Weather not answering"); }
+}
+
+/* ---- skyline (wall) ------------------------------------------------------
+   Seeded, so the same wall shows the same town every night. A few windows
+   are lit and now and then one goes out or comes on. */
+let skyline=[];
+function rng(seed){ let s=seed>>>0; return ()=>((s=Math.imul(s^(s>>>15),2246822507)^Math.imul(s^(s>>>13),3266489909))>>>0)/4294967296; }
+function buildSkyline(){
+  const r=rng(Math.round(loc.lat*1000)^Math.round(loc.lon*1000)^Math.round(S.face));
+  skyline=[]; let x=-10;
+  while(x<W+10){
+    const tree=r()<0.28, w=tree? 20+r()*50 : 30+r()*110, h=tree? 10+r()*Math.min(36,H*0.045) : 12+r()*Math.min(70,H*0.075)*(r()<0.12?1.9:1);
+    const b={x,w,h,tree,win:[]};
+    if(!tree){
+      const cols=Math.max(1,Math.floor(w/14)), rows=Math.max(1,Math.floor(h/16));
+      for(let i=0;i<cols;i++) for(let j=0;j<rows;j++) if(r()<0.16)
+        b.win.push({x:x+5+i*14, y:j*16+7, on:true, warm:r()<0.8, flip:r()*600000});
+    }
+    skyline.push(b); x+=w+(r()<0.3?r()*30:0);
+  }
+}
+
+/* ---- drawing ------------------------------------------------------------ */
+let shooting=null, nextShoot=Date.now()+20000+Math.random()*40000;
+function twinkle(i, t, alt){ return 0.82+0.18*Math.sin(t/(380+i*7%300)+i*1.7)*(alt<25?1.4:0.7); }
+
+function skyBackground(sun){
+  // Projectors are black by default; only twilight earns a little light.
+  const tw=Math.max(0, Math.min(1, (sun.alt+18)/18));           // 0 at astronomical night, 1 at sunset
+  if(G.kind==="ceiling"){
+    const g=cx.createRadialGradient(G.cx,G.cy,0,G.cx,G.cy,G.Rs);
+    g.addColorStop(0, `rgba(${8+tw*18},${10+tw*26},${24+tw*60},1)`);
+    g.addColorStop(1, `rgba(${4+tw*60},${6+tw*30},${18+tw*60},1)`);
+    cx.fillStyle="#000"; cx.fillRect(0,0,W,H);
+    cx.beginPath(); cx.arc(G.cx,G.cy,G.Rs,0,Math.PI*2); cx.fillStyle=g; cx.fill();
+    // a warm glow on the rim where the sun is, during twilight
+    if(tw>0.05){
+      const p=proj(sun.az, 0);
+      if(p){ const gg=cx.createRadialGradient(p.x,p.y,0,p.x,p.y,G.Rs*0.7);
+        gg.addColorStop(0,`rgba(255,120,60,${0.22*tw})`); gg.addColorStop(1,"rgba(255,120,60,0)");
+        cx.save(); cx.beginPath(); cx.arc(G.cx,G.cy,G.Rs,0,Math.PI*2); cx.clip(); cx.fillStyle=gg; cx.fillRect(0,0,W,H); cx.restore(); }
+    }
+  }else{
+    const g=cx.createLinearGradient(0,0,0,G.hy);
+    g.addColorStop(0, `rgb(${2+tw*8},${3+tw*12},${10+tw*36})`);
+    g.addColorStop(1, `rgb(${6+tw*70},${8+tw*40},${22+tw*60})`);
+    cx.fillStyle=g; cx.fillRect(0,0,W,G.hy+1);
+    if(tw>0.05){
+      const daz=wrap180(sun.az-S.face);
+      if(Math.abs(daz)<110){
+        const p=proj(sun.az, 0.5) || {x: daz<0?-W*0.2:W*1.2, y:G.hy};
+        const gg=cx.createRadialGradient(p.x,G.hy,0,p.x,G.hy,W*0.6);
+        gg.addColorStop(0,`rgba(255,130,60,${0.28*tw})`); gg.addColorStop(1,"rgba(255,130,60,0)");
+        cx.fillStyle=gg; cx.fillRect(0,0,W,G.hy);
+      }
+    }
+    cx.fillStyle="#000"; cx.fillRect(0,G.hy,W,H-G.hy);
+  }
+}
+
+function drawStars(lst, t){
+  const pts=new Array(STARS.length);
+  STARS.forEach((s,i)=>{
+    const h=raDecToAltAz(s[1]*15, s[2], lst);
+    const p=h.alt>-1?proj(h.az,h.alt):null;
+    pts[i]=p&&{...p, alt:h.alt};
+  });
+  if(S.lines){
+    cx.lineWidth=Math.max(1,G.fs*0.07);
+    CONST.forEach(([name,segs,dashed])=>{
+      cx.strokeStyle=dashed?"rgba(124,156,255,.13)":"rgba(124,156,255,.28)";
+      cx.setLineDash(dashed?[G.fs*0.4,G.fs*0.5]:[]);
+      let sx=0,sy=0,n=0;
+      cx.beginPath();
+      segs.forEach(([a,b])=>{
+        const pa=pts[STAR_IDX[a]], pb=pts[STAR_IDX[b]];
+        if(!pa||!pb) return;
+        if(Math.hypot(pa.x-pb.x,pa.y-pb.y)>Math.max(W,H)*0.6) return;    // wrapped behind the lens
+        cx.moveTo(pa.x,pa.y); cx.lineTo(pb.x,pb.y); sx+=pa.x+pb.x; sy+=pa.y+pb.y; n+=2;
+      });
+      cx.stroke();
+      if(S.labels && n && !dashed){
+        cx.fillStyle="rgba(124,156,255,.42)"; cx.font=`500 ${G.fs*0.62}px system-ui`;
+        cx.textAlign="center"; cx.fillText(name.toUpperCase(), sx/n, sy/n+G.fs*1.3);
+      }
+    });
+    cx.setLineDash([]);
+  }
+  STARS.forEach((s,i)=>{
+    const p=pts[i]; if(!onScreen(p)) return;
+    const m=s[3], base=Math.max(0.6, (3.9-m)*G.fs*0.075);
+    const ext=p.alt<10 ? 0.45+p.alt/18 : 1;                         // dimmer through more air
+    const a=Math.min(1, (0.35+(3.6-m)*0.2)*twinkle(i,t,p.alt)*ext);
+    if(m<1.2){
+      const g=cx.createRadialGradient(p.x,p.y,0,p.x,p.y,base*4);
+      g.addColorStop(0,`rgba(220,230,255,${a*0.35})`); g.addColorStop(1,"rgba(220,230,255,0)");
+      cx.fillStyle=g; cx.beginPath(); cx.arc(p.x,p.y,base*4,0,Math.PI*2); cx.fill();
+    }
+    cx.fillStyle = s[0]==="Betelgeuse"||s[0]==="Antares"||s[0]==="Aldebaran"||s[0]==="Arcturus" ? `rgba(255,200,160,${a})` :
+                   s[0]==="Rigel"||s[0]==="Vega"||s[0]==="Sirius"||s[0]==="Spica" ? `rgba(200,220,255,${a})` : `rgba(235,238,255,${a})`;
+    cx.beginPath(); cx.arc(p.x,p.y,base,0,Math.PI*2); cx.fill();
+    if(S.labels && m<1.0){
+      cx.fillStyle="rgba(207,214,255,.45)"; cx.font=`500 ${G.fs*0.6}px system-ui`; cx.textAlign="left";
+      cx.fillText(s[0], p.x+base+G.fs*0.35, p.y+G.fs*0.2);
+    }
+  });
+}
+
+function drawMoon(t, lst){
+  const me=moonEcl(t), se=sunEcl(t);
+  const mq=eclToEq(me.lon, me.lat), h=raDecToAltAz(mq.ra, mq.dec, lst);
+  if(h.alt<-1) return;
+  const p=proj(h.az,h.alt); if(!onScreen(p)) return;
+  const elong=wrap360(me.lon-se), f=(1-Math.cos(elong*D2R))/2;
+  // bright limb points along the sky toward the sun
+  const sq=eclToEq(se,0), sh=raDecToAltAz(sq.ra,sq.dec,lst);
+  const v=(az,al)=>[Math.cos(al*D2R)*Math.sin(az*D2R), Math.cos(al*D2R)*Math.cos(az*D2R), Math.sin(al*D2R)];
+  const a=v(h.az,h.alt), b=v(sh.az,sh.alt), k=0.04;
+  const n=[a[0]+(b[0]-a[0])*k, a[1]+(b[1]-a[1])*k, a[2]+(b[2]-a[2])*k];
+  const naz=wrap360(Math.atan2(n[0],n[1])*R2D), nal=Math.asin(n[2]/Math.hypot(...n))*R2D;
+  const q=proj(naz,nal), ang=q?Math.atan2(q.y-p.y,q.x-p.x):0;
+  const r=G.fs*1.15;
+  const glow=cx.createRadialGradient(p.x,p.y,r,p.x,p.y,r*5);
+  glow.addColorStop(0,`rgba(230,235,255,${0.10+0.2*f})`); glow.addColorStop(1,"rgba(230,235,255,0)");
+  cx.fillStyle=glow; cx.beginPath(); cx.arc(p.x,p.y,r*5,0,Math.PI*2); cx.fill();
+  cx.save(); cx.translate(p.x,p.y); cx.rotate(ang);
+  cx.fillStyle="rgba(40,44,60,.9)"; cx.beginPath(); cx.arc(0,0,r,0,Math.PI*2); cx.fill();
+  const lit="rgba(240,238,225,.95)";
+  cx.fillStyle=lit; cx.beginPath(); cx.arc(0,0,r,-Math.PI/2,Math.PI/2); cx.fill();       // sunward half
+  cx.fillStyle=f>0.5?lit:"rgba(40,44,60,1)";
+  cx.beginPath(); cx.ellipse(0,0,Math.max(0.01,r*Math.abs(1-2*f)),r,0,0,Math.PI*2); cx.fill();
+  cx.restore();
+  if(S.labels){ cx.fillStyle="rgba(207,214,255,.5)"; cx.font=`500 ${G.fs*0.62}px system-ui`; cx.textAlign="center";
+    cx.fillText(`Moon · ${Math.round(f*100)}%`, p.x, p.y+r+G.fs*1.0); }
+}
+
+function drawShooting(now){
+  if(!shooting && now>nextShoot){
+    const a=Math.random()*360, el=25+Math.random()*50, dir=Math.random()*Math.PI*2;
+    shooting={az:a, alt:el, dir, at:now, len:6+Math.random()*10};
+    nextShoot=now+30000+Math.random()*70000;
+  }
+  if(!shooting) return;
+  const k=(now-shooting.at)/900; if(k>1){ shooting=null; return; }
+  const head={az:shooting.az+Math.cos(shooting.dir)*shooting.len*k, alt:shooting.alt+Math.sin(shooting.dir)*shooting.len*k*0.6};
+  const tail={az:head.az-Math.cos(shooting.dir)*shooting.len*0.35, alt:head.alt-Math.sin(shooting.dir)*shooting.len*0.35*0.6};
+  const p=proj(head.az,head.alt), q=proj(tail.az,tail.alt); if(!p||!q) return;
+  const g=cx.createLinearGradient(q.x,q.y,p.x,p.y);
+  g.addColorStop(0,"rgba(255,255,255,0)"); g.addColorStop(1,`rgba(255,255,255,${0.9*(1-k)})`);
+  cx.strokeStyle=g; cx.lineWidth=G.fs*0.12; cx.beginPath(); cx.moveTo(q.x,q.y); cx.lineTo(p.x,p.y); cx.stroke();
+}
+
+let featured=null;
+function drawPlanes(now){
+  let best=null;
+  /* A busy sky (DC has 40+ in range) piles low, far aircraft onto the horizon.
+     Only the highest few get a label and full size; the rest are quiet dots. */
+  const rank=[...planes.values()].map(p=>{ const l=lookAngles(planeNow(p,now)); return {p, el:l.alt, on:l.alt>0&&onScreen(proj(l.az,l.alt))}; })
+    .filter(x=>x.on).sort((a,b)=>b.el-a.el), loud=new Set(rank.slice(0,9).filter(x=>x.el>(G.kind==="wall"?1:4)).map(x=>x.p));
+  for(const p of planes.values()){
+    const pos=planeNow(p,now), la=lookAngles(pos);
+    // trail: sample the flown path every 2 s, keep ~2 minutes
+    const last=p.trail[p.trail.length-1];
+    if(!last || now-last.t>2000){ p.trail.push({...pos,t:now}); if(p.trail.length>60) p.trail.shift(); }
+    if(la.alt<0) continue;
+    const sp=proj(la.az,la.alt); if(!onScreen(sp)) continue;
+    if(!best || la.alt>best.la.alt) best={p,la,pos};
+    // contrail
+    if(p.trail.length>1 && loud.has(p)){
+      cx.lineCap="round";
+      for(let i=1;i<p.trail.length;i++){
+        const A=lookAngles(p.trail[i-1]), B=lookAngles(p.trail[i]);
+        const pa=A.alt>0&&proj(A.az,A.alt), pb=B.alt>0&&proj(B.az,B.alt);
+        if(!pa||!pb||Math.hypot(pa.x-pb.x,pa.y-pb.y)>W/3) continue;
+        const k=i/p.trail.length;
+        cx.strokeStyle=`rgba(190,205,255,${0.25*k})`; cx.lineWidth=G.fs*0.1*(0.4+k);
+        cx.beginPath(); cx.moveTo(pa.x,pa.y); cx.lineTo(pb.x,pb.y); cx.stroke();
+      }
+      const L=p.trail[p.trail.length-1], A=lookAngles(L), pa=A.alt>0&&proj(A.az,A.alt);
+      if(pa){ cx.strokeStyle="rgba(190,205,255,.28)"; cx.beginPath(); cx.moveTo(pa.x,pa.y); cx.lineTo(sp.x,sp.y); cx.stroke(); }
+    }
+    // heading on screen: project a point a little ahead along the track
+    const ahead=lookAngles({...moveLL(pos,p.trk,400),alt:pos.alt}), ap=proj(ahead.az,ahead.alt);
+    const ang=ap?Math.atan2(ap.y-sp.y,ap.x-sp.x):0;
+    const isLoud=loud.has(p);
+    if(!isLoud){
+      const ph=(now+(p.call||"").length*137)%1500;
+      cx.fillStyle="rgba(200,212,255,.55)"; cx.beginPath(); cx.arc(sp.x,sp.y,G.fs*0.13,0,Math.PI*2); cx.fill();
+      if(ph<120){ cx.fillStyle="rgba(255,50,50,.9)"; cx.beginPath(); cx.arc(sp.x,sp.y,G.fs*0.16,0,Math.PI*2); cx.fill(); }
+      continue;
+    }
+    const sz=G.fs*(0.55+Math.min(1, 6000/Math.max(1500,la.d))*0.9);
+    cx.save(); cx.translate(sp.x,sp.y); cx.rotate(ang);
+    cx.fillStyle="rgba(220,228,255,.9)";
+    cx.beginPath();                                                   // a small airliner, nose along +x
+    cx.moveTo(sz,0); cx.lineTo(sz*0.2,sz*0.12); cx.lineTo(-sz*0.1,sz*0.85); cx.lineTo(-sz*0.3,sz*0.85);
+    cx.lineTo(-sz*0.15,sz*0.12); cx.lineTo(-sz*0.75,sz*0.1); cx.lineTo(-sz*0.95,sz*0.4); cx.lineTo(-sz*1.05,sz*0.4);
+    cx.lineTo(-sz*0.95,0); cx.lineTo(-sz*1.05,-sz*0.4); cx.lineTo(-sz*0.95,-sz*0.4); cx.lineTo(-sz*0.75,-sz*0.1);
+    cx.lineTo(-sz*0.15,-sz*0.12); cx.lineTo(-sz*0.3,-sz*0.85); cx.lineTo(-sz*0.1,-sz*0.85); cx.lineTo(sz*0.2,-sz*0.12);
+    cx.closePath(); cx.fill();
+    // nav lights: red port (left wing), green starboard, red beacon, white strobes
+    const ph=(now+ (p.call||"").length*137)%1500;
+    const dot=(x,y,c,r)=>{ cx.fillStyle=c; cx.beginPath(); cx.arc(x,y,r,0,Math.PI*2); cx.fill(); };
+    dot(-sz*0.2,-sz*0.85,"rgba(255,60,60,.95)",sz*0.11);
+    dot(-sz*0.2, sz*0.85,"rgba(60,255,120,.95)",sz*0.11);
+    if(ph<120) dot(0,0,"rgba(255,40,40,1)",sz*0.22);
+    if(ph>500&&ph<560 || ph>680&&ph<740){
+      const g=cx.createRadialGradient(0,0,0,0,0,sz*1.6); g.addColorStop(0,"rgba(255,255,255,.9)"); g.addColorStop(1,"rgba(255,255,255,0)");
+      cx.fillStyle=g; cx.beginPath(); cx.arc(0,0,sz*1.6,0,Math.PI*2); cx.fill();
+    }
+    cx.restore();
+    if(S.labels){
+      const col=p.color||"#9fb3ff";
+      cx.textAlign="left";
+      cx.font=`700 ${G.fs*0.78}px system-ui`; cx.fillStyle=col;
+      cx.fillText(p.call, sp.x+sz*1.3, sp.y-G.fs*0.15);
+      cx.font=`500 ${G.fs*0.6}px system-ui`; cx.fillStyle="rgba(207,214,255,.6)";
+      cx.fillText(`${Math.round(p.alt/100)*100>0?(Math.round(p.alt/100)*100).toLocaleString()+" ft":""}${p.type?" · "+p.type:""}`, sp.x+sz*1.3, sp.y+G.fs*0.6);
+    }
+  }
+  featured=best;
+}
+
+/* Ceiling rim: compass, and the departures (or, with none, the place) as a
+   ring of text slowly circling the horizon. */
+function ringText(){
+  const parts=[];
+  trains.filter(t=>liveMin(t)>-0.5).slice(0,6).forEach(t=>{
+    const m=Math.max(0,Math.round(liveMin(t)));
+    parts.push({txt:`${RAIL_NAMES[t.line]||t.line} to ${t.dest}`, col:RAIL_COLORS[t.line]||"#cfd6ff"},
+               {txt:` ${m<=0?"now":m+" min"}  ◆  `, col:"rgba(207,214,255,.75)"});
+  });
+  const now=new Date();
+  const base=[{txt:`${(loc.label||"Here").toUpperCase()}  ◆  ${clock(now)}  ◆  `, col:"rgba(207,214,255,.65)"}];
+  if(wx) base.push({txt:`${Math.round(wx.temperature_2m)}°  ·  ${wx.cloud_cover}% cloud  ◆  `, col:"rgba(207,214,255,.55)"});
+  if(planes.size) base.push({txt:`${planes.size} aircraft in range  ◆  `, col:"rgba(207,214,255,.55)"});
+  return parts.length ? parts.concat(base) : base;
+}
+function drawCeilingRim(t){
+  const {cx:X, cy:Y, R, Rs, fs}=G;
+  cx.strokeStyle="rgba(124,156,255,.35)"; cx.lineWidth=1.5;
+  cx.beginPath(); cx.arc(X,Y,Rs,0,Math.PI*2); cx.stroke();
+  cx.strokeStyle="rgba(124,156,255,.15)";
+  cx.beginPath(); cx.arc(X,Y,R,0,Math.PI*2); cx.stroke();
+  // altitude rings 30 / 60
+  cx.setLineDash([2,6]); cx.strokeStyle="rgba(124,156,255,.12)";
+  [30,60].forEach(a=>{ cx.beginPath(); cx.arc(X,Y,(90-a)/90*Rs,0,Math.PI*2); cx.stroke(); });
+  cx.setLineDash([]);
+  // compass letters on the horizon ring
+  [["N",0],["E",90],["S",180],["W",270]].forEach(([l,az])=>{
+    const th=(az+S.north)*D2R, r=Rs-fs*0.9;
+    cx.fillStyle=l==="N"?"#ff6b6b":"rgba(207,214,255,.7)"; cx.font=`800 ${fs*0.95}px system-ui`;
+    cx.textAlign="center"; cx.textBaseline="middle";
+    cx.fillText(l, X-Math.sin(th)*r, Y-Math.cos(th)*r);
+  });
+  for(let az=0;az<360;az+=15){
+    const th=(az+S.north)*D2R, a=Rs, b=Rs-(az%45===0?fs*0.45:fs*0.22);
+    cx.strokeStyle="rgba(124,156,255,.35)"; cx.beginPath();
+    cx.moveTo(X-Math.sin(th)*a,Y-Math.cos(th)*a); cx.lineTo(X-Math.sin(th)*b,Y-Math.cos(th)*b); cx.stroke();
+  }
+  cx.textBaseline="alphabetic";
+  // rotating ring of text between Rs and R
+  const parts=ringText(), rr=(Rs+R)/2, f=Math.min(fs*0.95,(R-Rs)*0.62);
+  cx.font=`600 ${f}px system-ui`; cx.textBaseline="middle"; cx.textAlign="center";
+  const circ=2*Math.PI*rr;
+  let seq=[], len=0;
+  while(len<circ){ for(const p of parts){ const w=cx.measureText(p.txt).width; seq.push({...p,w}); len+=w; } if(!parts.length) break; }
+  let a0=-Math.PI/2 + (t/1000)*(2*Math.PI/420);                   // one lap every 7 minutes
+  for(const s of seq){
+    for(const ch of s.txt){
+      const w=cx.measureText(ch).width, da=w/rr;
+      if(a0+da > -Math.PI/2 + (t/1000)*(2*Math.PI/420) + Math.PI*2) break;
+      const a=a0+da/2;
+      cx.save(); cx.translate(X+Math.cos(a)*rr, Y+Math.sin(a)*rr); cx.rotate(a+Math.PI/2);
+      cx.fillStyle=s.col; cx.fillText(ch,0,0); cx.restore();
+      a0+=da;
+    }
+  }
+  cx.textBaseline="alphabetic";
+}
+
+/* Wall: horizon compass, skyline, the track. */
+function drawWallGround(now){
+  const {hy, fs}=G;
+  // compass ticks along the horizon
+  cx.textAlign="center";
+  for(let az=0;az<360;az+=5){
+    const p=proj(az,0); if(!p||p.x<-20||p.x>W+20) continue;
+    const big=az%45===0, mid=az%15===0;
+    cx.strokeStyle=`rgba(124,156,255,${big?.5:mid?.3:.15})`; cx.lineWidth=1;
+    cx.beginPath(); cx.moveTo(p.x,hy-(big?fs*0.6:mid?fs*0.35:fs*0.18)); cx.lineTo(p.x,hy); cx.stroke();
+    if(big){ const L=["N","NE","E","SE","S","SW","W","NW"][az/45];
+      cx.fillStyle=L==="N"?"#ff6b6b":"rgba(207,214,255,.65)"; cx.font=`800 ${fs*0.8}px system-ui`;
+      cx.fillText(L,p.x,hy-fs*0.9); }
+    else if(mid){ cx.fillStyle="rgba(124,156,255,.35)"; cx.font=`500 ${fs*0.5}px system-ui`; cx.fillText(az+"°",p.x,hy-fs*0.55); }
+  }
+  // skyline silhouettes
+  for(const b of skyline){
+    cx.fillStyle="#04050a";
+    if(b.tree){ cx.beginPath(); cx.ellipse(b.x+b.w/2, hy-b.h*0.55, b.w/2, b.h*0.6, 0, 0, Math.PI*2); cx.fill();
+                cx.fillRect(b.x+b.w/2-2, hy-b.h*0.2, 4, b.h*0.2); }
+    else{ cx.fillRect(b.x, hy-b.h, b.w, b.h);
+      for(const w of b.win){
+        const on=((now+w.flip)%600000)>40000;                       // each window goes dark for 40 s in every 10 min
+        if(!on) continue;
+        cx.fillStyle=w.warm?"rgba(255,190,110,.55)":"rgba(170,200,255,.45)";
+        cx.fillRect(w.x, hy-b.h+w.y, 6, 7);
+      }
+    }
+  }
+  cx.strokeStyle="rgba(124,156,255,.25)"; cx.beginPath(); cx.moveTo(0,hy+0.5); cx.lineTo(W,hy+0.5); cx.stroke();
+
+  // the track
+  const ty=hy+(H-hy)*0.40, sx=W/2, half=W*0.46, MAXM=20;
+  const st=stations&&stations[0];
+  if(st || trains.length){
+    cx.strokeStyle="rgba(124,156,255,.22)"; cx.lineWidth=2;
+    cx.beginPath(); cx.moveTo(W*0.02,ty-fs*0.35); cx.lineTo(W*0.98,ty-fs*0.35); cx.stroke();
+    cx.beginPath(); cx.moveTo(W*0.02,ty+fs*0.35); cx.lineTo(W*0.98,ty+fs*0.35); cx.stroke();
+    for(let m=5;m<=MAXM;m+=5) [-1,1].forEach(s=>{
+      const x=sx+s*m/MAXM*half; cx.fillStyle="rgba(124,156,255,.3)"; cx.font=`500 ${fs*0.5}px system-ui`; cx.textAlign="center";
+      cx.fillText(m+" min", x, ty+fs*1.3);
+    });
+    // platform
+    cx.fillStyle="rgba(124,156,255,.18)"; cx.fillRect(sx-fs*2.4, ty-fs*0.8, fs*4.8, fs*1.6);
+    cx.fillStyle="rgba(207,214,255,.85)"; cx.font=`700 ${fs*0.75}px system-ui`; cx.textAlign="center";
+    cx.fillText((st?st.n:"Station").toUpperCase(), sx, ty+fs*3.3);
+    /* One station's track: the next three each way, so labels never pile up. */
+    const shown=[], per={};
+    trains.filter(t=>!st||!t.stop||t.stop===st.n).forEach(t=>{
+      const m=liveMin(t); if(m<-0.6||m>MAXM) return;
+      per[t.group]=(per[t.group]||0)+1; if(per[t.group]<=3) shown.push(t);
+    });
+    shown.forEach(t=>{
+      const m=liveMin(t);
+      const s=t.group==="2"?1:-1, x=sx+s*Math.max(0,m)/MAXM*half, y=ty+(s<0?-fs*0.35:fs*0.35);
+      const col=RAIL_COLORS[t.line]||"#cfd6ff", L=fs*(m<=0?3.6:2.4);
+      const g=cx.createRadialGradient(x,y,0,x,y,L*1.3);
+      g.addColorStop(0,col+(m<=0?"88":"44")); g.addColorStop(1,col+"00");
+      cx.fillStyle=g; cx.beginPath(); cx.arc(x,y,L*1.3,0,Math.PI*2); cx.fill();
+      cx.fillStyle=col; const pulse=m<=0?0.75+0.25*Math.sin(now/180):1;
+      cx.globalAlpha=pulse; cx.beginPath(); cx.roundRect ? cx.roundRect(x-L/2,y-fs*0.22,L,fs*0.44,fs*0.22) : cx.rect(x-L/2,y-fs*0.22,L,fs*0.44); cx.fill();
+      // headlight toward the station
+      cx.fillStyle="#fff"; cx.beginPath(); cx.arc(x-s*L/2,y,fs*0.12,0,Math.PI*2); cx.fill();
+      cx.globalAlpha=1;
+      cx.font=`700 ${fs*0.62}px system-ui`; cx.fillStyle=col; cx.textAlign="center";
+      cx.fillText(`${t.dest}`, x, s<0? y-fs*0.75 : y+fs*1.05+fs*0.0);
+      cx.font=`600 ${fs*0.55}px system-ui`; cx.fillStyle="rgba(207,214,255,.8)";
+      cx.fillText(m<=0.25?"boarding":Math.ceil(m)+" min", x, s<0? y-fs*1.4 : y+fs*1.7);
+    });
+  }
+}
+
+/* Corner text: clock, weather, what is overhead, any problems. */
+function clock(d){ let h=d.getHours(), m=d.getMinutes(); const ap=h>=12?"PM":"AM"; h=((h+11)%12)+1; return `${h}:${String(m).padStart(2,"0")} ${ap}`; }
+function drawCorners(now){
+  const d=new Date(now), fs=Math.max(12,Math.min(W,H)*0.024), pad=fs*1.2;
+  cx.textBaseline="alphabetic";
+  cx.textAlign="left"; cx.fillStyle="rgba(207,214,255,.85)"; cx.font=`300 ${fs*2.6}px system-ui`;
+  cx.fillText(clock(d), pad, pad+fs*2.2);
+  cx.font=`500 ${fs*0.8}px system-ui`; cx.fillStyle="rgba(207,214,255,.5)";
+  cx.fillText(d.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})+(wx?`  ·  ${Math.round(wx.temperature_2m)}°  ·  ${wx.cloud_cover}% cloud`:""), pad, pad+fs*3.4);
+  if(G.kind==="wall"){ cx.fillText(`Facing ${["N","NE","E","SE","S","SW","W","NW"][Math.round(S.face/45)%8]} · ${Math.round(S.face)}°`, pad, pad+fs*4.5); }
+
+  // the highest aircraft gets the bottom-left caption
+  cx.textAlign="left";
+  const by=H-pad-fs*0.9;        // config.js's ODbL credit for the aircraft data sits under this; it must stay visible
+  if(featured){
+    const {p,la}=featured, dir=["N","NE","E","SE","S","SW","W","NW"][Math.round(la.az/45)%8];
+    cx.font=`700 ${fs*1.1}px system-ui`; cx.fillStyle=p.color||"#9fb3ff";
+    cx.fillText(p.call, pad, by-fs*1.3);
+    cx.font=`500 ${fs*0.75}px system-ui`; cx.fillStyle="rgba(207,214,255,.6)";
+    cx.fillText(`${Math.round(la.alt)}° up in the ${dir}  ·  ${(la.d/1852).toFixed(1)} nm  ·  ${Math.round(p.alt).toLocaleString()} ft${p.desc?"  ·  "+p.desc:(p.type?"  ·  "+p.type:"")}`, pad, by);
+  }
+  // problems / demo, bottom-right, quiet
+  const notes=Object.values(src).filter(s=>s.state==="bad"||s.state==="off").map(s=>s.note).filter(Boolean);
+  cx.textAlign="right"; cx.font=`500 ${fs*0.62}px system-ui`;
+  const demoOn=Object.values(src).some(s=>s.state==="demo");
+  if(demoOn){ cx.fillStyle="rgba(255,209,102,.8)"; cx.fillText("DEMO SKY — sample aircraft and trains", W-pad, by-(notes.length?fs*1.0*notes.length:0)); }
+  cx.fillStyle="rgba(207,214,255,.35)";
+  notes.forEach((n,i)=>cx.fillText(n, W-pad, by-(notes.length-1-i)*fs*1.0));
+}
+
+let lastFrame=0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  if(document.hidden || ts-lastFrame<33) return;                    // ~30 fps is plenty, and kind to a stick PC
+  lastFrame=ts;
+  const now=Date.now();
+  geom();
+  cx.setTransform(DPR,0,0,DPR,0,0);
+  const lst=lstDeg(now), sq=eclToEq(sunEcl(now),0), sun=raDecToAltAz(sq.ra,sq.dec,lst);
+  skyBackground(sun);
+  if(G.kind==="ceiling"){ cx.save(); cx.beginPath(); cx.arc(G.cx,G.cy,G.Rs,0,Math.PI*2); cx.clip(); }
+  else { cx.save(); cx.beginPath(); cx.rect(0,0,W,G.hy); cx.clip(); }
+  const starA=Math.max(0.15, Math.min(1, (-sun.alt-2)/10));         // stars fade in through twilight
+  cx.globalAlpha=starA; drawStars(lst, now); cx.globalAlpha=1;
+  drawShooting(now);
+  drawMoon(now, lst);
+  drawPlanes(now);
+  cx.restore();
+  if(G.kind==="ceiling") drawCeilingRim(now); else drawWallGround(now);
+  drawCorners(now);
+}
+
+/* ---- keystone ------------------------------------------------------------
+   Corner pin: the four corners of the picture are dragged to where they land
+   on the surface, and a homography maps the full-viewport stage onto them. */
+function solve(A,b){
+  const n=b.length;
+  for(let i=0;i<n;i++){
+    let m=i; for(let r=i+1;r<n;r++) if(Math.abs(A[r][i])>Math.abs(A[m][i])) m=r;
+    [A[i],A[m]]=[A[m],A[i]]; [b[i],b[m]]=[b[m],b[i]];
+    for(let r=i+1;r<n;r++){ const f=A[r][i]/A[i][i]; for(let c=i;c<n;c++) A[r][c]-=f*A[i][c]; b[r]-=f*b[i]; }
+  }
+  const x=new Array(n);
+  for(let i=n-1;i>=0;i--){ let s=b[i]; for(let c=i+1;c<n;c++) s-=A[i][c]*x[c]; x[i]=s/A[i][i]; }
+  return x;
+}
+function ksCorners(){ return S.ks || [[0,0],[1,0],[1,1],[0,1]]; }
+function applyKeystone(){
+  const el=$("#ks"), c=ksCorners();
+  const src=[[0,0],[W,0],[W,H],[0,H]], dst=c.map(([fx,fy])=>[fx*W,fy*H]);
+  const A=[], b=[];
+  for(let i=0;i<4;i++){
+    const [x,y]=src[i], [X,Y]=dst[i];
+    A.push([x,y,1,0,0,0,-X*x,-X*y]); b.push(X);
+    A.push([0,0,0,x,y,1,-Y*x,-Y*y]); b.push(Y);
+  }
+  const h=solve(A,b);
+  el.style.transform = S.ks ? `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)` : "";
+  $("#flip").style.transform = S.mirror ? "scaleX(-1)" : "";
+  document.body.style.filter = S.bright<100 ? `brightness(${S.bright/100})` : "";
+}
+const handles=[];
+let ksSel=0;
+function placeHandles(){
+  ksCorners().forEach(([fx,fy],i)=>{ const h=handles[i]; if(!h) return; h.style.left=fx*W+"px"; h.style.top=fy*H+"px"; h.classList.toggle("on",i===ksSel); });
+}
+for(let i=0;i<4;i++){
+  const h=document.createElement("div"); h.className="pj-handle"; h.textContent=i+1;
+  h.addEventListener("pointerdown",e=>{
+    h.setPointerCapture(e.pointerId); ksSel=i;
+    const move=ev=>{ const c=ksCorners().map(x=>x.slice()); c[i]=[ev.clientX/W, ev.clientY/H]; S.ks=c; applyKeystone(); placeHandles(); };
+    const up=()=>{ h.removeEventListener("pointermove",move); h.removeEventListener("pointerup",up); save(); };
+    h.addEventListener("pointermove",move); h.addEventListener("pointerup",up);
+  });
+  document.body.appendChild(h); handles.push(h);
+}
+function toggleKs(on){ document.body.classList.toggle("ks-edit", on); $("#ks").classList.toggle("editing", on); $("#ksBtn").classList.toggle("on", on); placeHandles(); }
+
+/* ---- settings panel ----------------------------------------------------- */
+const DIRS=["N","NE","E","SE","S","SW","W","NW"];
+DIRS.forEach((d,i)=>{ const b=document.createElement("button"); b.className="b"; b.textContent=d; b.dataset.az=i*45;
+  b.onclick=()=>{ S.face=i*45; changed(); }; $("#faceSeg").appendChild(b); });
+document.querySelectorAll("[data-surf]").forEach(b=>b.onclick=()=>{ S.surface=b.dataset.surf; changed(); });
+$("#face").oninput=e=>{ S.face=+e.target.value; changed(); };
+$("#north").oninput=e=>{ S.north=+e.target.value; changed(); };
+$("#bright").oninput=e=>{ S.bright=+e.target.value; changed(); };
+$("#mirrorBtn").onclick=()=>{ S.mirror=!S.mirror; changed(); };
+$("#linesBtn").onclick=()=>{ S.lines=!S.lines; changed(); };
+$("#labelsBtn").onclick=()=>{ S.labels=!S.labels; changed(); };
+$("#ksBtn").onclick=()=>toggleKs(!document.body.classList.contains("ks-edit"));
+$("#ksReset").onclick=()=>{ S.ks=null; changed(); };
+$("#fsBtn").onclick=fullscreen;
+$("#gear").onclick=()=>$("#panel").classList.toggle("open");
+function fullscreen(){ const d=document; if(d.fullscreenElement) d.exitFullscreen&&d.exitFullscreen(); else (d.documentElement.requestFullscreen||function(){}).call(d.documentElement); }
+let lastFace=null;
+function changed(){
+  save(); syncPanel(); applyKeystone(); placeHandles();
+  if(lastFace!==S.face){ lastFace=S.face; buildSkyline(); }
+}
+function syncPanel(){
+  document.querySelectorAll("[data-surf]").forEach(b=>b.classList.toggle("on", b.dataset.surf===S.surface));
+  document.querySelectorAll("#faceSeg .b").forEach(b=>b.classList.toggle("on", +b.dataset.az===S.face));
+  $("#faceRow").style.display=S.surface==="wall"?"":"none";
+  $("#northRow").style.display=S.surface==="ceiling"?"":"none";
+  $("#face").value=S.face; $("#faceVal").textContent=`${DIRS[Math.round(S.face/45)%8]} · ${S.face}°`;
+  $("#north").value=S.north; $("#northVal").textContent=`${S.north}°`;
+  $("#bright").value=S.bright; $("#brightVal").textContent=`${S.bright}%`;
+  $("#mirrorBtn").classList.toggle("on",S.mirror); $("#linesBtn").classList.toggle("on",S.lines); $("#labelsBtn").classList.toggle("on",S.labels);
+}
+function renderStatus(){
+  const el=$("#status"); if(!el) return;
+  el.innerHTML=`<b>${(loc.label||"Saved location")}</b> · ${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}<br>`+
+    Object.entries(src).map(([k,s])=>`${k}: ${s.state==="ok"?"✓":s.state==="demo"?"demo":s.state==="off"?"off":"✗"}${s.note?" — "+s.note:""}`).join("<br>");
+}
+
+/* Keys: built for a remote (arrows + OK) as much as a keyboard. */
+addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT") return;
+  const k=e.key, ks=document.body.classList.contains("ks-edit");
+  if(ks && /^[1-4]$/.test(k)){ ksSel=+k-1; placeHandles(); return; }
+  if(ks && k.startsWith("Arrow")){
+    const step=e.shiftKey?0.01:0.002, c=ksCorners().map(x=>x.slice());
+    if(k==="ArrowLeft") c[ksSel][0]-=step; if(k==="ArrowRight") c[ksSel][0]+=step;
+    if(k==="ArrowUp") c[ksSel][1]-=step; if(k==="ArrowDown") c[ksSel][1]+=step;
+    S.ks=c; changed(); e.preventDefault(); return;
+  }
+  if(k==="Escape"){ toggleKs(false); $("#panel").classList.remove("open"); return; }
+  if(k==="s"||k==="S"||k==="Enter"&&!$("#panel").classList.contains("open")){ $("#panel").classList.toggle("open"); return; }
+  if(k==="c"||k==="C"){ S.surface="ceiling"; changed(); }
+  else if(k==="w"||k==="W"){ S.surface="wall"; changed(); }
+  else if(k==="m"||k==="M"){ S.mirror=!S.mirror; changed(); }
+  else if(k==="k"||k==="K"){ toggleKs(!ks); }
+  else if(k==="f"||k==="F"){ fullscreen(); }
+  else if(k==="l"||k==="L"){ S.labels=!S.labels; changed(); }
+  else if((k==="ArrowLeft"||k==="ArrowRight") && !$("#panel").contains(document.activeElement)){
+    const d=(k==="ArrowLeft"?-1:1)*(e.shiftKey?1:5);
+    if(S.surface==="wall") S.face=wrap360(S.face+d); else S.north=wrap360(S.north+d);
+    changed();
+  }
+});
+let idleT=0;
+function wake(){ document.body.classList.remove("idle"); clearTimeout(idleT); idleT=setTimeout(()=>document.body.classList.add("idle"),3000); }
+addEventListener("pointermove",wake); addEventListener("keydown",wake); wake();
+addEventListener("resize",resize);
+
+/* ---- go ------------------------------------------------------------------ */
+syncPanel(); resize(); lastFace=S.face; renderStatus();
+requestAnimationFrame(frame);
+refreshPlanes(); setInterval(refreshPlanes, 10000);
+refreshTrains(); setInterval(refreshTrains, DEMO&&!wmataKey?5000:25000);
+refreshWx(); setInterval(refreshWx, 15*60000);
+</script>
+</body>
+</html>
