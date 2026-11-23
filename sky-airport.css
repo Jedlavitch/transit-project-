@@ -1,0 +1,93 @@
+/* Sky — Airport view (sky-airport.js). Works in both Skys: it is its own
+   full-screen layer with its own map, above everything else on the page. */
+#sgAp{ display:none }
+#sgAp.show{
+  display:block; position:fixed; top:0; right:0; bottom:0; left:0; z-index:60;
+  background:#0B0D12; color:#F7F8FA; font-family:var(--body, system-ui, sans-serif);
+  --ap-tint:rgba(12,14,18,.78); --ap-edge:rgba(255,255,255,.14);
+}
+:root[data-sky-glass]:not([data-sky-dark]) #sgAp.show{ background:#E6E8EB }
+#sgApMap{ position:absolute; top:0; right:0; bottom:0; left:0 }
+#sgAp .leaflet-container{ background:inherit }
+/* Everything under the layer stops animating behind it. */
+:root.sg-airport-on body > *:not(#sgAp){ visibility:hidden }
+
+#sgAp .ap-top{
+  position:absolute; z-index:1000; top:max(12px, env(safe-area-inset-top)); left:12px; right:12px;
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; pointer-events:none;
+}
+#sgAp .ap-top > *{ pointer-events:auto }
+#sgAp .ap-back, #sgAp .ap-pick{
+  font-weight:600; font-size:14px; line-height:1.2; font-family:inherit; color:#F7F8FA; background:var(--ap-tint); border:1px solid var(--ap-edge);
+  border-radius:10px; padding:10px 14px; cursor:pointer; box-shadow:inset 0 -3px 0 #FF3D77;
+}
+#sgAp .ap-pick{ box-shadow:inset 0 -3px 0 #2F7BFF; max-width:240px; margin-left:auto }
+#sgAp .ap-title{
+  display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; min-width:0;
+  background:var(--ap-tint); border:1px solid var(--ap-edge); border-radius:12px; padding:8px 14px;
+}
+#sgAp .ap-code{ font-size:24px; letter-spacing:.02em }
+#sgAp .ap-name{ font-size:13px; color:#C9CFD8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40vw }
+#sgAp .ap-rwy{ font:600 13px/1.2 "IBM Plex Mono",ui-monospace,monospace; color:#FF8FB1 }
+#sgAp .ap-rwy:empty{ display:none }
+
+/* The list: a column on the right; a sheet along the bottom on narrow screens. */
+#sgAp .ap-side{
+  position:absolute; z-index:1000; top:84px; right:12px; bottom:24px; width:min(340px, 36vw);
+  overflow:auto; background:var(--ap-tint); border:1px solid var(--ap-edge); border-radius:14px; padding:12px 14px;
+}
+@media (max-width:760px){
+  #sgAp .ap-side{ top:auto; left:12px; right:12px; width:auto; max-height:42vh; bottom:12px }
+  #sgAp .ap-name{ display:none }
+}
+#sgAp h3{ margin:10px 0 6px; font-weight:700; font-size:11px; line-height:1.2; font-family:inherit; letter-spacing:.12em; text-transform:uppercase; color:#A8AFBA }
+#sgAp h3 .n{ color:#F7F8FA; margin-left:4px }
+#sgAp section:first-of-type h3{ margin-top:2px }
+#sgAp ol{ list-style:none; margin:0; padding:0 }
+#sgAp li{
+  display:grid; grid-template-columns:1fr auto auto; gap:2px 8px; align-items:baseline;
+  padding:8px 8px; margin:0 -8px; border-radius:8px; cursor:pointer;
+}
+#sgAp li:hover, #sgAp li.on{ background:rgba(255,255,255,.08) }
+#sgAp li .cs{ font:700 15px/1.2 "IBM Plex Mono",ui-monospace,monospace }
+#sgAp li .rw{ font:700 11px/1 "IBM Plex Mono",monospace; padding:3px 6px; border-radius:5px; background:#FF3D77; color:#fff }
+#sgAp .ap-sec-dep li .rw{ background:#00E0C6; color:#0F1115 }
+#sgAp li .eta{ font:700 15px/1.2 "IBM Plex Mono",monospace; color:#FFD37A; text-align:right; grid-column:3 }
+#sgAp li .meta{ grid-column:1 / -1; font-size:12px; color:#A8AFBA }
+#sgAp .ap-sec-arr li{ box-shadow:inset 3px 0 0 #FF3D77; padding-left:11px }
+#sgAp .ap-sec-dep li{ box-shadow:inset 3px 0 0 #00E0C6; padding-left:11px }
+#sgAp .ap-landed li{ cursor:default; box-shadow:inset 3px 0 0 #FFD37A; padding-left:11px }
+#sgAp .ap-empty, #sgAp .ap-gnd, #sgAp .ap-note, #sgAp .ap-status{ font-size:12px; color:#A8AFBA; margin:6px 0 }
+#sgAp .ap-status:empty, #sgAp .ap-gnd:empty{ display:none }
+#sgAp .ap-note{ margin-top:14px; opacity:.75 }
+#sgAp [hidden]{ display:none !important }
+
+/* Runway numbers at each threshold */
+.ap-rwy-lbl{ font:700 11px/16px "IBM Plex Mono",ui-monospace,monospace; color:#fff; text-align:center;
+  background:#2b313c; border-radius:4px; box-shadow:0 0 0 1px rgba(255,255,255,.5) }
+
+/* Aircraft: colour says what it is doing */
+.ap-pl{ background:none; border:0 }
+.ap-pl .ap-ic{ display:block; width:24px; height:24px; transition:transform .8s ease }
+.ap-pl svg{ width:24px; height:24px; display:block; overflow:visible; filter:drop-shadow(0 0 3px rgba(0,0,0,.85)) }
+.ap-pl path{ fill:#8A93A3; stroke:#fff; stroke-width:1 }
+.ap-pl.ap-arr path{ fill:#FF3D77 }
+.ap-pl.ap-dep path{ fill:#00E0C6 }
+.ap-pl.ap-ground path{ fill:#FFD37A }
+.ap-pl.ap-ground .ap-ic, .ap-pl.ap-ground svg{ width:16px; height:16px; margin:4px }
+.ap-pl.ap-other{ opacity:.55 }
+.ap-pl .ap-lbl{ position:absolute; left:26px; top:4px; white-space:nowrap; pointer-events:none;
+  font:600 11px/1.2 "IBM Plex Mono",ui-monospace,monospace; color:#F7F8FA;
+  padding:2px 6px; border-radius:4px; background:rgba(12,14,18,.72) }
+.ap-pl.ap-arr .ap-lbl{ box-shadow:inset 2px 0 0 #FF3D77 }
+.ap-pl.ap-dep .ap-lbl{ box-shadow:inset 2px 0 0 #00E0C6 }
+.ap-pl.ap-other .ap-lbl, .ap-pl.ap-ground .ap-lbl{ display:none }
+#sgAp.ap-far .ap-lbl{ display:none }
+.ap-pl.ap-focus{ z-index:9999 !important }
+.ap-pl.ap-focus .ap-lbl{ display:block; background:#FF3D77 }
+.ap-pl.ap-focus svg{ filter:drop-shadow(0 0 6px #FF3D77) }
+@keyframes apFlash{ 0%{ transform:scale(1) } 30%{ transform:scale(2.2) } 100%{ transform:scale(1) } }
+.ap-pl.ap-flash .ap-ic svg{ animation:apFlash 1.2s ease }
+
+/* The way in, as one of Glass's camera-bar chips */
+:root[data-sky-glass] #sgCam #sgApBtn{ box-shadow:inset 0 -3px 0 #FFD37A }
