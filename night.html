@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=35" />
-<link rel="stylesheet" href="sky-glass.css?v=4" />
+<link rel="stylesheet" href="sky-glass.css?v=5" />
 <link rel="stylesheet" href="sky-airport.css?v=3" />
 <script src="cityswitch.js?v=6"></script>
 <script>/* Sky follows the board style: Glass (the default, i.e. nothing saved, or
@@ -3762,8 +3762,8 @@ function boot(){
 function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
-<script src="sky-glass.js?v=4" defer></script>
-<script src="sky-airport.js?v=3" defer></script>
+<script src="sky-glass.js?v=5" defer></script>
+<script src="sky-airport.js?v=4" defer></script>
 <script src="sky-landmarks.js?v=2" defer></script>
 <script src="mascot.js?v=3" defer></script>
 <script src="mascot-buddy.js?v=9" defer></script>

@@ -556,3 +556,32 @@
     justify-content:flex-start; max-width:calc(100vw - 150px);
   }
 }
+
+/* ---- header, organised: ‹ board · More · ⚙ — the rest lives in More ------- */
+:root[data-sky-glass] #sgMore{ order:6; position:relative }
+:root[data-sky-glass] header #sgMoreBtn{ --chip:#00E0C6 }
+:root[data-sky-glass] header #sgMoreBtn::after{ content:" \25BE"; opacity:.8 }
+:root[data-sky-glass] #sgMore.open #sgMoreBtn{ border-color:#00E0C6 }
+:root[data-sky-glass] #sgMenu{
+  position:absolute; right:0; top:calc(100% + 8px); z-index:50; min-width:230px;
+  display:flex; flex-direction:column; gap:2px; padding:6px; border-radius:14px;
+  background:rgba(16,18,23,.95); border:1px solid var(--sg-edge); box-shadow:0 18px 50px rgba(0,0,0,.45);
+}
+:root[data-sky-glass] #sgMenu[hidden]{ display:none }
+:root[data-sky-glass] header #sgMenu > a,
+:root[data-sky-glass] header #sgMenu > button{
+  order:0 !important; margin:0 !important; width:100%; text-align:left; display:block;
+  background:none !important; border:0 !important; box-shadow:none !important; border-radius:9px;
+  padding:11px 12px; font-weight:600; color:var(--sg-ink); text-decoration:none; opacity:1 !important; pointer-events:auto !important;
+}
+:root[data-sky-glass] header #sgMenu > a:hover,
+:root[data-sky-glass] header #sgMenu > button:hover{ background:rgba(255,255,255,.08) !important }
+:root[data-sky-glass] header #sgMenu > [aria-pressed="true"]{ color:#00E0C6 }
+:root[data-sky-glass] header #sgMenu #fsBtn::after{ content:"Full screen"; }
+:root[data-sky-glass] header #sgMenu #tourBtn::before{ content:"" }
+/* Follow does what Close up did, so the map's own toggle goes. */
+:root[data-sky-glass] #miniZoomBtn{ display:none !important }
+/* The camera bar's buttons sit closer together now their labels are short. */
+:root[data-sky-glass] #sgCam.show{ gap:6px }
+/* The header is its own layer (z2) under the camera bar (z5); lift it while the menu is open. */
+:root[data-sky-glass].sg-menu-open header{ z-index:30 }

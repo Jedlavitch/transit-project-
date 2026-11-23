@@ -644,7 +644,7 @@
   function button() {
     if (document.getElementById("sgApBtn")) return;
     var b = document.createElement("button");
-    b.type = "button"; b.id = "sgApBtn"; b.textContent = "Airport view";
+    b.type = "button"; b.id = "sgApBtn"; b.textContent = document.getElementById("sgCam") ? "Airport" : "Airport view";
     b.title = "Watch the airport this flight is heading for: runways, arrivals and landings (A)";
     b.addEventListener("click", function () { open(); });
     var bar = document.getElementById("sgCam"), gear = document.getElementById("setBtn");

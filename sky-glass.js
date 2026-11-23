@@ -292,7 +292,7 @@
     if (!camBar) return;
     var f = camBar.querySelector(".sg-cam-follow"), rc = camBar.querySelector(".sg-cam-recentre");
     f.setAttribute("aria-pressed", String(cam.on));
-    f.textContent = cam.on ? "Following" : "Follow plane";
+    f.textContent = cam.on ? "Following" : "Follow";
     f.title = cam.on ? "Stop following and show the whole route (C)" : "Zoom in and fly with the plane (C)";
     rc.hidden = !(cam.on && userHolding());
     camBar.querySelector(".sg-cam-read").hidden = !cam.on;
@@ -355,7 +355,7 @@
     if (!t) return;
     var href = "https://www.liveatc.net/search/?icao=" + encodeURIComponent(t.icao);
     if (a.getAttribute("href") !== href) a.setAttribute("href", href);
-    a.textContent = "Listen to ATC · " + t.icao;
+    a.textContent = "ATC · " + t.icao;
     a.title = "Open LiveATC's live feeds for " + t.icao + " (" + t.why + ") in a new tab";
   }
 
@@ -365,7 +365,7 @@
     camBar.innerHTML = '<span class="sg-cam-read" hidden></span>' +
       '<button type="button" class="sg-cam-recentre" hidden>Re-centre</button>' +
       '<button type="button" class="sg-cam-follow" aria-pressed="false"></button>' +
-      '<button type="button" class="sg-cam-next" title="Follow the next plane in range (N)">Next plane ›</button>' +
+      '<button type="button" class="sg-cam-next" title="Follow the next plane in range (N)">Next ›</button>' +
       '<a class="sg-cam-atc" target="_blank" rel="noopener" hidden></a>';
     document.body.appendChild(camBar);
     camBar.querySelector(".sg-cam-follow").addEventListener("click", function () { setFollow(!cam.on); });
@@ -501,6 +501,28 @@
     gear.parentNode.insertBefore(db, gear);
     db.addEventListener("click", function () { setDark(!root.hasAttribute("data-sky-dark")); });
     setDark(root.hasAttribute("data-sky-dark"));
+  }
+
+  /* The header, organised (Glass): logo and title, then just "‹ board",
+     More and Settings, then the clock. Everything else moves into the More
+     menu — the same elements, moved rather than copied, so their handlers
+     and keyboard shortcuts keep working. Close up goes: Follow does it. */
+  if (glass && gear && !document.getElementById("sgMore")) {
+    var more = document.createElement("div");
+    more.id = "sgMore";
+    more.innerHTML = '<button type="button" id="sgMoreBtn" aria-haspopup="menu" aria-expanded="false" title="More controls">More</button><div id="sgMenu" role="menu" hidden></div>';
+    gear.parentNode.insertBefore(more, gear);
+    var menu = more.querySelector("#sgMenu"), mb = more.querySelector("#sgMoreBtn");
+    ["sgShareBtn", "sgHideBtn", "sgViewBtn", "sgDarkBtn", "logBtn", "tourBtn", "fsBtn"].forEach(function (id) {
+      var b = document.getElementById(id); if (!b) return;
+      b.setAttribute("role", "menuitem"); menu.appendChild(b);
+    });
+    var setMenu = function (open) { menu.hidden = !open; mb.setAttribute("aria-expanded", String(open)); more.classList.toggle("open", open); root.classList.toggle("sg-menu-open", open); };
+    mb.addEventListener("click", function (e) { e.stopPropagation(); setMenu(menu.hidden); });
+    menu.addEventListener("click", function (e) { if (e.target.closest("[role=menuitem]")) setTimeout(function () { setMenu(false); }, 0); });
+    document.addEventListener("click", function (e) { if (!more.contains(e.target)) setMenu(false); });
+    addEventListener("keydown", function (e) { if (e.key === "Escape" && !menu.hidden) setMenu(false); });
+    try { if (typeof miniZoomMode !== "undefined" && miniZoomMode === "close" && typeof setMiniZoomMode === "function") setTimeout(function () { setMiniZoomMode("route"); }, 0); } catch (e) {}
   }
 
   var bare = false;
