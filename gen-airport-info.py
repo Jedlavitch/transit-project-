@@ -50,7 +50,7 @@ def simplify(pts, keep=60):
     return [pts[int(i * step)] for i in range(keep)]
 
 
-def build(ap):
+def build(ap, saved=None):
     lats = [p for r in ap["rwy"] for p in (r["a"][0], r["b"][0])] + [ap["lat"]]
     lons = [p for r in ap["rwy"] for p in (r["a"][1], r["b"][1])] + [ap["lon"]]
     bb = "%.4f,%.4f,%.4f,%.4f" % (min(lats) - .01, min(lons) - .01, max(lats) + .01, max(lons) + .01)
@@ -64,9 +64,12 @@ def build(ap):
           'nwr["shop"](%(b)s);'
           'nwr["aeroway"="aerodrome"](%(b)s);'
           ");out center tags;") % {"b": bb}
-    els = overpass(q1)["elements"]
-    time.sleep(3)
-    els = els + overpass(q2)["elements"]
+    if saved is not None:
+        els = saved          # a response saved earlier (see --from)
+    else:
+        els = overpass(q1)["elements"]
+        time.sleep(3)
+        els = els + overpass(q2)["elements"]
 
     terms = []
     for e in els:
@@ -140,13 +143,19 @@ def build(ap):
 
 def main():
     aps = json.load(open("airport-runways.json"))["airports"]
-    want = set(a.upper() for a in sys.argv[1:])
+    args = sys.argv[1:]
+    saved = None
+    # --from FILE: build from an Overpass JSON answer saved by hand, for the
+    # days the public servers time out (they often do for the big airports)
+    if "--from" in args:
+        i = args.index("--from"); saved = json.load(open(args[i + 1]))["elements"]; del args[i:i + 2]
+    want = set(a.upper() for a in args)
     os.makedirs("airport-info", exist_ok=True)
     for ap in aps:
         if want and ap["icao"] not in want and ap["iata"] not in want:
             continue
         try:
-            doc = build(ap)
+            doc = build(ap, saved)
         except Exception as e:
             print("%s: FAILED %s" % (ap["icao"], e), file=sys.stderr, flush=True)
             continue
