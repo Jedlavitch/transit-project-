@@ -98,7 +98,8 @@
         '<select class="ap-pick" aria-label="Choose an airport"></select>' +
       '</div>' +
       '<aside class="ap-side">' +
-        '<div class="ap-health"><span class="ap-pill">Checking…</span><span class="ap-why"></span>' +
+        '<button type="button" class="ap-grip" aria-label="Show more" aria-expanded="false"><i></i></button>' +
+        '<div class="ap-health"><div class="ap-head"><span class="ap-dot"></span><span class="ap-pill">Checking…</span></div><span class="ap-why"></span>' +
           '<dl class="ap-stats"></dl></div>' +
         '<div class="ap-tabs" role="tablist">' +
           '<button type="button" role="tab" data-tab="traffic" aria-selected="true">Traffic</button>' +
@@ -138,7 +139,21 @@
     poiLayer = L.layerGroup();
     trailLayer = L.layerGroup().addTo(map);
     planeLayer = L.layerGroup().addTo(map);
-    map.on("zoomend", function () { el.classList.toggle("ap-far", map.getZoom() < 10); });
+    /* Plane labels go below z10 (they pile up); runway numbers only from z13,
+       where the runways are long enough on screen to carry them. */
+    var zoomCls = function () { var z = map.getZoom(); el.classList.toggle("ap-far", z < 10); el.classList.toggle("ap-near", z >= 13); };
+    map.on("zoomend", zoomCls); zoomCls();
+    // the phone sheet: a short peek that opens to most of the screen
+    var side = $(".ap-side", el), grip = $(".ap-grip", el);
+    function setSheet(open) { side.classList.toggle("open", open); if (!open) side.scrollTop = 0; grip.setAttribute("aria-expanded", String(open)); grip.setAttribute("aria-label", open ? "Show less" : "Show more"); }
+    grip.addEventListener("click", function () { setSheet(!side.classList.contains("open")); });
+    var y0 = null;
+    grip.addEventListener("touchstart", function (e) { y0 = e.touches[0].clientY; }, { passive: true });
+    grip.addEventListener("touchend", function (e) {
+      if (y0 == null) return; var dy = e.changedTouches[0].clientY - y0; y0 = null;
+      if (dy < -30) setSheet(true); else if (dy > 30) setSheet(false);
+    });
+    $(".ap-tabs", el).addEventListener("click", function () { setSheet(true); });
   }
   function dark() { return root.hasAttribute("data-sky-dark") || !root.hasAttribute("data-sky-glass"); }
 

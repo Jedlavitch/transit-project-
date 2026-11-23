@@ -140,3 +140,95 @@
 #sgAp .ap-links a, #sgAp .ap-tsa{ font-weight:700; font-size:14px; color:#7FB2FF; text-decoration:none; display:block }
 #sgAp .ap-tsa{ color:#F7F8FA }
 #sgAp .ap-links li > span:last-child{ font-size:12px; color:#A8AFBA }
+
+/* =============================================================================
+   v3 design pass — one type family, a calmer hierarchy, a phone sheet.
+   (Later rules here deliberately override the first pass above.)
+   ============================================================================= */
+#sgAp.show{
+  font-family:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums;
+  --ap-tint:rgba(16,18,23,.86); --ap-line:rgba(255,255,255,.08); --ap-sub:#9AA3B2;
+}
+/* Top bar: back, the airport, the picker — one tidy row */
+#sgAp .ap-top{ gap:8px; align-items:stretch }
+#sgAp .ap-back, #sgAp .ap-pick{
+  font-size:14px; font-weight:600; padding:0 14px; height:44px; border-radius:12px;
+  box-shadow:none; border:1px solid var(--ap-edge); background:var(--ap-tint);
+}
+#sgAp .ap-pick{ max-width:220px; appearance:none; -webkit-appearance:none; padding-right:30px;
+  background-image:linear-gradient(45deg,transparent 50%,#9AA3B2 50%),linear-gradient(135deg,#9AA3B2 50%,transparent 50%);
+  background-position:calc(100% - 16px) 19px, calc(100% - 11px) 19px; background-size:5px 5px; background-repeat:no-repeat }
+#sgAp .ap-title{ align-items:center; gap:10px; padding:0 14px; height:44px; border-radius:12px; flex-wrap:nowrap }
+#sgAp .ap-code{ font-size:20px; font-weight:800; letter-spacing:.01em }
+#sgAp .ap-name{ font-size:13px; color:var(--ap-sub) }
+#sgAp .ap-rwy{ font-weight:600; font-size:12px; line-height:1; font-family:inherit; color:#fff; background:#FF3D77; padding:5px 8px; border-radius:6px; white-space:nowrap }
+
+/* The panel */
+#sgAp .ap-side{ top:68px; width:min(360px,36vw); padding:14px; border-radius:16px; background:var(--ap-tint);
+  -webkit-backdrop-filter:none; backdrop-filter:none; scrollbar-width:thin }
+#sgAp .ap-grip{ display:none }
+
+/* Status: one headline, one sentence, then chips */
+#sgAp .ap-health{ padding:12px 12px 10px; border-radius:12px; box-shadow:none; background:rgba(46,204,113,.10); margin-bottom:12px }
+#sgAp .ap-health.ap-minor{ background:rgba(255,211,122,.12); box-shadow:none }
+#sgAp .ap-health.ap-bad{ background:rgba(255,140,60,.14); box-shadow:none }
+#sgAp .ap-health.ap-stop{ background:rgba(255,61,119,.16); box-shadow:none }
+#sgAp .ap-head{ display:flex; align-items:center; gap:8px }
+#sgAp .ap-dot{ width:10px; height:10px; border-radius:50%; background:#2ECC71; box-shadow:0 0 0 4px rgba(46,204,113,.2); flex:none }
+#sgAp .ap-minor .ap-dot{ background:#FFD37A; box-shadow:0 0 0 4px rgba(255,211,122,.2) }
+#sgAp .ap-bad .ap-dot{ background:#FF8C3C; box-shadow:0 0 0 4px rgba(255,140,60,.2) }
+#sgAp .ap-stop .ap-dot{ background:#FF3D77; box-shadow:0 0 0 4px rgba(255,61,119,.25) }
+#sgAp .ap-pill{ font-size:20px; font-weight:800; letter-spacing:-.01em }
+#sgAp .ap-why{ font-size:13px; line-height:1.4; color:#D5DAE2; margin:4px 0 10px }
+#sgAp .ap-stats{ display:flex; flex-wrap:wrap; gap:6px; margin:0 }
+#sgAp .ap-stats div{ display:flex; align-items:baseline; gap:6px; padding:6px 9px; border-radius:8px; background:rgba(255,255,255,.07) }
+#sgAp .ap-stats dt{ font-size:11px; letter-spacing:0; text-transform:none; color:var(--ap-sub) }
+#sgAp .ap-stats dd{ font-weight:600; font-size:13px; line-height:1.2; font-family:inherit; white-space:nowrap }
+
+/* Tabs */
+#sgAp .ap-tabs{ margin:0 0 10px; border-radius:10px; background:rgba(255,255,255,.06) }
+#sgAp .ap-tabs button{ padding:9px; font-size:13px; font-weight:600; border-radius:8px; color:var(--ap-sub) }
+#sgAp .ap-tabs button[aria-selected="true"]{ background:rgba(255,255,255,.14); color:#fff }
+
+/* Section heads and rows */
+#sgAp h3{ font-size:11px; font-weight:700; letter-spacing:.1em; color:var(--ap-sub); margin:14px 0 4px }
+#sgAp li{ padding:9px 8px; border-radius:10px; gap:1px 10px }
+#sgAp li .cs{ font-weight:700; font-size:15px; line-height:1.25; font-family:inherit; letter-spacing:.01em }
+#sgAp li .eta{ font-weight:700; font-size:15px; line-height:1.25; font-family:inherit; color:#FFD37A }
+#sgAp li .meta{ font-size:12px; color:var(--ap-sub); margin-top:1px }
+#sgAp li .rw{ font-weight:700; font-size:11px; line-height:1; font-family:inherit; padding:4px 6px }
+#sgAp .ap-sec-arr li, #sgAp .ap-sec-dep li, #sgAp .ap-landed li{ padding-left:12px }
+#sgAp .ap-rw, #sgAp .ap-rw th{ font-family:inherit }
+#sgAp .ap-term > h4{ font-size:15px }
+#sgAp .ap-term li .open{ font-family:inherit; font-size:10px }
+#sgAp .ap-note{ font-size:11px; line-height:1.4 }
+
+/* Map: runway numbers only when there is room for them */
+.ap-rwy-lbl{ display:none; font-family:"Inter",-apple-system,system-ui,sans-serif; font-weight:700 }
+#sgAp.ap-near .ap-rwy-lbl{ display:block }
+
+/* ---- phones: a sheet that peeks, and opens on a tap or a swipe up ---------- */
+@media (max-width:760px){
+  #sgAp .ap-top{ left:10px; right:10px; top:max(10px, env(safe-area-inset-top)) }
+  #sgAp .ap-back{ padding:0 12px }
+  #sgAp .ap-title{ flex:1 1 auto; min-width:0; padding:0 12px }
+  #sgAp .ap-code{ font-size:18px }
+  #sgAp .ap-pick{ flex:0 0 auto; max-width:104px; font-size:13px; order:3 }
+  #sgAp .ap-side{
+    left:0; right:0; bottom:0; top:auto; width:auto; border-radius:18px 18px 0 0;
+    max-height:36vh; padding:6px 14px calc(12px + env(safe-area-inset-bottom));
+    transition:max-height .28s ease; box-shadow:0 -10px 30px rgba(0,0,0,.35);
+  }
+  #sgAp .ap-side.open{ max-height:78vh }
+  #sgAp .ap-grip{ display:block; width:100%; height:22px; border:0; background:none; cursor:pointer; padding:0; margin:0 0 4px }
+  #sgAp .ap-grip i{ display:block; width:40px; height:5px; border-radius:3px; background:rgba(255,255,255,.3); margin:8px auto 0 }
+  #sgAp .ap-health{ padding:10px 12px; margin-bottom:10px }
+  #sgAp .ap-pill{ font-size:18px }
+  #sgAp .ap-why{ margin:2px 0 8px; font-size:12px }
+  /* peeking: the headline and one row of chips; the rest when opened */
+  #sgAp .ap-side:not(.open) .ap-stats{ flex-wrap:nowrap; overflow:hidden; mask-image:linear-gradient(90deg,#000 85%,transparent) ; -webkit-mask-image:linear-gradient(90deg,#000 85%,transparent) }
+  #sgAp .ap-side:not(.open) .ap-why{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  #sgAp .leaflet-bottom.leaflet-left{ bottom:calc(36vh + 6px) }
+}
+#sgAp .ap-stats dt{ white-space:nowrap } #sgAp .ap-stats div{ flex:none }
