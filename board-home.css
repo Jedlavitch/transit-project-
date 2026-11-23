@@ -541,65 +541,81 @@
   :root[data-style="glass"] body #app > header > *, :root[data-style="glass"] #map .leaflet-control{ transition:none }
 }
 
+/* NOT ON AMAZON DEVICES (.tb-lowfx, set by keepalive.js): an Echo Show 21
+   photographed this block half-applied: the map squeezed to a strip and map
+   and boxes both stuck in the left ~39% (the Classic map column) with the
+   rest of the screen empty. Its Silk engine mishandles the subgrid layout,
+   so there it keeps the fallback above — Glass colours and chrome on the
+   Classic side-by-side layout, which renders correctly on old engines.
+   :where() keeps every selector's specificity exactly as it was. */
 @supports (grid-template-rows: subgrid){
-  :root[data-style="glass"] body #app{
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app{
     display:grid; grid-template-columns:minmax(0,1fr);
     grid-template-rows:auto auto var(--glass-band) minmax(0,1fr) auto;
   }
-  :root[data-style="glass"] body #app > header    { grid-column:1; grid-row:1 }
-  :root[data-style="glass"] body #app > #statStrip{ grid-column:1; grid-row:2 }
-  :root[data-style="glass"] body #app > main{
+  /* --glass-band is in dvh, i.e. real screen pixels, but #app is zoomed on a
+     TV (and shrunk on a small desk screen), so the band was scaled twice: at
+     1.2x on a 1080p panel the map took 945 of 1080px and the boxes got 67px.
+     Same correction theme.css makes for its own map row. */
+  @supports (zoom: 1){
+    :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app{
+      grid-template-rows:auto auto calc(var(--glass-band) / var(--ui-zoom, 1)) minmax(0,1fr) auto;
+    }
+  }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > header    { grid-column:1; grid-row:1 }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > #statStrip{ grid-column:1; grid-row:2 }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main{
     grid-column:1; grid-row:1 / 5; z-index:1; min-height:0;
     display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:subgrid;
     gap:0; padding:0;
   }
-  :root[data-style="glass"] body #app > footer    { grid-column:1; grid-row:5; z-index:6 }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > footer    { grid-column:1; grid-row:5; z-index:6 }
 
   /* The map column: header + strip + band. Its own stacking context keeps
      Leaflet's 400-1000 panes below the chrome (z6 in #app). */
-  :root[data-style="glass"] body #app > main > .col:first-child{
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:first-child{
     grid-column:1; grid-row:1 / 4; position:relative; z-index:0;
     min-width:0; min-height:0; display:block;
   }
-  :root[data-style="glass"] body #app > main > .col:first-child > .tb-map-heading{ display:none }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:first-child > .tb-map-heading{ display:none }
   /* The map's foot fades into the page instead of ending on a hard edge.
      Leaflet's own bottom controls (z1000: scale, attribution) stay above it. */
-  :root[data-style="glass"] body:not(.map-full) #app > main > .col:first-child::after{
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body:not(.map-full) #app > main > .col:first-child::after{
     content:""; position:absolute; left:0; right:0; bottom:0; height:min(140px,38%);
     z-index:900; pointer-events:none;
     background:linear-gradient(180deg, rgba(0,0,0,0), var(--bg) 92%);
   }
-  :root[data-style="glass"] body #app > main > .col:last-child{ position:relative; z-index:2 }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:last-child{ position:relative; z-index:2 }
   /* #map must not be its own stacking context here (Classic gives it z0), or
      the fade would bury the scale and the OpenStreetMap attribution. The
      column above is still the context that keeps Leaflet under the chrome. */
-  :root[data-style="glass"] body:not(.map-full) #map{ z-index:auto }
-  :root[data-style="glass"] body #app #map{
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body:not(.map-full) #map{ z-index:auto }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app #map{
     position:absolute; top:0; right:0; bottom:0; left:0;
     height:auto; min-height:0; border:0 !important; border-radius:0;
   }
-  :root[data-style="glass"] body .legend{
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body .legend{
     position:absolute; left:12px; bottom:10px; z-index:950; max-width:60%;
     text-shadow:var(--glass-ink-shadow);
   }
   /* The map's own controls clear the frosted chrome above them. */
-  :root[data-style="glass"] body:not(.map-full) #map .leaflet-top{ top:var(--tb-glass-top, 0px) }
-  :root[data-style="glass"] body:not(.map-full) #mapFsBtn{ top:calc(var(--tb-glass-top, 0px) + 10px) }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body:not(.map-full) #map .leaflet-top{ top:var(--tb-glass-top, 0px) }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body:not(.map-full) #mapFsBtn{ top:calc(var(--tb-glass-top, 0px) + 10px) }
   /* "Following UAL2297 · Stop" lives at the map's top edge, which in Glass is
      under the header: it sat behind the buttons, half hidden. Below them. */
-  :root[data-style="glass"] body:not(.map-full) #followBanner{ top:calc(var(--tb-glass-top, 0px) + 10px) }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body:not(.map-full) #followBanner{ top:calc(var(--tb-glass-top, 0px) + 10px) }
 
   /* The departures sit below the band, as they do in the stacked layout. */
-  :root[data-style="glass"] body #app > main > .col:last-child{
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:last-child{
     grid-column:1; grid-row:4; min-width:0; min-height:0; padding:14px 16px 12px;
   }
 
   /* Map-only: the column's z-index:0 would trap the fixed map under the
      chrome, so the chrome steps aside — same as Atlas. */
-  :root[data-style="glass"] body.map-full #app > header,
-  :root[data-style="glass"] body.map-full #app > #statStrip,
-  :root[data-style="glass"] body.map-full #app > footer,
-  :root[data-style="glass"] body.map-full #app > main > .col:last-child{ display:none }
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body.map-full #app > header,
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body.map-full #app > #statStrip,
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body.map-full #app > footer,
+  :root[data-style="glass"]:where(:not(.tb-lowfx)) body.map-full #app > main > .col:last-child{ display:none }
 
   /* Tablet and up: the boxes FILL the space under the map. The fitter caps
      tile height when everything already fits, which on a big screen left
@@ -608,14 +624,14 @@
      chosen so rows come out even), and each list takes its box's full
      height — trimmed to whole rows by the same script. */
   @media (min-width:481px){
-    :root[data-style="glass"] body #app > main > .col:last-child{ display:flex; flex-direction:column; overflow:hidden }
-    :root[data-style="glass"] body #app > main > .col:last-child > .cards{ flex:1 1 auto; min-height:0 }
-    :root[data-style="glass"].tb-grid body .cards{
+    :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:last-child{ display:flex; flex-direction:column; overflow:hidden }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:last-child > .cards{ flex:1 1 auto; min-height:0 }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)).tb-grid body .cards{
       grid-template-columns:repeat(var(--tb-glass-cols, var(--tb-card-cols, 3)), minmax(0,1fr)) !important;
       grid-auto-rows:minmax(0,1fr) !important; align-content:stretch !important;
     }
-    :root[data-style="glass"].tb-grid body .card:not(.mini){ height:auto !important; min-height:0; display:flex; flex-direction:column }
-    :root[data-style="glass"].tb-grid body .card:not(.mini) .list{ flex:1 1 auto; min-height:0; max-height:none !important; height:auto !important }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)).tb-grid body .card:not(.mini){ height:auto !important; min-height:0; display:flex; flex-direction:column }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)).tb-grid body .card:not(.mini) .list{ flex:1 1 auto; min-height:0; max-height:none !important; height:auto !important }
   }
 
   /* Large screens: the map is the point, so it gets most of the height.
@@ -623,15 +639,15 @@
      the columns), which on a wide screen is usually one row of tall boxes.
      Laptop-height screens get a smaller step so each box keeps two rows. */
   @media (min-width:1221px){
-    :root[data-style="glass"]{ --glass-band:clamp(360px, 50dvh, 900px) }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)){ --glass-band:clamp(360px, 50dvh, 900px) }
   }
   @media (min-width:1221px) and (min-height:950px){
-    :root[data-style="glass"]{ --glass-band:clamp(360px, 58dvh, 1100px) }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)){ --glass-band:clamp(360px, 58dvh, 1100px) }
   }
 
   /* Phones scroll the page instead of fitting it; the band stays a map. */
   @media (max-width:480px){
-    :root[data-style="glass"]{ --glass-band:max(230px,34dvh) }
-    :root[data-style="glass"] body #app > main > .col:last-child{ padding:10px }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)){ --glass-band:max(230px,34dvh) }
+    :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:last-child{ padding:10px }
   }
 }
