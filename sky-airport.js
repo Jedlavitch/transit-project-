@@ -635,7 +635,7 @@
     loadInfo();
     if (tab === "info") setTab("info");
   }
-  function open(code) {
+  function open(code, camId) {
     loadData().then(function () {
       var a = (code && find(code)) || pickAirport();
       if (!a) return;
@@ -645,6 +645,13 @@
       try { if (base) base.setTheme(dark() ? "dark" : "color"); } catch (e) {}
       show(a);
       cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
+      /* ?cam=<id> (with ?airport=) opens that live camera straight away: the
+         link a city board uses for "watch the airport live" (e.g. Chicago's
+         Midway camera). Unknown ids are ignored and leave the airport view. */
+      if (camId && window.TBCams) {
+        var c = window.TBCams.forIcao(a.icao).filter(function (x) { return x.id === camId; })[0];
+        if (c) window.TBCams.open(c, a);
+      }
     });
   }
   function close() {
@@ -677,8 +684,9 @@
       if (e.key === "Escape" && window.TBAirport.isOpen()) { e.stopPropagation(); close(); }
       else if ((e.key === "a" || e.key === "A") && !window.TBAirport.isOpen()) open();
     }, true);
-    var q = null; try { q = new URLSearchParams(location.search).get("airport"); } catch (e) {}
-    if (q) open(q);
+    var q = null, qc = null;
+    try { var u = new URLSearchParams(location.search); q = u.get("airport"); qc = u.get("cam"); } catch (e) {}
+    if (q) open(q, qc);
   }
   // after sky-glass.js has built the camera bar
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(boot, 0); });

@@ -293,6 +293,7 @@
     clearInterval(poll); cancelAnimationFrame(raf);
     $("iframe", el).setAttribute("src", "about:blank");     // stop the stream, not just hide it
     cam = null;
+    try { var u = new URL(location.href); if (u.searchParams.has("cam")) { u.searchParams.delete("cam"); history.replaceState(null, "", u); } } catch (e) {}
   }
   window.TBCams.open = open;
   window.TBCams.close = close;
