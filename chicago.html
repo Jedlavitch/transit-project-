@@ -606,6 +606,9 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
     </nav>
     <nav class="view-links">
       <a id="nightBtn" href="night.html?city=chicago" title="Sky view — nearest flight" onclick="if(window.TBGate &amp;&amp; !TBGate.require('sky')) return false; window.location.href='night.html?city=chicago'; return false;">Sky</a>
+      <!-- Midway's live runway camera, opened straight from Sky's airport view (sky-cams.js).
+           Same Sky gate as the button above: it is part of Sky. -->
+      <a id="camBtn" href="night.html?city=chicago&amp;airport=KMDW&amp;cam=kmdw-streamtime" title="Live camera at Chicago Midway — runways 31, with the planes around it" onclick="if(window.TBGate &amp;&amp; !TBGate.require('sky')) return false; window.location.href=this.getAttribute('href'); return false;">Midway cam</a>
       <a id="tvBtn" href="tv.html" title="TV menu — big remote-friendly launcher" onclick="window.location.href='tv.html'; return false;">TV</a>
       <a id="tourBtn" href="tour.html" title="Grand Tour — shuffle every city's planes, trains &amp; buses on one live map" onclick="window.location.href='tour.html'; return false;">Tour</a>
       <a id="spotBtn" href="spot.html" title="Spotter — log the trains, buses &amp; planes you see" onclick="window.location.href='spot.html'; return false;">Spot</a>
