@@ -1,5 +1,6 @@
 /* ============================================================================
-   keepalive.js — keeps a board on screen on an Amazon Echo Show (and Fire TV).
+   keepalive.js — keeps a board on screen, and light enough to run, on an
+   Amazon Echo Show (and Fire TV). Low-effects mode is further down.
 
    WHY wake.js IS NOT ENOUGH THERE
      A wake lock stops the screen dimming. It does not stop Fire OS deciding the
@@ -29,8 +30,33 @@
   try { q = new URLSearchParams(location.search).get("keepalive"); } catch (_) {}
   if (q === "1" || q === "0") store(q);
 
-  var pref = saved();
   var amazon = /Silk|Echo|AEO|AFT|KF[A-Z]{2}/i.test(navigator.userAgent || "");
+
+  /* LOW-EFFECTS MODE — the same Amazon devices choke on Glass.
+     Glass floats frosted pills (backdrop-filter: blur) over a live WebGL map.
+     Every time a bus or plane moves, every blur behind it is recomputed, and
+     an Echo Show's GPU cannot keep up: the page stalls and the map stutters.
+     Here every backdrop blur on the page goes (including ones other scripts
+     inject later, hence the universal selector), and Glass's pills get a more
+     solid tint so the text still reads over a bright map without the blur.
+     Same remembered overrides: ?lowfx=1 forces it on, ?lowfx=0 off. */
+  var LFX = "tb.lowfx", lq = null, lpref = null;
+  try { lq = new URLSearchParams(location.search).get("lowfx"); } catch (_) {}
+  try { if (lq === "1" || lq === "0") localStorage.setItem(LFX, lq); lpref = localStorage.getItem(LFX); } catch (_) {}
+  if (lpref === "1" || (lpref !== "0" && amazon)) {
+    var root = document.documentElement;
+    root.classList.add("tb-lowfx");
+    var st = document.createElement("style");
+    st.id = "tbLowFx";
+    st.textContent =
+      ".tb-lowfx *,.tb-lowfx *::before,.tb-lowfx *::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}" +
+      ".tb-lowfx[data-style=glass]{--glass-tint-strong:rgba(12,14,18,.84)}" +
+      ".tb-lowfx[data-style=glass][data-theme=black]{--glass-tint-strong:rgba(0,0,0,.86)}" +
+      ".tb-lowfx[data-style=glass][data-theme=day]{--glass-tint-strong:rgba(255,255,255,.9)}";
+    (document.head || root).appendChild(st);
+  }
+
+  var pref = saved();
   if (pref === "0" || (pref !== "1" && !amazon)) return;
 
   var SRC = "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAWlzb21tcDQxbXA0MgAAAAFtZGF0AAAAAAAAAUYAAAA6BgUyR1ZK3FxMQz+U78URPNFDqAEAAAMAAQMAAAMAAQIAAAfQCwAAAwAAAwAAEbwMA4kFAw3/////gAAAAFMluCAAg///4eigPvFb7/D//DwSF++++++++oTFa666hKuuuuuuuoTrrrqEq6666666hOuuuoSrrrrrrr4//8PRfvvvrrrrrrrrrrrrrrrrrrrrwAAAACgh4QQHvwOn6EfNn+fs/nhSf/QVVn88KT/PCufz+fzwpP/Mqi/51UX8AAAAISHiCAc4z/VWf5s/+qs/nhaf54Xz+fz+eFp/5lUX/Oqi/gAAACEh4wwGuM+fo/n4j5/P5/P82f5/P5/P54Yn/mVRf86qL+AAAAAnIeQQBjoTvEeI4j5/P5/PxHz+fz+fiPn8/n8/zZ/5kGleaI/nVRfwAAAC4m1vb3YAAABsbXZoZAAAAADnKUoR5ylKEQAAAlgAAAXcAAEAAAEAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAJudHJhawAAAFx0a2hkAAAAAecpShHnKUoRAAAAAQAAAAAAAAXcAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAABAAAAAQAAAAAAAJGVkdHMAAAAcZWxzdAAAAAAAAAABAAAF3AAAAAAAAQAAAAAB5m1kaWEAAAAgbWRoZAAAAADnKUoR5ylKEQAAAlgAAAXcVcQAAAAAADFoZGxyAAAAAAAAAAB2aWRlAAAAAAAAAAAAAAAAQ29yZSBNZWRpYSBWaWRlbwAAAAGNbWluZgAAABR2bWhkAAAAAQAAAAAAAAAAAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAABTXN0YmwAAACcc3RzZAAAAAAAAAABAAAAjGF2YzEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAQABAAEgAAABIAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY//8AAAAiYXZjQwFCAAv/4QALJ0IAC6tBhvAgwigBAAQozjyAAAAACmZpZWwBAAAAAApjaHJtAAAAAAAYc3R0cwAAAAAAAAABAAAABQAAASwAAAAUc3RzcwAAAAAAAAABAAAAAQAAABFzZHRwAAAAACAQEBAQAAAAKHN0c2MAAAAAAAAAAgAAAAEAAAACAAAAAQAAAAMAAAABAAAAAQAAAChzdHN6AAAAAAAAAAAAAAAFAAAAlQAAACwAAAAlAAAAJQAAACsAAAAcc3RjbwAAAAAAAAADAAAALAAAAO0AAAE3";
