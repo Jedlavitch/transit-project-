@@ -585,3 +585,69 @@
 :root[data-sky-glass] #sgCam.show{ gap:6px }
 /* The header is its own layer (z2) under the camera bar (z5); lift it while the menu is open. */
 :root[data-sky-glass].sg-menu-open header{ z-index:30 }
+
+/* =============================================================================
+   Sky header + map controls, calmer: neutral glass, joined groups, no rainbow
+   underlines. Only a state (Following, a pressed toggle) gets colour.
+   ============================================================================= */
+:root[data-sky-glass] header{ align-items:center; gap:10px }
+:root[data-sky-glass] #sgActs{
+  order:6; margin-left:auto; display:flex; align-items:stretch; height:44px;
+  background:var(--sg-tint); border:1px solid var(--sg-edge); border-radius:12px; padding:3px; gap:2px;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+:root[data-sky-glass] #sgActs > a, :root[data-sky-glass] #sgActs > button, :root[data-sky-glass] #sgActs #sgMoreBtn{
+  order:0 !important; margin:0 !important; height:100%; display:flex; align-items:center; padding:0 14px !important;
+  background:none !important; border:0 !important; box-shadow:none !important; border-radius:9px !important;
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  color:var(--sg-ink) !important; font-weight:600; font-size:14px; text-decoration:none;
+}
+:root[data-sky-glass] #sgActs > a:hover, :root[data-sky-glass] #sgActs > button:hover,
+:root[data-sky-glass] #sgActs #sgMoreBtn:hover, :root[data-sky-glass] #sgMore.open #sgMoreBtn{ background:rgba(255,255,255,.1) !important }
+:root[data-sky-glass] #sgActs #sgMore{ order:0; display:flex }
+:root[data-sky-glass] #sgActs > #setBtn{ font-size:16px; padding:0 12px !important }
+:root[data-sky-glass] #sgActs > * + *{ position:relative }
+:root[data-sky-glass] #sgActs > * + *::before{ content:""; position:absolute; left:-1px; top:9px; bottom:9px; width:1px; background:var(--sg-edge) }
+:root[data-sky-glass] header .clock{ order:7; height:44px; display:flex; align-items:center; padding:0 14px; margin-left:0; border-radius:12px; box-sizing:border-box }
+/* the idle fade still applies to the joined control as a whole */
+:root[data-sky-glass].sg-idle #sgActs{ opacity:0; pointer-events:none }
+:root[data-sky-glass] #sgActs{ transition:opacity .45s ease }
+:root[data-sky-glass].sg-idle #sgActs > *{ opacity:1 }
+
+/* the menu */
+:root[data-sky-glass] #sgMenu{ top:calc(100% + 10px); right:-4px; min-width:220px; padding:6px }
+:root[data-sky-glass] header #sgMenu > a, :root[data-sky-glass] header #sgMenu > button{ font-size:14px; padding:10px 12px; height:auto }
+:root[data-sky-glass] header #sgMenu #fsBtn::before, :root[data-sky-glass] header #sgMenu #fsBtn::after{ content:none !important }
+:root[data-sky-glass] .sg-menu-sep{ height:1px; background:var(--sg-edge); margin:5px 8px }
+/* while it is open, the whole header sits above the map controls and the card */
+:root[data-sky-glass].sg-menu-open header{ z-index:40 }
+
+/* map controls: one segmented bar */
+:root[data-sky-glass] #sgCam.show{
+  gap:2px; padding:3px; border-radius:12px; background:var(--sg-tint); border:1px solid var(--sg-edge);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); flex-wrap:nowrap; max-width:none;
+}
+:root[data-sky-glass] #sgCam button, :root[data-sky-glass] #sgCam .sg-cam-atc{
+  background:none !important; border:0 !important; box-shadow:none !important; border-radius:9px !important;
+  -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  padding:9px 13px !important; font-size:14px !important; font-weight:600; color:var(--sg-ink) !important; white-space:nowrap;
+}
+:root[data-sky-glass] #sgCam button:hover, :root[data-sky-glass] #sgCam .sg-cam-atc:hover{ background:rgba(255,255,255,.1) !important }
+:root[data-sky-glass] #sgCam .sg-cam-follow[aria-pressed="true"]{ background:#FF3D77 !important; color:#fff !important }
+:root[data-sky-glass] #sgCam .sg-cam-recentre{ background:#00E0C6 !important; color:#0F1115 !important }
+:root[data-sky-glass] #sgCam > * + *:not(.sg-cam-read){ position:relative }
+:root[data-sky-glass] #sgCam .sg-cam-read{
+  order:9; background:none !important; border:0 !important; padding:0 10px 0 6px !important; font-size:12px; color:var(--sg-muted)
+}
+:root[data-sky-glass].sg-idle #sgCam.show{ opacity:.0; pointer-events:none }
+:root[data-sky-glass].sg-idle.sg-following #sgCam.show{ opacity:1; pointer-events:auto }
+:root[data-sky-glass].sg-idle.sg-following #sgCam.show > :not(.sg-cam-read):not(.sg-cam-follow){ display:none }
+@media (max-width:760px){
+  :root[data-sky-glass] #sgCam.show{ max-width:calc(100vw - 24px); overflow-x:auto; scrollbar-width:none }
+  :root[data-sky-glass] #sgActs > a, :root[data-sky-glass] #sgActs > button, :root[data-sky-glass] #sgActs #sgMoreBtn{ padding:0 11px !important }
+}
+/* night.html rewrites the full-screen button's icon as you toggle it, so the
+   menu labels it in CSS: hide the icon, show words. */
+:root[data-sky-glass] header #sgMenu #fsBtn{ font-size:0 !important }
+:root[data-sky-glass] header #sgMenu #fsBtn > *{ display:none }
+:root[data-sky-glass] header #sgMenu #fsBtn::after{ content:"Full screen" !important; font-size:14px; font-weight:600 }

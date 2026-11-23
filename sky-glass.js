@@ -402,7 +402,7 @@
   /* 3a — idle fade (Glass) */
   var IDLE_MS = 3500, idleTimer = 0;
   function busy() {
-    return ["#settings.show", "#fleetPanel.show", "#logPanel.show"].some(function (s) { return !!$(s); }) ||
+    return ["#settings.show", "#fleetPanel.show", "#logPanel.show", "#sgMore.open"].some(function (s) { return !!$(s); }) ||
       (document.activeElement && document.activeElement.closest && !!document.activeElement.closest("header"));
   }
   function sleep() { if (!glass) return; if (busy()) { wake(); return; } root.classList.add("sg-idle"); }
@@ -513,10 +513,26 @@
     more.innerHTML = '<button type="button" id="sgMoreBtn" aria-haspopup="menu" aria-expanded="false" title="More controls">More</button><div id="sgMenu" role="menu" hidden></div>';
     gear.parentNode.insertBefore(more, gear);
     var menu = more.querySelector("#sgMenu"), mb = more.querySelector("#sgMoreBtn");
-    ["sgShareBtn", "sgHideBtn", "sgViewBtn", "sgDarkBtn", "logBtn", "tourBtn", "fsBtn"].forEach(function (id) {
-      var b = document.getElementById(id); if (!b) return;
-      b.setAttribute("role", "menuitem"); menu.appendChild(b);
+    /* Grouped: this flight · how it looks · elsewhere. Labels made
+       consistent here ("tour ›" is a header link's wording, not a menu's). */
+    var groups = [["sgShareBtn", "sgHideBtn"], ["sgViewBtn", "sgDarkBtn"], ["logBtn", "tourBtn", "fsBtn"]];
+    var names = { logBtn: "Spotter\u2019s log", tourBtn: "Grand Tour", fsBtn: "Full screen" };
+    groups.forEach(function (g, gi) {
+      if (gi) { var hr = document.createElement("div"); hr.className = "sg-menu-sep"; hr.setAttribute("role", "separator"); menu.appendChild(hr); }
+      g.forEach(function (id) {
+        var b = document.getElementById(id); if (!b) return;
+        b.setAttribute("role", "menuitem");
+        if (names[id]) { b.textContent = names[id]; b.setAttribute("aria-label", names[id]); }
+        menu.appendChild(b);
+      });
     });
+    /* ‹ Board, More and Settings as one joined control. */
+    var acts = document.createElement("div");
+    acts.id = "sgActs";
+    var board = document.getElementById("boardBtn");
+    gear.parentNode.insertBefore(acts, gear);
+    if (board) { board.textContent = "\u2039 Board"; acts.appendChild(board); }
+    acts.appendChild(more); acts.appendChild(gear);
     var setMenu = function (open) { menu.hidden = !open; mb.setAttribute("aria-expanded", String(open)); more.classList.toggle("open", open); root.classList.toggle("sg-menu-open", open); };
     mb.addEventListener("click", function (e) { e.stopPropagation(); setMenu(menu.hidden); });
     menu.addEventListener("click", function (e) { if (e.target.closest("[role=menuitem]")) setTimeout(function () { setMenu(false); }, 0); });
