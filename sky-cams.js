@@ -45,7 +45,19 @@
        the camera's own pan/zoom readout, and the camera also switches
        between a few presets. Until a daylight calibration confirms the aim
        for each preset, no marks are drawn (wrong marks are worse than none):
-       the view shows the video and the traffic around the camera instead. */
+       the view shows the video and the traffic around the camera instead.
+       Daylight attempt 2026-11-23 (10:23-13:03 CST) also stopped short: the
+       camera showed three different presets, each with its own on-screen
+       pan/tilt/zoom readout: -38.73 +2.43 2.9x (the guess above);
+       -36.81 +3.48 2.5x (down the 31R departure roll, water tower left of
+       centre, arched hangars centre, blue water tower right); and
+       -6.46 +2.96 1.0x (wide, over a white wall, terminal gates at left).
+       One fixed yaw/pitch/hfov can only be right for one of them, and the
+       page can't read which preset is on (cross-origin player), so marks
+       stay off until the camera is known to hold one view, or until we
+       find a way to tell presets apart. (The run was also cut up by the
+       Mac sleeping for 15-60 min between steps, which ruled out the
+       plane-versus-feed timing work.) */
     calibrated: false
   },
   /* TRACKING cameras: pan-tilt-zoom cameras that follow planes by themselves
