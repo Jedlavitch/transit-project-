@@ -497,3 +497,62 @@
 :root #settings.tbset #watchMsg:empty, :root #settings.tbset #skyAddrMsg:empty, :root #settings.tbset #goveeMsg:empty{ min-height:0 !important; margin:0 !important }
 :root #settings.tbset .tbset-sec{ border-bottom-color:#2C3038 !important }
 :root #settings.tbset .tbset-foot{ background:#14171C !important; border-top-color:#2C3038 !important }
+
+/* ---- Follow camera, view switch, dark map (sky-glass.js §4) ----------------- */
+:root[data-sky-glass] header #sgViewBtn{ --chip:#2F7BFF; order:6 }
+:root[data-sky-glass] header #sgDarkBtn{ --chip:#00E0C6; order:6 }
+:root[data-sky-glass] header #sgDarkBtn[aria-pressed="true"]{ border-color:#00E0C6 }
+/* The original Sky's header has no chip styling; the view switch matches its own buttons. */
+
+/* The camera bar: bottom right, over the map, clear of the flight card. */
+#sgCam{ display:none }
+:root[data-sky-glass] #sgCam.show{
+  position:fixed; right:clamp(8px,3vw,38px); bottom:calc(14px + env(safe-area-inset-bottom, 0px)); z-index:5;
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; max-width:min(560px, 92vw);
+  transition:opacity .45s ease;
+}
+:root[data-sky-glass] #sgCam button,
+:root[data-sky-glass] #sgCam .sg-cam-read{
+  font:600 13px/1.2 var(--body,system-ui); color:var(--sg-ink);
+  background:var(--sg-tint); border:1px solid var(--sg-edge); border-radius:10px;
+  padding:9px 13px; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+:root[data-sky-glass] #sgCam button{ cursor:pointer; box-shadow:inset 0 -3px 0 #2F7BFF }
+:root[data-sky-glass] #sgCam button:hover{ border-color:#2F7BFF }
+:root[data-sky-glass] #sgCam .sg-cam-follow[aria-pressed="true"]{ background:#FF3D77; border-color:#FF3D77; color:#fff; box-shadow:none }
+:root[data-sky-glass] #sgCam .sg-cam-recentre{ background:#00E0C6; border-color:#00E0C6; color:#0F1115; box-shadow:none }
+:root[data-sky-glass] #sgCam .sg-cam-read{ font-weight:500; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12px }
+:root[data-sky-glass] #sgCam [hidden]{ display:none }
+@media (pointer:coarse){ :root[data-sky-glass] #sgCam button{ padding:12px 16px; font-size:14px } }
+/* Idle: the buttons fade like the header's, but the live readout stays. */
+:root[data-sky-glass].sg-idle #sgCam button{ opacity:0; pointer-events:none }
+:root[data-sky-glass] #sgCam button{ transition:opacity .45s ease }
+:root[data-sky-glass].sg-bare #sgCam .sg-cam-read{ display:none }
+/* While following, the camera moves the plane 8-30 times a second; the
+   marker's own 1.4 s glide would make it trail behind the centre. */
+:root[data-sky-glass].sg-following .mini-veh-icon{ transition:none }
+:root[data-sky-glass].sg-following .mini-veh-icon svg{ transition:transform .6s ease }
+
+/* Dark map */
+:root[data-sky-glass][data-sky-dark] body,
+:root[data-sky-glass][data-sky-dark] body > #miniMap .leaflet-container{ background:#0B0D12 }
+:root[data-sky-glass][data-sky-dark] .mini-here-label{ color:#F7F8FA; text-shadow:0 0 3px #000, 0 0 2px #000 }
+:root[data-sky-glass][data-sky-dark] .sg-plane path{ fill:#DCEBFF; stroke:#0A1220 }
+/* Listen to ATC — a link out to LiveATC, styled as one of the bar's chips. */
+:root[data-sky-glass] #sgCam .sg-cam-atc{
+  font:600 13px/1.2 var(--body,system-ui); color:var(--sg-ink); text-decoration:none;
+  background:var(--sg-tint); border:1px solid var(--sg-edge); border-radius:10px;
+  padding:9px 13px; box-shadow:inset 0 -3px 0 #00E0C6;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); transition:opacity .45s ease;
+}
+:root[data-sky-glass] #sgCam .sg-cam-atc:hover{ border-color:#00E0C6 }
+:root[data-sky-glass].sg-idle #sgCam .sg-cam-atc{ opacity:0; pointer-events:none }
+@media (pointer:coarse){ :root[data-sky-glass] #sgCam .sg-cam-atc{ padding:12px 16px; font-size:14px } }
+/* Narrow screens: the flight card spans the full width at the bottom, so the
+   camera bar moves up under the header, left-aligned (Close up / zoom sit right). */
+@media (max-width:760px){
+  :root[data-sky-glass] #sgCam.show{
+    top:calc(var(--sg-head, 84px) + 10px); bottom:auto; left:clamp(8px,3vw,38px); right:auto;
+    justify-content:flex-start; max-width:calc(100vw - 150px);
+  }
+}

@@ -13,13 +13,16 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <link rel="stylesheet" href="theme.css?v=35" />
-<link rel="stylesheet" href="sky-glass.css?v=2" />
+<link rel="stylesheet" href="sky-glass.css?v=4" />
 <script src="cityswitch.js?v=6"></script>
 <script>/* Sky follows the board style: Glass (the default, i.e. nothing saved, or
-   "glass") gets the Glass Sky; any other chosen style keeps the original. Set
-   before first paint so the page never flashes the other layout. */
-(function(){try{var y=localStorage.getItem("tb.style");
-  if(!y||y==="glass")document.documentElement.setAttribute("data-sky-glass","");}catch(e){
+   "glass") gets the Glass Sky; any other chosen style keeps the original.
+   The view switch in the header (sky-glass.js) overrides that for Sky alone:
+   nightmode.view = "glass" | "starfield". Set before first paint so the page
+   never flashes the other layout. data-sky-dark is the Glass Sky's dark map. */
+(function(){try{var y=localStorage.getItem("tb.style"), v=localStorage.getItem("nightmode.view");
+  if(v==="glass"||(v!=="starfield"&&(!y||y==="glass")))document.documentElement.setAttribute("data-sky-glass","");
+  if(localStorage.getItem("nightmode.dark")==="1")document.documentElement.setAttribute("data-sky-dark","");}catch(e){
   document.documentElement.setAttribute("data-sky-glass","");}})();</script>
 <script src="settings-ui.js?v=19" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
@@ -1100,7 +1103,10 @@ function initMiniMap(){
      dark one read as a black void with a line on it. Same map as the boards. */
   const glassMap=document.documentElement.hasAttribute("data-sky-glass");
   // Glass Sky: basemap.js's colour set (Esri World Street Map, unfiltered)
-  if(glassMap) TBBasemap.add(miniMap, "color", { maxZoom:19 }); else TBBasemap.addDark(miniMap, { maxZoom:19 });
+  // ...or the dark one, when the Glass Sky's Dark map switch is on (sky-glass.js
+  // swaps it live through window.__skyBase.setTheme).
+  const darkMap=document.documentElement.hasAttribute("data-sky-dark");
+  window.__skyBase = glassMap ? TBBasemap.add(miniMap, darkMap?"dark":"color", { maxZoom:19 }) : TBBasemap.addDark(miniMap, { maxZoom:19 });
   // live precipitation overlay — quieter under Glass, where the map is the page
   initRadar(miniMap, document.documentElement.hasAttribute("data-sky-glass") ? .32 : .5);
   miniRouteLayer=L.layerGroup().addTo(miniMap);   // endpoints + route line, rebuilt each render
@@ -1745,7 +1751,7 @@ async function producePlane(){
       x: typeof x.a.alt_baro==="number"?`${x.a.alt_baro.toLocaleString()} ft`:"",
       ll:{lat:x.a.lat,lon:x.a.lon}, hex:x.a.hex, trk:x.a.track })),
     acType:(a.t||"").toUpperCase(), acTypeName:a.desc||a.t, airlineNm:airlineName(route,a),
-    gsKt:a.gs, altFt: typeof a.alt_baro==="number"?a.alt_baro:null,
+    gsKt:a.gs, trkDeg: typeof a.track==="number"?a.track:null, altFt: typeof a.alt_baro==="number"?a.alt_baro:null,
     // altitude AND speed: "how high" without "how fast" is half the story when
     // you are watching something cross the sky
     altText: [typeof a.alt_baro==="number"?`${a.alt_baro.toLocaleString()} ft`:"",
@@ -1762,6 +1768,9 @@ async function producePlane(){
         ? "Route not published for this flight today"
         : (tidyOwner(a.ownOp) ? `${tidyOwner(a.ownOp)} · private or unscheduled` : "General aviation — no scheduled route"),
     oLL, dLL, posLL:{lat:a.lat,lon:a.lon}, oCode:route?route.origin.iata_code:"", dCode:route?route.destination.iata_code:"",
+    // ICAO codes for the Listen to ATC button (sky-glass.js), which opens LiveATC for the airport
+    oIcao:route&&route.origin.icao_code||"", dIcao:route&&route.destination.icao_code||"",
+    phase: typeof phaseOf==="function" ? phaseOf(a) : "",
     progPct: prog?prog.pct:null, progFlown: prog?prog.flownNm:null, progToGo: prog?prog.toGoNm:null,
     statusHtml: emergencyBadge(a)
       +(isHolding(a)?`<span class="badge hold">⟳ holding</span>`:"")
@@ -3752,7 +3761,7 @@ function boot(){
 function safeBoot(){ try{ boot(); }catch(e){ console.error("boot() failed, retrying:", e); setTimeout(()=>{ try{ boot(); }catch(e2){ console.error("boot() retry failed:", e2); } }, 150); } }
 if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", safeBoot); } else { safeBoot(); }
 </script>
-<script src="sky-glass.js?v=2" defer></script>
+<script src="sky-glass.js?v=4" defer></script>
 <script src="sky-landmarks.js?v=2" defer></script>
 <script src="mascot.js?v=3" defer></script>
 <script src="mascot-buddy.js?v=9" defer></script>
