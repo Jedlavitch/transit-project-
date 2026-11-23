@@ -543,11 +543,9 @@
 
 /* NOT ON AMAZON DEVICES (.tb-lowfx, set by keepalive.js): an Echo Show 21
    photographed this block half-applied: the map squeezed to a strip and map
-   and boxes both stuck in the left ~39% (the Classic map column) with the
-   rest of the screen empty. Its Silk engine mishandles the subgrid layout,
-   so there it keeps the fallback above — Glass colours and chrome on the
-   Classic side-by-side layout, which renders correctly on old engines.
-   :where() keeps every selector's specificity exactly as it was. */
+   and boxes both stuck in the left ~39% with the rest of the screen empty.
+   Amazon devices get the same Glass layout built a second way, at the end of
+   this file. :where() keeps every selector's specificity exactly as it was. */
 @supports (grid-template-rows: subgrid){
   :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app{
     display:grid; grid-template-columns:minmax(0,1fr);
@@ -650,4 +648,72 @@
     :root[data-style="glass"]:where(:not(.tb-lowfx)){ --glass-band:max(230px,34dvh) }
     :root[data-style="glass"]:where(:not(.tb-lowfx)) body #app > main > .col:last-child{ padding:10px }
   }
+}
+
+/* GLASS, SECOND BUILD — for Amazon devices (.tb-lowfx).
+   The same picture as the block above (map under the header and stat strip,
+   boxes below it), without the two things an Echo Show's Silk engine got
+   wrong there:
+     - no subgrid: <main> is display:contents (Chrome 65), so its two columns
+       are placed straight into #app's own rows. Same geometry, one grid.
+     - no dvh in the band: plain vh. A var() holding dvh on an engine without
+       it voids the whole grid-template-rows at computed-value time — which is
+       exactly a map collapsed to a strip.
+   The band is divided by --ui-zoom, because an Echo counts as a TV and #app
+   is zoomed (see the matching correction in the block above). */
+:root[data-style="glass"].tb-lowfx{ --glass-band-lite:40vh; --glass-band-min:240px; --glass-band-max:520px }
+/* Big screens: a smaller share than the block above gives (50-58dvh). An Echo
+   is zoomed, so its header and strip are taller too, and at 58% the boxes
+   under the map were down to their title bars with no departures in them.
+   42vh leaves the map about two-thirds of the screen and the boxes the rest. */
+@media (min-width:1221px){
+  :root[data-style="glass"].tb-lowfx{ --glass-band-lite:42vh; --glass-band-min:300px; --glass-band-max:900px }
+}
+@media (min-width:481px){
+  :root[data-style="glass"].tb-lowfx body #app{
+    display:grid; grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto calc(max(var(--glass-band-min), min(var(--glass-band-lite), var(--glass-band-max))) / var(--ui-zoom, 1)) minmax(0,1fr) auto;
+  }
+  :root[data-style="glass"].tb-lowfx body #app > header    { grid-column:1; grid-row:1 }
+  :root[data-style="glass"].tb-lowfx body #app > #statStrip{ grid-column:1; grid-row:2 }
+  :root[data-style="glass"].tb-lowfx body #app > main{ display:contents }
+  :root[data-style="glass"].tb-lowfx body #app > footer    { grid-column:1; grid-row:5; z-index:6 }
+  :root[data-style="glass"].tb-lowfx body #app > main > .col:first-child{
+    grid-column:1; grid-row:1 / 4; position:relative; z-index:0;
+    min-width:0; min-height:0; display:block; margin:0; padding:0;
+  }
+  :root[data-style="glass"].tb-lowfx body #app > main > .col:first-child > .tb-map-heading{ display:none }
+  :root[data-style="glass"].tb-lowfx body:not(.map-full) #app > main > .col:first-child::after{
+    content:""; position:absolute; left:0; right:0; bottom:0; height:140px; max-height:38%;
+    z-index:900; pointer-events:none;
+    background:linear-gradient(180deg, rgba(0,0,0,0), var(--bg) 92%);
+  }
+  :root[data-style="glass"].tb-lowfx body:not(.map-full) #map{ z-index:auto }
+  :root[data-style="glass"].tb-lowfx body #app #map{
+    position:absolute; top:0; right:0; bottom:0; left:0;
+    width:auto; height:auto; min-height:0; border:0 !important; border-radius:0;
+  }
+  :root[data-style="glass"].tb-lowfx body .legend{
+    position:absolute; left:12px; bottom:10px; z-index:950; max-width:60%;
+    text-shadow:var(--glass-ink-shadow);
+  }
+  :root[data-style="glass"].tb-lowfx body:not(.map-full) #map .leaflet-top{ top:var(--tb-glass-top, 0px) }
+  :root[data-style="glass"].tb-lowfx body:not(.map-full) #mapFsBtn{ top:calc(var(--tb-glass-top, 0px) + 10px) }
+  :root[data-style="glass"].tb-lowfx body:not(.map-full) #followBanner{ top:calc(var(--tb-glass-top, 0px) + 10px) }
+  :root[data-style="glass"].tb-lowfx body #app > main > .col:last-child{
+    grid-column:1; grid-row:4; position:relative; z-index:2;
+    min-width:0; min-height:0; padding:14px 16px 12px;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  :root[data-style="glass"].tb-lowfx body #app > main > .col:last-child > .cards{ flex:1 1 auto; min-height:0 }
+  :root[data-style="glass"].tb-lowfx.tb-grid body .cards{
+    grid-template-columns:repeat(var(--tb-glass-cols, var(--tb-card-cols, 3)), minmax(0,1fr)) !important;
+    grid-auto-rows:minmax(0,1fr) !important; align-content:stretch !important;
+  }
+  :root[data-style="glass"].tb-lowfx.tb-grid body .card:not(.mini){ height:auto !important; min-height:0; display:flex; flex-direction:column }
+  :root[data-style="glass"].tb-lowfx.tb-grid body .card:not(.mini) .list{ flex:1 1 auto; min-height:0; max-height:none !important; height:auto !important }
+  :root[data-style="glass"].tb-lowfx body.map-full #app > header,
+  :root[data-style="glass"].tb-lowfx body.map-full #app > #statStrip,
+  :root[data-style="glass"].tb-lowfx body.map-full #app > footer,
+  :root[data-style="glass"].tb-lowfx body.map-full #app > main > .col:last-child{ display:none }
 }
