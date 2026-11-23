@@ -62,3 +62,7 @@
 #sgAp .ap-cam::before{ content:"\25CF "; color:#fff; animation:cvPulse 1.6s ease-in-out infinite }
 @keyframes cvPulse{ 50%{ opacity:.35 } }
 #sgCv [hidden]{ display:none !important }
+/* camera switcher (airports with more than one camera) */
+#sgCv .cv-switch{ display:flex; gap:2px; padding:3px; border-radius:12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14) }
+#sgCv .cv-switch button{ border:0; background:none; color:#C9CFD8; font-weight:600; font-size:13px; font-family:inherit; padding:8px 12px; border-radius:9px; cursor:pointer; white-space:nowrap }
+#sgCv .cv-switch button[aria-pressed="true"]{ background:rgba(255,255,255,.14); color:#fff }

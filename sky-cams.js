@@ -47,7 +47,25 @@
        for each preset, no marks are drawn (wrong marks are worse than none):
        the view shows the video and the traffic around the camera instead. */
     calibrated: false
-  }];
+  },
+  /* TRACKING cameras: pan-tilt-zoom cameras that follow planes by themselves
+     (driven by ADS-B) and label them in their own picture. Our marks can't
+     follow a moving camera and aren't needed, so these show the video with
+     the traffic around the airport listed below. Checked live and
+     embeddable 2026-11-22; a stream that restarts gets a new video id, so
+     an id here can go stale. */
+  { id: "klga-fr24", icao: "KLGA", title: "LaGuardia \u00b7 runways 13/31 and the skyline", yt: "T_QsY01tIK0", mode: "tracking",
+    owner: "Flightradar24", ownerUrl: "https://www.youtube.com/@Flightradar24DotCom",
+    about: "Follows each plane automatically and labels it in the picture (CamStreamer PlaneTracker with Flightradar24 data)." },
+  { id: "ksfo-luftra", icao: "KSFO", title: "SFO \u00b7 plane spotting with ATC", yt: "sTVM6Sc80X0", mode: "tracking",
+    owner: "Luftra Aviation", ownerUrl: "https://www.youtube.com/@LuftraAI",
+    about: "Tracks individual planes and adds its own flight data and tower audio." },
+  { id: "klax-avl-24", icao: "KLAX", title: "LAX \u00b7 runways 24L/24R (north)", short: "24L/24R", yt: "n4I0d44oBEs", mode: "tracking",
+    owner: "AirlineVideosLive+", ownerUrl: "https://www.youtube.com/@AirlineVideosLivePlus",
+    about: "From the roof of the H Hotel; the camera zooms in on planes as they land and take off." },
+  { id: "klax-avl-25", icao: "KLAX", title: "LAX \u00b7 runways 25L/25R (south)", short: "25L/25R", yt: "KzsNnyN8D_Q", mode: "tracking",
+    owner: "AirlineVideosLive+", ownerUrl: "https://www.youtube.com/@AirlineVideosLivePlus",
+    about: "From the roof of the H Hotel; the camera zooms in on planes as they land and take off." }];
   window.TBCams = { forIcao: function (icao) { icao = String(icao || "").toUpperCase(); return CAMS.filter(function (c) { return c.icao === icao; }); } };
 
   var R = Math.PI / 180, FT = 0.3048, EARTH = 6371008;
@@ -89,6 +107,7 @@
       '<div class="cv-top">' +
         '<button type="button" class="cv-back">‹ Airport</button>' +
         '<div class="cv-title"><b></b><span></span></div>' +
+        '<div class="cv-switch" role="group" aria-label="Cameras" hidden></div>' +
         '<div class="cv-delay" title="The stream runs behind real time. If the marks lead or trail the planes, nudge this.">' +
           '<button type="button" data-d="-1" aria-label="Marks earlier">−</button><span></span><button type="button" data-d="1" aria-label="Marks later">+</button></div>' +
       '</div>' +
@@ -101,6 +120,10 @@
         '<p class="cv-note">Video: <a target="_blank" rel="noopener"></a>, on YouTube. <span class="cv-cal"></span></p></div>';
     document.body.appendChild(el);
     $(".cv-back", el).addEventListener("click", close);
+    $(".cv-switch", el).addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-id]"); if (!b) return;
+      var c = CAMS.filter(function (x) { return x.id === b.getAttribute("data-id"); })[0]; if (c && c !== cam) open(c, ap);
+    });
     $(".cv-delay", el).addEventListener("click", function (e) {
       var b = e.target.closest("button[data-d]"); if (!b) return;
       nudge = Math.round((nudge + +b.getAttribute("data-d")) * 10) / 10; saveNudge(); paintDelay();
@@ -202,10 +225,15 @@
     var B = $(".cv-rail-b", el), Rr = $(".cv-rail-r", el);
     if (!cam.calibrated) {
       B.innerHTML = ""; Rr.innerHTML = "";
-      var all = inView.concat(near).sort(function (a, b) { return (a.q ? a.q.dist : 1e9) - (b.q ? b.q.dist : 1e9); }).slice(0, 8);
+      /* Planes in the air first (what a runway camera is for), nearest first;
+         parked ones only fill the list when nothing is flying. */
+      var rank = function (it) { return it.k === "ground" ? 1 : 0; };
+      var all = inView.concat(near).sort(function (a, b) { return rank(a) - rank(b) || (a.q ? a.q.dist : 1e9) - (b.q ? b.q.dist : 1e9); });
+      var flying = all.filter(function (it) { return it.k !== "ground"; });
+      all = (flying.length >= 3 ? flying : all).slice(0, 8);
       $(".cv-list", el).innerHTML = all.map(function (it) {
-        return '<li class="cv-' + it.k + '"><b>' + esc(it.h.cs) + "</b><span>" + esc([it.h.type, altLabel(it.p), (it.q ? (it.q.dist / 1852).toFixed(1) + " nm from the camera" : "")].filter(Boolean).join(" \u00b7 ")) + "</span></li>";
-      }).join("") || '<li class="cv-none">No aircraft near the camera right now.</li>';
+        return '<li class="cv-' + it.k + '"><b>' + esc(it.h.cs) + "</b><span>" + esc([it.h.type, altLabel(it.p), (it.q ? (it.q.dist / 1852).toFixed(1) + (cam.mode === "tracking" ? " nm from the airport" : " nm from the camera") : "")].filter(Boolean).join(" \u00b7 ")) + "</span></li>";
+      }).join("") || '<li class="cv-none">No aircraft near ' + (cam.mode === "tracking" ? "the airport" : "the camera") + ' right now.</li>';
       return;
     }
     B.innerHTML = inView.map(function (it) {
@@ -230,7 +258,16 @@
   /* ---- open / close ------------------------------------------------------------- */
   function open(c, airport) {
     build();
-    cam = c; ap = airport || null; hist = {}; nudge = loadNudge();
+    ap = airport || ap || null;
+    if (c.mode === "tracking") {
+      // no fixed position to project from: list the traffic around the airport instead
+      c.calibrated = false;
+      if (ap && c.lat == null) { c.lat = ap.lat; c.lon = ap.lon; c.hM = (ap.elev || 0) * FT + 30; c.yaw = 0; c.pitch = 0; c.hfov = 60; c.delay = 20; }
+    }
+    cam = c; hist = {}; nudge = loadNudge();
+    var sw = $(".cv-switch", el), all = window.TBCams.forIcao(c.icao);
+    sw.hidden = all.length < 2;
+    sw.innerHTML = all.map(function (x) { return '<button type="button" data-id="' + x.id + '" aria-pressed="' + (x === c) + '">' + esc(x.short || x.title) + "</button>"; }).join("");
     $(".cv-title b", el).textContent = c.icao.replace(/^K/, "");
     $(".cv-title span", el).textContent = c.title;
     var a = $(".cv-note a", el); a.textContent = c.owner; a.href = c.ownerUrl;
@@ -238,7 +275,9 @@
     var f = $("iframe", el); if (f.getAttribute("src") !== src) f.setAttribute("src", src);
     paintDelay();
     $(".cv-delay", el).hidden = !c.calibrated;
-    $(".cv-cal", el).textContent = c.calibrated
+    $(".cv-cal", el).textContent = c.mode === "tracking"
+      ? (c.about || "") + " The list below is the traffic around the airport, from this board\u2019s feed."
+      : c.calibrated
       ? "Marks: this board\u2019s ADS-B feed, drawn where each plane was when the frame you are seeing was filmed. They sit beside the picture, never on it."
       : "Plane marks for this camera are coming once it has been calibrated in daylight; until then, the list shows the traffic around the camera.";
     el.classList.add("show");
