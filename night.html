@@ -3047,7 +3047,7 @@ function renderAircraftLivery(subject){
   const callsignPrefix=/^(?:[A-Z]{3}|[A-Z][A-Z0-9])(?=\d|$)/.exec((subject.callsign || "").toUpperCase());
   const operator=callsignPrefix ? callsignPrefix[0] : (subject.airlineIcao || subject.airlineIata || "").toUpperCase();
   const carrier=mode==="planes" && AIRLINE_LIVERIES.find(item=>item.operators.includes(operator));
-  const photo=carrier && (carrier.photos?.[subject.acType] || carrier.example);
+  const photo=carrier && ((carrier.photos && carrier.photos[subject.acType]) || carrier.example);
   const tail=!photo && mode==="planes" && AIRLINE_TAILS.find(([icao,iata])=>operator===icao || operator===iata);
   const filename=photo ? photo[0] : tail ? `tails/${tail[0].toLowerCase()}.png` : "";
   if(filename===lastLiveryPhoto) return;
