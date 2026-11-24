@@ -1,0 +1,58 @@
+/* Transit Project: Archivo for display, IBM Plex for controls; motion uses
+   the three brand colors. Reduced-motion readers get the same illustrations. */
+:root{--view-pink:#FF3D77;--view-teal:#00E0C6;--view-blue:#2F7BFF}
+.va-icon{overflow:visible;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.3;transform-origin:50% 50%;transition:filter .25s,transform .25s}
+.va-icon .va-aircraft{animation:va-flight 4s ease-in-out infinite;transform-origin:50% 50%}
+.va-icon .va-trail{animation:va-trail-flow 2s linear infinite}
+.va-icon .va-star{animation:va-twinkle 3.8s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+.va-icon .va-late{animation-delay:1.1s}
+.va-icon .va-flap{animation:va-flap-turn 5.8s ease-in-out infinite;transform-origin:32px 32px}
+.va-icon .va-beam{animation:va-beam-breathe 3.4s ease-in-out infinite}
+.va-icon .va-lens{animation:va-lens-glow 3.4s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+.va-icon .va-window{animation:va-window-light 6s ease-in-out infinite}
+.va-icon .va-sun{animation:va-sunrise 5s ease-in-out infinite}
+.va-icon .va-route{animation:va-route-flow 3s linear infinite}
+.va-icon .va-route-dot{animation:va-globe-flight 4.8s ease-in-out infinite}
+@keyframes va-flight{0%,100%{transform:translate(-2px,2px) rotate(-3deg)}50%{transform:translate(3px,-3px) rotate(3deg)}}
+@keyframes va-trail-flow{to{stroke-dashoffset:-28}}
+@keyframes va-twinkle{0%,100%{opacity:.55;transform:scale(.85)}50%{opacity:1;transform:scale(1.12)}}
+@keyframes va-flap-turn{0%,69%,100%{transform:perspective(180px) rotateX(0deg)}75%{transform:perspective(180px) rotateX(-75deg)}81%{transform:perspective(180px) rotateX(18deg)}89%{transform:perspective(180px) rotateX(0deg)}}
+@keyframes va-beam-breathe{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes va-lens-glow{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.04)}}
+@keyframes va-window-light{0%,20%,100%{opacity:.45}35%,80%{opacity:.95}}
+@keyframes va-sunrise{0%,100%{transform:translateY(3px);opacity:.7}50%{transform:translateY(-3px);opacity:1}}
+@keyframes va-route-flow{to{stroke-dashoffset:-35}}
+@keyframes va-globe-flight{0%,12%{transform:translate(0,0);opacity:0}18%{opacity:1}36%{transform:translate(7px,-17px)}55%{transform:translate(23px,-24px)}77%{transform:translate(41px,-16px);opacity:1}85%,100%{transform:translate(41px,-16px);opacity:0}}
+@keyframes va-menu-open{from{opacity:0;filter:blur(3px);translate:0 -9px}to{opacity:1;filter:blur(0);translate:0 0}}
+@keyframes va-card-arrive{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes va-panorama-enter{from{opacity:.35;transform:scale(1.025)}to{opacity:1;transform:scale(1)}}
+@keyframes va-title-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes va-card-sheen{from{transform:translateX(-180%) skewX(-25deg)}to{transform:translateX(400%) skewX(-25deg)}}
+#app header details.tb-view-launcher[open] > .view-links{background:#12101A;border-color:#453b54;animation:va-menu-open .34s cubic-bezier(.16,1,.3,1)}
+#app header details.tb-view-launcher[open] a.tb-view-card{animation:va-card-arrive .42s cubic-bezier(.16,1,.3,1) both;animation-delay:var(--view-delay,0ms)}
+#app header details.tb-view-launcher .view-links a.tb-view-card{min-height:108px;background:#211b2e;border-color:#3a304b;transition:background .24s,border-color .24s,box-shadow .24s}
+#app header details.tb-view-launcher .view-links a.tb-view-card:hover,#app header details.tb-view-launcher .view-links a.tb-view-card:focus-visible{background:#262039;border-color:#00E0C6;box-shadow:inset 0 0 0 1px #00E0C6,0 7px 22px #0004}
+#app header details.tb-view-launcher .view-links a[data-view-kind=projector]{background:#132c2c;border-color:#287a70}
+#app header .tb-view-icon,#app header .tb-view-icon svg{width:44px;height:44px;flex:none}
+#app header .tb-view-card:hover .va-icon,#app header .tb-view-card:focus-visible .va-icon{filter:drop-shadow(0 3px 9px #2f7bff44);transform:translateY(-2px) scale(1.06)}
+#app header .tb-view-name{font-family:var(--display,'Archivo',Arial,sans-serif);font-size:16px;font-weight:600;letter-spacing:-.025em;color:#FFFCF5}
+#app header .tb-view-head strong{font-family:var(--display,'Archivo',Arial,sans-serif);font-weight:700;color:#FFFCF5}
+#app header .tb-view-head > span{color:#00E0C6}
+#app header .tb-view-card[data-view-kind=sky]:hover .va-aircraft{animation-duration:1.8s}
+#app header .tb-view-card[data-view-kind=board]:hover .va-flap{animation-duration:1.8s}
+#app header .tb-view-tool .tb-view-icon,#app header .tb-view-tool .tb-view-icon svg{width:24px;height:24px}
+#app header .tb-view-tool .tb-view-name{font:500 12px var(--body,'IBM Plex Sans',sans-serif)}
+.mode-card{overflow:hidden;animation:va-card-arrive .55s cubic-bezier(.16,1,.3,1) both;animation-delay:var(--view-delay,0ms)}
+.mode-top>.va-icon{width:44px;height:44px;color:#00E0C6}
+.mode-top{margin-bottom:10px}
+.mode-card:hover>.mode-top>.va-icon,.mode-card.on>.mode-top>.va-icon{transform:translateY(-2px) scale(1.08);filter:drop-shadow(0 3px 10px #2f7bff33)}
+.mode-card::after{content:'';position:absolute;top:0;bottom:0;left:0;width:35%;background:linear-gradient(90deg,transparent,#00e0c60c,transparent);transform:translateX(-180%) skewX(-25deg);pointer-events:none}
+.mode-card:hover::after,.mode-card.on::after{animation:va-card-sheen 1.2s ease-out}
+.mode-card:active,.primary-action:active{transform:scale(.98)}
+.city-feature.city-enter #citySkyline{animation:va-panorama-enter .7s cubic-bezier(.16,1,.3,1)}
+.city-feature.city-enter h1,.city-feature.city-enter .feature-desc{animation:va-title-enter .42s cubic-bezier(.16,1,.3,1) both}
+.city-feature.city-enter .feature-desc{animation-delay:.045s}
+@media(min-width:1600px) and (min-height:850px){.mode-top>.va-icon{width:54px;height:54px}.mode-card{min-height:166px}}
+@media(max-height:740px) and (min-width:981px){.mode-top>.va-icon{width:36px;height:36px}.mode-card{min-height:118px}.mode-top{margin-bottom:7px}}
+@media(max-width:600px){#app header .tb-view-icon,#app header .tb-view-icon svg{width:36px;height:36px}#app header details.tb-view-launcher .view-links a.tb-view-card{gap:9px;padding:15px 10px;min-height:106px}#app header .tb-view-name{font-size:15px}.mode-top>.va-icon{width:44px;height:44px}}
+@media(prefers-reduced-motion:reduce){.va-icon,.va-icon *,#app header details.tb-view-launcher[open] > .view-links,#app header details.tb-view-launcher a.tb-view-card,.mode-card,.mode-card::after,.city-feature.city-enter *{animation:none!important;transition:none!important;filter:none!important}.mode-card:active,.primary-action:active{transform:none}}

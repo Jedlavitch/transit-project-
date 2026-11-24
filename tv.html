@@ -1,261 +1,24 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<!-- Brand marks. favicon.svg is the dot-less 16px drawing: the guide's floor
-     for the full mark is 40px, and a browser tab is not going to honour that. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1018">
+<meta name="description" content="Choose your city and your view. Live transit boards, aircraft overhead, and city projector panoramas, all in one place.">
+<title>Transit Project — TV menu</title>
 <link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
 <link rel="apple-touch-icon" href="brand/icon-dark-180.png">
-<meta name="theme-color" content="#12101A">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<!-- "TV menu" is the one name for this page, everywhere: this title, the nav
-     and hero button on index.html, and the title on the TV button each city
-     board carries. It had been "TV Menu" here, "All views" in the nav and "Set
-     up a TV" in the hero — three names for one page, which is three chances to
-     miss it. Sentence case to match its siblings (pair.html, profile.html). -->
-<title>Transit Project — TV menu</title>
-<!-- Keep the screen on. A launcher you drive from a couch is exactly the page
-     that sits untouched long enough for a display to dim. -->
+<link rel="stylesheet" href="tv-menu.css?v=2">
+<link rel="stylesheet" href="view-motion.css?v=1">
+<script src="polyfills.js?v=1"></script>
 <script src="wake.js?v=1"></script>
 <script src="paywall.js"></script>
-<style>
-  /* tv.html — a 10-foot launcher. Everything here is sized for a couch, not a
-     desk, and driven by the four arrow keys + OK that every TV remote has. */
-
-  /* This page deliberately does not load theme.css — it has its own 10-foot
-     scale and would fight the board styles — so the brand faces are declared
-     here rather than inherited. Same three families, same tokens. */
-  @import url("https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap");
-  :root{
-    --display:"Archivo","Helvetica Neue",Arial,sans-serif;
-    --body:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-    --brand-pink:#FF3D77; --brand-teal:#00E0C6; --brand-blue:#2F7BFF;
-  }
-  /* The mark, scaled to the 10-foot page rather than pinned at 40px, with the
-     guide's clear space (one station dot, 13%) built into the margin. */
-  .brandmark{display:block; flex:none;
-    width:clamp(40px,calc(3*var(--u)),58px); height:clamp(40px,calc(3*var(--u)),58px);
-    margin:calc(clamp(40px,calc(3*var(--u)),58px) * .13); align-self:center}
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0}
-  body{
-    background:#070d18; color:#e8f0ff; overflow:hidden;
-    font-family:var(--body);
-    /* One scaling unit for the whole page. Sizing off width alone overflows a
-       short screen (720p TVs overlapped their own footer), so height gets a
-       vote: on 16:9 the two terms are near-identical, and anything shorter
-       shrinks type to fit instead of spilling over the row below. */
-    --u:min(1vw, 1.72vh);
-    /* TVs overscan: keep everything inside a safe margin so nothing is cut off */
-    padding:max(3vh,18px) max(4vw,24px);
-    display:flex; flex-direction:column; gap:2.2vh;
-  }
-  body::before{
-    content:""; position:fixed; top:0;right:0;bottom:0;left:0;inset:0; pointer-events:none; z-index:0;
-    background:
-      radial-gradient(90vw 60vh at 12% 0%, rgba(78,161,255,.16), transparent 60%),
-      radial-gradient(70vw 55vh at 95% 105%, rgba(181,140,255,.14), transparent 60%);
-  }
-  header{position:relative; z-index:1; display:flex; align-items:baseline; gap:1.2rem; flex-wrap:wrap}
-  h1{
-    margin:0; font-family:var(--display); font-weight:800; text-transform:uppercase;
-    font-size:clamp(24px,calc(3.4*var(--u)),84px); letter-spacing:-.02em;
-    background:linear-gradient(90deg,var(--brand-pink),var(--brand-blue) 50%,var(--brand-teal));
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-  }
-  .sub{font-size:clamp(13px,calc(1.35*var(--u)),34px); color:#93a6c4}
-  .clock{margin-left:auto; font-variant-numeric:tabular-nums; text-align:right}
-  .clock .t{font-size:clamp(20px,calc(2.7*var(--u)),68px); font-weight:700; letter-spacing:1px}
-  .clock .d{font-size:clamp(11px,calc(1.05*var(--u)),20px); color:#93a6c4}
-
-  /* Cities take twice the leftover height of Views, so the tiles grow to fill a
-     TV instead of huddling at the top with dead space underneath. */
-  .section{position:relative; z-index:1; display:flex; flex-direction:column; min-height:0}
-  #citySec{flex:2 1 0}
-  #viewSec{flex:1 1 0}
-  .section .grid{flex:1 1 auto; grid-auto-rows:1fr; min-height:0}
-  .section h2{
-    margin:0 0 1vh; font-size:clamp(11px,calc(1.05*var(--u)),20px); font-weight:700;
-    letter-spacing:.22em; text-transform:uppercase; color:#7f93b3;
-  }
-
-  .grid{display:grid; gap:clamp(8px,calc(1.2*var(--u)),20px)}
-  /* Cities outgrew four columns: at 11 they need a third row, and this page
-     deliberately does not scroll, so the extra row was being cut off. Six
-     columns keeps it to two rows and keeps every tile the same height as
-     before, rather than shrinking them all to buy room for one row nobody
-     could see anyway. */
-  #cities{grid-template-columns:repeat(6,1fr)}
-  @media (max-width:1500px){ #cities{grid-template-columns:repeat(4,1fr)} }
-  /* Views must stay on ONE row. It only gets a third of the leftover height, so
-     the moment it wraps to two, both rows are squeezed until the tile names
-     clip — the tiles keep their badge and lose the words, which on a television
-     leaves you navigating by three-letter codes.
-
-     This has now happened twice: first at five views in four columns, and again
-     when Unlock made it six against five columns. So the column count tracks the
-     number of views, and the rule is worth restating for whoever adds a seventh:
-     bump this with it, or the labels quietly vanish at TV aspect ratio while
-     still looking fine on a laptop. */
-  #views{grid-template-columns:repeat(6,1fr)}
-  @media (max-width:1100px){ #views{grid-template-columns:repeat(3,1fr)} }
-
-  .tile{
-    position:relative; display:flex; flex-direction:column; justify-content:space-between;
-    gap:.35em; padding:clamp(10px,calc(1.35*var(--u)),24px);
-    /* Hard guarantee: a tile can never paint over its neighbour or the footer. */
-    overflow:hidden;
-    border-radius:14px; cursor:pointer; text-decoration:none; color:inherit;
-    background:linear-gradient(160deg,rgba(24,38,64,.95),rgba(14,23,42,.95));
-    border:2px solid rgba(120,150,200,.18);
-    transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease;
-  }
-  .tile .num{
-    position:absolute; top:.5em; right:.7em; font-size:clamp(11px,calc(1.05*var(--u)),20px);
-    font-weight:700; color:#5f7396;
-  }
-  /* City code in the utility face, not an emoji. Sized far below what the emoji
-     occupied — three letters at 72px would swallow the tile — and carrying the
-     tile's own accent, so it still works as a colour-coded anchor from a couch,
-     which is what the emoji was really doing. */
-  .tile .icon{font-family:var(--mono); font-weight:600; letter-spacing:.08em;
-    font-size:clamp(13px,calc(1.5*var(--u)),34px); line-height:1;
-    align-self:flex-start; padding:.32em .5em; border-radius:.4em;
-    background:color-mix(in srgb, var(--sys,#4ea1ff) 22%, transparent); color:#dce8fb}
-  .tile .name{font-size:clamp(17px,calc(2.15*var(--u)),56px); font-weight:700; line-height:1.1}
-  /* Six narrower columns make the longest system lists wrap to a third line,
-     which overflowed the tile. Cap it at two lines and fade the overflow rather
-     than letting the box grow — the name is what you navigate by, the list
-     underneath is only a hint at what the board carries. */
-  .tile .desc{font-size:clamp(11px,calc(1.15*var(--u)),30px); color:#93a6c4; line-height:1.25;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
-  .tile .bar{height:4px; border-radius:3px; background:var(--sys,#4ea1ff); opacity:.85}
-
-  /* The focus ring is the whole point of this page — it has to be obvious from
-     across a room, so it scales and glows rather than being a 2px outline. */
-  .tile.on{
-    transform:scale(1.045);
-    border-color:var(--sys,#4ea1ff);
-    box-shadow:0 0 0 4px color-mix(in srgb, var(--sys,#4ea1ff) 45%, transparent),
-               0 18px 50px rgba(0,0,0,.55);
-    background:linear-gradient(160deg,rgba(36,56,92,.98),rgba(18,30,54,.98));
-  }
-  .tile.on .desc{color:#c3d3ec}
-  .tile.last::after{
-    content:"last used"; position:absolute; bottom:.55em; right:.8em;
-    font-size:clamp(9px,calc(.85*var(--u)),16px); color:#7f93b3; letter-spacing:.1em; text-transform:uppercase;
-  }
-
-  footer{
-    position:relative; z-index:1; margin-top:auto; display:flex; gap:1.6em; flex-wrap:wrap;
-    font-size:clamp(11px,calc(1.05*var(--u)),20px); color:#7f93b3;
-  }
-  footer kbd{
-    background:rgba(120,150,200,.15); border:1px solid rgba(120,150,200,.3);
-    border-radius:5px; padding:.1em .45em; font-family:inherit; color:#c3d3ec;
-  }
-
-  #castBtn{
-    display:flex; align-items:center; gap:.5em; cursor:pointer;
-    font:inherit; font-size:clamp(12px,calc(1.1*var(--u)),22px); font-weight:600;
-    color:#c3d3ec; background:rgba(120,150,200,.12);
-    border:2px solid rgba(120,150,200,.28); border-radius:10px;
-    padding:.45em .9em; transition:border-color .14s ease, background .14s ease;
-  }
-  #castBtn:hover,#castBtn:focus-visible{border-color:#4ea1ff; background:rgba(78,161,255,.18); outline:none}
-  #castBtn.casting{border-color:#33d17a; background:rgba(51,209,122,.18); color:#d6ffe7}
-  #castBtn.casting .ico{animation:pulse 1.6s ease-in-out infinite}
-  #castBtn.dim{opacity:.55}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-
-  /* ---- unlock this screen ----
-     Same shape as the cast button, deliberately: they are the two things you do
-     to a television from this menu, and the second one had nowhere to live.
-
-     Until now the pairing QR appeared only on the licence wall, which gate.js
-     never shows to a licensed device — so the person most likely to be standing
-     in front of a new television, having already paid, was the one person who
-     could not reach it. This is the page that ends up ON the TV (every fallback
-     in castHelp() tells you to open it there), so this is where the button that
-     unlocks the TV belongs. */
-  #pairBtn{
-    display:flex; align-items:center; gap:.5em; cursor:pointer;
-    font:inherit; font-size:clamp(12px,calc(1.1*var(--u)),22px); font-weight:600;
-    color:#c3d3ec; background:rgba(120,150,200,.12);
-    border:2px solid rgba(120,150,200,.28); border-radius:10px;
-    padding:.45em .9em; transition:border-color .14s ease, background .14s ease;
-  }
-  #pairBtn:hover,#pairBtn:focus-visible{border-color:#4ea1ff; background:rgba(78,161,255,.18); outline:none}
-  /* Licensed already: still here, still reachable, just not shouting. */
-  #pairBtn.done{border-color:rgba(51,209,122,.5); color:#d6ffe7}
-  #pairPanel{
-    position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:75; display:none;
-    align-items:center; justify-content:center; background:rgba(4,9,18,.9);
-  }
-  #pairPanel.show{display:flex}
-  #pairPanel .box{
-    background:#0d1830; border:2px solid rgba(120,150,200,.35); border-radius:16px;
-    padding:clamp(18px,2.2vw,32px); width:min(92vw,720px); color:#e8f0ff;
-    font-size:clamp(12px,calc(1.05*var(--u)),20px);
-  }
-  #pairPanel h3{margin:0 0 .7em; font-size:clamp(18px,calc(1.9*var(--u)),36px)}
-  #pairPanel .note{color:#93a5cf; margin:0 0 1em; line-height:1.55}
-  #pairPanel button{
-    margin-top:1.1em; font:inherit; font-weight:700; cursor:pointer; color:#e8f0ff;
-    background:rgba(120,150,200,.14); border:2px solid rgba(120,150,200,.32);
-    border-radius:10px; padding:.5em 1.1em;
-  }
-  #pairPanel button:hover,#pairPanel button:focus-visible{border-color:#4ea1ff; outline:none}
-
-  #toast{
-    position:fixed; left:50%; bottom:6vh; transform:translateX(-50%) translateY(1em);
-    z-index:60; max-width:min(90vw,780px); text-align:center;
-    background:rgba(10,18,34,.97); border:2px solid rgba(120,150,200,.35);
-    border-radius:12px; padding:.7em 1.2em; color:#e8f0ff;
-    font-size:clamp(12px,calc(1.15*var(--u)),24px);
-    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
-  }
-  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
-
-  #castHelp{
-    position:fixed; top:0;right:0;bottom:0;left:0;inset:0; z-index:70; display:none;
-    align-items:center; justify-content:center; background:rgba(4,9,18,.86);
-  }
-  #castHelp.show{display:flex}
-  #castHelp .box{
-    max-width:min(92vw,900px); max-height:88vh; overflow:auto;
-    background:#0d1728; border:2px solid rgba(120,150,200,.35); border-radius:16px;
-    padding:clamp(18px,calc(2*var(--u)),40px); color:#e8f0ff;
-    font-size:clamp(13px,calc(1.2*var(--u)),24px); line-height:1.45;
-  }
-  #castHelp h3{margin:0 0 .6em; font-size:clamp(18px,calc(1.9*var(--u)),36px)}
-  #castHelp ol{margin:.5em 0; padding-left:1.4em}
-  #castHelp li{margin:.35em 0}
-  #castHelp .url{
-    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all;
-    background:rgba(120,150,200,.14); border-radius:8px; padding:.5em .7em; margin:.6em 0;
-  }
-  #castHelp button{
-    margin-top:1em; font:inherit; font-weight:700; cursor:pointer;
-    background:#4ea1ff; color:#06121f; border:0; border-radius:10px; padding:.5em 1.4em;
-  }
-
-  /* Phones/tablets land here too (the header link is on every board) — stack it. */
-  @media (max-width:760px){
-    #cities{grid-template-columns:repeat(2,1fr)}
-    #views{grid-template-columns:repeat(2,1fr)}
-    html{height:auto}
-    body{overflow:auto; height:auto; min-height:100%}
-    /* Fit-the-viewport sizing is a TV concern. On a phone the page scrolls, so
-       rows take their natural height — otherwise the flex split squashes them
-       and the tiles' overflow:hidden silently crops the text. (ID selectors
-       here because #citySec/#viewSec set the flex ratios above.) */
-    #citySec,#viewSec{flex:none}
-    .section .grid{grid-auto-rows:auto}
-    footer{margin-top:1.5em}
-  }
-</style>
+<script src="projector-cities.js?v=1" defer></script>
+<script src="projector-landmarks-americas.js?v=1" defer></script>
+<script src="projector-landmarks-europe.js?v=1" defer></script>
+<script src="projector-scene.js?v=1" defer></script>
+<script src="view-art.js?v=1" defer></script>
+<script src="tv-menu.js?v=2" defer></script>
 <script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
    the whole site and cached every board, so a device that installed it keeps serving
    old copies no matter how many times the site is redeployed - which looks exactly
@@ -275,551 +38,63 @@
 }catch(e){}})();</script>
 </head>
 <body>
-
-<header>
-  <img class="brandmark" src="brand/mark-on-dark.svg" alt="" width="56" height="56">
-  <h1>Live Transit Project</h1>
-  <div class="sub">Pick a city — <b>arrow keys</b> to move, <b>OK</b> to open</div>
-  <button id="castBtn" type="button"><span class="ico">CAST</span><span class="lbl">Cast to TV</span></button>
-  <button id="pairBtn" type="button"><span class="ico">QR</span><span class="lbl">Unlock this screen</span></button>
-  <div class="clock"><div class="t" id="clock">--:--</div><div class="d" id="date">—</div></div>
-</header>
-
-<div id="toast" role="status" aria-live="polite"></div>
-<div id="castHelp"><div class="box" id="castHelpBox"></div></div>
-<div id="pairPanel">
-  <div class="box">
-    <h3>Unlock this screen</h3>
-    <p class="note" id="pairNote">Scan the code with your phone. Your licence moves across — nothing to type on the TV.</p>
-    <div id="pairHost"></div>
-    <button type="button" id="pairClose">Close</button>
+<a class="skip-link" href="#screenPanel">Skip to display views</a>
+<svg class="svg-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+<symbol id="tv-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+<symbol id="tv-sky" viewBox="0 0 32 32"><path d="m4 18 10-2 7-11 3 1-3 10 7 3v3l-9-1-4 6h-3l2-7-10 1z"/></symbol>
+<symbol id="tv-board" viewBox="0 0 32 32"><rect x="3" y="6" width="26" height="21" rx="2"/><path d="M3 16h26M12 6v21m9-21v21M7 10h1m8 0h1m8 0h1"/></symbol>
+<symbol id="tv-projector" viewBox="0 0 32 32"><path d="M4 6h24v17H4zm12 17v5m-6 0h12M9 17l5-5 4 3 5-5"/><path d="m23 2 .6 1.5L25 4l-1.4.5L23 6l-.5-1.5L21 4l1.5-.5z"/></symbol>
+<symbol id="tv-home" viewBox="0 0 32 32"><path d="m3 15 13-11 13 11M7 12v16h18V12M13 28v-9h6v9"/></symbol>
+<symbol id="tv-tour" viewBox="0 0 32 32"><path d="m3 7 9-3 8 3 9-3v21l-9 3-8-3-9 3zm9-3v21m8-18v21"/><path d="m7 17 3-4 5 3 6-6 4 2"/></symbol>
+<symbol id="tv-spot" viewBox="0 0 32 32"><circle cx="16" cy="13" r="4"/><path d="M26 13c0 8-10 15-10 15S6 21 6 13a10 10 0 0 1 20 0z"/></symbol>
+<symbol id="tv-cast" viewBox="0 0 24 24"><path d="M3 9V4h18v16h-6M3 13a7 7 0 0 1 7 7M3 17a3 3 0 0 1 3 3"/><circle cx="3" cy="20" r=".5"/></symbol>
+<symbol id="tv-fullscreen" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5"/></symbol>
+<symbol id="tv-account" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/></symbol>
+<symbol id="tv-pair" viewBox="0 0 24 24"><path d="M3 3h6v6H3zm12 0h6v6h-6zM3 15h6v6H3zm12 0h3v3h3v3h-6zm6-3v3m-9-3v9"/></symbol>
+</defs></svg>
+<header class="topbar">
+  <a class="brand" href="index.html" data-tv-control aria-label="Transit Project home"><img src="brand/mark-on-dark.svg" width="44" height="44" alt=""><span class="wordmark"><span>Transit</span><span>Project</span></span></a>
+  <span class="page-label">TV menu</span>
+  <div class="header-actions">
+    <button class="utility" id="castBtn" data-tv-control type="button"><svg aria-hidden="true"><use href="#tv-cast"/></svg><span class="lbl">Cast to TV</span></button>
+    <button class="utility" id="pairBtn" data-tv-control type="button" aria-label="Unlock this screen"><svg aria-hidden="true"><use href="#tv-pair"/></svg><span class="lbl">Unlock screen</span></button>
+    <button class="utility" id="fullscreenBtn" data-tv-control type="button" aria-label="Full screen" title="Full screen (F)"><svg aria-hidden="true"><use href="#tv-fullscreen"/></svg></button>
+    <a class="utility" href="profile.html" data-tv-control aria-label="Your account" title="Your account"><svg aria-hidden="true"><use href="#tv-account"/></svg></a>
   </div>
-</div>
-
-<section class="section" id="citySec">
-  <h2>Cities</h2>
-  <div class="grid" id="cities"></div>
-</section>
-
-<section class="section" id="viewSec">
-  <h2>Views</h2>
-  <div class="grid" id="views"></div>
-</section>
-
-<footer>
-  <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> move</span>
-  <span><kbd>OK</kbd> / <kbd>Enter</kbd> open</span>
-  <span><kbd>1</kbd>–<kbd>9</kbd> jump straight to a board</span>
-  <span><kbd>F</kbd> full screen</span>
-  <span><kbd>C</kbd> cast to TV</span>
-  <span id="unlockHint"><kbd>U</kbd> unlock this screen</span>
-  <span id="hint"></span>
+  <div class="clock"><div class="t" id="clock">--:--</div><div class="d" id="date"></div></div>
+</header>
+<main class="tv-layout">
+  <aside class="city-panel" aria-labelledby="citiesTitle">
+    <div class="section-heading"><h2 id="citiesTitle">Choose your city</h2><span class="small-count">13 CITIES</span></div>
+    <div class="city-list" id="cities" role="group" aria-label="City selection"></div>
+  </aside>
+  <div class="screen-panel" id="screenPanel">
+    <section class="city-feature" aria-labelledby="selectedCityName">
+      <canvas id="citySkyline" aria-hidden="true"></canvas>
+      <div class="feature-content">
+        <p class="eyebrow"><span class="status-dot"></span><span id="featureRegion">YOUR CITY, ON YOUR SCREEN</span></p>
+        <h1 id="selectedCityName">Washington, DC</h1>
+        <p class="feature-desc" id="selectedCityDesc">Metro, buses, trains, and the sky overhead.</p>
+        <div class="feature-actions">
+          <a class="primary-action" id="openBoard" data-tv-control href="dc.html"><span>Open live board</span><svg aria-hidden="true"><use href="#tv-arrow"/></svg></a>
+          <a class="secondary-action" id="openProjector" data-tv-control href="projector.html?city=dc&amp;surface=wall">See the city after dark ↗</a>
+        </div>
+      </div>
+      <span class="panorama-caption" id="panoramaCaption">ILLUSTRATED CITY PANORAMA</span>
+    </section>
+    <section class="view-section" aria-labelledby="viewsTitle">
+      <div class="section-heading"><h2 id="viewsTitle">Find your view</h2><span class="view-context" id="viewContext">City views follow Washington, DC</span></div>
+      <div class="mode-grid" id="views"></div>
+    </section>
+  </div>
+</main>
+<footer class="bottom-bar">
+  <div class="remote-help"><span><kbd>↑ ↓ ← →</kbd> Move</span><span><kbd>OK</kbd> Choose</span><span><kbd>1–9</kbd> Open city</span><span><kbd>F</kbd> Full screen</span><span id="unlockHint"><kbd>U</kbd> Unlock screen</span><span id="hint" role="status"></span></div>
+  <div class="bottom-links"><a href="projector-cities.html" data-tv-control>City collection ↗</a><a href="index.html" data-tv-control>Back to Transit Project</a></div>
 </footer>
-
-<script>
-/* Every board this launcher can open. `city` is the query param night.html and
-   flipboard.html already expect, so the view tiles just append it.
-
-   Order is deliberate, not the order the files happen to exist in: the two home
-   boards first (so 1 and 2 are the ones actually used daily), then the rest of
-   the Northeast, then the West Coast, then Europe. Numbers are positional, so
-   this order is also the remote's number-key mapping — it should not churn.
-
-   Icons are one consistent idea — a symbol OF the place — rather than the
-   earlier mix of transit glyphs and city mascots, which read as arbitrary. */
-var CITIES = [
-  {id:"dc",        file:"dc.html",         icon:"DC", name:"Washington DC", desc:"Metro · Metrobus · MARC · Ride On", sys:"#4ea1ff"},
-  {id:"philly",    file:"philadelphia.html",  icon:"PHL", name:"Philadelphia",  desc:"SEPTA rail · subway · bus · PATCO", sys:"#3ad0c8"},
-  {id:"nyc",       file:"nyc.html",           icon:"NYC", name:"New York",      desc:"Subway · LIRR · Metro-North · PATH", sys:"#ffd166"},
-  {id:"nj",        file:"newjersey.html",     icon:"NJ", name:"New Jersey",    desc:"NJ Transit rail · light rail · bus", sys:"#ff9d5c"},
-  {id:"boston",    file:"boston.html",        icon:"BOS", name:"Boston",        desc:"MBTA subway · commuter rail · bus", sys:"#33d17a"},
-  {id:"chicago",   file:"chicago.html",       icon:"CHI", name:"Chicago",       desc:"CTA 'L' · bus · Metra · Amtrak", sys:"#00a1de"},
-  {id:"la",        file:"losangeles.html",    icon:"LA", name:"Los Angeles",   desc:"Metro rail · Metrolink", sys:"#b58cff"},
-  {id:"sf",        file:"sanfrancisco.html",  icon:"SF", name:"San Francisco", desc:"BART · Muni · Caltrain · cable car", sys:"#ff6b8a"},
-  {id:"amsterdam", file:"amsterdam.html",     icon:"AMS", name:"Amsterdam",     desc:"Metro · tram · rail · ferry", sys:"#8ab4ff"},
-  /* Europe. Icons keep the same rule as the rest of this list — a symbol OF the
-     place, not a transit glyph: Cologne's cathedral, Stuttgart as the city both
-     Mercedes and Porsche come from, the Alps above Zurich. */
-  {id:"cologne",   file:"cologne.html",       icon:"CGN", name:"Cologne",       desc:"KVB Stadtbahn · S-Bahn · DB rail", sys:"#e8a33d"},
-  {id:"stuttgart", file:"stuttgart.html",     icon:"STR", name:"Stuttgart",     desc:"SSB Stadtbahn · S-Bahn · DB rail", sys:"#e05a5a"},
-  {id:"rome",      file:"rome.html",          icon:"ROM", name:"Rome",          desc:"Metro · tram · ATAC bus · Trenitalia", sys:"#d9744a"},
-  {id:"zurich",    file:"zurich.html",        icon:"ZRH", name:"Zurich",        desc:"Tram · S-Bahn · SBB rail", sys:"#5ad1a0"}
-];
-
-/* Views that follow whichever city you used last. `perCity:false` = shared page. */
-var VIEWS = [
-  /* First, so it is one press down from the cities rather than the far corner of
-     the grid. See the note by `action` below for why it is a tile at all. */
-  {icon:"QR", name:"Unlock this screen", desc:"Scan with your phone — nothing to type",
-   action:"pair", perCity:false, sys:"#ff6b9d"},
-  {icon:"SKY", name:"Sky",   desc:"Nearest flight overhead, full screen", file:"night.html",      perCity:true,  sys:"#b58cff"},
-  {icon:"BRD", name:"Board", desc:"Split-flap departure board",           file:"flipboard.html",  perCity:true,  sys:"#ffd166"},
-  /* perCity:false — home.html reads the saved location, not a ?city=. Its
-     transit is DC-area (WMATA, Ride On, MARC); weather, sky and lights work anywhere. */
-  {icon:"HOME", name:"Home",  desc:"Smart display: when to leave, the room light, the weather", file:"home.html", perCity:false, sys:"#ff9f43"},
-  /* Projector opens a distinct panorama for the selected city. */
-  {icon:"PROJ", name:"Projector", desc:"The real sky overhead, thrown on a wall or ceiling", file:"projector.html", perCity:true, sys:"#7c9cff"},
-  {icon:"TOUR", name:"Tour",  desc:"Every city's vehicles on one map",     file:"tour.html",       perCity:false, sys:"#3ad0c8"},
-  {icon:"SPOT", name:"Spot",  desc:"Log what you see — phone app",         file:"spot.html",       perCity:false, sys:"#33d17a"},
-  /* `action` rather than a file: a tile that does something instead of going
-     somewhere. It is a tile at all because a television remote has arrows and
-     OK and no letter keys — the U shortcut and the button beside Cast serve a
-     keyboard and a mouse, and neither of those is what is in the room. Tiles
-     are the only thing arrow navigation reaches, so anything that has to be
-     reachable from a sofa has to be one. */
-  {icon:"ACCT", name:"Account", desc:"Sign-in, licence key, saved settings", file:"profile.html",    perCity:false, sys:"#4ea1ff"}
-];
-
-var LAST_KEY = "tb.tvLastCity";
-var lastCity = "";
-try { lastCity = localStorage.getItem(LAST_KEY) || ""; } catch (e) {}
-
-/* One flat list in DOM order — the arrow-key math below treats it as rows of
-   `cols` so ↓ from a city lands on the view directly beneath it. */
-var tiles = [];
-
-function tile(o){
-  var a = document.createElement("a");
-  a.className = "tile";
-  a.href = o.href;
-  a.style.setProperty("--sys", o.sys);
-  /* Only the first nine tiles get a number: the shortcut is a single keypress,
-     so a "10" badge would advertise a key that does not exist. */
-  a.innerHTML =
-    (o.num <= 9 ? '<span class="num">' + o.num + '</span>' : '') +
-    '<span class="icon">' + o.icon + '</span>' +
-    '<span class="name">' + o.name + '</span>' +
-    '<span class="desc">' + o.desc + '</span>' +
-    '<span class="bar"></span>';
-  a.addEventListener("mouseenter", function(){ focusIndex(tiles.indexOf(a)); });
-  /* A tile can either go somewhere or do something. The keyboard's Enter branch
-     reads data-action off the element for the same reason, so both routes into a
-     tile agree. */
-  if (o.action) a.setAttribute("data-action", o.action);
-  a.addEventListener("click", function(e){
-    e.preventDefault();
-    if (o.action === "pair") { openPair(); return; }
-    open(o.href, o.city);
-  });
-  return a;
-}
-
-function targetCity(){ return lastCity || CITIES[0].id; }
-
-function buildViewHref(v){
-  if (v.action) return "#";              // a tile that does something, not one that goes somewhere
-  return v.perCity ? v.file + "?city=" + targetCity() : v.file;
-}
-
-var cityWrap = document.getElementById("cities");
-CITIES.forEach(function(c, i){
-  var el = tile({href:c.file, icon:c.icon, name:c.name, desc:c.desc, sys:c.sys, num:i+1, city:c.id});
-  if (c.id === lastCity) el.classList.add("last");
-  cityWrap.appendChild(el); tiles.push(el);
-});
-
-var viewWrap = document.getElementById("views");
-/* Free right now: there is nothing to unlock, so the tile does not offer to. */
-if (window.TB_PAYWALL === false) VIEWS = VIEWS.filter(function(v){ return v.action !== "pair"; });
-VIEWS.forEach(function(v, i){
-  /* Views used to be numbered 9-12, which was right when there were 8 cities.
-     With 11 they collided with city badges 9, 10 and 11 — two tiles showing the
-     same number, and the key only ever reaching one of them. Numbering now
-     continues from the city count. */
-  var el = tile({href:buildViewHref(v), icon:v.icon, name:v.name, desc:v.desc, sys:v.sys,
-                 num:CITIES.length + i + 1, city:"", action:v.action});
-  el.dataset.view = i;
-  viewWrap.appendChild(el); tiles.push(el);
-});
-
-/* Start on the board you opened last, so the common case is OK-and-go. */
-var idx = 0;
-if (lastCity){
-  var li = CITIES.map(function(c){ return c.id; }).indexOf(lastCity);
-  if (li >= 0) idx = li;
-}
-
-/* An unlicensed screen has one job before it can usefully do anything else, so
-   the selection starts on it — nought presses instead of hunting the grid with
-   a remote. A licensed screen is left alone on whichever board it opened last,
-   which is the thing it is actually for. */
-if (!screenLicensed()){
-  var ui = tiles.map(function(t){ return t.getAttribute("data-action"); }).indexOf("pair");
-  if (ui >= 0) idx = ui;
-}
-
-function focusIndex(n, block){
-  if (n < 0 || n >= tiles.length) return;
-  tiles[idx].classList.remove("on");
-  idx = n;
-  tiles[idx].classList.add("on");
-  /* preventScroll, then scroll deliberately. Focus alone would jump the tile to
-     the middle of the screen on every arrow press; focus with preventScroll and
-     nothing else never scrolls at all, which is how the selection could sit
-     below the fold with the page showing the top and nothing visibly chosen —
-     exactly what happens on an unlicensed screen, where the selection starts on
-     a tile eleven cities down. "nearest" scrolls only when it has to, so on a
-     television where the whole grid already fits this does nothing. */
-  tiles[idx].focus({preventScroll:true});
-  /* "nearest" while arrowing around: it moves as little as it can, so the grid
-     does not lurch under every press. The opening selection asks for "center"
-     instead — nearest leaves a tile flush with the bottom edge, and there is a
-     fixed footer sitting over exactly that strip. */
-  if (tiles[idx].scrollIntoView) tiles[idx].scrollIntoView({block: block || "nearest", inline:"nearest"});
-}
-tiles.forEach(function(t){ t.tabIndex = -1; });
-/* Through focusIndex rather than focusing directly, so the opening selection
-   gets scrolled into view like every later one. Setting it by hand here is what
-   left an unlicensed screen selecting a tile the viewer could not see. */
-tiles[idx].classList.add("on");
-(function(){ var start = idx; idx = 0; focusIndex(start, "center"); })();
-
-function open(href, city){
-  if (city){ try { localStorage.setItem(LAST_KEY, city); } catch (e) {} }
-  window.location.href = href;
-}
-
-function move(dx, dy){
-  var cols = 4;
-  var n = tiles.length, cityCount = CITIES.length;
-  var next = idx;
-  if (dx){
-    next = idx + dx;
-    if (next < 0) next = n - 1;
-    if (next >= n) next = 0;
-  } else if (dy){
-    next = idx + dy * cols;
-    /* Wrap between the two sections instead of dead-ending at an edge. */
-    if (next < 0) next = idx + cityCount;                  /* up from row 1 -> views */
-    if (next >= n) next = idx % cols;                      /* down off the end -> row 1 */
-    if (next >= n) next = n - 1;
-  }
-  focusIndex(next);
-}
-
-document.addEventListener("keydown", function(e){
-  var k = e.key;
-  /* While the cast help is up it owns the keyboard — otherwise arrow presses
-     would silently move the selection behind the overlay. */
-  if (document.getElementById("castHelp").classList.contains("show")){
-    if (k === "Escape" || k === "Enter" || k === " ") { closeCastHelp(); e.preventDefault(); }
-    return;
-  }
-  /* The pairing panel owns the keyboard for the same reason — and it matters
-     more here, because it is polling: arrows leaking through would move the
-     selection behind a QR somebody is in the middle of scanning. */
-  if (document.getElementById("pairPanel").classList.contains("show")){
-    if (k === "Escape" || k === "Enter" || k === " ") { closePair(); e.preventDefault(); }
-    return;
-  }
-  if (k === "c" || k === "C"){ toggleCast(); e.preventDefault(); return; }
-  if ((k === "u" || k === "U") && window.TB_PAYWALL !== false){ openPair(); e.preventDefault(); return; }
-  if (k === "ArrowRight"){ move(1,0); e.preventDefault(); }
-  else if (k === "ArrowLeft"){ move(-1,0); e.preventDefault(); }
-  else if (k === "ArrowDown"){ move(0,1); e.preventDefault(); }
-  else if (k === "ArrowUp"){ move(0,-1); e.preventDefault(); }
-  else if (k === "Enter" || k === " "){
-    var t = tiles[idx];
-    // OK on a tile that does something rather than goes somewhere.
-    if (t.getAttribute("data-action") === "pair") { openPair(); e.preventDefault(); return; }
-    open(t.getAttribute("href"), CITIES[idx] ? CITIES[idx].id : "");
-    e.preventDefault();
-  }
-  else if (/^[1-9]$/.test(k)){
-    /* Remotes have a number pad; 1-8 are cities, 9 is the first view. */
-    var n = parseInt(k,10) - 1;
-    if (n < tiles.length) { focusIndex(n); var t2 = tiles[n]; open(t2.getAttribute("href"), CITIES[n] ? CITIES[n].id : ""); }
-  }
-  else if (k === "f" || k === "F"){
-    /* Prefixed aliases, the same pattern dc/station/flipboard/night already use —
-       this was the one fullscreen path that got missed. Chrome 68-70 exposes only
-       the webkit forms, so `document.fullscreenElement` was undefined, the else-if
-       found no `requestFullscreen`, and the handler simply exited: F did nothing
-       and said nothing, because the explanatory hint lives inside the promise's
-       .catch(). The footer goes on advertising "F full screen" the whole time.
-
-       The `p && p.catch` guard is load-bearing: webkitRequestFullscreen returns
-       undefined on old Blink, so calling .catch() on it would throw inside the
-       keydown handler and turn a silent no-op into a broken one. */
-    var el = document.documentElement;
-    var say = function(){ document.getElementById("hint").textContent =
-      "full screen blocked here — try the TV's own zoom"; };
-    var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fsEl) {
-      var ex = document.exitFullscreen || document.webkitExitFullscreen;
-      if (ex) ex.call(document);
-    } else {
-      var req = el.requestFullscreen || el.webkitRequestFullscreen;
-      if (!req) say();
-      else {
-        try { var p = req.call(el); if (p && p.catch) p.catch(say); }
-        catch (e) { say(); }
-      }
-    }
-  }
-});
-
-/* ---- Casting -------------------------------------------------------------
-   No web API lets a page mirror its own tab — only the browser's own UI can do
-   that, which is why a naive "cast" button on a website does nothing. What a
-   page CAN do is the Presentation API: hand a URL to a Chromecast / Google TV,
-   which then loads that page itself. For a kiosk board that is better than
-   mirroring anyway — the TV renders the board at its own resolution, live, and
-   this laptop can be closed afterwards. Where the API doesn't exist (Safari,
-   Firefox) the button explains how to cast in THAT browser rather than
-   pretending to work. -------------------------------------------------------*/
-var castConn = null;
-var castAvail = null;   /* true / false once known, null = unknown */
-
-function absUrl(href){ return new URL(href, location.href).href; }
-function selectedName(){ return tiles[idx].querySelector(".name").textContent; }
-
-function castSupported(){
-  return typeof PresentationRequest === "function" && !!navigator.presentation;
-}
-
-/* The TV fetches the URL over the network itself, so it has to be an address
-   the TV can actually reach. localhost is a secure context (so the API exists
-   and the picker opens) but is unreachable from the TV — worth saying plainly
-   instead of letting the cast fail on the device with no explanation. */
-function castReachable(){ return location.protocol === "https:"; }
-
-function toast(msg, ms){
-  var t = document.getElementById("toast");
-  t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast._t);
-  toast._t = setTimeout(function(){ t.classList.remove("show"); }, ms || 5200);
-}
-
-function setCastUI(){
-  var b = document.getElementById("castBtn"), lbl = b.querySelector(".lbl");
-  b.classList.remove("dim");
-  if (castConn){
-    b.classList.add("casting"); lbl.textContent = "Stop casting";
-    b.title = "Stop casting (C)"; return;
-  }
-  b.classList.remove("casting");
-  if (!castSupported()){
-    lbl.textContent = "Cast — how?";
-    b.title = "This browser can't start a cast from a page — click for how to do it on this device";
-    return;
-  }
-  lbl.textContent = "Cast to TV";
-  if (castAvail === false){
-    b.classList.add("dim");
-    b.title = "No cast device found on this network yet — click for other ways to get a board on the TV";
-    return;
-  }
-  b.title = "Cast " + selectedName() + " to a TV (C)";
-}
-
-function castHelp(reason){
-  var ua = navigator.userAgent;
-  var isSafari  = /safari/i.test(ua) && !/chrome|chromium|crios|edg|android/i.test(ua);
-  var isFirefox = /firefox|fxios/i.test(ua);
-  var published = "https://transitproject.online/tv.html";
-  var body;
-
-  if (reason === "local"){
-    body = "<h3>Casting needs the published site</h3>" +
-      "<p>This page is being served from <b>localhost</b>. The TV fetches the board over " +
-      "your network by itself, and it can't reach localhost — so the cast would fail on the " +
-      "TV even though the picker opens here. Cast from the published address instead:</p>" +
-      '<div class="url">' + published + "</div>";
-  } else if (reason === "none"){
-    body = "<h3>No cast device found</h3>" +
-      "<p>Nothing on this network is advertising itself as a Chromecast or Google TV. Either " +
-      "the TV is off/asleep, or this device is on a different network (guest Wi-Fi is a common " +
-      "culprit). You can always open the menu in the TV's own browser instead:</p>" +
-      '<div class="url">' + published + "</div>";
-  } else if (isSafari){
-    body = "<h3>Casting from Safari</h3>" +
-      "<p>Safari doesn't let a page start a cast, so this has to go through AirPlay:</p>" +
-      "<ol><li>Open <b>Control Centre</b> on your Mac or iPhone</li>" +
-      "<li>Choose <b>Screen Mirroring</b></li>" +
-      "<li>Pick your Apple TV</li></ol>" +
-      "<p>Or open this menu in the TV's own browser and pick a board there — that's what it's built for:</p>" +
-      '<div class="url">' + published + "</div>";
-  } else if (isFirefox){
-    body = "<h3>Firefox can't cast</h3>" +
-      "<p>Firefox has no casting support at all, from a page or from its own menu. Two options:</p>" +
-      "<ol><li>Open this menu in your TV's browser and pick a board there</li>" +
-      "<li>Or open it in Chrome, which can cast a board straight to a Chromecast</li></ol>" +
-      '<div class="url">' + published + "</div>";
-  } else {
-    body = "<h3>Casting from this browser</h3>" +
-      "<p>This browser doesn't expose casting to a page. Try its own menu " +
-      "(<b>⋮ → Cast</b> in Chrome and Edge), or open this menu in the TV's browser:</p>" +
-      '<div class="url">' + published + "</div>";
-  }
-
-  var box = document.getElementById("castHelpBox");
-  box.innerHTML = body + '<button type="button" id="castHelpOk">Got it</button>';
-  document.getElementById("castHelp").classList.add("show");
-  document.getElementById("castHelpOk").onclick = closeCastHelp;
-  document.getElementById("castHelpOk").focus();
-}
-
-/* ---- unlocking this screen from a phone ---------------------------------
-   Every fallback in castHelp() above ends the same way: open this menu in the
-   television's own browser. So this page is the one that ends up ON the TV,
-   and until now there was nothing on it that could license the thing. The
-   pairing QR existed only on gate.js's wall, and gate.js returns early for
-   anyone who has paid — so the person standing at a new television with a
-   licence already on their phone was precisely the person who could not
-   reach it.
-
-   The panel is fetched on demand rather than shipped with the launcher: this
-   page draws nine tiles and has no other use for a QR encoder.
-
-   pair-tv.js is happy without license.js, which this page does not load — it
-   falls back to the shipped Worker URL and the same tb.device id, and on
-   success writes the licence to localStorage itself before reloading. */
-var pairLoading = null;
-function loadPair(cb){
-  if (window.TBPair) { cb(true); return; }
-  if (pairLoading) { pairLoading.push(cb); return; }
-  pairLoading = [cb];
-  var left = 2, failed = false;
-  function settle(){
-    var ok = !failed && !!window.TBPair, list = pairLoading;
-    pairLoading = null;
-    for (var i = 0; i < list.length; i++) { try { list[i](ok); } catch(_){} }
-  }
-  ["pair-qr.js?v=1", "pair-tv.js?v=1"].forEach(function(src){
-    var s = document.createElement("script");
-    s.src = src;
-    s.onload  = function(){ if (--left === 0) settle(); };
-    s.onerror = function(){ failed = true; if (--left === 0) settle(); };
-    document.head.appendChild(s);
-  });
-}
-
-/* Read the cached licence straight from localStorage — license.js is not on
-   this page to answer, but these are the exact values it writes, and the same
-   fourteen-day offline grace gate.js honours. */
-function screenLicensed(){
-  if (window.TB_PAYWALL === false) return true;
-  try{
-    var DAY = 86400000;
-    if (Number(localStorage.getItem("tb.license.okUntil") || 0) > Date.now()) return true;
-    if (Number(localStorage.getItem("tb.license.lastOk")  || 0) > Date.now() - 14 * DAY) return true;
-  }catch(_){}
-  return false;
-}
-
-function paintPairBtn(){
-  var b = document.getElementById("pairBtn");
-  if (!b) return;
-  if (window.TB_PAYWALL === false) {
-    b.style.display = "none";
-    document.getElementById("unlockHint").style.display = "none";
-    return;
-  }
-  var on = screenLicensed();
-  if (on) b.classList.add("done"); else b.classList.remove("done");
-  b.querySelector(".lbl").textContent = on ? "Screen is licensed" : "Unlock this screen";
-  b.title = on
-    ? "This screen already has a licence. You can still pair it again."
-    : "Show a code your phone can scan to unlock this screen";
-}
-
-function openPair(){
-  var panel = document.getElementById("pairPanel"),
-      note  = document.getElementById("pairNote"),
-      host  = document.getElementById("pairHost");
-  panel.classList.add("show");
-  note.textContent = "Loading…";
-  host.innerHTML = "";
-  document.getElementById("pairClose").focus();
-  loadPair(function(ok){
-    if (!ok){
-      note.textContent = "Couldn't load the pairing tools. Check this screen's connection, then try again.";
-      return;
-    }
-    note.textContent = screenLicensed()
-      ? "This screen already has a licence — scanning again simply re-registers it, and costs you nothing."
-      : "Scan this with your phone. Your licence moves across; there is nothing to type on the TV.";
-    window.TBPair.mount(host, {});
-  });
-}
-
-function closePair(){
-  if (window.TBPair) window.TBPair.stop();     // stop polling with the panel gone
-  document.getElementById("pairPanel").classList.remove("show");
-  paintPairBtn();
-  /* Back to the tile the remote was sitting on, so arrows carry on working.
-     Focusing the header button instead would strand a remote outside the grid
-     with no way back into it. */
-  try { tiles[idx].focus({preventScroll:true}); }catch(_){}
-}
-
-function closeCastHelp(){
-  document.getElementById("castHelp").classList.remove("show");
-  tiles[idx].focus({preventScroll:true});
-}
-
-function startCast(){
-  if (!castSupported()) { castHelp(); return; }
-  if (!castReachable()) { castHelp("local"); return; }
-  if (castAvail === false) { castHelp("none"); return; }
-
-  var name = selectedName(), req;
-  try { req = new PresentationRequest([absUrl(tiles[idx].getAttribute("href"))]); }
-  catch (e) { castHelp(); return; }
-
-  req.start().then(function(conn){
-    castConn = conn;
-    var ended = function(){ castConn = null; setCastUI(); toast("Casting stopped"); };
-    conn.onclose = ended; conn.onterminate = ended;
-    setCastUI();
-    toast(name + " is loading on the TV — it runs the board itself, so you can close this tab");
-  }).catch(function(err){
-    var n = err && err.name;
-    if (n === "NotFoundError") castHelp("none");
-    else if (n === "NotAllowedError") toast("Cast cancelled");
-    else toast("Couldn't start casting" + (n ? " (" + n + ")" : ""));
-  });
-}
-
-function stopCast(){
-  try { castConn.terminate(); } catch (e) {}
-  castConn = null; setCastUI();
-}
-
-function toggleCast(){ castConn ? stopCast() : startCast(); }
-
-function initCast(){
-  document.getElementById("castBtn").addEventListener("click", toggleCast);
-  document.getElementById("pairBtn").addEventListener("click", openPair);
-  document.getElementById("pairClose").addEventListener("click", closePair);
-  paintPairBtn();
-  document.getElementById("castHelp").addEventListener("click", function(e){
-    if (e.target.id === "castHelp") closeCastHelp();
-  });
-  setCastUI();
-  if (!castSupported()) return;
-  try {
-    var probe = new PresentationRequest([absUrl("tv.html")]);
-    /* Also lets the browser's own Cast menu offer this page as a target. */
-    try { navigator.presentation.defaultRequest = probe; } catch (e) {}
-    probe.getAvailability().then(function(a){
-      castAvail = a.value;
-      a.onchange = function(){ castAvail = a.value; setCastUI(); };
-      setCastUI();
-    }).catch(function(){ castAvail = null; setCastUI(); });  /* unknown: stay enabled */
-  } catch (e) {}
-}
-initCast();
-
-function tick(){
-  var d = new Date();
-  document.getElementById("clock").textContent =
-    d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-  document.getElementById("date").textContent =
-    d.toLocaleDateString([], {weekday:"long", month:"short", day:"numeric"});
-}
-tick(); setInterval(tick, 10000);
-</script>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="castHelp" class="dialog-backdrop" role="dialog" aria-modal="true" aria-label="Casting help"><div class="box" id="castHelpBox"></div></div>
+<div id="pairPanel" class="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="pairTitle"><div class="box"><h3 id="pairTitle">Unlock this screen</h3><p class="note" id="pairNote">Scan with your phone to connect this screen.</p><div id="pairHost"></div><button type="button" id="pairClose">Close</button></div></div>
+<noscript><p>JavaScript is needed for the TV menu. Open a city board directly: <a href="dc.html">Washington, DC</a> · <a href="philadelphia.html">Philadelphia</a> · <a href="nyc.html">New York</a>.</p></noscript>
 </body>
 </html>

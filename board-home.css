@@ -717,3 +717,50 @@
   :root[data-style="glass"].tb-lowfx body.map-full #app > footer,
   :root[data-style="glass"].tb-lowfx body.map-full #app > main > .col:last-child{ display:none }
 }
+
+/* Shared visual view switcher. The original anchors keep their city routing,
+   account state, and gate handlers. Fixed colors make the panel readable over
+   either a dark transit board or a bright street map. */
+#app header details.tb-view-launcher{display:block;position:relative;flex:0 0 auto}
+#app header details.tb-view-launcher > summary{display:flex;align-items:center;justify-content:center;gap:12px;list-style:none;cursor:pointer;padding:10px 14px;font:600 13px/1.2 var(--body);border-radius:9px}
+#app header details.tb-view-launcher > summary:focus-visible{outline:2px solid #93ded3;outline-offset:4px}
+#app header details.tb-view-launcher > summary::after{content:'⌄';font-size:14px;transition:transform .18s}
+#app header details.tb-view-launcher[open] > summary::after{transform:rotate(180deg)}
+#app header details.tb-view-launcher > .view-links{display:none;position:absolute;right:0;left:auto;top:calc(100% + 12px);width:540px;padding:22px;margin:0;overflow-y:auto;background:#101824;color:#edf3fc;border:1px solid #3b4c62;border-radius:14px;box-shadow:0 24px 70px #0008;z-index:1200;text-shadow:none;scrollbar-width:thin;scrollbar-color:#41536d transparent}
+#app header details.tb-view-launcher[open] > .view-links{display:block;animation:tb-view-reveal .16s ease-out}
+#app header .tb-view-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 18px;padding:0 0 16px;border-bottom:1px solid #2c3b50}
+#app header .tb-view-head strong{font:600 21px/1.2 var(--body);letter-spacing:-.035em;color:#f1f6ff}
+#app header .tb-view-head > span{font:500 11px/1.3 var(--mono);color:#8eafaF;max-width:45%;text-align:right}
+#app header .tb-view-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+#app header details.tb-view-launcher .view-links a.tb-view-card{position:relative;display:flex;align-items:flex-start;gap:12px;min-width:0;width:auto;min-height:95px;margin:0;padding:17px 13px;background:#172334;color:#eef4fc;border:1px solid #2e4057;border-radius:9px;font:500 14px/1.3 var(--body);white-space:normal;transition:border-color .15s,background .15s,box-shadow .15s;text-decoration:none}
+#app header details.tb-view-launcher .view-links a.tb-view-card:hover,#app header details.tb-view-launcher .view-links a.tb-view-card:focus-visible{background:#21364a;border-color:#78c5c1;box-shadow:inset 0 0 0 1px #78c5c1;outline:none}
+#app header details.tb-view-launcher .view-links a[data-view-kind=projector]{border-color:#3f6865;background:#173034}
+#app header .tb-view-icon{flex:none;display:flex;width:25px;color:#91aecd;padding-top:1px}
+#app header .tb-view-icon svg{display:block;width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.45;stroke-linecap:round;stroke-linejoin:round}
+#app header [data-view-kind=sky] .tb-view-icon{color:#b0b8e5}
+#app header [data-view-kind=board] .tb-view-icon{color:#e1c48c}
+#app header [data-view-kind=projector] .tb-view-icon{color:#83cec1}
+#app header [data-view-kind=home] .tb-view-icon{color:#d7ab8c}
+#app header .tb-view-copy{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+#app header .tb-view-name{display:block;font:600 17px/1.2 var(--body);letter-spacing:-.025em;color:#f1f6ff}
+#app header .tb-view-desc{display:block;font:400 11px/1.4 var(--body);color:#9cb0c9;max-width:170px}
+#app header .tb-view-arrow{font:400 14px/1 var(--body);color:#7d96b6;flex:none;transition:transform .15s}
+#app header a.tb-view-card:hover .tb-view-arrow,#app header a.tb-view-card:focus-visible .tb-view-arrow{transform:translate(2px,-2px);color:#bdfff2}
+#app header .tb-view-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:15px;padding-top:14px;border-top:1px solid #2c3b50}
+#app header details.tb-view-launcher .view-links a.tb-view-tool{display:flex;align-items:center;gap:7px;width:auto;margin:0;padding:8px 9px;border:1px solid transparent;border-radius:6px;background:transparent;color:#b9c8dd;text-decoration:none}
+#app header details.tb-view-launcher .view-links a.tb-view-tool:hover,#app header details.tb-view-launcher .view-links a.tb-view-tool:focus-visible{background:#21364a;border-color:#70859f;outline:none}
+#app header .tb-view-tool .tb-view-icon,#app header .tb-view-tool .tb-view-icon svg{width:16px;height:16px}
+#app header .tb-view-tool .tb-view-name{font-size:12px;font-weight:500;color:#b9c8dd}
+#app header .tb-view-tool .tb-view-desc{display:none}
+#app header .tb-view-hint{font:400 11px/1.45 var(--body);color:#839bb8;margin:14px 0 0;min-height:32px;white-space:normal;text-align:left}
+@keyframes tb-view-reveal{from{opacity:0;translate:0 -5px}to{opacity:1;translate:0 0}}
+@media(max-width:600px){#app header details.tb-view-launcher > .view-links{padding:16px}#app header .tb-view-head{margin-bottom:13px;padding-bottom:13px}#app header .tb-view-head strong{font-size:20px}#app header .tb-view-head > span{font-size:10px}#app header .tb-view-grid{gap:7px}#app header details.tb-view-launcher .view-links a.tb-view-card{gap:9px;min-height:92px;padding:14px 10px}#app header .tb-view-name{font-size:16px}#app header .tb-view-desc{font-size:11px}#app header .tb-view-icon,#app header .tb-view-icon svg{width:22px;height:22px}#app header .tb-view-arrow{display:none}}
+@media(prefers-reduced-motion:reduce){#app header details.tb-view-launcher *,#app header details.tb-view-launcher[open] > .view-links{animation:none!important;transition:none!important}}
+/* Direct-child links preserve the board modules' existing insertion points. */
+#app header details.tb-view-launcher[open] > .view-links{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}
+#app header .tb-view-head,#app header .tb-view-hint,#app header .tb-view-tools{grid-column:1 / -1}
+#app header .tb-view-head{margin-bottom:4px;padding-bottom:14px}
+#app header details.tb-view-launcher .view-links a.tb-view-card{grid-column:span 3}
+#app header .tb-view-tools{height:0;padding:0;margin:5px 0 0;border-top:1px solid #2c3b50}
+#app header details.tb-view-launcher .view-links a.tb-view-tool{grid-column:span 2;justify-content:center;padding:8px 2px}
+#app header .tb-view-hint{margin-top:1px;margin-bottom:0}
