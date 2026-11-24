@@ -63,7 +63,7 @@
   seconds to become interactive has already lost the visitor it was built for.
 -->
 
-<link rel="stylesheet" href="homepage.css?v=2">
+<link rel="stylesheet" href="homepage.css?v=3">
 </head>
 <body class="homepage">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -75,57 +75,98 @@
   <symbol id="icon-scope" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3"/></symbol>
   <symbol id="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
   <symbol id="icon-moon" viewBox="0 0 24 24"><path d="M21 14.5A9 9 0 0 1 9.5 3 9 9 0 1 0 21 14.5Z"/></symbol>
+  <symbol id="icon-tv" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></symbol>
 </defs></svg>
 <div class="wrap">
   <header class="site-header">
-    <a class="brand" href="index.html" aria-label="Transit Project — home"><img class="brandmark" data-theme-mark src="brand/mark-on-dark.svg" width="44" height="44" alt=""><span class="brand-type"><span class="wordmark">Transit Project<span>.</span></span><span class="brand-sub">Your city, connected</span></span></a>
+    <a class="brand" href="index.html" aria-label="Transit Project — home"><img class="brandmark" data-theme-mark src="brand/mark-on-dark.svg" width="44" height="44" alt=""><span class="brand-type"><span class="wordmark">Transit Project</span></span></a>
     <nav aria-label="Main navigation"><a href="#whats-new">What’s new</a><a href="#cities">Cities</a><a href="#preview">Views</a><a href="#faq">FAQ</a></nav>
-    <div class="header-actions"><div class="theme-switch" role="group" aria-label="Homepage appearance"><button type="button" data-home-theme="dark" aria-label="Dark mode" aria-pressed="true" title="Use dark mode"><svg><use href="#icon-moon"></use></svg><span>Dark</span></button><button type="button" data-home-theme="light" aria-label="Light mode" aria-pressed="false" title="Use light mode"><svg><use href="#icon-sun"></use></svg><span>Light</span></button></div><a class="acct" id="navAccount" href="profile.html?from=index.html" title="Your licence, devices and sign-in"><span class="av" id="navAvatar" aria-hidden="true"></span><span id="navAccountLabel">Your account</span></a><a class="header-cta" id="navBuy" href="buy.html">Get a license ↗</a></div>
+    <div class="header-actions"><div class="theme-switch" role="group" aria-label="Homepage appearance"><button type="button" data-home-theme="dark" aria-label="Dark mode" aria-pressed="true" title="Use dark mode"><svg><use href="#icon-moon"></use></svg><span>Dark</span></button><button type="button" data-home-theme="light" aria-label="Light mode" aria-pressed="false" title="Use light mode"><svg><use href="#icon-sun"></use></svg><span>Light</span></button></div><a class="acct" id="navAccount" href="profile.html?from=index.html" aria-label="Your account" title="Your licence, devices and sign-in"><span class="av" id="navAvatar" aria-hidden="true"></span><span id="navAccountLabel">Your account</span></a><a class="header-cta" id="navBuy" href="buy.html">Get a license ↗</a></div>
   </header>
   <main id="main">
     <section class="hero" aria-labelledby="heroTitle">
-      <div class="hero-copy"><p class="eyebrow"><span class="signal-led"></span> The world outside. Connected.</p><h1 id="heroTitle">Your city.<br><span class="spectrum-text">In real time.</span></h1>
-        <p class="hero-modes"><span class="pink-ink">Trains.</span> <span class="teal-ink">Buses.</span> <span class="blue-ink">Planes.</span> One screen.</p>
-        <p class="lede">Turn any screen into your city’s live control center. Moving maps, nearby departures, and aircraft overhead — all in one beautifully connected view.</p>
-        <div class="cta-row"><a class="btn primary" href="#cities">Launch your city <span aria-hidden="true">↗</span></a><a class="btn secondary" id="tvSetup" href="tv.html"><svg class="line-icon"><use href="#icon-network"></use></svg>Set up a display</a></div>
-        <div class="hero-return"><a id="openBoard" href="dc.html">Open the Washington board</a><span aria-hidden="true">→</span></div><div class="note" id="resumeNote"></div>
-        <button class="key-toggle" id="haveKey" type="button" aria-controls="keyBox" aria-expanded="false">I have a licence key</button><div id="keyBox" hidden><div class="keyrow"><input id="keyInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false" aria-label="Licence key"><button class="btn primary" id="keyGo" type="button">Unlock</button></div><div class="note" id="keyMsg" aria-live="polite"></div></div>
+      <div class="hero-copy">
+        <div class="route-key" aria-label="Trains, buses, and aircraft">
+          <span class="pink-ink"><svg aria-hidden="true"><use href="#icon-rail"></use></svg>Rail</span>
+          <span class="teal-ink"><svg aria-hidden="true"><use href="#icon-road"></use></svg>Road</span>
+          <span class="blue-ink"><svg aria-hidden="true"><use href="#icon-air"></use></svg>Air</span>
+        </div>
+        <h1 id="heroTitle">Your city in<br class="hero-break"> <span class="hero-accent">real time.</span></h1>
+        <p class="lede">Track trains, buses, and aircraft on one live board. Explore your city from a browser, a TV, or a spare tablet.</p>
+        <div class="cta-row">
+          <a class="btn primary" href="#cities">Find your city <span aria-hidden="true">↗</span></a>
+          <a class="btn secondary" id="tvSetup" href="tv.html">Set up a display</a>
+        </div>
+        <a class="hero-return" id="openBoard" href="dc.html">Open the Washington board</a>
+        <div class="note" id="resumeNote"></div>
+        <button class="key-toggle" id="haveKey" type="button" aria-controls="keyBox" aria-expanded="false">I have a license key</button>
+        <div id="keyBox" hidden>
+          <div class="keyrow"><input id="keyInput" autocomplete="off" spellcheck="false" aria-label="License key"><button class="btn primary" id="keyGo" type="button">Unlock</button></div>
+          <div class="note" id="keyMsg" aria-live="polite"></div>
+        </div>
       </div>
-      <div class="signal-stage" aria-label="Interactive product showcase">
-        <div class="stage-topline"><span><i></i> Transit Project / System view</span><span>RAIL · ROAD · AIR</span></div>
-        <svg class="signal-network" viewBox="0 0 700 560" fill="none" aria-hidden="true">
-          <defs><pattern id="signal-grid" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M35 0H0V35" stroke="currentColor" stroke-width=".6"/></pattern><linearGradient id="signal-spectrum"><stop stop-color="#ff3d77"/><stop offset=".5" stop-color="#2f7bff"/><stop offset="1" stop-color="#00e0c6"/></linearGradient></defs>
-          <rect width="700" height="560" fill="url(#signal-grid)" opacity=".22"/><circle cx="350" cy="280" r="225" stroke="currentColor" opacity=".12" stroke-dasharray="2 8"/><circle cx="350" cy="280" r="165" stroke="currentColor" opacity=".1"/><path d="M0 280H700M350 0V560" stroke="currentColor" opacity=".1"/>
-          <g class="network-halo" stroke-width="15" opacity=".08"><path d="M-20 110H240L540 410H720" stroke="#ff3d77"/><path d="M80 570V460L350 190V-10" stroke="#00e0c6"/><path d="M-20 370H170L410 130H720" stroke="#2f7bff"/></g>
-          <g stroke-width="2"><path d="M-20 110H240L540 410H720" stroke="#ff3d77"/><path d="M80 570V460L350 190V-10" stroke="#00e0c6"/><path d="M-20 370H170L410 130H720" stroke="#2f7bff"/></g>
-          <g class="network-stations"><circle cx="140" cy="110" r="5"/><circle cx="240" cy="110" r="6"/><circle cx="540" cy="410" r="6"/><circle cx="620" cy="410" r="5"/><circle cx="80" cy="490" r="5"/><circle cx="350" cy="75" r="5"/><circle cx="170" cy="370" r="6"/><circle cx="470" cy="130" r="5"/><circle cx="620" cy="130" r="6"/></g>
-          <g class="network-vehicles"><circle r="4" fill="#ff3d77"><animateMotion dur="10s" repeatCount="indefinite" path="M-20 110H240L540 410H720"/></circle><circle r="4" fill="#00e0c6"><animateMotion dur="13s" repeatCount="indefinite" path="M80 570V460L350 190V-10"/></circle><circle r="4" fill="#2f7bff"><animateMotion dur="11s" repeatCount="indefinite" path="M-20 370H170L410 130H720"/></circle></g>
-          <g class="network-labels"><text x="16" y="96">RAIL / 01</text><text x="365" y="44">ROAD / 02</text><text x="620" y="115">AIR / 03</text><text x="456" y="512">NETWORK ILLUSTRATION</text></g>
-        </svg>
-        <div class="hero-terminal"><div class="terminal-header"><span class="terminal-lights"><i></i><i></i><i></i></span><span id="heroScreenLabel">Washington DC / Live board</span><svg class="line-icon"><use href="#icon-network"></use></svg></div><a id="heroScreenLink" href="dc.html" aria-label="Open the Washington live board"><img id="heroScreen" src="shots/home-board-dc.jpg" width="1280" height="720" fetchpriority="high" decoding="async" alt="The actual Washington DC live board centered on Union Station, with a moving transit map and departure panels."></a><div class="terminal-footer"><span><span class="signal-led"></span> ACTUAL PRODUCT CAPTURE</span><span>OPEN VIEW ↗</span></div></div>
-        <div class="floating-tag tag-city"><span class="tag-symbol"><svg class="line-icon"><use href="#icon-scope"></use></svg></span><div><b><span data-city-total>13</span> city systems</b><small>One connected perspective</small></div></div>
-        <div class="floating-tag tag-screen"><span class="tag-symbol"><svg class="line-icon"><use href="#icon-network"></use></svg></span><div><b>Any screen.</b><small>Powered by your browser</small></div></div>
-        <div class="hero-view-switch" role="group" aria-label="Choose a hero product view"><button type="button" data-hero-view="board" aria-pressed="true" aria-controls="heroScreen"><svg><use href="#icon-network"></use></svg>Live board</button><button type="button" data-hero-view="departures" aria-pressed="false" aria-controls="heroScreen"><svg><use href="#icon-rail"></use></svg>Departures</button><button type="button" data-hero-view="sky" aria-pressed="false" aria-controls="heroScreen"><svg><use href="#icon-air"></use></svg>Sky view</button></div>
+      <div class="product-console" id="preview" aria-label="Transit Project product preview">
+        <div class="console-toolbar">
+          <div class="preview-controls" role="group" aria-label="Choose a product preview">
+            <button type="button" class="preview-choice" data-preview="board" aria-pressed="true" aria-controls="productPreview"><svg aria-hidden="true"><use href="#icon-network"></use></svg>Live board</button>
+            <button type="button" class="preview-choice" data-preview="departures" aria-pressed="false" aria-controls="productPreview"><svg aria-hidden="true"><use href="#icon-rail"></use></svg>Departures</button>
+            <button type="button" class="preview-choice" data-preview="sky" aria-pressed="false" aria-controls="productPreview"><svg aria-hidden="true"><use href="#icon-air"></use></svg>Sky view</button>
+          </div>
+        </div>
+        <figure class="product-preview" id="productPreview">
+          <a id="previewLink" href="dc.html" aria-label="Open the Washington live board"><img id="previewImage" src="shots/home-board-dc.jpg" width="1280" height="720" fetchpriority="high" alt="The Washington, DC board with a map and departure panels."></a>
+          <figcaption class="preview-bottom">
+            <span id="previewLocation" aria-live="polite">Washington DC / Live board</span>
+            <a id="previewOpen" href="dc.html">Open this view <span aria-hidden="true">↗</span></a>
+          </figcaption>
+        </figure>
       </div>
     </section>
-    <div class="capability-rail"><div><span class="rail-number" data-city-total>13</span><span>CITY BOARDS<small>Across the US & Europe</small></span></div><div><svg class="line-icon pink-ink"><use href="#icon-rail"></use></svg><span>RAIL + ROAD<small>Local departures, connected</small></span></div><div><svg class="line-icon blue-ink"><use href="#icon-air"></use></svg><span>THE SKY ABOVE<small>Know what’s flying overhead</small></span></div><div><svg class="line-icon teal-ink"><use href="#icon-network"></use></svg><span>ZERO INSTALLS<small>Tablet · Desktop · TV</small></span></div></div>
     <div class="live-strip" id="liveStrip" hidden><div class="live-head"><span class="signal-led"></span><span>On the network <b>Live feed</b></span><span class="where" id="liveWhere"></span></div><div class="live-rows" id="liveRows"></div></div>
 
     <section class="new-features" id="whats-new" aria-labelledby="newTitle">
-      <div class="section-top"><div><p class="eyebrow"><span class="section-index">NEW</span> Beyond the next departure</p><h2 id="newTitle">New ways to<br><span class="spectrum-text">see your city.</span></h2></div><p class="sub">A smarter board. A city to explore. A skyline after dark. Your screen can do a lot more than show the next train.</p></div>
+      <div class="section-top"><h2 id="newTitle">What’s new</h2></div>
       <div class="feature-grid">
-        <article class="feature-projector"><div class="feature-copy"><span class="feature-tag">PROJECTOR + PLANETARIUM</span><h3>Your city.<br>After dark.</h3><p>Explore 13 detailed city skylines, or turn your ceiling into a planetarium with stars and the moon.</p><a href="projector-cities.html">Explore projector views <span aria-hidden="true">↗</span></a></div><svg class="feature-stars" viewBox="0 0 600 430" aria-hidden="true"><g fill="#b6d0ff"><circle cx="80" cy="230" r="1"/><circle cx="205" cy="280" r="1.3"/><circle cx="420" cy="90" r="1"/><circle cx="510" cy="150" r="1.4"/><circle cx="350" cy="240" r=".8"/><circle cx="460" cy="260" r="1.1"/><circle cx="310" cy="60" r=".8"/><circle cx="570" cy="290" r="1"/></g><path d="M504 40a27 27 0 1 0 26 34 23 23 0 0 1-26-34" fill="#d3e6ff" opacity=".8"/></svg><canvas id="featurePanorama" role="img" aria-label="Illustrated Washington DC panorama from Projector mode">A detailed city panorama from Projector mode.</canvas><div class="projector-caption"><div class="projector-city-controls" role="group" aria-label="Choose a projector panorama"><button type="button" data-projector-city="dc" aria-pressed="true">DC</button><button type="button" data-projector-city="nyc" aria-pressed="false">NYC</button><button type="button" data-projector-city="sf" aria-pressed="false">SF</button></div><span id="featureCityName">Washington, DC / Projector panorama</span></div></article>
-        <article class="feature-mini"><svg class="feature-icon"><use href="#icon-network"></use></svg><div><span class="feature-tag">SMART BOARD + DETAILED MAPS</span><h3>The right details. More room.</h3><p>Keep the map in view while useful panels rotate. Pin up to two panels, explore transit layers, and tap supported major stations for departures.</p><a href="dc.html">Explore a live board ↗</a></div></article>
-        <article class="feature-mini"><svg class="feature-icon"><use href="#icon-scope"></use></svg><div><span class="feature-tag">EXPLORE + CITY PASSPORT</span><h3>Go beyond your usual stop.</h3><p>Find curated places, follow a two-stop outing, and collect visit stamps in your city passport. Your saved places stay in this browser.</p><a href="#cities">Find your city ↗</a></div></article>
-        <article class="feature-mini"><svg class="feature-icon"><use href="#icon-air"></use></svg><div><span class="feature-tag">TV SETUP + DISPLAY LINKS</span><h3>Your city. A bigger screen.</h3><p>Choose a city and view, then follow guided setup for AirPlay, Chromecast, or your TV’s browser. Share your display link with a QR code.</p><a href="tv.html">Set up your screen ↗</a></div></article>
-      </div><div class="feature-extras"><span>MORE TO EXPLORE</span><a href="spot.html">Spotter: log your sightings ↗</a><a href="profile.html">Your account & screens ↗</a><a href="tv.html">Casting uses your device’s system controls →</a></div>
+        <article class="feature-projector">
+          <div class="feature-copy">
+            <p class="feature-tag">Projector &amp; planetarium</p>
+            <h3>Your city after dark</h3>
+            <p>Explore 13 city skylines, or project the stars and moon onto your ceiling.</p>
+            <a href="projector-cities.html">Explore projector views <span aria-hidden="true">↗</span></a>
+          </div>
+          <div class="projector-preview">
+            <div class="projector-art">
+              <svg class="feature-stars" viewBox="0 0 600 225" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <g fill="#b6d0ff" opacity=".8"><circle cx="80" cy="54" r="1"/><circle cx="205" cy="46" r="1.3"/><circle cx="420" cy="60" r="1"/><circle cx="510" cy="108" r="1.4"/><circle cx="350" cy="25" r=".8"/><circle cx="460" cy="110" r="1.1"/><circle cx="310" cy="77" r=".8"/><circle cx="570" cy="35" r="1"/></g>
+                <path d="M504 24a21 21 0 1 0 20 27 18 18 0 0 1-20-27" fill="#d3e6ff" opacity=".8"/>
+              </svg>
+              <canvas id="featurePanorama" width="600" height="225" role="img" aria-label="Illustrated Washington DC skyline">A detailed city panorama from Projector mode.</canvas>
+            </div>
+            <div class="projector-caption">
+              <span id="featureCityName" aria-live="polite">Washington, DC</span>
+              <div class="projector-city-controls" role="group" aria-label="Choose a projector panorama">
+                <button type="button" data-projector-city="dc" aria-label="Washington, DC skyline" aria-pressed="true" aria-controls="featurePanorama">DC</button>
+                <button type="button" data-projector-city="nyc" aria-label="New York skyline" aria-pressed="false" aria-controls="featurePanorama">NYC</button>
+                <button type="button" data-projector-city="sf" aria-label="San Francisco skyline" aria-pressed="false" aria-controls="featurePanorama">SF</button>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="feature-mini">
+          <svg class="feature-icon" aria-hidden="true"><use href="#icon-network"></use></svg>
+          <div><h3>Smarter boards</h3><p>Pin the panels you use most and tap major stations for departures.</p><a href="dc.html">Open a live board <span aria-hidden="true">↗</span></a></div>
+        </article>
+        <article class="feature-mini">
+          <svg class="feature-icon" aria-hidden="true"><use href="#icon-scope"></use></svg>
+          <div><h3>City passport</h3><p>Find local stops worth visiting, follow a two-stop outing, and collect stamps.</p><a href="#cities">Find your city <span aria-hidden="true">↗</span></a></div>
+        </article>
+        <article class="feature-mini">
+          <svg class="feature-icon" aria-hidden="true"><use href="#icon-tv"></use></svg>
+          <div><h3>Big-screen setup</h3><p>Choose a city and view, then follow the setup for AirPlay, Chromecast, or a TV browser.</p><a href="tv.html">Set up your screen <span aria-hidden="true">↗</span></a></div>
+        </article>
+      </div>
     </section>
-    <section class="showcase" id="preview" aria-labelledby="previewTitle"><div class="section-top"><div><p class="eyebrow"><span class="section-index">01</span> One city. Every angle.</p><h2 id="previewTitle">A better view<br>of <span class="teal-ink">everything.</span></h2></div><p class="sub">The original live board, a station-style departures display, and the sky above. Switch perspectives. Stay connected.</p></div>
-      <div class="product-console"><div class="console-toolbar"><div class="preview-controls" role="group" aria-label="Choose a product preview"><button type="button" class="preview-choice" data-preview="board" aria-pressed="true" aria-controls="productPreview"><svg><use href="#icon-network"></use></svg>Live board</button><button type="button" class="preview-choice" data-preview="departures" aria-pressed="false" aria-controls="productPreview"><svg><use href="#icon-rail"></use></svg>Departures</button><button type="button" class="preview-choice" data-preview="sky" aria-pressed="false" aria-controls="productPreview"><svg><use href="#icon-air"></use></svg>Sky view</button></div><span class="capture-label"><i></i> REAL PRODUCT. REAL DATA.</span></div>
-      <figure class="product-preview" id="productPreview"><div class="screen-bar"><span class="screen-cross">⌖</span><span id="previewLocation">Washington DC / Live board</span><span class="screen-mark">TRANSIT PROJECT / PREVIEW</span></div><a id="previewLink" href="dc.html" aria-label="Open the Washington live board"><img id="previewImage" src="shots/home-board-dc.jpg" width="1280" height="720" loading="lazy" decoding="async" alt="The Washington DC board with a transit map and departure panels."></a><div class="preview-bottom"><figcaption id="previewCaption" aria-live="polite">Your city at a glance. Live vehicles, nearby departures, and the details that keep you connected.</figcaption><a id="previewOpen" href="dc.html">Open this view <span aria-hidden="true">↗</span></a></div></figure></div>
-      <div class="showcase-footer"><span>YOUR TABLET. YOUR TV. YOUR LAPTOP. A WHOLE NEW PURPOSE.</span><a href="tv.html">Build your display ↗</a></div>
-    </section>
-    <section class="city-section" id="cities" aria-labelledby="cityCount"><div class="section-top"><div><p class="eyebrow"><span class="section-index">02</span> The city directory</p><h2 id="cityCount">Thirteen cities</h2></div><p class="sub">Every city has its own rhythm. Its own network. Its own board. Choose your connection.</p></div><div class="directory-bar"><span>SELECT YOUR CITY</span><span>LOCAL RAIL / ROAD / AIR</span><span>OPEN BOARD ↗</span></div><div class="cities" id="cityGrid"></div></section>
+    <section class="city-section" id="cities" aria-labelledby="cityCount"><div class="section-top"><div><p class="eyebrow"><span class="section-index">02</span> The city directory</p><h2 id="cityCount">Thirteen cities</h2></div><p class="sub">Choose a city to open its live board.</p></div><div class="directory-bar"><span>SELECT YOUR CITY</span><span>LOCAL RAIL / ROAD / AIR</span><span>OPEN BOARD ↗</span></div><div class="cities" id="cityGrid"></div></section>
     <section class="getting-started" id="start" aria-labelledby="startTitle"><div class="section-top"><div><p class="eyebrow"><span class="section-index">03</span> Bring your city online</p><h2 id="startTitle">From browser<br>to <span class="pink-ink">command center.</span></h2></div><p class="sub">Use hardware you already own. Customize your view. Let the city do the moving.</p></div><div class="steps"><div class="step"><span class="n">01<span></span></span><svg class="step-icon"><use href="#icon-scope"></use></svg><h3>Find your city.</h3><p>Open a board to explore its map, nearby departures, and aircraft. No installation required.</p><a href="#cities">Choose a city ↗</a></div><div class="step"><span class="n">02<span></span></span><svg class="step-icon"><use href="#icon-network"></use></svg><h3>Tune your signal.</h3><p>Set your location. Choose your panels, theme, and design. Each city remembers its own setup.</p><span class="step-note">One board. Your way.</span></div><div class="step"><span class="n">03<span></span></span><svg class="step-icon"><use href="#icon-rail"></use></svg><h3>Go full screen.</h3><p>Give a tablet, TV, laptop, or Raspberry Pi a new purpose. Bookmark your board and leave it running.</p><a href="tv.html">Set up your display ↗</a></div></div></section>
     <section id="views" aria-labelledby="viewsTitle"><div class="section-top"><div><p class="eyebrow"><span class="section-index">04</span> Beyond the board</p><h2 id="viewsTitle">Change the view.<br><span class="blue-ink">Keep the connection.</span></h2></div><p class="sub">Follow a flight. Scan the whole network. Log a sighting. There’s more than one way to watch your city.</p></div><div class="views" id="viewGrid"></div></section>
     <section id="pricing">
@@ -208,7 +249,7 @@
   </section>
     <section class="last-stop" aria-label="Launch Transit Project"><svg class="last-routes" viewBox="0 0 1000 240" fill="none" aria-hidden="true"><path d="M480-20v100l180 180M620-20v80l-80 80H0" stroke="#ff3d77"/><path d="M1050 30H830L640 220H-20" stroke="#00e0c6"/><path d="M1100 130H760L580-50" stroke="#2f7bff"/></svg><div><p class="eyebrow">A whole city. One screen.</p><h2>Your next<br><span class="spectrum-text">connection.</span></h2></div><div class="last-actions"><a class="btn primary" href="#cities">Launch your city ↗</a><a href="tv.html">Or set up a display →</a></div></section>
   </main>
-  <footer><a class="footer-brand" href="index.html"><img data-theme-mark src="brand/mark-on-dark.svg" alt="" width="40" height="40"><span>Transit Project<span class="pink-ink">.</span></span></a><p>Built in Washington, DC.<br>Connected to the world outside.</p><div><a href="profile.html?from=index.html">Your account</a><a href="PRIVACY.md">Privacy</a><a href="tv.html">TV menu ↗</a></div><small>Live data from public transit and aircraft feeds. Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners.</small><span class="footer-signal" aria-hidden="true"><i></i><i></i><i></i></span></footer>
+  <footer><a class="footer-brand" href="index.html"><img data-theme-mark src="brand/mark-on-dark.svg" alt="" width="40" height="40"><span>Transit Project</span></a><p>Built in Washington, DC.<br>Connected to the world outside.</p><div><a href="profile.html?from=index.html">Your account</a><a href="PRIVACY.md">Privacy</a><a href="tv.html">TV menu ↗</a></div><small>Live data from public transit and aircraft feeds. Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners.</small><span class="footer-signal" aria-hidden="true"><i></i><i></i><i></i></span></footer>
 </div>
 <script>
 /* The city and view lists are the same ones tv.html carries. Kept in step by
@@ -313,7 +354,7 @@ function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.classNa
   var b=document.getElementById("openBoard");
   b.href=c.file; b.textContent="Open the "+c.name+" board";
   document.getElementById("resumeNote").textContent =
-    "Pinning this to a wall display? Bookmark " + c.file + " directly so it opens straight to the board.";
+    "Bookmark this board for quick access on a dedicated display.";
 })();
 
 /* ---- the one FAQ answer that can go stale --------------------------------
@@ -577,7 +618,7 @@ setTimeout(paintAccountChip, 1500);
   });
 })();
 </script>
-<script src="homepage.js?v=2" defer></script>
-<script src="homepage-features.js?v=1" defer></script>
+<script src="homepage.js?v=3" defer></script>
+<script src="homepage-features.js?v=2" defer></script>
 </body>
 </html>

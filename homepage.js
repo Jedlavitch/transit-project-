@@ -46,15 +46,14 @@
   });
 
   var previews = {
-    board: { src: 'shots/home-board-dc.jpg', title: 'Washington DC / Live board', href: 'dc.html', label: 'Open the Washington live board', alt: 'Transit Project’s Washington DC board with a live transit map and departure panels centered on Union Station.', caption: 'Your city at a glance. Live vehicles, nearby departures, and the details that keep you connected.' },
-    departures: { src: 'shots/home-departures.jpg', title: 'Washington DC / Departure board', href: 'flipboard.html?city=dc', label: 'Open the departure board', alt: 'The Transit Project departure board displaying nearby rail departures in a station-style layout.', caption: 'Station-concourse clarity. Nearby departures in a full-screen board, made for a quick glance.' },
-    sky: { src: 'shots/home-sky.jpg', title: 'Washington DC / Sky view', href: 'night.html?city=dc', label: 'Open Sky view', alt: 'The Transit Project Sky view showing the nearest flight, its route, and a map.', caption: 'Ever wondered where that plane is going? Get a closer look at the nearest aircraft overhead.' }
+    board: { src: 'shots/home-board-dc.jpg', title: 'Washington DC / Live board', href: 'dc.html', label: 'Open the Washington live board', alt: 'Transit Project’s Washington DC board with a live transit map and departure panels centered on Union Station.' },
+    departures: { src: 'shots/home-departures.jpg', title: 'Washington DC / Departure board', href: 'flipboard.html?city=dc', label: 'Open the departure board', alt: 'The Transit Project departure board displaying nearby rail departures in a station-style layout.' },
+    sky: { src: 'shots/home-sky.jpg', title: 'Washington DC / Sky view', href: 'night.html?city=dc', label: 'Open Sky view', alt: 'The Transit Project Sky view showing the nearest flight, its route, and a map.' }
   };
-  function bindPreviews(attribute, imageId, linkId, titleId, captionId, actionId) {
+  function bindPreviews(attribute, imageId, linkId, titleId, actionId) {
     var image = document.getElementById(imageId);
     var link = document.getElementById(linkId);
     var title = document.getElementById(titleId);
-    var caption = captionId ? document.getElementById(captionId) : null;
     var action = actionId ? document.getElementById(actionId) : null;
     var choices = document.querySelectorAll('[' + attribute + ']');
     if (!image || !link || !choices.length) return;
@@ -74,7 +73,6 @@
         action.setAttribute('aria-label', selected.label);
       }
       if (title) title.textContent = selected.title;
-      if (caption) caption.textContent = selected.caption;
     }
 
     choices.forEach(function (button) {
@@ -89,6 +87,5 @@
     select(initialChoice ? initialChoice.getAttribute(attribute) : 'board');
   }
 
-  bindPreviews('data-preview', 'previewImage', 'previewLink', 'previewLocation', 'previewCaption', 'previewOpen');
-  bindPreviews('data-hero-view', 'heroScreen', 'heroScreenLink', 'heroScreenLabel');
+  bindPreviews('data-preview', 'previewImage', 'previewLink', 'previewLocation', 'previewOpen');
 }());

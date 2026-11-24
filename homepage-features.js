@@ -24,7 +24,7 @@
       button.setAttribute('aria-pressed', String(button.getAttribute('data-projector-city') === selected));
     });
     canvas.setAttribute('role', 'img');
-    if (caption) caption.textContent = city ? city.name + ' / Projector panorama' : 'Projector panorama';
+    if (caption) caption.textContent = city ? city.name : 'Projector panorama';
     canvas.setAttribute('aria-label', city ? 'Detailed illustrative skyline of ' + city.name + ' from the Projector view.' : 'Projector panorama preview unavailable.');
 
     try {
