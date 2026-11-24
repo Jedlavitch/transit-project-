@@ -10,7 +10,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Transit Project — live trains, buses and planes on any screen</title>
 <meta name="description" content="A live transit and flight board for your wall. Trains, buses and aircraft overhead, in real time, across the US and Europe. Runs in any browser." />
-<meta name="theme-color" content="#081020" />
 <!-- Social preview. Without these a shared link renders as a bare rectangle,
      which for a product whose whole argument is "look at it" is the worst
      possible first impression. Absolute URLs on purpose: Slack, iMessage and
@@ -21,13 +20,13 @@
 <meta property="og:title" content="Transit Project — live trains, buses and planes on any screen" />
 <meta property="og:description" content="A live departure board for your wall. Real trains, buses and aircraft overhead, across the US and Europe. Runs in any browser — no server, no subscription." />
 <meta property="og:url" content="https://transitproject.online/" />
-<meta property="og:image" content="https://transitproject.online/shots/board-dc.jpg" />
-<meta property="og:image:width" content="1600" />
-<meta property="og:image:height" content="900" />
+<meta property="og:image" content="https://transitproject.online/shots/home-board-dc.jpg" />
+<meta property="og:image:width" content="1280" />
+<meta property="og:image:height" content="720" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Transit Project — live trains, buses and planes on any screen" />
 <meta name="twitter:description" content="A live departure board for your wall. Real trains, buses and aircraft overhead, across the US and Europe." />
-<meta name="twitter:image" content="https://transitproject.online/shots/board-dc.jpg" />
+<meta name="twitter:image" content="https://transitproject.online/shots/home-board-dc.jpg" />
 <link rel="stylesheet" href="theme.css?v=35" />
 <script>/* pre-paint: honour the look chosen on the boards.
 
@@ -68,431 +67,66 @@ var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accen
   remembering which city you last opened. A landing page that takes three
   seconds to become interactive has already lost the visitor it was built for.
 -->
-<style>
-  *{box-sizing:border-box}
-  body{margin:0; background:var(--bg); color:var(--text); min-height:100vh;
-    background-image:
-      radial-gradient(900px 600px at 108% -6%, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 60%),
-      radial-gradient(700px 500px at -10% 8%, color-mix(in srgb, var(--amtrak) 12%, transparent) 0%, transparent 55%);
-    background-attachment:fixed}
-  a{color:var(--accent-ink); text-decoration:none}
-  .wrap{max-width:1080px; margin:0 auto; padding:0 20px}
 
-  /* ---- header ---- */
-  header{display:flex; align-items:center; gap:16px; padding:18px 0; flex-wrap:wrap}
-  /* The mark at its 40px floor, carrying the guide's clear space (that margin
-     lives in .brandmark in theme.css), wordmark in the display face beside it. */
-  .brand{display:flex; align-items:center; gap:2px; color:var(--text)}
-  .brand .wordmark{font-family:var(--display); font-weight:800; text-transform:uppercase;
-    letter-spacing:-.02em; font-size:24px; line-height:1; white-space:nowrap}
-  header nav{margin-left:auto; display:flex; gap:6px; flex-wrap:wrap}
-  header nav a{padding:7px 13px; border-radius:9px; color:var(--muted); font-weight:600; font-size:13.5px}
-  header nav a:hover{color:var(--text); background:var(--panel2)}
-  header nav a.hi{background:var(--brand-pink); color:#fff}
-
-  /* ---- the account chip ----
-     "Your account" used to be a text link fourth of seven, styled exactly like
-     the four descriptions of the site around it. It is the only nav item that
-     is a place you go rather than a thing to read about, and people looking for
-     it were scanning past it.
-
-     So it gets the three things that make an account control findable anywhere
-     on the web: the far right of the header, a border so it reads as a control,
-     and a round avatar. Nothing clever — the point is that it is exactly where
-     the habit already says to look. */
-  header nav a.acct{display:inline-flex; align-items:center; gap:8px;
-    padding:5px 14px 5px 6px; border:1px solid var(--line); border-radius:999px;
-    color:var(--text); margin-left:2px}
-  header nav a.acct:hover{background:var(--panel2); border-color:var(--brand-pink)}
-  /* Longhand, not a font: shorthand. --sys is a COLOUR here — the city cards set
-     it inline per accent — so naming it as a family made the whole shorthand
-     invalid and quietly dropped the weight and size with it. The family should
-     be inherited from the nav in any case. */
-  header nav a.acct .av{width:24px; height:24px; border-radius:50%; flex:0 0 auto;
-    display:inline-flex; align-items:center; justify-content:center; background:var(--panel2);
-    color:var(--muted); font-weight:800; font-size:11.5px; line-height:1; letter-spacing:0}
-  header nav a.acct .av svg{width:15px; height:15px; display:block; fill:currentColor}
-  /* Signed in: the avatar carries the account's initial in the brand colour, so
-     the state is readable at a glance. The address itself stays in the tooltip —
-     this is the page most likely to be left up on a wall, and an email in the
-     header of a public page is a small leak that never had to happen. */
-  header nav a.acct.in .av{background:var(--brand-pink); color:#fff}
-  header nav a.acct.in{border-color:var(--brand-pink)}
-  /* Narrow phones wrap the nav to a second row; the chip keeps its shape rather
-     than stretching across it. */
-  @media (max-width:560px){ header nav a.acct{padding:5px 12px 5px 5px} }
-  header nav a.hi:hover{background:var(--brand-pink); filter:brightness(1.08)}
-
-  /* ---- hero ---- */
-  .hero{padding:44px 0 30px; max-width:760px}
-  /* Display face: uppercase, tight-tracked, far above the 24px floor. */
-  h1{font-family:var(--display); font-size:clamp(2.1rem,5.4vw,3.5rem); line-height:1.02;
-    margin:0 0 16px; font-weight:800; letter-spacing:-.03em; text-transform:uppercase}
-  /* One route colour per mode, not a gradient across all three. Pink and teal
-     are near-complementary, so ANY interpolation between them passes through a
-     low-chroma middle — in sRGB the midpoint is rgb(127,142,158), 14% saturation,
-     and "buses" rendered grey. oklab raises it but cannot remove it.
-     Colouring the words instead is also what the guide actually asks for:
-     "assign a color per line or per mode and stay consistent". Trains pink,
-     buses teal, planes blue — and the same three, in the same roles, are what
-     the mark draws. */
-  h1 .r1{color:var(--brand-pink)}
-  h1 .r2{color:var(--brand-teal)}
-  h1 .r3{color:var(--brand-blue)}
-  .lede{font-size:clamp(1rem,2vw,1.22rem); line-height:1.55; color:var(--muted); margin:0 0 26px}
-  .cta-row{display:flex; gap:11px; flex-wrap:wrap; align-items:center}
-  .btn{display:inline-flex; align-items:center; gap:9px; padding:13px 22px; border-radius:12px;
-    font-weight:800; font-size:15px; border:1px solid transparent; cursor:pointer; font-family:inherit}
-  /* Pink on white text, not pink text: the guide passes pink for UI elements
-     and large type but calls it unsafe for small copy, and a 15px button label
-     is small copy. Putting the colour behind white keeps it well clear. */
-  .btn.primary{background:var(--brand-pink); color:#fff}
-  .btn.primary:hover{filter:brightness(1.08)}
-  .btn.ghost{background:var(--panel); color:var(--text); border-color:var(--line)}
-  .btn.ghost:hover{border-color:var(--brand-blue)}
-  .note{font-size:12.5px; color:var(--muted); margin-top:14px}
-  #keyBox{margin-top:18px; max-width:460px}
-  .keyrow{display:flex; gap:9px; flex-wrap:wrap}
-  .keyrow input{flex:1; min-width:210px; padding:12px 13px; border-radius:11px;
-    border:1px solid var(--line); background:var(--panel2); color:var(--text);
-    font-size:15px; font-family:inherit; letter-spacing:.04em}
-  .keyrow input:focus{outline:none; border-color:var(--accent)}
-
-/* ---- live strip ---- */
-  .live-strip{margin:8px 0 44px; border:1px solid var(--line); border-radius:16px;
-    background:color-mix(in srgb, var(--panel) 82%, transparent); overflow:hidden}
-  .live-head{display:flex; align-items:center; gap:10px; padding:11px 16px;
-    border-bottom:1px solid var(--line); font-size:11.5px; font-weight:800;
-    letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
-  .dot{width:7px; height:7px; border-radius:50%; background:var(--live-ink); flex:none;
-    box-shadow:0 0 0 0 color-mix(in srgb, var(--live) 70%, transparent); animation:pulse 2.4s infinite}
-  @keyframes pulse{70%{box-shadow:0 0 0 7px transparent} 100%{box-shadow:0 0 0 0 transparent}}
-  @media (prefers-reduced-motion:reduce){ .dot{animation:none} }
-  .live-head .where{margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600}
-  .live-rows{display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr))}
-  .lr{display:flex; align-items:center; gap:11px; padding:12px 16px; border-right:1px solid var(--line);
-    border-top:1px solid var(--line); min-width:0}
-  .lr:nth-child(-n+3){border-top:none}
-  /* Mode code, not an emoji — the same utility-face chip the city cards use. */
-  .lr .em{font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.07em;
-    flex:none; padding:4px 6px; border-radius:6px; color:var(--text);
-    background:color-mix(in srgb, var(--accent) 18%, transparent)}
-  .lr .txt{min-width:0}
-  .lr .t1{font-size:13.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .lr .t2{font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .lr .val{margin-left:auto; font-weight:800; font-size:13.5px; white-space:nowrap; font-variant-numeric:tabular-nums}
-  .live-empty{padding:16px; color:var(--muted); font-size:13px}
-
-  /* ---- sections ---- */
-  section{padding:14px 0 46px}
-  h2{font-size:13px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--muted); margin:0 0 4px}
-  .sub{color:var(--muted); font-size:14px; margin:0 0 20px; max-width:620px; line-height:1.5}
-
-  /* ---- city grid ---- */
-  /* Screenshots. Every one is a real capture of the running product with live
-     data on it, not a mock-up — which is the only kind worth showing for
-     something whose selling point is that it is actually live. */
-  .shot{margin:26px 0 8px; border:1px solid var(--line); border-radius:16px; overflow:hidden;
-    background:var(--panel); box-shadow:0 18px 50px rgba(0,0,0,.45)}
-  .shot img{display:block; width:100%; height:auto}
-  .shot .cap{padding:11px 15px; color:var(--muted); font-size:12.5px; border-top:1px solid var(--line)}
-  .gallery{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; margin-top:6px}
-  .gallery figure{margin:0; border:1px solid var(--line); border-radius:14px; overflow:hidden;
-    background:var(--panel)}
-  .gallery img{display:block; width:100%; height:auto}
-  .gallery figcaption{padding:10px 13px; color:var(--muted); font-size:12.5px; line-height:1.45}
-  .gallery b{color:var(--text)}
-  .cities{display:grid; grid-template-columns:repeat(auto-fill,minmax(232px,1fr)); gap:12px}
-  .city{display:flex; align-items:center; gap:13px; padding:15px 16px; border-radius:14px;
-    border:1px solid var(--line); background:var(--panel); position:relative; overflow:hidden;
-    transition:border-color .16s ease, transform .16s ease}
-  .city::before{content:""; position:absolute; top:0;right:auto;bottom:0;left:0;inset:0 auto 0 0; width:3px; background:var(--sys)}
-  .city:hover{border-color:var(--sys); transform:translateY(-2px)}
-  /* City codes in the utility face, on the card's own accent. The guide gives
-     mono to "route numbers" and this is the same job — and unlike the emoji it
-     replaced, DC / PHL / BOS is information rather than decoration. */
-  .city .ico{font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.06em;
-    flex:none; min-width:42px; padding:5px 7px; border-radius:7px; text-align:center;
-    background:color-mix(in srgb, var(--sys,var(--accent)) 20%, transparent);
-    color:var(--text)}
-  .city .nm{font-weight:800; font-size:15px; color:var(--text)}
-  .city .ds{font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.35}
-
-  /* ---- "more coming soon" ----------------------------------------------
-     Sits in the grid as the tile after the last real city, so the run of
-     cities visibly continues rather than stopping dead. A sticker, not a card:
-     dashed edge and a slight tilt, and no href — nothing here is clickable and
-     it should not invite the try. The tilt straightens on hover so it reads as
-     stuck on rather than misaligned.
-
-     Its icon slot carries the three brand lines instead of a city code, which
-     is the one place on this page the mark's own geometry appears small. Drawn
-     rather than scaled from the logo: at this size the full mark is under the
-     guide's 40px floor, so it is three plain strokes with no station dots —
-     the same concession favicon.svg makes. */
-  .city-soon{display:flex; align-items:center; gap:13px; padding:15px 16px; border-radius:14px;
-    background:color-mix(in srgb, var(--brand-pink) 7%, var(--panel));
-    border:1.5px dashed color-mix(in srgb, var(--brand-pink) 45%, var(--line));
-    transform:rotate(-1.6deg); transform-origin:60% 50%;
-    transition:transform .18s ease, border-color .18s ease}
-  .city-soon:hover{transform:rotate(0deg); border-color:var(--brand-pink)}
-  .city-soon .lines{flex:none; min-width:42px; display:flex; justify-content:center}
-  /* Pink, and kept on one line. It is the only tile in this grid that is a
-     message rather than a destination, and the colour is what says so before
-     the words do. */
-  .city-soon .nm{font-weight:800; font-size:15px; color:var(--brand-pink); white-space:nowrap}
-  .city-soon .ds{font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.35}
-  @media (prefers-reduced-motion:reduce){
-    .city-soon, .city-soon:hover{transform:none}
-  }
-
-  /* ---- views ---- */
-  .views{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px}
-  .view{padding:17px; border-radius:14px; border:1px solid var(--line); background:var(--panel2);
-    transition:border-color .16s ease}
-  .view:hover{border-color:var(--sys)}
-  .view .ico{font-size:22px}
-  .view .nm{font-weight:800; margin-top:8px; color:var(--text); font-size:15px}
-  .view .ds{font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
-
-  /* ---- pricing ---- */
-  .price-card{border:1px solid var(--line); border-radius:18px; background:var(--panel);
-    padding:26px; display:grid; grid-template-columns:1fr auto; gap:26px; align-items:center}
-  .price-card ul{margin:14px 0 0; padding-left:19px; color:var(--muted); font-size:13.5px; line-height:1.85}
-  .price-card ul b{color:var(--text)}
-  .price-big{font-size:44px; font-weight:800; letter-spacing:-.02em; line-height:1}
-  .price-big small{font-size:13px; font-weight:600; color:var(--muted); display:block; margin-top:7px; letter-spacing:0}
-  .buy-side{text-align:center; min-width:190px}
-  @media (max-width:720px){ .price-card{grid-template-columns:1fr} .buy-side{text-align:left} }
-
-  /* ---- getting started ---- */
-  .steps{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px}
-  .step{padding:19px; border-radius:14px; border:1px solid var(--line); background:var(--panel)}
-  .step .n{width:26px; height:26px; border-radius:50%; background:var(--accent); color:#04101f;
-    font-weight:800; font-size:13.5px; display:flex; align-items:center; justify-content:center}
-  .step .nm{font-weight:800; margin-top:11px; color:var(--text); font-size:15px}
-  .step .ds{font-size:13px; color:var(--muted); margin-top:5px; line-height:1.55}
-  .step kbd{background:var(--panel2); border:1px solid var(--line); border-bottom-width:2px;
-    border-radius:5px; padding:1px 6px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-    font-size:11.5px; color:var(--text)}
-
-  /* ---- faq ----
-     <details> rather than JavaScript: it is keyboard accessible, works with the
-     page's find-in-page, and survives this page's whole script failing. */
-  .faq{display:grid; gap:9px; max-width:780px}
-  .faq details{border:1px solid var(--line); border-radius:12px; background:var(--panel);
-    overflow:hidden}
-  .faq summary{padding:14px 17px; cursor:pointer; font-weight:700; font-size:14.5px;
-    color:var(--text); list-style:none; display:flex; align-items:center; gap:11px}
-  .faq summary::-webkit-details-marker{display:none}
-  .faq summary::before{content:"+"; color:var(--accent-ink); font-weight:800; font-size:17px;
-    line-height:1; width:13px; flex:none}
-  .faq details[open] summary::before{content:"−"}
-  .faq summary:hover{background:var(--panel2)}
-  .faq .a{padding:0 17px 15px 41px; color:var(--muted); font-size:13.5px; line-height:1.6}
-  .faq .a b{color:var(--text)}
-
-  footer{border-top:1px solid var(--line); padding:24px 0 40px; color:var(--muted); font-size:12.5px;
-    display:flex; gap:16px; flex-wrap:wrap; align-items:center}
-  footer a{color:var(--muted)} footer a:hover{color:var(--text)}
-  footer .sp{margin-left:auto}
-
-  /* ---- made in DC -------------------------------------------------------
-     Its own row under the legal text: flex-basis 100% breaks the line without
-     needing a second footer element. Both marks are drawn here rather than set
-     as emoji — an emoji heart and flag render as somebody else's artwork, at
-     somebody else's colours, differently on every platform, which is the one
-     thing a brand line cannot afford. */
-  .madein{flex-basis:100%; display:flex; align-items:center; gap:7px;
-    padding-top:14px; margin-top:2px; border-top:1px solid var(--line);
-    font-size:12.5px; color:var(--muted)}
-  .madein .heart{width:12px; height:11px; flex:none; fill:var(--brand-pink);
-    position:relative; top:.5px}
-  /* The flag keeps the District's own red rather than the brand pink: it is a
-     civic mark, and a recoloured one reads as a mistake. The paper-white field
-     and the rounded corner are what tie it to everything else here. */
-  .madein .dcflag{width:20px; height:auto; flex:none; border-radius:2px;
-    box-shadow:0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent);
-    position:relative; top:.5px}
-</style>
+<link rel="stylesheet" href="homepage.css?v=1">
 </head>
-<body>
-
+<body class="homepage">
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="wrap">
-  <header>
+  <header class="site-header">
     <a class="brand" href="index.html" aria-label="Transit Project — home">
-      <img class="brandmark" src="brand/mark-on-dark.svg" alt="" width="40" height="40">
-      <span class="wordmark">Transit Project</span>
+      <img class="brandmark" src="brand/mark-on-light.svg" alt="" width="40" height="40">
+      <span class="wordmark">Transit<br>Project<span class="brand-period">.</span></span>
     </a>
-    <nav>
-      <a href="#start">How it works</a>
-      <a href="#faq">FAQ</a>
-      <a href="tour.html">Grand Tour</a>
-      <a href="spot.html">Spotter</a>
-      <a href="tv.html">TV menu</a>
-      <a class="hi" id="navBuy" href="buy.html">Get a license</a>
-      <a class="acct" id="navAccount" href="profile.html?from=index.html"
-         title="Your licence, devices and sign-in">
-        <span class="av" id="navAvatar" aria-hidden="true"></span>
-        <span id="navAccountLabel">Your account</span>
-      </a>
+    <nav aria-label="Main navigation">
+      <a href="#cities">Cities</a><a href="#start">How it works</a><a href="#views">The views</a><a href="#faq">FAQ</a>
+      <a class="acct" id="navAccount" href="profile.html?from=index.html" title="Your licence, devices and sign-in"><span class="av" id="navAvatar" aria-hidden="true"></span><span id="navAccountLabel">Your account</span></a>
+      <a class="hi" id="navBuy" href="buy.html">Get a license ↗</a>
     </nav>
   </header>
-
-  <div class="hero">
-    <h1>Your city's <span class="r1">trains</span>, <span class="r2">buses</span> and
-      <span class="r3">planes</span>, live on any screen.</h1>
-    <p class="lede">A self-contained departure board for your wall. It runs entirely in the
-      browser and talks straight to public transit feeds — no server, no subscription, nothing
-      to expire. Pin it to a tablet, a TV, a Raspberry Pi, or an old Facebook Portal.</p>
-    <!-- The TV menu is second, ahead of picking a city, because a wall display is
-         what this is for — the lede two lines above says so. It used to be
-         reachable only as a nav link, and tv.html is also where the unlock QR
-         lives, so this is the front door to setting a television up at all.
-
-         Labelled with the page's exact name — the same string as the nav item,
-         its own <title>, and the TV button on every city board. "Open the TV
-         menu" read better beside "Open the Washington board", but it pushed the
-         four buttons onto two rows and left the licence-key one stranded
-         underneath, which is a worse trade than a two-word button. -->
-    <div class="cta-row">
-      <a class="btn primary" id="openBoard" href="dc.html">Open the Washington board</a>
-      <a class="btn ghost" id="tvSetup" href="tv.html">TV menu</a>
-      <a class="btn ghost" href="#cities">Pick your city</a>
-      <button class="btn ghost" id="haveKey">I have a licence key</button>
-    </div>
-    <div class="note" id="resumeNote"></div>
-
-    <!-- Key entry inline rather than on its own page: someone arriving with a
-         key in their clipboard should not have to find a second page first.
-         activate.html still exists for the link in the purchase email. -->
-    <div id="keyBox" hidden>
-      <div class="keyrow">
-        <input id="keyInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"
-               spellcheck="false" aria-label="Licence key" />
-        <button class="btn primary" id="keyGo">Unlock</button>
+  <main id="main">
+    <section class="hero" aria-labelledby="heroTitle">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot"></span> A little closer to the city</p>
+        <h1 id="heroTitle">Your city.<br>In <span class="motion-word">motion<svg viewBox="0 0 430 20" preserveAspectRatio="none" aria-hidden="true"><path d="M3 14C124 2 272 3 425 11"/></svg></span>.</h1>
+        <p class="lede">The next train. The bus around the corner. That plane overhead. Bring it all together on a live board that feels right at home.</p>
+        <div class="cta-row"><a class="btn primary" href="#cities">Find your city <span aria-hidden="true">↗</span></a><a class="text-link" id="tvSetup" href="tv.html">Put it on your TV <span aria-hidden="true">→</span></a></div>
+        <div class="hero-return"><a id="openBoard" href="dc.html">Open the Washington board</a><span aria-hidden="true">↗</span></div>
+        <div class="note" id="resumeNote"></div>
+        <button class="key-toggle" id="haveKey" type="button" aria-controls="keyBox" aria-expanded="false">I have a licence key</button>
+        <div id="keyBox" hidden><div class="keyrow"><input id="keyInput" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off" spellcheck="false" aria-label="Licence key"><button class="btn primary" id="keyGo" type="button">Unlock</button></div><div class="note" id="keyMsg" aria-live="polite"></div></div>
       </div>
-      <div class="note" id="keyMsg"></div>
+      <figure class="hero-photo">
+        <img src="shots/home-city.jpg" width="1200" height="800" fetchpriority="high" decoding="async" alt="A silver elevated train passes brick city buildings beneath a rose-colored evening sky.">
+        <div class="photo-stamp" aria-hidden="true"><img src="brand/mark-on-dark.svg" alt="" width="40" height="40"><span>Always<br>going places.</span></div>
+        <figcaption><span>For the love of getting there.</span><span class="image-credit">AI-created illustration</span></figcaption>
+      </figure>
+    </section>
+    <div class="route-strip" aria-label="Trains, buses and aircraft, together on any screen">
+      <div><span class="route-node pink">01</span><span>On the rails</span><small>Trains & trams</small></div>
+      <div><span class="route-node teal">02</span><span>On the streets</span><small>Buses & more</small></div>
+      <div><span class="route-node blue">03</span><span>Up above</span><small>Aircraft overhead</small></div>
     </div>
-  </div>
-
-  <!-- Live strip: real vehicles, right now. Two keyless CORS-open requests and
-       no map, so the page stays fast. If either feed is down the strip removes
-       itself rather than showing an apology no visitor cares about. -->
-  <div class="live-strip" id="liveStrip" hidden>
-    <div class="live-head">
-      <span class="dot"></span> Live right now
-      <span class="where" id="liveWhere">loading…</span>
-    </div>
-    <div class="live-rows" id="liveRows"></div>
-  </div>
-
-  <!-- The hero shot goes after the live strip, not before it: the strip proves
-       the data is real in two seconds, and this then shows what that looks like
-       at full size. loading="eager" on this one because it is the thing the
-       page is for; everything below is lazy. -->
-  <figure class="shot">
-    <img src="shots/board-dc.jpg" width="1600" height="900" loading="eager" decoding="async"
-         alt="The Washington DC board: a live map covered in labelled Metro trains, buses and
-              aircraft, beside cards showing Metrorail predictions, Amtrak services running
-              between 11 and 107 minutes late, MARC commuter trains and planes overhead." />
-    <figcaption class="cap">The Washington board on a normal evening — 142 vehicles tracked,
-      10 aircraft overhead, and every delay coloured by how late it actually is.</figcaption>
-  </figure>
-
-  <section>
-    <h2>What it looks like</h2>
-    <p class="sub">Real captures of the running product, live data and all. Nothing here is a
-      mock-up — the delays, the aircraft and the running times were true at the moment each
-      one was taken.</p>
-    <div class="gallery">
-      <figure>
-        <img src="shots/sky-dc.jpg" width="1600" height="900" loading="lazy" decoding="async"
-             alt="Sky view: an American Airlines Boeing 737 MAX 8 from San Diego to Philadelphia
-                  on final approach, with a live weather-radar map of the United States." />
-        <figcaption><b>Sky view.</b> The nearest aircraft, full screen — where it came from,
-          where it is going, and how far through the flight it is.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/flipboard-dc.jpg" width="1600" height="900" loading="lazy" decoding="async"
-             alt="Split-flap departure board showing Metro Red Line trains marked live and two
-                  Amtrak Northeast Regional services 50 and 93 minutes late." />
-        <figcaption><b>Departure board.</b> A split-flap wall for the hallway, with the
-          operator on every row.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/board-nyc.jpg" width="1600" height="900" loading="lazy" decoding="async"
-             alt="The New York board with subway, PATH, Long Island Rail Road and Metro-North
-                  departures beside a live map of moving trains." />
-        <figcaption><b>New York.</b> Subway, PATH, LIRR and Metro-North on one screen.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/board-sf.jpg" width="1600" height="900" loading="lazy" decoding="async"
-             alt="The San Francisco board showing BART, Muni, Caltrain and cable car departures
-                  with a live vehicle map." />
-        <figcaption><b>San Francisco.</b> BART, Muni, Caltrain — and the cable cars.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/board-cologne.jpg" width="1600" height="900" loading="lazy" decoding="async"
-             alt="The Cologne board at three in the morning: an International card listing a
-                  Nightjet to Amsterdam, a service running ten minutes late, a cancelled Eurostar
-                  to Paris and an ICE to Brig, beside S-Bahn and long-distance departures." />
-        <figcaption><b>Cologne, 03:00.</b> The trains that leave the country get their own card —
-          a Nightjet to Amsterdam, an ICE to Brig, and a Eurostar that isn't running tonight.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/board-amsterdam.jpg" width="1600" height="900" loading="lazy" decoding="async"
-             alt="The Amsterdam board in Dutch, with an International card showing Eurostar
-                  services to Paris-Nord and London St Pancras and ICE trains to Frankfurt and
-                  Rheine, beside metro, tram, NS rail and ferry departures." />
-        <figcaption><b>Amsterdam.</b> Eurostar to London and Paris, ICE to Frankfurt — and the
-          board speaks Dutch.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section id="cities">
-    <h2 id="cityCount">Cities</h2>
-    <p class="sub">Each board is pinned to its own city and keeps its own settings, so they never
-      argue about where "here" is. Open one and it starts working immediately — no key, no sign-up.</p>
-    <div class="cities" id="cityGrid"></div>
-  </section>
-
-  <section id="start">
-    <h2>Getting started</h2>
-    <p class="sub">Three steps, and none of them involve signing up.</p>
-    <div class="steps">
-      <div class="step">
-        <div class="n">1</div>
-        <div class="nm">Pick your city</div>
-        <div class="ds">Tap a card above. It opens straight into a live board — no key, no
-          sign-up, no configuration. What you see is what it does.</div>
+    <section class="showcase" id="preview" aria-labelledby="previewTitle">
+      <div class="section-top"><div><p class="eyebrow">01 / The view from here</p><h2 id="previewTitle">A window into<br>what’s moving.</h2></div><p class="sub">Real departures. Moving maps. A city’s worth of small stories, on the screen you already own.</p></div>
+      <div class="preview-controls" aria-label="Choose a product preview">
+        <button type="button" class="preview-choice" data-preview="board" aria-pressed="true" aria-controls="productPreview">Live board</button>
+        <button type="button" class="preview-choice" data-preview="departures" aria-pressed="false" aria-controls="productPreview">Departure board</button>
+        <button type="button" class="preview-choice" data-preview="sky" aria-pressed="false" aria-controls="productPreview">Sky view</button>
+        <span class="capture-label">Actual product captures</span>
       </div>
-      <div class="step">
-        <div class="n">2</div>
-        <div class="nm">Tell it where you are</div>
-        <div class="ds">Press <kbd>⚙</kbd> in the header, type any address, city or zip, and
-          hit Set. Every card re-centres on you — nearest stations, nearest stops, planes
-          overhead. Each city remembers its own location separately.</div>
-      </div>
-      <div class="step">
-        <div class="n">3</div>
-        <div class="nm">Put it on the wall</div>
-        <div class="ds">Press <kbd>F</kbd> or the ⛶ button for full screen, then bookmark that
-          city's page so the screen opens straight to the board. On a tablet or TV, add it to
-          the home screen and leave it running.</div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2>More than one screen</h2>
-    <p class="sub">The same live data, shown four other ways.</p>
-    <div class="views" id="viewGrid"></div>
-  </section>
-
-  <section id="pricing">
+      <figure class="product-preview" id="productPreview"><div class="screen-bar"><span><i></i><i></i><i></i></span><span id="previewLocation">Washington DC / Live board</span><span class="screen-mark">TP</span></div><a id="previewLink" href="dc.html" aria-label="Open the Washington live board"><img id="previewImage" src="shots/home-board-dc.jpg" width="1280" height="720" loading="lazy" decoding="async" alt="Transit Project’s Washington DC board, showing a live transit map and departure panels centered on Union Station."></a><figcaption id="previewCaption" aria-live="polite">Your city at a glance. Live vehicles, nearby departures, and the details that keep you connected.</figcaption></figure>
+      <div class="live-strip" id="liveStrip" hidden><div class="live-head"><span class="dot"></span> Live right now <span class="where" id="liveWhere"></span></div><div class="live-rows" id="liveRows"></div></div>
+      <div class="showcase-footer"><span>Any browser. Your tablet, TV, laptop, or Raspberry Pi.</span><a href="tv.html">Meet your new wall display ↗</a></div>
+    </section>
+    <section class="city-section" id="cities" aria-labelledby="cityCount"><div class="section-top"><div><p class="eyebrow">02 / Find your way in</p><h2 id="cityCount">Cities</h2></div><p class="sub">From the morning commute to the last tram home. Pick a city and see what’s moving.</p></div><div class="cities" id="cityGrid"></div></section>
+    <section class="getting-started" id="start" aria-labelledby="startTitle"><div class="section-top"><div><p class="eyebrow">03 / Make yourself at home</p><h2 id="startTitle">Next stop:<br>your screen.</h2></div><p class="sub">No app to install. No complicated setup. Just a new way to feel connected to the world outside.</p></div><div class="steps">
+      <div class="step"><span class="n">01</span><h3>Pick your city.</h3><p>Open a city board. The map, departures, and aircraft are ready to explore right in your browser.</p><a href="#cities">Explore the cities ↗</a></div>
+      <div class="step"><span class="n">02</span><h3>Make it yours.</h3><p>Open Settings to choose a location, a look, and the panels you want to see. Each city remembers its own setup.</p><span class="step-note">Your corner of the world.</span></div>
+      <div class="step"><span class="n">03</span><h3>Give it a home.</h3><p>Open full screen on a spare tablet, a TV, or a laptop. Bookmark your board and let the city come to you.</p><a href="tv.html">Open the TV menu ↗</a></div>
+    </div></section>
+    <section id="views" aria-labelledby="viewsTitle"><div class="section-top"><div><p class="eyebrow">04 / A change of scenery</p><h2 id="viewsTitle">Same city.<br>Different perspective.</h2></div><p class="sub">Watch the sky, follow the network, or bring a little station-concourse charm home.</p></div><div class="views" id="viewGrid"></div></section>
+    <section id="pricing">
     <h2>Pricing</h2>
     <p class="sub">Every board above is fully usable right now. A license removes the evaluation
       notice, forever, on up to five devices.</p>
@@ -514,11 +148,7 @@ var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accen
       </div>
     </div>
   </section>
-
-  <section id="faq">
-    <h2>Questions</h2>
-    <p class="sub">The ones worth answering before you spend anything.</p>
-    <div class="faq">
+    <section class="faq-section" id="faq" aria-labelledby="faqTitle"><div><p class="eyebrow">Before you hop on</p><h2 id="faqTitle">A few good<br>questions.</h2><p class="sub">The practical details, all in one place.</p></div><div class="faq">
       <details>
         <summary>Do I need an account, or an API key?</summary>
         <div class="a">No. Open a board and it works — every city ships with its timetables
@@ -574,37 +204,10 @@ var a=g("tb.accent")||g("transitboard.accent");if(a)d.style.setProperty("--accen
       </details>
     </div>
   </section>
-
-  <footer>
-    <img class="brandmark" src="brand/mark-on-dark.svg" alt="Transit Project" width="40" height="40">
-    <span>Live data from WMATA, SEPTA, MTA, NJ Transit, MBTA, BART, GVB, SBB, Amtrak and adsb.lol.</span>
-    <span class="sp">Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners and are used to identify their services.</span>
-    <span class="sp"><a href="PRIVACY.md">Privacy</a></span>
-
-    <!-- Three red stars over two red bars, the District's flag as it actually
-         is. Ratio 19:10, stars and bars inset from the edge the way the real
-         one insets them. aria-hidden because the sentence beside it already
-         says "in Washington, DC" — a screen reader does not need it twice. -->
-    <span class="madein">
-      <span>Made with</span>
-      <svg class="heart" viewBox="0 0 12 11" aria-hidden="true" focusable="false">
-        <path d="M6,10.2C6,10.2 1,7.1 1,3.9C1,2.3 2.3,1 3.9,1C4.9,1 5.7,1.5 6,2.2C6.3,1.5 7.1,1 8.1,1C9.7,1 11,2.3 11,3.9C11,7.1 6,10.2 6,10.2Z"/>
-      </svg>
-      <span>in Washington, DC</span>
-      <svg class="dcflag" viewBox="0 0 19 10" aria-hidden="true" focusable="false">
-        <rect width="19" height="10" fill="#FFFCF5"/>
-        <g fill="#CF142B">
-          <path transform="translate(5.4,2.6)" d="M0,-1.5 0.34,-0.46 1.43,-0.46 0.55,0.18 0.88,1.21 0,0.57 -0.88,1.21 -0.55,0.18 -1.43,-0.46 -0.34,-0.46Z"/>
-          <path transform="translate(9.5,2.6)" d="M0,-1.5 0.34,-0.46 1.43,-0.46 0.55,0.18 0.88,1.21 0,0.57 -0.88,1.21 -0.55,0.18 -1.43,-0.46 -0.34,-0.46Z"/>
-          <path transform="translate(13.6,2.6)" d="M0,-1.5 0.34,-0.46 1.43,-0.46 0.55,0.18 0.88,1.21 0,0.57 -0.88,1.21 -0.55,0.18 -1.43,-0.46 -0.34,-0.46Z"/>
-          <rect x="1.5" y="5.1" width="16" height="1.5"/>
-          <rect x="1.5" y="7.4" width="16" height="1.5"/>
-        </g>
-      </svg>
-    </span>
-  </footer>
+    <section class="last-stop" aria-label="Explore Transit Project"><img src="brand/mark-on-dark.svg" alt="" width="72" height="72"><div><p class="eyebrow">There’s a whole city out there.</p><h2>Let it in.</h2></div><a class="btn primary" href="#cities">Find your city ↗</a></section>
+  </main>
+  <footer><a class="footer-wordmark" href="index.html">Transit Project.</a><p>Made with love in Washington, DC.<br>For everyone who looks up when a train goes by.</p><div><a href="profile.html?from=index.html">Your account</a><a href="PRIVACY.md">Privacy</a><a href="tv.html">TV menu ↗</a></div><small>Live data from public transit and aircraft feeds. Not affiliated with or endorsed by any transit agency. Agency names and marks belong to their owners.</small></footer>
 </div>
-
 <script>
 /* The city and view lists are the same ones tv.html carries. Kept in step by
    hand for now -- two copies of a twelve-line array is not worth a fetch and a
@@ -849,7 +452,7 @@ setTimeout(paintAccountChip, 1500);
     msg.style.color = kind==="bad" ? "var(--late-ink)" : kind==="ok" ? "var(--good-ink)" : "var(--muted)"; }
 
   btn.addEventListener("click", function(){
-    box.hidden=!box.hidden;
+    box.hidden=!box.hidden; btn.setAttribute("aria-expanded", String(!box.hidden));
     if(!box.hidden){ input.focus(); if(!window.TBLicense || !TBLicense.configured)
       say("Licensing isn't switched on for this site yet — every board is currently open."); }
   });
@@ -884,7 +487,7 @@ setTimeout(paintAccountChip, 1500);
      mints a DIFFERENT shape -- TB then four groups of five -- for the signed
      feed-proxy keys. Both are real; they belong to different subsystems. */
   var qk=new URLSearchParams(location.search).get("key");
-  if(qk){ box.hidden=false; input.value=qk; submit(); }
+  if(qk){ box.hidden=false; btn.setAttribute("aria-expanded", "true"); input.value=qk; submit(); }
 })();
 
 /* ---- live strip ----------------------------------------------------------
@@ -968,7 +571,6 @@ setTimeout(paintAccountChip, 1500);
   });
 })();
 </script>
-<script src="mascot.js?v=3" defer></script>
-<script src="mascot-buddy.js?v=10" defer></script>
+<script src="homepage.js?v=1" defer></script>
 </body>
 </html>
