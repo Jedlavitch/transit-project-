@@ -3013,6 +3013,16 @@ const AIRLINE_LIVERIES=[{
     A21N:["wizz-a21n.jpg","Wizz Air Airbus A321neo in the pink and purple livery"],
     A321:["wizz-a321.jpg","Wizz Air Airbus A321 in its 100th aircraft livery"]
   }
+},{
+  operators:["FFT","F9"],
+  credit:"Ziongarage · CC0",
+  source:"https://commons.wikimedia.org/wiki/File:N393FR,_Frontier_Airlines.jpg",
+  example:["frontier-nevada.jpg","Frontier Airlines Airbus A320neo N393FR with the Nevada the Red Fox livery","Red fox livery example"]
+},{
+  operators:["UAL","UA"],
+  credit:"airbus777 · CC BY 2.0",
+  source:"https://commons.wikimedia.org/wiki/File:New_United_Livery.jpg",
+  example:["united-evo-blue.jpg","United Airlines Boeing 737 in the Evo Blue globe livery at its unveiling","Evo Blue livery example"]
 }];
 const LIVERY_GUIDE="https://svo.su/upload/sprint.editor/8e8/8e8ec2daf3f4a0251f56f75d7721e25e.pdf";
 const AIRLINE_TAILS=[
@@ -3037,7 +3047,7 @@ function renderAircraftLivery(subject){
   const callsignPrefix=/^(?:[A-Z]{3}|[A-Z][A-Z0-9])(?=\d|$)/.exec((subject.callsign || "").toUpperCase());
   const operator=callsignPrefix ? callsignPrefix[0] : (subject.airlineIcao || subject.airlineIata || "").toUpperCase();
   const carrier=mode==="planes" && AIRLINE_LIVERIES.find(item=>item.operators.includes(operator));
-  const photo=carrier && carrier.photos[subject.acType];
+  const photo=carrier && (carrier.photos?.[subject.acType] || carrier.example);
   const tail=!photo && mode==="planes" && AIRLINE_TAILS.find(([icao,iata])=>operator===icao || operator===iata);
   const filename=photo ? photo[0] : tail ? `tails/${tail[0].toLowerCase()}.png` : "";
   if(filename===lastLiveryPhoto) return;
@@ -3047,7 +3057,7 @@ function renderAircraftLivery(subject){
   figure.hidden=true;
   if(!filename){ img.removeAttribute("src"); return; }
   figure.dataset.kind=photo ? "photo" : "tail";
-  $("#aircraftLiveryLabel").textContent=photo ? "Livery example" : tail[4] || "Tail livery";
+  $("#aircraftLiveryLabel").textContent=photo ? photo[2] || "Livery example" : tail[4] || "Tail livery";
   const credit=$("#aircraftLiveryCredit");
   credit.href=photo ? carrier.source : `${LIVERY_GUIDE}#page=${tail[3]}`;
   credit.textContent=photo ? carrier.credit : "2018 guide";
