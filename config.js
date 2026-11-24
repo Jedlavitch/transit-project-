@@ -53,7 +53,7 @@ window.TB_CONFIG = {
   sfLiveUrl:    "https://restless-frog-f414.jacklemonade2.workers.dev",  // sf511-worker.js
   amsLiveUrl:   "",       // ovapi-worker.js
   romeLiveUrl:  "",       // rome-worker.js
-  chicagoLiveUrl: "",     // cta-worker.js (needs CTA Train + Bus Tracker keys)
+  chicagoLiveUrl: "https://cta.jacklemonade2.workers.dev",  // cta-worker.js (Train Tracker key set; Bus Tracker key still to add)
 
   /* ---- shared spotter feed --------------------------------------------- */
   spotBlob:     "",       // share code from the phone app
