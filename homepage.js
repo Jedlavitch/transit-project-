@@ -55,7 +55,7 @@
     var link = document.getElementById(linkId);
     var title = document.getElementById(titleId);
     var action = actionId ? document.getElementById(actionId) : null;
-    var livery = document.getElementById('previewLivery');
+    var actionLabel = document.getElementById('previewOpenText');
     var choices = document.querySelectorAll('[' + attribute + ']');
     if (!image || !link || !choices.length) return;
 
@@ -73,8 +73,8 @@
         action.href = selected.href;
         action.setAttribute('aria-label', selected.label);
       }
+      if (actionLabel) actionLabel.textContent = view === 'sky' ? selected.label : 'Open this view';
       if (title) title.textContent = selected.title;
-      if (livery) livery.hidden = view !== 'sky';
     }
 
     choices.forEach(function (button) {

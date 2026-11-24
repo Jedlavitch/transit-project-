@@ -63,7 +63,7 @@
   seconds to become interactive has already lost the visitor it was built for.
 -->
 
-<link rel="stylesheet" href="homepage.css?v=5">
+<link rel="stylesheet" href="homepage.css?v=6">
 </head>
 <body class="homepage">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -117,27 +117,9 @@
           <a id="previewLink" href="dc.html" aria-label="Open the Washington live board"><img id="previewImage" src="shots/home-board-dc.jpg" width="1280" height="720" fetchpriority="high" alt="The Washington, DC board with a map and departure panels."></a>
           <figcaption class="preview-bottom">
             <span id="previewLocation" aria-live="polite">Washington DC / Live board</span>
-            <a id="previewOpen" href="dc.html">Open this view <span aria-hidden="true">↗</span></a>
+            <a id="previewOpen" href="dc.html"><span id="previewOpenText">Open this view</span> <span aria-hidden="true">↗</span></a>
           </figcaption>
         </figure>
-        <div class="preview-liveries" id="previewLivery" hidden>
-          <div class="preview-livery">
-            <img src="shots/liveries/condor-a339.jpg" width="860" height="600" alt="Condor Airbus A330-900 in green and white Island livery" loading="lazy" decoding="async">
-            <div>
-              <strong>Condor A330-900 · Island livery</strong>
-              <span>Example from <a href="https://condor-newsroom.condor.com/en/us/downloads/">Condor’s fleet gallery</a></span>
-            </div>
-          </div>
-          <figure class="preview-tails">
-            <figcaption><strong>Airline tail markings</strong><a href="https://svo.su/upload/sprint.editor/8e8/8e8ec2daf3f4a0251f56f75d7721e25e.pdf">2018 livery guide</a></figcaption>
-            <ul class="preview-tail-list">
-              <li><img src="shots/liveries/tails/aal.png" width="460" height="355" alt="" loading="lazy" decoding="async"><span>American</span></li>
-              <li><img src="shots/liveries/tails/dal.png" width="460" height="354" alt="" loading="lazy" decoding="async"><span>Delta</span></li>
-              <li><img src="shots/liveries/tails/swa.png" width="460" height="355" alt="" loading="lazy" decoding="async"><span>Southwest</span></li>
-              <li><img src="shots/liveries/tails/jbu.png" width="460" height="355" alt="" loading="lazy" decoding="async"><span>JetBlue plaid</span></li>
-            </ul>
-          </figure>
-        </div>
       </div>
     </section>
     <div class="live-strip" id="liveStrip" hidden><div class="live-head"><span class="signal-led"></span><span>On the network <b>Live feed</b></span><span class="where" id="liveWhere"></span></div><div class="live-rows" id="liveRows"></div></div>
@@ -636,7 +618,7 @@ setTimeout(paintAccountChip, 1500);
   });
 })();
 </script>
-<script src="homepage.js?v=4" defer></script>
+<script src="homepage.js?v=5" defer></script>
 <script src="homepage-features.js?v=2" defer></script>
 </body>
 </html>
