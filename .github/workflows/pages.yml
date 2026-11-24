@@ -26,10 +26,7 @@ on:
   schedule:
     - cron: "*/15 * * * *"
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
 
 # A stuck run must never block the next one. The legacy "pages build and
 # deployment" pipeline and this workflow both claim the github-pages
@@ -41,14 +38,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # Finish the upload in its own job before publishing. This also lets a
+  # publishing retry reuse the completed artifact instead of uploading a
+  # second artifact with the same name into the same workflow run.
+  build:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
+    outputs:
+      artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
       # Stage only what the site actually serves. Uploading `path: .` sent the
       # whole checkout -- including the 36MB .git directory -- into the artifact,
       # which is what left the deploy hanging. Generators and CI config aren't
@@ -121,6 +121,21 @@ jobs:
           EOF
       - uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: _site
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/configure-pages@v5
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
