@@ -105,3 +105,13 @@ kbd{font:400 9px var(--mono);border:1px solid #38495e;border-bottom-width:2px;bo
 /* Brand display and screen selection. */
 h1{text-transform:uppercase}
 @media(max-width:620px){h1{font-size:31px;font-size:clamp(27px,8vw,39px)}}
+
+/* A distinct, small city landmark in the three brand colors. */
+.city-emblem{display:flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px}
+.city-emblem .city-icon{width:28px;height:28px;overflow:visible;transition:transform .2s,filter .2s}
+.city-option:hover .city-icon,.city-option.on .city-icon{transform:translateY(-1px);filter:drop-shadow(0 2px 4px #2f7bff30)}
+.city-option[aria-pressed=true] .city-icon{filter:drop-shadow(0 0 4px #00e0c624)}
+@media(max-height:740px) and (min-width:981px){.city-emblem,.city-emblem .city-icon{width:22px;height:22px}}
+@media(max-width:980px){.city-emblem,.city-emblem .city-icon{width:24px;height:24px}.city-option{gap:9px}}
+@media(max-width:620px){.city-emblem,.city-emblem .city-icon{width:23px;height:23px}.city-option{gap:8px}}
+@media(prefers-reduced-motion:reduce){.city-option .city-icon{transition:none;transform:none!important;filter:none!important}}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12101A">
+<title>Transit Project — TV display</title>
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="stylesheet" href="display.css?v=1">
+<script src="polyfills.js?v=1"></script>
+<script src="wake.js?v=1"></script>
+<script src="projector-cities.js?v=1" defer></script>
+<script src="city-icons.js?v=2" defer></script>
+<script src="tv-connect-core.js?v=1" defer></script>
+<script src="display.js?v=1" defer></script>
+</head>
+<body>
+<iframe id="displayFrame" title="Your selected Transit Project display" allow="fullscreen; geolocation; autoplay" allowfullscreen></iframe>
+<aside class="display-setup" id="displaySetup" aria-labelledby="displaySetupTitle">
+  <div class="display-heading"><span id="displayCityIcon" aria-hidden="true"></span><div><span class="eyebrow">TRANSIT PROJECT / TV SETUP</span><h1 id="displaySetupTitle">Your display</h1></div></div>
+  <p class="display-view" id="displayView"></p>
+  <h2 id="displayMethodTitle">Ready for your TV</h2>
+  <ol id="displaySteps"></ol>
+  <p class="display-note" id="displayNote"></p>
+  <div class="display-actions"><button type="button" id="displayHide">Hide setup</button><button type="button" id="displayFullscreen">Full screen</button></div>
+  <p id="displayStatus" role="status" aria-live="polite"></p>
+  <a id="displayDirect">Open the display directly ↗</a>
+</aside>
+<button type="button" id="displayShow" class="display-show" aria-controls="displaySetup" aria-expanded="false" hidden><img src="brand/favicon.svg" alt="" width="18" height="18">TV setup</button>
+<noscript><p>This display needs JavaScript. <a href="tv.html">Return to the TV menu.</a></p></noscript>
+</body>
+</html>

@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="brand/icon-dark-180.png">
 <meta name="theme-color" content="#12101A">
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Transit Project — Your account</title>
+<title>Your account — Transit Project</title>
 <link rel="stylesheet" href="theme.css?v=35" />
 <script>/* pre-paint: same shared look as every board, so arriving here doesn't flash */
 (function(){try{var g=function(k){return localStorage.getItem(k)},d=document.documentElement;
@@ -18,95 +18,49 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
 <script src="paywall.js"></script>
 <script src="license.js?v=3"></script>
 <script src="account.js?v=3"></script>
-<style>
-  *{box-sizing:border-box}
-  html,body{margin:0; min-height:100%}
-  body{color:var(--text); -webkit-font-smoothing:antialiased; padding:34px 20px 60px;
-    background:
-      radial-gradient(800px 600px at 105% -8%, rgba(78,161,255,.14) 0%, transparent 58%),
-      radial-gradient(1000px 700px at 50% 120%, var(--blue-deep,#0a1a3d) 0%, transparent 60%),
-      var(--bg)}
-  .wrap{max-width:720px; margin:0 auto}
-  .back{color:var(--accent-ink); font-size:13px; text-decoration:none}
-  h1{font-size:26px; margin:14px 0 4px;
-    background:linear-gradient(90deg,var(--text) 20%,#4ea1ff 70%,#b58cff);
-    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-    width:fit-content}
-  :root[data-theme="day"] h1{filter:brightness(.7) saturate(1.25)}
-  .lede{color:var(--muted); font-size:13.5px; line-height:1.7; margin:0 0 22px}
-
-  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
-    border-radius:14px; padding:20px 22px; margin-bottom:16px}
-  .panel h2{font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.09em;
-    color:var(--muted); margin:0 0 14px}
-  .row{display:flex; justify-content:space-between; align-items:center; gap:14px;
-    padding:10px 0; border-bottom:1px solid var(--row-line)}
-  .row:last-of-type{border-bottom:none}
-  .row .k{font-size:13px; color:var(--muted)}
-  .row .v{font-size:13.5px; font-weight:700; text-align:right; word-break:break-word}
-  .mono{font-family:ui-monospace,Menlo,monospace; letter-spacing:.04em}
-
-  .pill{display:inline-block; padding:3px 9px; border-radius:99px; font-size:11px; font-weight:800;
-    text-transform:uppercase; letter-spacing:.06em}
-  .pill.ok{background:rgba(51,209,122,.15); color:var(--delay-ok,#33d17a)}
-  .pill.warn{background:rgba(255,204,51,.15); color:var(--delay-min,#ffcc33)}
-  .pill.off{background:var(--row-bg); color:var(--muted); border:1px solid var(--line)}
-
-  button{font-family:inherit; cursor:pointer}
-  .btn{padding:10px 15px; border-radius:10px; border:1px solid var(--line); background:var(--row-bg);
-    color:var(--text); font-size:13px; font-weight:700}
-  .btn:hover{border-color:var(--accent)}
-  .btn.primary{background:var(--accent); color:#04101f; border:none}
-  .btn.danger{border-color:rgba(255,90,90,.5); color:#ff7a7a}
-  .btns{display:flex; flex-wrap:wrap; gap:9px; margin-top:14px}
-
-  input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line);
-    background:var(--row-bg); color:var(--text); font-family:inherit; font-size:15px; font-weight:600}
-  input.code{font-family:ui-monospace,Menlo,monospace; letter-spacing:.28em; text-align:center;
-    font-size:20px; font-weight:800}
-  label{display:block; font-size:11px; font-weight:800; text-transform:uppercase;
-    letter-spacing:.07em; color:var(--muted); margin:12px 0 6px}
-
-  .note{font-size:12.5px; color:var(--muted); line-height:1.65; margin:12px 0 0}
-  .note code{font-family:ui-monospace,Menlo,monospace; font-size:11.5px;
-    background:var(--row-bg); padding:1px 5px; border-radius:4px}
-  .msg{font-size:13px; min-height:18px; margin-top:10px}
-  .msg.good{color:var(--delay-ok,#33d17a)}
-  .msg.bad{color:#ff7a7a}
-  .hide{display:none !important}
-
-  table{width:100%; border-collapse:collapse; font-size:13px}
-  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
-    color:var(--muted); font-weight:800; padding:6px 8px 6px 0}
-  td{padding:7px 8px 7px 0; border-top:1px solid var(--row-line)}
-</style>
+<link rel="stylesheet" href="profile.css?v=1">
+<script src="city-icons.js?v=2"></script>
 </head>
 <body>
-<div class="wrap">
-  <a class="back" id="backLink" href="dc.html">← back to the board</a>
-  <h1>Your account</h1>
-  <p class="lede">Everything this browser knows about you in one place — who you are signed in as,
-    the licence this device is running on, and the settings your boards have saved here.
-    Nothing on this page is sent anywhere except when you sign in or check your licence.</p>
-
-  <!-- ── ACCOUNT ─────────────────────────────────────────────────────────── -->
-  <div class="panel">
-    <h2>Account</h2>
-
+<a class="skip-link" href="#accountMain">Skip to account</a>
+<header class="account-topbar">
+  <a class="account-brand" href="tv.html" aria-label="Transit Project TV menu"><img src="brand/mark-on-dark.svg" width="48" height="48" alt=""><span>TRANSIT<br>PROJECT</span></a>
+  <div class="topbar-right"><a id="backLink" class="back" href="dc.html"><span aria-hidden="true">←</span> Back to board</a><span class="topbar-rule"></span><span class="account-label">YOUR ACCOUNT</span></div>
+</header>
+<div class="account-layout">
+  <aside class="account-sidebar">
+    <div class="account-identity"><span class="identity-avatar" id="accountAvatar" aria-hidden="true">TP</span><div><strong id="identityTitle">Your space</strong><span id="identityStatus">Checking account…</span></div></div>
+    <nav class="account-nav" aria-label="Account sections"><a href="#overview" data-section-link="overview"><span data-icon="overview" aria-hidden="true"></span>Overview<span class="nav-arrow" aria-hidden="true">↗</span></a><a href="#security" data-section-link="security"><span data-icon="security" aria-hidden="true"></span>Sign-in & security<span class="nav-arrow" aria-hidden="true">↗</span></a><a href="#screens" data-section-link="screens"><span data-icon="screens" aria-hidden="true"></span>Licence & screens<span class="nav-arrow" aria-hidden="true">↗</span></a><a href="#sightings" data-section-link="sightings"><span data-icon="sightings" aria-hidden="true"></span>Spotter log<span class="nav-arrow" aria-hidden="true">↗</span></a><a href="#preferences" data-section-link="preferences"><span data-icon="preferences" aria-hidden="true"></span>Preferences<span class="nav-arrow" aria-hidden="true">↗</span></a><a href="#browser" data-section-link="browser"><span data-icon="browser" aria-hidden="true"></span>This browser<span class="nav-arrow" aria-hidden="true">↗</span></a></nav>
+    <a class="sidebar-tv" href="tv.html"><span data-icon="screens" aria-hidden="true"></span><strong>Take it to the TV</strong><small>Your city. A bigger canvas.</small><span aria-hidden="true">↗</span></a>
+    <p class="sidebar-foot">Every city.<br>Always moving.</p>
+  </aside>
+  <main id="accountMain" class="account-main">
+    <section class="account-section" id="overview" data-account-section aria-labelledby="overviewTitle">
+      <div class="section-heading overview-heading"><span class="eyebrow">THE PERSONAL SIDE OF TRANSIT</span><h1 id="overviewTitle" tabindex="-1">Your city.<br>Your setup.</h1><p>A place for your sightings, screens, and the details that make Transit Project yours.</p>
+        <svg class="overview-routes" viewBox="0 0 310 220" fill="none" aria-hidden="true"><path class="route-ghost" d="M-10 170h110l60-60h170M75-10v75l75 75v90"/><path class="route route-pink" d="M25 55h95l105 105h70"/><path class="route route-blue" d="M5 145h95L215 30h70"/><path class="route route-teal" d="M75 205l85-85V15"/><g class="route-stops"><circle cx="120" cy="55" r="7"/><circle cx="160" cy="85" r="7"/><circle cx="100" cy="145" r="7"/><circle cx="225" cy="160" r="7"/></g><circle class="route-traveller" r="4" fill="#FFFCF5"><animateMotion dur="7s" repeatCount="indefinite" path="M25 55h95l105 105h70"/></circle></svg>
+      </div>
+      <div class="overview-stats">
+        <a class="stat-card" href="#security" data-section-link="security"><span class="stat-icon" data-icon="security" aria-hidden="true"></span><span class="stat-label">ACCOUNT</span><strong id="overviewAccount">Checking…</strong><small id="overviewAccountNote">Sign-in & security</small><span class="stat-arrow" aria-hidden="true">↗</span></a>
+        <a class="stat-card" href="#sightings" data-section-link="sightings"><span class="stat-icon" data-icon="sightings" aria-hidden="true"></span><span class="stat-label">YOUR SIGHTINGS</span><strong id="overviewSpots">0</strong><small id="overviewSpotNote">Saved in this browser</small><span class="stat-arrow" aria-hidden="true">↗</span></a>
+        <a class="stat-card" href="#screens" data-section-link="screens"><span class="stat-icon" data-icon="screens" aria-hidden="true"></span><span class="stat-label">SCREEN ACCESS</span><strong id="overviewLicence">Checking…</strong><small id="overviewLicenceNote">Licence & screens</small><span class="stat-arrow" aria-hidden="true">↗</span></a>
+      </div>
+      <div class="overview-bottom">
+        <article class="launch-card"><span class="eyebrow">A CITY WORTH LEAVING ON</span><h2>Give your city<br>the big screen.</h2><p>Live boards, passing planes, and skylines after dark. Find your view and make it a fixture.</p><a class="btn primary" href="tv.html">Open TV menu <span aria-hidden="true">↗</span></a><svg class="launch-art" viewBox="0 0 180 140" fill="none" aria-hidden="true"><rect x="21" y="25" width="138" height="83" rx="7" stroke="#00E0C6" stroke-width="3"/><path d="M68 123h44M90 108v15M35 92h110" stroke="#2F7BFF" stroke-width="3"/><path d="M47 91V69h17v22M73 91V48h17v43M102 91V58h22v33" stroke="#00E0C6" stroke-width="3"/><path d="m117 37 18-9m-11-2 2 7 7 3" stroke="#FF3D77" stroke-width="3"/></svg></article>
+        <article class="quick-cities"><div class="card-title"><h2>Back to your city</h2><span class="eyebrow">LIVE BOARDS</span></div><div id="accountCities" class="account-cities"></div><a class="text-link" href="tv.html">Explore all 13 cities <span aria-hidden="true">→</span></a></article>
+      </div>
+    </section>
+<section class="account-section" id="security" data-account-section aria-labelledby="securityTitle">
+      <div class="section-heading"><span class="eyebrow">Sign-in & security</span><h1 id="securityTitle" tabindex="-1">A home for your account.</h1><p>Sign in, sync your sightings, and manage your password.</p></div>
+      <div class="section-grid"><article class="panel">
     <!-- no account server configured: say so plainly rather than show a dead form -->
     <div id="acctOff" class="hide">
-      <div class="row"><span class="k">Sign-in</span><span class="v"><span class="pill off">Not set up</span></span></div>
-      <p class="note">Sign-in is built but has no server behind it yet, so there is nothing to sign in to.
-        It needs <code>account-worker.js</code> deployed with a KV namespace bound as <code>ACCOUNTS</code>
-        and an email API key — the steps are in <code>ACCOUNTS.md</code>. Paste the Worker URL into
-        <code>acctUrl</code> in <code>config.js</code> and this section turns itself on everywhere,
-        with no other change.</p>
-      <p class="note">Everything else on this page works without it.</p>
+      <div class="row"><span class="k">Sign-in</span><span class="v"><span class="pill off">Unavailable</span></span></div>
+      <p class="note">Account sign-in is unavailable on this installation. Your boards, saved locations and local Spotter log still work.</p>
     </div>
 
     <!-- configured, signed out -->
     <div id="acctIn" class="hide">
-      <p class="note" style="margin-top:0">Sign in to carry your Spotter log between devices.</p>
+      <p class="note" style="margin-top:0">Keep your sightings with you. Sign in to sync your Spotter log between devices.</p>
       <div id="stepEmail">
         <!-- Each provider appears only if the Worker actually holds its client
              id, so a button never leads somewhere that cannot answer. -->
@@ -136,7 +90,7 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
         </div>
         <p class="note">The code expires in 15 minutes. Check spam if it hasn't arrived.</p>
       </div>
-      <div class="msg" id="acctMsg"></div>
+      <div class="msg" id="acctMsg" role="status" aria-live="polite"></div>
     </div>
 
     <!-- signed in -->
@@ -155,70 +109,83 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
         <div id="pwCurWrap" class="hide">
           <label for="pwCur">Current password</label>
           <input id="pwCur" type="password" autocomplete="current-password" placeholder="••••••••" />
-          <p class="note">If you signed in with a code, Google or Apple, leave this empty — you have
-            already proved you own the address, which is the stronger claim of the two.</p>
+          <p class="note">If you signed in with an email code, Google or Apple, you can leave the current password empty.</p>
         </div>
         <div class="btns">
           <button class="btn primary" id="pwSaveBtn" type="button">Save password</button>
           <button class="btn danger hide" id="pwRemoveBtn" type="button">Remove password</button>
         </div>
       </div>
-      <p class="note">Signing out leaves your sightings on this device alone — it is not "delete my data".</p>
-      <div class="msg" id="acctMsg2"></div>
-    </div>
-  </div>
-
-  <!-- ── LICENCE ─────────────────────────────────────────────────────────── -->
-  <div class="panel">
-    <h2>Licence</h2>
-    <div class="row"><span class="k">Status</span><span class="v" id="licStatus">—</span></div>
+      <p class="note">Your sightings stay in this browser when you sign out.</p>
+      <div class="msg" id="acctMsg2" role="status" aria-live="polite"></div>
+    </div></article>
+      <aside class="section-help"><span class="help-art" data-icon="security" aria-hidden="true"></span><h2>Your log, in sync</h2><p>An account carries your Spotter sightings between devices. Board appearance and saved locations stay in this browser.</p><div class="help-divider"></div><h3>Sync is for sightings</h3><p>Opening a new screen? Sign in there with the same email address to bring your log along.</p></aside></div>
+    </section>
+<section class="account-section" id="screens" data-account-section aria-labelledby="screensTitle">
+      <div class="section-heading"><span class="eyebrow">Licence & screens</span><h1 id="screensTitle" tabindex="-1">Made for the big screen.</h1><p>Check access on this browser and set up your next display.</p></div>
+      <div class="section-grid"><article class="panel">    <div class="row"><span class="k">Status</span><span class="v" id="licStatus">—</span></div>
     <div class="row"><span class="k">Key</span><span class="v mono" id="licKey">—</span></div>
     <div class="row" id="licDevRow"><span class="k">Devices using this key</span><span class="v" id="licDevices">—</span></div>
     <div class="btns">
       <button class="btn" id="revealBtn" type="button">Reveal key</button>
-      <button class="btn" id="copyKeyBtn" type="button">Copy</button>
-      <button class="btn" id="enterKeyBtn" type="button">Enter a different key</button>
+      <button class="btn" id="copyKeyBtn" type="button">Copy key</button>
+      <button class="btn" id="enterKeyBtn" type="button">Enter a licence key</button>
     </div>
     <div id="licEnter" class="hide">
       <label for="keyInput">Licence key</label>
       <input id="keyInput" class="mono" spellcheck="false" placeholder="TB-XXXXX-XXXXX-XXXXX-XXXXX" style="text-transform:uppercase" />
       <div class="btns"><button class="btn primary" id="saveKeyBtn" type="button">Save and check</button></div>
     </div>
-    <div class="msg" id="licMsg"></div>
-    <p class="note" id="licNote"></p>
-  </div>
-
-  <!-- ── SPOTTER ─────────────────────────────────────────────────────────── -->
-  <div class="panel">
-    <h2>Spotter log</h2>
-    <div class="row"><span class="k">Sightings on this device</span><span class="v" id="spotCount">—</span></div>
+    <div class="msg" id="licMsg" role="status" aria-live="polite"></div>
+    <p class="note" id="licNote"></p></article>
+      <aside class="section-help"><span class="help-art" data-icon="screens" aria-hidden="true"></span><h2>Your next screen starts here</h2><p>Choose a city and a view, then follow the AirPlay, Chromecast, or TV-browser setup.</p><a class="btn primary" href="tv.html">Set up a screen <span aria-hidden="true">↗</span></a><div class="help-divider"></div><h3>One place to launch</h3><p>The TV menu keeps all your display views together.</p></aside></div>
+    </section>
+<section class="account-section" id="sightings" data-account-section aria-labelledby="sightingsTitle">
+      <div class="section-heading"><span class="eyebrow">Spotter log</span><h1 id="sightingsTitle" tabindex="-1">Every sighting has a story.</h1><p>Your local log, sharing code, and a way back to the action.</p></div>
+      <div class="section-grid"><article class="panel">    <div class="row"><span class="k">Sightings on this device</span><span class="v" id="spotCount">—</span></div>
     <div class="row"><span class="k">Most recent</span><span class="v" id="spotLatest">—</span></div>
     <div class="row"><span class="k">Share code</span><span class="v mono" id="spotBlob">—</span></div>
     <div class="btns">
       <button class="btn" id="copyBlobBtn" type="button">Copy share code</button>
       <button class="btn" id="openSpotBtn" type="button">Open the Spotter</button>
     </div>
+    <div class="msg" id="spotMsg" role="status" aria-live="polite"></div>
     <p class="note">The share code is what pushes this phone's log onto your boards. Anyone with the
-      code can read the log, so treat it like a link to a private page rather than a password.</p>
-  </div>
-
-  <!-- ── BOARD PREFERENCES ───────────────────────────────────────────────── -->
-  <div class="panel">
-    <h2>Board preferences</h2>
-    <div class="row"><span class="k">Theme</span><span class="v" id="prefTheme">—</span></div>
+      code can read the log, so treat it like a link to a private page rather than a password.</p></article>
+      <aside class="section-help"><span class="help-art" data-icon="sightings" aria-hidden="true"></span><h2>Keep your discoveries</h2><p>Sightings are saved on this browser. Sign in and use Sync now to merge them with your account.</p><a class="text-link" href="#security" data-section-link="security">Go to sign-in <span aria-hidden="true">→</span></a><div class="help-divider"></div><h3>Share with care</h3><p>Anyone with your share code can read the shared log. Only share it with people or screens you trust.</p></aside></div>
+    </section>
+<section class="account-section" id="preferences" data-account-section aria-labelledby="preferencesTitle">
+      <div class="section-heading"><span class="eyebrow">Preferences</span><h1 id="preferencesTitle" tabindex="-1">Make yourself at home.</h1><p>Appearance and saved city settings for this browser.</p></div>
+      <div class="section-grid"><article class="panel"><div class="preference-edit">
+  <fieldset><legend>Appearance</legend><p>Choose a shared look for your boards and this page. Cities with their own look keep it.</p>
+    <div class="theme-options" role="group" aria-label="Appearance">
+      <button type="button" data-theme-choice="dark" aria-pressed="false"><span class="theme-sample sample-dark"><i></i><i></i></span>Night</button>
+      <button type="button" data-theme-choice="day" aria-pressed="false"><span class="theme-sample sample-day"><i></i><i></i></span>Day</button>
+      <button type="button" data-theme-choice="black" aria-pressed="false"><span class="theme-sample sample-black"><i></i><i></i></span>OLED black</button>
+    </div>
+  </fieldset>
+  <fieldset><legend>Board accent</legend><p>A little Transit Project color, your way.</p>
+    <div class="accent-options" role="group" aria-label="Board accent">
+      <button type="button" data-accent-choice="" aria-pressed="false"><i class="swatch swatch-default"></i>Default</button>
+      <button type="button" data-accent-choice="#FF3D77" aria-pressed="false"><i class="swatch swatch-pink"></i>Pink</button>
+      <button type="button" data-accent-choice="#00E0C6" aria-pressed="false"><i class="swatch swatch-teal"></i>Teal</button>
+      <button type="button" data-accent-choice="#2F7BFF" aria-pressed="false"><i class="swatch swatch-blue"></i>Blue</button>
+    </div>
+  </fieldset>
+  <div class="msg" id="prefMsg" role="status" aria-live="polite"></div>
+</div>    <div class="row"><span class="k">Theme</span><span class="v" id="prefTheme">—</span></div>
     <div class="row"><span class="k">Accent colour</span><span class="v" id="prefAccent">—</span></div>
     <div class="row"><span class="k">Rows per box</span><span class="v" id="prefRows">—</span></div>
     <p class="note" style="margin-bottom:10px">Cities with settings saved in this browser:</p>
-    <table id="cityTable">
+    <div class="table-scroll"><table id="cityTable">
       <thead><tr><th>City</th><th>Tracking near</th><th>Hidden cards</th></tr></thead>
       <tbody id="cityRows"><tr><td colspan="3" style="color:var(--muted)">None yet.</td></tr></tbody>
-    </table>
-  </div>
-
-  <!-- ── THIS DEVICE ─────────────────────────────────────────────────────── -->
-  <div class="panel">
-    <h2>This device</h2>
-    <div class="row"><span class="k">Device id</span><span class="v mono" id="devId">—</span></div>
+    </table></div></article>
+      <aside class="section-help"><span class="help-art" data-icon="preferences" aria-hidden="true"></span><h2>Local to this browser</h2><p>These choices apply to boards opened in this browser. They are separate from account sync.</p><div class="help-divider"></div><h3>Fine-tune each city</h3><p>Open a city board to adjust its tracking location, rows, and visible cards.</p></aside></div>
+    </section>
+<section class="account-section" id="browser" data-account-section aria-labelledby="browserTitle">
+      <div class="section-heading"><span class="eyebrow">This browser</span><h1 id="browserTitle" tabindex="-1">Know your setup.</h1><p>Browser details, local storage, and a fresh start when you need one.</p></div>
+      <div class="section-grid"><article class="panel">    <div class="row"><span class="k">Device id</span><span class="v mono" id="devId">—</span></div>
     <div class="row"><span class="k">Browser</span><span class="v" id="devUA">—</span></div>
     <div class="row"><span class="k">Time zone</span><span class="v" id="devTz">—</span></div>
     <div class="btns">
@@ -227,341 +194,13 @@ var a=g("tb.accent");if(a)d.style.setProperty("--accent",a);}catch(e){}})();</sc
     <p class="note">This only clears what this browser has stored — themes, saved locations, your
       licence key and your local sightings — and signs this browser out. It does not touch your
       account, cancel a licence, or remove anything from any server.</p>
-    <div class="msg" id="devMsg"></div>
-  </div>
+    <div class="msg" id="devMsg" role="status" aria-live="polite"></div></article>
+      <aside class="section-help"><span class="help-art" data-icon="browser" aria-hidden="true"></span><h2>A fresh start, here only</h2><p>Clearing settings removes this browser’s saved locations, appearance, local sightings, sign-in, and licence key.</p><div class="help-divider"></div><h3>Your account stays intact</h3><p>It does not delete your account or server-side sightings, cancel a licence, or change another device.</p></aside></div>
+    </section>
+  </main>
 </div>
-
-<script>
-"use strict";
-const $ = s => document.querySelector(s);
-const LS = { key:"tb.license", dev:"tb.device", spots:"tb.spots", blob:"tb.spotBlob",
-             theme:"tb.theme", accent:"tb.accent", rows:"tb.rows", licUrl:"tb.workerUrl" };
-const get = k => { try { return localStorage.getItem(k) || ""; } catch(e){ return ""; } };
-function say(el, text, kind){ const e=$(el); if(!e) return; e.textContent=text||"";
-  e.className = "msg" + (kind ? " " + kind : ""); }
-const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-/* Back to step one. Signing out after a code left the old code and "Code sent to…"
-   on screen, with nowhere to type an address. */
-function resetSignIn(){
-  $("#stepCode").classList.add("hide"); $("#stepEmail").classList.remove("hide");
-  $("#codeInput").value=""; authToken=""; say("#acctMsg","");
-}
-
-/* Come back to whichever board sent you here, when that is knowable. */
-(function backLink(){
-  const from = new URLSearchParams(location.search).get("from");
-  if (from && /^[a-z]+\.html$/.test(from)) $("#backLink").href = from;
-})();
-
-/* ── Account ──────────────────────────────────────────────────────────────
-   account.js is dormant with no Worker URL, so the three states are: not
-   configured at all, configured-and-signed-out, and signed in. Which ways in
-   to offer inside that second state is the Worker's business, not ours — see
-   methods(). */
-let authToken = "";
-let acctMethods = { code: true, password: false, google: false, apple: false };
-
-async function paintAccount(){
-  const A = window.TBAccount;
-  const configured = !!(A && A.configured());
-  $("#acctOff").classList.toggle("hide", configured);
-  $("#acctIn").classList.toggle("hide", !configured || A.signedIn());
-  $("#acctUser").classList.toggle("hide", !configured || !A.signedIn());
-  if (!configured) return;
-
-  acctMethods = await A.methods();
-  $("#googleBtn").classList.toggle("hide", !acctMethods.google);
-  $("#appleBtn").classList.toggle("hide", !acctMethods.apple);
-  $("#provRow").classList.toggle("hide", !(acctMethods.google || acctMethods.apple));
-  $("#pwWrap").classList.toggle("hide", !acctMethods.password);
-  $("#pwNote").classList.toggle("hide", !(acctMethods.password && acctMethods.code));
-  labelSubmit();
-
-  if (A.signedIn()) {
-    $("#acctEmail").textContent = A.email() || "(unknown)";
-    const has = A.hasPassword();
-    $("#pwState").innerHTML = has
-      ? '<span class="pill ok">Set</span>'
-      : '<span class="pill off">Not set</span>';
-    $("#pwEditBtn").textContent = has ? "Change password" : "Set a password";
-    $("#pwEditBtn").classList.toggle("hide", !acctMethods.password);
-    $("#pwCurWrap").classList.toggle("hide", !has);
-    $("#pwRemoveBtn").classList.toggle("hide", !has);
-  }
-}
-
-/* Keep the button honest about which door the current input will use. */
-function labelSubmit(){
-  const pw = acctMethods.password ? $("#pwInput").value : "";
-  $("#sendCodeBtn").textContent = (pw || !acctMethods.code) ? "Sign in" : "Email me a code";
-}
-$("#pwInput").addEventListener("input", labelSubmit);
-$("#googleBtn").onclick = () => TBAccount.oauthGo("google");
-$("#appleBtn").onclick = () => TBAccount.oauthGo("apple");
-
-$("#sendCodeBtn").onclick = async () => {
-  const addr = $("#emailInput").value.trim();
-  if (!addr || addr.indexOf("@") < 1) return say("#acctMsg", "That doesn't look like an email address.", "bad");
-  const pw = acctMethods.password ? $("#pwInput").value : "";
-
-  if (pw) {
-    say("#acctMsg", "Signing in…");
-    try {
-      await TBAccount.signInPassword(addr, pw);
-      $("#pwInput").value = "";
-      await paintAccount(); paintSpots();
-      say("#acctMsg", "");
-    } catch (e) { say("#acctMsg", e.message, "bad"); }
-    return;
-  }
-  if (!acctMethods.code) return say("#acctMsg", "Enter your password.", "bad");
-
-  say("#acctMsg", "Sending…");
-  try {
-    authToken = await TBAccount.start(addr);
-    $("#stepEmail").classList.add("hide");
-    $("#stepCode").classList.remove("hide");
-    $("#codeInput").focus();
-    say("#acctMsg", "Code sent to " + addr + ".", "good");
-  } catch (e) { say("#acctMsg", "Couldn't send a code: " + e.message, "bad"); }
-};
-
-/* ── the password itself ────────────────────────────────────────────────── */
-$("#pwEditBtn").onclick = () => {
-  const open = $("#pwEdit").classList.toggle("hide");
-  if (!open) $("#pwNew").focus();
-};
-$("#pwSaveBtn").onclick = async () => {
-  const next = $("#pwNew").value;
-  if (!next) return say("#acctMsg2", "Type the new password, or use Remove password.", "bad");
-  say("#acctMsg2", "Saving…");
-  try {
-    await TBAccount.setPassword(next, $("#pwCur").value || undefined);
-    $("#pwNew").value = ""; $("#pwCur").value = "";
-    $("#pwEdit").classList.add("hide");
-    await paintAccount();
-    say("#acctMsg2", "Password saved. You can sign in with it on any device.", "good");
-  } catch (e) { say("#acctMsg2", e.message, "bad"); }
-};
-$("#pwRemoveBtn").onclick = async () => {
-  say("#acctMsg2", "Removing…");
-  try {
-    await TBAccount.setPassword("");
-    $("#pwEdit").classList.add("hide");
-    await paintAccount();
-    say("#acctMsg2", "Password removed — sign in with a code or a provider.", "good");
-  } catch (e) { say("#acctMsg2", e.message, "bad"); }
-};
-$("#backToEmailBtn").onclick = () => {
-  $("#stepCode").classList.add("hide"); $("#stepEmail").classList.remove("hide"); say("#acctMsg","");
-};
-$("#verifyBtn").onclick = async () => {
-  const code = $("#codeInput").value.trim();
-  if (!/^\d{6}$/.test(code)) return say("#acctMsg", "The code is six digits.", "bad");
-  say("#acctMsg", "Checking…");
-  try { await TBAccount.verify(authToken, code); resetSignIn(); paintAccount(); paintSpots(); }
-  catch (e) { say("#acctMsg", "That didn't work: " + e.message, "bad"); }
-};
-$("#syncBtn").onclick = async () => {
-  say("#acctMsg2", "Syncing…");
-  try { const r = await TBAccount.sync(); paintSpots();
-        say("#acctMsg2", r ? `Synced — ${r.count} sightings.` : "Nothing to sync.", "good"); }
-  catch (e) {
-    say("#acctMsg2", "Sync failed: " + e.message, "bad");
-    if (!TBAccount.signedIn()) { await paintAccount(); say("#acctMsg", "That session has ended. Please sign in again.", "bad"); }
-  }
-};
-$("#signOutBtn").onclick = async () => {
-  await TBAccount.signOut(); resetSignIn(); paintAccount(); say("#acctMsg2", "Signed out. Your sightings are still here.", "good");
-};
-
-/* ── Licence ──────────────────────────────────────────────────────────────
-   The key is masked by default: this page is the one someone screenshots when
-   asking for help. */
-let revealed = false;
-function maskKey(k){
-  if (!k) return "";
-  const parts = k.split("-");
-  if (parts.length < 3) return k.slice(0,4) + "••••";
-  return parts.map((p,i) => i===0 || i===1 ? p : "•".repeat(p.length)).join("-");
-}
-function paintKey(){
-  const k = get(LS.key);
-  $("#licKey").textContent = k ? (revealed ? k : maskKey(k)) : "None on this device";
-  $("#revealBtn").textContent = revealed ? "Hide key" : "Reveal key";
-  $("#revealBtn").classList.toggle("hide", !k);
-  $("#copyKeyBtn").classList.toggle("hide", !k);
-}
-$("#revealBtn").onclick = () => { revealed = !revealed; paintKey(); };
-$("#copyKeyBtn").onclick = async () => {
-  try { await navigator.clipboard.writeText(get(LS.key)); say("#licMsg","Key copied.","good"); }
-  catch(e){ say("#licMsg","Couldn't copy — reveal it and copy by hand.","bad"); }
-};
-$("#enterKeyBtn").onclick = () => $("#licEnter").classList.toggle("hide");
-$("#saveKeyBtn").onclick = async () => {
-  const k = $("#keyInput").value.trim().toUpperCase();
-  if (!k) return;
-  say("#licMsg", "Checking…");
-  try {
-    const ok = await window.TBLicense.enterKey(k);
-    paintKey(); await paintLicence();
-    say("#licMsg", ok === false ? "That key was not accepted." : "Key saved.", ok === false ? "bad" : "good");
-  } catch (e) { say("#licMsg", "Couldn't check that key: " + e.message, "bad"); }
-};
-
-async function paintLicence(){
-  const L = window.TBLicense;
-  paintKey();
-  if (!L || !L.configured) {
-    $("#licStatus").innerHTML = '<span class="pill off">Not in use</span>';
-    $("#licDevRow").classList.add("hide");
-    $("#enterKeyBtn").classList.add("hide");   // enterKey does not exist while dormant
-    $("#licEnter").classList.add("hide");
-    $("#licNote").textContent = "Every board is free to use right now, so no licence is needed.";
-    return;
-  }
-  $("#licStatus").innerHTML = L.licensed
-    ? '<span class="pill ok">Licensed</span>' : '<span class="pill warn">Evaluation</span>';
-  $("#licNote").textContent = L.licensed
-    ? "Checked against the licence server every 24 hours, with 14 days of grace if it can't be reached — a kiosk offline for a fortnight keeps working."
-    : "Running in evaluation. Enter a key above to unlock.";
-
-  /* Device count comes from the same /verify the boards call, with the SAME
-     device id this browser already registered — so asking here re-stamps that
-     entry rather than consuming another of the five slots. */
-  const key = get(LS.key), dev = (L.device ? L.device() : get(LS.dev));
-  const base = (L.url || "").replace(/\/+$/, "");
-  if (!key || !base) { $("#licDevRow").classList.add("hide"); return; }
-  try {
-    const r = await fetch(`${base}/verify?key=${encodeURIComponent(key)}&device=${encodeURIComponent(dev)}`,
-                          { cache:"no-store" });
-    const d = await r.json();
-    /* Name the reason rather than showing a dash. This row is the one someone
-       reads when a board says "evaluation" and they believe they have paid. */
-    const WHY = {
-      unknown_key:  "That key isn't recognised",
-      revoked:      "This key has been revoked",
-      device_limit: `Limit of ${d.limit} devices reached`,
-      missing_key:  "No key to check",
-    };
-    $("#licDevRow").classList.remove("hide");
-    $("#licDevices").textContent = d.ok ? `${d.devices} of ${d.limit}`
-                                        : (WHY[d.error] || "Couldn't be checked");
-  } catch (e) { $("#licDevices").textContent = "Couldn't reach the licence server"; }
-}
-
-/* ── Spotter ──────────────────────────────────────────────────────────── */
-function paintSpots(){
-  let spots = [];
-  try { spots = JSON.parse(get(LS.spots) || "[]"); } catch(e){}
-  $("#spotCount").textContent = spots.length ? spots.length.toLocaleString() : "None yet";
-  const latest = spots.filter(s => s && s.ts).sort((a,b) => b.ts - a.ts)[0];
-  $("#spotLatest").textContent = latest
-    ? new Date(latest.ts).toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"})
-    : "—";
-  const blob = get(LS.blob);
-  $("#spotBlob").textContent = blob || "Not sharing";
-  $("#copyBlobBtn").classList.toggle("hide", !blob);
-}
-$("#copyBlobBtn").onclick = async () => {
-  try { await navigator.clipboard.writeText(get(LS.blob)); say("#devMsg","Share code copied.","good"); }
-  catch(e){}
-};
-$("#openSpotBtn").onclick = () => { window.location.href = "spot.html"; };
-
-/* ── Preferences + devices ───────────────────────────────────────────────
-   City rows are discovered by scanning localStorage rather than from a list of
-   cities, so a board added later shows up here without this page changing. */
-const CITY_NAMES = { "": "Washington DC", phl:"Philadelphia", nyc:"New York", boston:"Boston",
-  sf:"San Francisco", la:"Los Angeles", ams:"Amsterdam", nj:"New Jersey",
-  zurich:"Zurich", cologne:"Cologne", stuttgart:"Stuttgart", rome:"Rome", chicago:"Chicago", mycity:"Stencil" };
-function paintPrefs(){
-  $("#prefTheme").textContent = get(LS.theme) || "Dark (default)";
-  const a = get(LS.accent);
-  $("#prefAccent").innerHTML = a
-    ? `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${esc(a)};
-        vertical-align:-1px;margin-right:7px"></span><span class="mono">${esc(a)}</span>` : "Default";
-  $("#prefRows").textContent = get(LS.rows) || "Normal";
-
-  const found = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i) || "";
-    const m = k.match(/^transitboard([a-z]*)\.(loc|hiddenCards)$/);
-    if (m) (found[m[1]] = found[m[1]] || {})[m[2]] = localStorage.getItem(k);
-  }
-  const ids = Object.keys(found).sort();
-  const body = $("#cityRows");
-  // Not an early return: after "Clear saved settings" the old cities stayed listed.
-  if (!ids.length) { body.innerHTML = '<tr><td colspan="3" style="color:var(--muted)">None yet.</td></tr>'; return; }
-  body.innerHTML = "";
-  ids.forEach(id => {
-    let where = "—", hidden = "None";
-    try { const l = JSON.parse(found[id].loc || "null"); if (l && l.label) where = l.label; } catch(e){}
-    try { const h = JSON.parse(found[id].hiddenCards || "[]");
-          if (h.length) hidden = h.length + " hidden"; } catch(e){}
-    const tr = document.createElement("tr");
-    // `where` can be an address someone typed.
-    tr.innerHTML = `<td>${esc(CITY_NAMES[id] || id || "Washington DC")}</td><td>${esc(where)}</td><td>${esc(hidden)}</td>`;
-    body.appendChild(tr);
-  });
-}
-function paintDevice(){
-  /* license.js mints this on its first check, so it genuinely does not exist
-     until a key is in play. Viewing this page shouldn't be what creates it —
-     say why it's blank instead of quietly writing one. */
-  const d = get(LS.dev);
-  $("#devId").textContent = d || "Assigned when you first use a licence key";
-  $("#devId").classList.toggle("mono", !!d);
-  const ua = navigator.userAgent;
-  const name = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera"
-    : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari"
-    : /Firefox\//.test(ua) ? "Firefox" : "This browser";
-  const os = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android"
-    : /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : "";
-  $("#devUA").textContent = os ? `${name} on ${os}` : name;
-  try { $("#devTz").textContent = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e){}
-}
-
-/* Destructive, so it asks first and names exactly what goes. Scoped to this
-   browser's own keys — the account and the licence record on the server are
-   untouched, which is what the note under the button promises. */
-$("#forgetBtn").onclick = () => {
-  const keys = [];
-  /* Left alone: what config.js owns, because it writes it straight back on the next
-     load and until then this page reports accounts as "not set up"; and the device
-     id, because a new id on the next licence check takes another of the five slots. */
-  let owned = {};
-  try { owned = JSON.parse(localStorage.getItem("tb.configWrote") || "{}") || {}; } catch(e){}
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i) || "";
-    if (k === "tb.configWrote" || k === LS.dev || owned[k]) continue;
-    if (/^(tb\.|transitboard|nightmode\.|flipboard\.)/.test(k)) keys.push(k);
-  }
-  if (!keys.length) return say("#devMsg", "Nothing saved on this device.", "good");
-  if (!confirm(`Clear ${keys.length} saved settings from this browser?\n\n`
-    + "This removes your themes, saved locations, licence key and local sightings from THIS device, "
-    + "and signs this device out. Your account and licence are not affected.")) return;
-  keys.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
-  say("#devMsg", `Cleared ${keys.length} settings. Reload to start fresh.`, "good");
-  paintKey(); paintSpots(); paintPrefs(); paintDevice(); resetSignIn(); paintAccount();
-};
-
-/* license.js verifies on its own schedule; give it a moment to settle before
-   reading TBLicense.licensed, or a cold load paints "Evaluation" then flips. */
-paintSpots(); paintPrefs(); paintDevice(); paintLicence();
-setTimeout(paintLicence, 1200);
-
-/* If this load is the browser coming back from Google or Apple, finish the
-   sign-in before the first paint, so the page never shows a signed-out panel to
-   somebody who has just signed in. */
-(async function startAccount(){
-  const back = window.TBAccount ? await TBAccount.completeReturn() : null;
-  await paintAccount();
-  if (back) {
-    if (back.ok) { paintSpots(); say("#acctMsg2", "Signed in as " + (back.email || "your account") + ".", "good"); }
-    else say("#acctMsg", back.error, "bad");
-  }
-})();
-</script>
+<footer class="account-footer"><span>TRANSIT PROJECT</span><span>Built around the way you move.</span><a href="tv.html">Find your view ↗</a></footer>
+<script src="profile.js?v=1"></script>
+<script src="profile-shell.js?v=1"></script>
 </body>
 </html>

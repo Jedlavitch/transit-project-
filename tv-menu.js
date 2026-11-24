@@ -80,7 +80,8 @@ function buildMenu(){
   CITIES.forEach(function(city,i){
     if(i===0||i===8){var label=document.createElement('p');label.className='city-group'+(i===8?' europe':'');label.textContent=i===0?'United States':'Europe';cities.appendChild(label);}
     var b=document.createElement('button');b.type='button';b.className='city-option';b.dataset.city=city.id;b.setAttribute('data-tv-control','');b.setAttribute('aria-pressed','false');
-    b.innerHTML='<span class="city-code">'+city.icon+'</span><span class="city-name">'+city.name+'</span><span class="shortcut" aria-hidden="true">'+(i<9?i+1:'')+'</span>';
+    b.setAttribute('aria-label',city.name);
+    b.innerHTML='<span class="city-emblem" aria-hidden="true">'+(window.TBCityIcon?window.TBCityIcon(city.id):city.icon)+'</span><span class="city-name">'+city.name+'</span><span class="shortcut" aria-hidden="true">'+(i<9?i+1:'')+'</span>';
     b.addEventListener('click',function(){selectCity(city.id,true);});
     cities.appendChild(b);
   });
@@ -144,122 +145,11 @@ addEventListener('resize',function(){clearTimeout(resizeTimer);resizeTimer=setTi
 buildMenu();
 document.getElementById('fullscreenBtn').addEventListener('click',toggleFullscreen);
 
-/* ---- Casting -------------------------------------------------------------
-   No web API lets a page mirror its own tab — only the browser's own UI can do
-   that, which is why a naive "cast" button on a website does nothing. What a
-   page CAN do is the Presentation API: hand a URL to a Chromecast / Google TV,
-   which then loads that page itself. For a kiosk board that is better than
-   mirroring anyway — the TV renders the board at its own resolution, live, and
-   this laptop can be closed afterwards. Where the API doesn't exist (Safari,
-   Firefox) the button explains how to cast in THAT browser rather than
-   pretending to work. -------------------------------------------------------*/
-var castConn = null;
-var castAvail = null;   /* true / false once known, null = unknown */
+/* TV setup is a shared, platform-specific connection panel. */
+function setCastUI(){if(window.TBTVCast)window.TBTVCast.update();}
+function toggleCast(){if(window.TBTVCast)window.TBTVCast.open();}
+function closeCastHelp(){if(window.TBTVCast)window.TBTVCast.close();}
 
-function absUrl(href){ return new URL(href, location.href).href; }
-function selectedName(){ return castSelection.name; }
-
-function castSupported(){
-  return typeof PresentationRequest === "function" && !!navigator.presentation;
-}
-
-/* The TV fetches the URL over the network itself, so it has to be an address
-   the TV can actually reach. localhost is a secure context (so the API exists
-   and the picker opens) but is unreachable from the TV — worth saying plainly
-   instead of letting the cast fail on the device with no explanation. */
-function castReachable(){ return location.protocol === "https:"; }
-
-function toast(msg, ms){
-  var t = document.getElementById("toast");
-  t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast._t);
-  toast._t = setTimeout(function(){ t.classList.remove("show"); }, ms || 5200);
-}
-
-function setCastUI(){
-  var b = document.getElementById("castBtn"), lbl = b.querySelector(".lbl");
-  b.classList.remove("dim");
-  if (castConn){
-    b.classList.add("casting"); lbl.textContent = "Stop casting";
-    b.title = "Stop casting (C)"; return;
-  }
-  b.classList.remove("casting");
-  if (!castSupported()){
-    lbl.textContent = "Cast — how?";
-    b.title = "This browser can't start a cast from a page — click for how to do it on this device";
-    return;
-  }
-  lbl.textContent = "Cast to TV";
-  if (castAvail === false){
-    b.classList.add("dim");
-    b.title = "No cast device found on this network yet — click for other ways to get a board on the TV";
-    return;
-  }
-  b.title = "Cast " + selectedName() + " to a TV (C)";
-}
-
-function castHelp(reason){
-  var ua = navigator.userAgent;
-  var isSafari  = /safari/i.test(ua) && !/chrome|chromium|crios|edg|android/i.test(ua);
-  var isFirefox = /firefox|fxios/i.test(ua);
-  var published = "https://transitproject.online/tv.html";
-  var body;
-
-  if (reason === "local"){
-    body = "<h3>Casting needs the published site</h3>" +
-      "<p>This page is being served from <b>localhost</b>. The TV fetches the board over " +
-      "your network by itself, and it can't reach localhost — so the cast would fail on the " +
-      "TV even though the picker opens here. Cast from the published address instead:</p>" +
-      '<div class="url">' + published + "</div>";
-  } else if (reason === "none"){
-    body = "<h3>No cast device found</h3>" +
-      "<p>Nothing on this network is advertising itself as a Chromecast or Google TV. Either " +
-      "the TV is off/asleep, or this device is on a different network (guest Wi-Fi is a common " +
-      "culprit). You can always open the menu in the TV's own browser instead:</p>" +
-      '<div class="url">' + published + "</div>";
-  } else if (isSafari){
-    body = "<h3>Casting from Safari</h3>" +
-      "<p>Safari doesn't let a page start a cast, so this has to go through AirPlay:</p>" +
-      "<ol><li>Open <b>Control Centre</b> on your Mac or iPhone</li>" +
-      "<li>Choose <b>Screen Mirroring</b></li>" +
-      "<li>Pick your Apple TV</li></ol>" +
-      "<p>Or open this menu in the TV's own browser and pick a board there — that's what it's built for:</p>" +
-      '<div class="url">' + published + "</div>";
-  } else if (isFirefox){
-    body = "<h3>Firefox can't cast</h3>" +
-      "<p>Firefox has no casting support at all, from a page or from its own menu. Two options:</p>" +
-      "<ol><li>Open this menu in your TV's browser and pick a board there</li>" +
-      "<li>Or open it in Chrome, which can cast a board straight to a Chromecast</li></ol>" +
-      '<div class="url">' + published + "</div>";
-  } else {
-    body = "<h3>Casting from this browser</h3>" +
-      "<p>This browser doesn't expose casting to a page. Try its own menu " +
-      "(<b>⋮ → Cast</b> in Chrome and Edge), or open this menu in the TV's browser:</p>" +
-      '<div class="url">' + published + "</div>";
-  }
-
-  var box = document.getElementById("castHelpBox");
-  box.innerHTML = body + '<button type="button" id="castHelpOk">Got it</button>';
-  document.getElementById("castHelp").classList.add("show");
-  document.getElementById("castHelpOk").onclick = closeCastHelp;
-  document.getElementById("castHelpOk").focus();
-}
-
-/* ---- unlocking this screen from a phone ---------------------------------
-   Every fallback in castHelp() above ends the same way: open this menu in the
-   television's own browser. So this page is the one that ends up ON the TV,
-   and until now there was nothing on it that could license the thing. The
-   pairing QR existed only on gate.js's wall, and gate.js returns early for
-   anyone who has paid — so the person standing at a new television with a
-   licence already on their phone was precisely the person who could not
-   reach it.
-
-   The panel is fetched on demand rather than shipped with the launcher: this
-   page draws nine tiles and has no other use for a QR encoder.
-
-   pair-tv.js is happy without license.js, which this page does not load — it
-   falls back to the shipped Worker URL and the same tb.device id, and on
-   success writes the licence to localStorage itself before reloading. */
 var pairLoading = null;
 function loadPair(cb){
   if (window.TBPair) { cb(true); return; }
@@ -339,61 +229,14 @@ function closePair(){
   try { tiles[idx].focus({preventScroll:true}); }catch(_){}
 }
 
-function closeCastHelp(){
-  document.getElementById("castHelp").classList.remove("show");
-  tiles[idx].focus({preventScroll:true});
-}
-
-function startCast(){
-  if (!castSupported()) { castHelp(); return; }
-  if (!castReachable()) { castHelp("local"); return; }
-  if (castAvail === false) { castHelp("none"); return; }
-
-  var name = selectedName(), req;
-  try { req = new PresentationRequest([absUrl(castSelection.href)]); }
-  catch (e) { castHelp(); return; }
-
-  req.start().then(function(conn){
-    castConn = conn;
-    var ended = function(){ castConn = null; setCastUI(); toast("Casting stopped"); };
-    conn.onclose = ended; conn.onterminate = ended;
-    setCastUI();
-    toast(name + " is loading on the TV — it runs the board itself, so you can close this tab");
-  }).catch(function(err){
-    var n = err && err.name;
-    if (n === "NotFoundError") castHelp("none");
-    else if (n === "NotAllowedError") toast("Cast cancelled");
-    else toast("Couldn't start casting" + (n ? " (" + n + ")" : ""));
-  });
-}
-
-function stopCast(){
-  try { castConn.terminate(); } catch (e) {}
-  castConn = null; setCastUI();
-}
-
-function toggleCast(){ castConn ? stopCast() : startCast(); }
-
 function initCast(){
-  document.getElementById("castBtn").addEventListener("click", toggleCast);
-  document.getElementById("pairBtn").addEventListener("click", openPair);
-  document.getElementById("pairClose").addEventListener("click", closePair);
-  paintPairBtn();
-  document.getElementById("castHelp").addEventListener("click", function(e){
-    if (e.target.id === "castHelp") closeCastHelp();
+  if(window.TBTVCast)window.TBTVCast.init({
+    getCity:function(){return window.TBProjectorCities.get(currentCity.id);},
+    getDefaultHref:function(){return castSelection.href;}
   });
-  setCastUI();
-  if (!castSupported()) return;
-  try {
-    var probe = new PresentationRequest([absUrl("tv.html")]);
-    /* Also lets the browser's own Cast menu offer this page as a target. */
-    try { navigator.presentation.defaultRequest = probe; } catch (e) {}
-    probe.getAvailability().then(function(a){
-      castAvail = a.value;
-      a.onchange = function(){ castAvail = a.value; setCastUI(); };
-      setCastUI();
-    }).catch(function(){ castAvail = null; setCastUI(); });  /* unknown: stay enabled */
-  } catch (e) {}
+  document.getElementById('pairBtn').addEventListener('click',openPair);
+  document.getElementById('pairClose').addEventListener('click',closePair);
+  paintPairBtn();
 }
 initCast();
 

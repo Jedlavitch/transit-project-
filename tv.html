@@ -8,7 +8,8 @@
 <title>Transit Project — TV menu</title>
 <link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
 <link rel="apple-touch-icon" href="brand/icon-dark-180.png">
-<link rel="stylesheet" href="tv-menu.css?v=2">
+<link rel="stylesheet" href="tv-menu.css?v=3">
+<link rel="stylesheet" href="tv-connect.css?v=1">
 <link rel="stylesheet" href="view-motion.css?v=1">
 <script src="polyfills.js?v=1"></script>
 <script src="wake.js?v=1"></script>
@@ -18,7 +19,11 @@
 <script src="projector-landmarks-europe.js?v=1" defer></script>
 <script src="projector-scene.js?v=1" defer></script>
 <script src="view-art.js?v=1" defer></script>
-<script src="tv-menu.js?v=2" defer></script>
+<script src="city-icons.js?v=2" defer></script>
+<script src="tv-connect-core.js?v=1" defer></script>
+<script src="pair-qr.js?v=1" defer></script>
+<script src="tv-connect.js?v=1" defer></script>
+<script src="tv-menu.js?v=3" defer></script>
 <script>/* Self-heal stale pages. The Spotter PWA's first service worker was scoped to
    the whole site and cached every board, so a device that installed it keeps serving
    old copies no matter how many times the site is redeployed - which looks exactly
@@ -93,7 +98,25 @@
   <div class="bottom-links"><a href="projector-cities.html" data-tv-control>City collection ↗</a><a href="index.html" data-tv-control>Back to Transit Project</a></div>
 </footer>
 <div id="toast" role="status" aria-live="polite"></div>
-<div id="castHelp" class="dialog-backdrop" role="dialog" aria-modal="true" aria-label="Casting help"><div class="box" id="castHelpBox"></div></div>
+<div id="castHelp" class="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="castTitle">
+  <div class="box cast-box" id="castHelpBox">
+    <div class="cast-heading"><div><span class="cast-eyebrow">Transit Project / Your TV</span><h3 id="castTitle">Your city. A bigger screen.</h3></div><button class="cast-close" id="castClose" type="button" aria-label="Close TV connection setup">×</button></div>
+    <p class="cast-intro">Choose a view, then connect with AirPlay, Chromecast, or your TV’s browser.</p>
+    <div class="cast-display"><div class="cast-city"><span id="castCityIcon" aria-hidden="true"></span><span><small>Your city</small><strong id="castCityName"></strong></span></div><label class="cast-view-label" for="castView">Display view<select id="castView"></select></label></div>
+    <div class="cast-methods" role="tablist" aria-label="TV connection method">
+      <button id="castMethod-airplay" type="button" role="tab" data-cast-method="airplay" aria-selected="true" aria-controls="castMethodPanel">AirPlay</button>
+      <button id="castMethod-chromecast" type="button" role="tab" data-cast-method="chromecast" aria-selected="false" aria-controls="castMethodPanel" tabindex="-1">Chromecast</button>
+      <button id="castMethod-browser" type="button" role="tab" data-cast-method="browser" aria-selected="false" aria-controls="castMethodPanel" tabindex="-1">TV browser</button>
+    </div>
+    <div id="castMethodPanel" role="tabpanel" aria-labelledby="castMethod-airplay">
+      <h4 id="castMethodTitle"></h4><p id="castMethodIntro"></p><ol class="cast-steps" id="castSteps"></ol>
+      <div class="cast-actions"><a class="primary-action" id="castOpen" href="display.html" target="_blank" rel="noopener"><span id="castOpenLabel">Open display</span><span aria-hidden="true">↗</span></a><button type="button" class="cast-copy" id="castCopy">Copy display link</button></div>
+      <p id="castStatus" role="status" aria-live="polite"></p><p id="castNote"></p>
+      <details class="cast-more"><summary>Connection help &amp; stopping</summary><p id="castTroubleText"></p><p id="castStop"></p><a id="castOfficialHelp" target="_blank" rel="noopener noreferrer">Official setup guide ↗</a></details>
+    </div>
+    <details class="cast-more" id="castShare"><summary>Display link &amp; open on your phone</summary><label for="castURL" class="cast-view-label">Selected display link<input id="castURL" type="text" readonly aria-label="Selected display link" spellcheck="false"></label><div class="cast-share-body"><div id="castQR"></div><p>Scan to open this display on your phone, then use AirPlay there. The link keeps the city and view you selected.</p></div></details>
+  </div>
+</div>
 <div id="pairPanel" class="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="pairTitle"><div class="box"><h3 id="pairTitle">Unlock this screen</h3><p class="note" id="pairNote">Scan with your phone to connect this screen.</p><div id="pairHost"></div><button type="button" id="pairClose">Close</button></div></div>
 <noscript><p>JavaScript is needed for the TV menu. Open a city board directly: <a href="dc.html">Washington, DC</a> · <a href="philadelphia.html">Philadelphia</a> · <a href="nyc.html">New York</a>.</p></noscript>
 </body>

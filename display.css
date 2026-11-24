@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{color-scheme:dark;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#FFFCF5;background:#12101A}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+#displayFrame{position:fixed;inset:0;top:0;left:0;width:100%;height:100%;border:0;background:#12101A}
+.display-setup{position:fixed;z-index:10;left:24px;bottom:24px;width:370px;max-width:calc(100% - 32px);max-height:calc(100% - 48px);overflow:auto;padding:23px;background:#12101af2;border:1px solid #574065;border-radius:13px;box-shadow:0 18px 60px #0008}
+.display-heading{display:flex;align-items:center;gap:12px;margin-bottom:7px}
+#displayCityIcon{display:block;flex:none;width:36px;height:36px}
+#displayCityIcon svg{display:block;width:36px;height:36px}
+.eyebrow{font:500 8px 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#00E0C6}
+h1{font:700 21px/1.1 'Archivo',Arial,sans-serif;letter-spacing:-.035em;margin:5px 0 0}
+.display-view{font-size:11px;color:#b6a8c2;margin:0 0 17px 48px}
+h2{font:600 15px 'IBM Plex Sans',sans-serif;margin:0 0 11px;color:#FFFCF5}
+ol{padding-left:20px;margin:0;font-size:12px;line-height:1.5;color:#c2b3ce}
+li{padding-left:4px;margin:8px 0}
+li::marker{font-family:'IBM Plex Mono',monospace;color:#00E0C6}
+.display-note{font-size:10px;line-height:1.5;color:#a595b4;margin:15px 0 0;padding-left:10px;border-left:2px solid #2F7BFF}
+.display-actions{display:flex;gap:10px;margin-top:18px}
+button{font:600 12px 'IBM Plex Sans',sans-serif;cursor:pointer;color:#fff;border:1px solid #FF3D77;background:#FF3D77;border-radius:7px;padding:10px 13px}
+#displayFullscreen{background:transparent;color:#FFFCF5;border-color:#6a4b81}
+button:hover{filter:brightness(1.15)}
+button:focus-visible,a:focus-visible{outline:2px solid #00E0C6;outline-offset:4px}
+#displayStatus{font-size:11px;line-height:1.4;color:#00E0C6;margin:12px 0 0}
+#displayStatus:empty{display:none}
+a{display:inline-block;color:#c1b0d1;font-size:10px;margin-top:13px;text-decoration:none}
+a:hover{text-decoration:underline}
+.display-show{position:fixed;z-index:11;left:14px;bottom:14px;display:flex;align-items:center;gap:8px;padding:8px 11px;background:#12101ad9;border-color:#574065;font-size:10px;opacity:.55;transition:opacity .2s}
+.display-show:hover,.display-show:focus-visible{opacity:1}
+[hidden]{display:none!important}
+@media(max-width:500px){.display-setup{left:16px;bottom:16px;padding:21px;width:350px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
