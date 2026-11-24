@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080c13">
+  <meta name="description" content="Thirteen cities after dark. Explore detailed city skylines, the sky overhead, and a projector view made for your wall or ceiling.">
+  <title>City nights — Transit Project</title>
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+  <script src="polyfills.js?v=1"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#080c13;--ink:#e4e8ee;--muted:#8c98a9;--faint:#4f6175;--line:#24303f;--accent:#9db9de}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    button{font:inherit}
+    a:focus-visible,button:focus-visible{outline:2px solid #cfdef0;outline-offset:5px}
+    .skip{position:fixed;left:20px;top:-80px;z-index:10;padding:12px 18px;background:#dce8f6;color:#080c13;border-radius:4px}
+    .skip:focus{top:12px}
+    .shell{width:min(1380px,calc(100% - 96px));margin:auto}
+    header{height:94px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:12px;font-size:13px;font-weight:650;letter-spacing:.01em}
+    .brand img{width:35px;height:35px;object-fit:contain}
+    .brand small{display:block;color:var(--muted);font-size:10px;font-weight:500;letter-spacing:.15em;margin-top:4px;text-transform:uppercase}
+    .top-nav{display:flex;align-items:center;gap:26px;font-size:12px;color:#acb8c9}
+    .top-nav a:hover{color:#fff}
+    .top-nav .resume{border:1px solid #394960;border-radius:5px;padding:11px 16px;color:#dce6f4}
+    .hero{display:grid;grid-template-columns:1.5fr 1fr;gap:70px;padding:74px 0 57px;align-items:end}
+    .eyebrow{display:flex;align-items:center;gap:10px;color:#a9bdd7;font-size:10px;font-weight:650;letter-spacing:.2em;text-transform:uppercase;margin:0 0 22px}
+    .eyebrow:before{content:"";display:block;width:6px;height:6px;border-radius:50%;background:#a9bdd7;box-shadow:0 0 12px #8caac24d}
+    h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(42px,5.3vw,73px);line-height:1.06;font-weight:400;letter-spacing:-.045em;margin:0}
+    h1 span{color:#9eacbf}
+    .hero-note{padding:0 0 4px 30px;border-left:1px solid #2b3949;max-width:380px;justify-self:end}
+    .hero-note p{font-size:14px;line-height:1.8;color:#a0adbf;margin:0 0 18px}
+    .hero-note .meta{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:#6f839e;line-height:1.8}
+    .collection-bar{display:flex;gap:22px;align-items:center;justify-content:space-between;padding:20px 0;border-top:1px solid var(--line);margin-bottom:12px}
+    .filters{display:flex;gap:7px;flex-wrap:wrap}
+    .filter{background:transparent;color:#8f9daf;border:1px solid transparent;border-radius:100px;padding:8px 14px;font-size:11px;cursor:pointer;transition:background .15s,color .15s}
+    .filter:hover{color:#e4e8ee;background:#17202c}
+    .filter[aria-pressed="true"]{border-color:#3a4c64;background:#172230;color:#dce6f4}
+    .count{color:#77869a;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;white-space:nowrap}
+    .city-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px 28px;padding-bottom:58px}
+    .city-card{min-width:0;border-bottom:1px solid #202c3a;padding-bottom:22px;scroll-margin-top:24px}
+    .city-card[hidden]{display:none}
+    .city-link{display:block;border-radius:3px}
+    .art{position:relative;aspect-ratio:2.55;background:#080e19;overflow:hidden;border:1px solid #1e2b3c;border-radius:3px;transition:border-color .2s}
+    .city-link:hover .art{border-color:#506078}
+    canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+    .art-top{position:absolute;top:18px;left:19px;right:19px;display:flex;align-items:center;justify-content:space-between;pointer-events:none;font:9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.11em;color:#8396b1}
+    .art-top .city-code{color:var(--city-accent);letter-spacing:.18em}
+    .art-bottom{position:absolute;left:19px;bottom:14px;display:flex;align-items:center;gap:8px;font-size:8px;font-weight:500;letter-spacing:.19em;text-transform:uppercase;color:#688099;pointer-events:none}
+    .art-bottom:before{content:"";width:3px;height:3px;border-radius:50%;background:var(--city-accent)}
+    .city-caption{display:flex;align-items:flex-start;gap:16px;padding-top:18px}
+    .city-number{color:#506278;padding-top:8px;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em}
+    .city-text{flex:1;min-width:0}
+    h2{font-size:22px;font-weight:450;letter-spacing:-.025em;margin:0 0 7px}
+    .city-desc{font-size:11px;line-height:1.7;color:#8f9daf;margin:0}
+    .arrow{font-size:21px;color:#718ba8;padding-top:2px;transition:transform .2s,color .2s}
+    .city-link:hover .arrow{color:var(--city-accent);transform:translateX(4px)}
+    .city-info{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 0 0 32px;font-size:10px;color:#536980}
+    .city-info a{color:#839bb7;white-space:nowrap}
+    .city-info a:hover{color:#d2ddeb;text-decoration:underline}
+    .about{display:grid;grid-template-columns:1fr 1fr 1fr;gap:36px;border-top:1px solid #2c394b;padding:34px 0 45px}
+    .about h3{font-size:12px;font-weight:600;color:#c0ccdc;margin:0 0 11px}
+    .about p{font-size:12px;line-height:1.8;color:#8191a7;margin:0;max-width:330px}
+    .about .n{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:#57718e;margin:0 0 15px;letter-spacing:.13em}
+    footer{display:flex;justify-content:space-between;gap:24px;padding:24px 0 30px;border-top:1px solid var(--line);font-size:10px;line-height:1.8;color:#52677f}
+    footer a{color:#8d9eb4}
+    footer a:hover{color:#d8e3f1}
+    @media(min-width:1600px){.shell{width:min(1480px,calc(100% - 140px))}.city-grid{gap:46px 36px}}
+    @media(max-width:800px){.shell{width:calc(100% - 44px)}header{height:78px}.hero{gap:30px;padding:48px 0 40px;grid-template-columns:1fr}.hero-note{justify-self:start;padding-left:20px;max-width:540px}.hero-note p{font-size:13px;margin-bottom:12px}.city-grid{gap:30px 18px}.art{aspect-ratio:2.2}.art-top{left:12px;right:12px;top:12px;font-size:8px}.art-bottom{left:12px;font-size:7px;bottom:10px}.city-caption{gap:10px}h2{font-size:20px}.city-info{padding-left:25px;align-items:flex-start}.city-info span{max-width:140px;line-height:1.6}.about{gap:20px}.top-nav{gap:18px}.top-nav .resume{padding:9px 12px}}
+    @media(max-width:540px){.shell{width:calc(100% - 32px)}.brand{font-size:12px}.brand img{width:30px;height:30px}.top-nav{font-size:11px}.top-nav .tv-link{display:none}.hero{padding:40px 0 31px}.eyebrow{font-size:9px;margin-bottom:18px}h1{font-size:46px}.collection-bar{align-items:flex-start;gap:12px}.filter{font-size:10px;padding:7px 10px}.count{padding-top:9px;font-size:9px}.city-grid{grid-template-columns:1fr;gap:27px;padding-bottom:36px}.art{aspect-ratio:2.3}.art-top{font-size:9px;left:16px;right:16px;top:15px}.art-bottom{left:16px;bottom:12px}.city-caption{padding-top:15px}.city-info{padding-top:11px}.city-info span{max-width:none}.about{grid-template-columns:1fr;gap:27px;padding:28px 0 35px}.about .n{margin-bottom:8px}.about p{max-width:none}.about h3{margin-bottom:7px}footer{flex-direction:column;gap:8px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+  </style>
+</head>
+<body>
+  <a href="#city-grid" class="skip">Skip to city collection</a>
+  <div class="shell">
+    <header>
+      <a class="brand" href="index.html"><img src="brand/mark-on-dark.svg" alt=""><span>Transit Project<small>Projector collection</small></span></a>
+      <nav class="top-nav" aria-label="Main navigation"><a class="tv-link" href="tv.html">TV home</a><a class="resume" href="projector.html">Open projector <span aria-hidden="true">↗</span></a></nav>
+    </header>
+    <main>
+      <div class="hero">
+        <div><p class="eyebrow">The city, after dark</p><h1>A different city.<br><span>A different night.</span></h1></div>
+        <div class="hero-note"><p>Familiar silhouettes. A thousand small details. Choose a city and let its skyline become part of your room.</p><div class="meta">13 CITY PANORAMAS&nbsp; / &nbsp;WALL + CEILING<br>DESIGNED FOR THE DARK</div></div>
+      </div>
+      <div class="collection-bar">
+        <div class="filters" role="group" aria-label="Filter city collection"><button class="filter" data-region="all" aria-pressed="true">All cities</button><button class="filter" data-region="United States" aria-pressed="false">United States</button><button class="filter" data-region="Europe" aria-pressed="false">Europe</button></div>
+        <div class="count" aria-live="polite" id="city-count">13 PLACES TO GO</div>
+      </div>
+      <div class="city-grid" id="city-grid" aria-label="City projector pages"></div>
+      <noscript><p>The city collection needs JavaScript. You can still <a href="projector.html?city=dc&amp;surface=wall">open the Washington, DC projector</a>.</p></noscript>
+      <div class="about">
+        <div><p class="n">01 / YOUR WALL</p><h3>A window onto the city</h3><p>Detailed landmarks, neighborhood rooflines, and quiet reflections. Each panorama has a character of its own.</p></div>
+        <div><p class="n">02 / YOUR CEILING</p><h3>The sky above that city</h3><p>Switch to ceiling mode for a circular star chart calculated for the selected location. Turn north to match your room.</p></div>
+        <div><p class="n">03 / YOUR ROOM</p><h3>Make the projection fit</h3><p>Adjust brightness, mirror the picture, or align its corners. Press S inside a city to open the projector controls.</p></div>
+      </div>
+    </main>
+    <footer><span>TRANSIT PROJECT <span aria-hidden="true">/</span> CITY NIGHTS</span><span>Illustrated skylines, composed for atmosphere. <a href="tv.html">Return to TV home <span aria-hidden="true">↗</span></a></span></footer>
+  </div>
+  <script src="projector-cities.js?v=1"></script>
+  <script src="projector-landmarks-americas.js?v=1"></script>
+  <script src="projector-landmarks-europe.js?v=1"></script>
+  <script src="projector-scene.js?v=1"></script>
+  <script>
+    (function(){
+      'use strict';
+      const cities=window.TBProjectorCities.all;
+      const grid=document.getElementById('city-grid');
+      const views=[];
+      function text(tag,className,value){const el=document.createElement(tag);el.className=className;el.textContent=value;return el;}
+      cities.forEach((city,index)=>{
+        const card=document.createElement('article');card.className='city-card';card.id='city-'+city.id;card.dataset.region=city.region;card.style.setProperty('--city-accent',city.accent);
+        const link=document.createElement('a');link.className='city-link';link.href='projector.html?city='+encodeURIComponent(city.id)+'&surface=wall';link.setAttribute('aria-label','Open '+city.name+' projector');
+        const art=document.createElement('div');art.className='art';
+        const canvas=document.createElement('canvas');canvas.setAttribute('aria-hidden','true');art.appendChild(canvas);
+        const top=text('div','art-top','');top.append(text('span','city-code',city.short));top.append(text('span','coordinates',Math.abs(city.lat).toFixed(2)+'°N  '+Math.abs(city.lon).toFixed(2)+'°'+(city.lon<0?'W':'E')));art.appendChild(top);
+        art.append(text('div','art-bottom',city.water||'City panorama'));
+        const caption=document.createElement('div');caption.className='city-caption';caption.append(text('span','city-number',String(index+1).padStart(2,'0')));
+        const copy=document.createElement('div');copy.className='city-text';copy.append(text('h2','',city.name));copy.append(text('p','city-desc',city.description));caption.append(copy);const arrow=text('span','arrow','↗');arrow.setAttribute('aria-hidden','true');caption.append(arrow);
+        link.append(art,caption);card.append(link);
+        const info=document.createElement('div');info.className='city-info';info.append(text('span','',city.region));const board=text('a','','City departure board ↗');board.href=city.board;board.setAttribute('aria-label',city.name+' departure board');info.append(board);card.append(info);grid.append(card);views.push({canvas,art,city});
+      });
+      function paint(view){
+        const {canvas,art,city}=view;const width=art.clientWidth,height=art.clientHeight;if(!width||!height)return;
+        const dpr=Math.min(2,window.devicePixelRatio||1);canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+        const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+        const gradient=c.createLinearGradient(0,0,0,height);gradient.addColorStop(0,'#060c16');gradient.addColorStop(1,'#121d2d');c.fillStyle=gradient;c.fillRect(0,0,width,height);
+        let seed=city.id.split('').reduce((n,ch)=>n+ch.charCodeAt(0)*391,1729);function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
+        for(let n=0;n<46;n++){const x=random()*width,y=random()*height*.65,r=random()*.7+.25;c.fillStyle='rgba(176,196,221,'+(random()*.3+.15)+')';c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();}
+        if(window.TBProjectorScene)window.TBProjectorScene.draw(c,{city,width,height,baseline:height*.84,detail:true,labels:false,now:Date.now()});
+      }
+      let resizeTimer;
+      function paintAll(){views.forEach(paint);}
+      addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(paintAll,120);});
+      document.querySelectorAll('.filter').forEach(button=>button.addEventListener('click',()=>{
+        document.querySelectorAll('.filter').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
+        const region=button.dataset.region;let count=0;
+        document.querySelectorAll('.city-card').forEach(card=>{const show=region==='all'||(region==='Europe'?card.dataset.region!=='United States':card.dataset.region===region);card.hidden=!show;if(show)count++;});
+        document.getElementById('city-count').textContent=count+' PLACES TO GO';paintAll();
+      }));
+      paintAll();
+    })();
+  </script>
+</body>
+</html>

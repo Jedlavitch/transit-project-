@@ -24,7 +24,7 @@
               the roof. Next departures circle the rim.
 
     WALL      A window. Say which way the wall faces and the page renders the
-              view through it in true perspective (90 degree lens): the
+              view through it with a 90 degree lens: the
               horizon, the stars and aircraft in that direction, a skyline,
               and a track with the nearest Metro station's trains sliding in
               to it in real time.
@@ -35,14 +35,15 @@
   localStorage under tb.proj.*.
 
   Data (all optional — a missing source says so and steps aside):
-    Location   transitboard.loc (the boards' saved location), else Bethesda
+    Location   city preset, or a saved observer when opening the generic URL
     Aircraft   the operator's own feed, tb.adsbUrl — never a default (see
                adsbBase() in night.html for why)
     Metro      WMATA live predictions (transitboard.wmataKey / config.js)
     Weather    Open-Meteo, no key
     Sky        computed here: ~110 bright stars, moon + phase, sun for twilight
 
-  URL:  projector.html?surface=ceiling|wall&face=180&demo=1
+  URL:  projector.html?city=nyc&surface=ceiling|wall&face=180&demo=1
+        projector-cities.html lists every distinct city page.
         demo=1 fills an empty sky with sample aircraft and trains, labelled
         as a demo on screen.
 -->
@@ -55,6 +56,10 @@
 <script src="gate.js?v=3" defer></script>
 <script src="wake.js?v=1"></script>
 <script src="config.js?v=2"></script>
+<script src="projector-cities.js?v=1"></script>
+<script src="projector-landmarks-americas.js?v=1"></script>
+<script src="projector-landmarks-europe.js?v=1"></script>
+<script src="projector-scene.js?v=1"></script>
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden;color:#cfd6ff;
     font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
@@ -92,6 +97,10 @@
   #panel input[type=range]{width:100%}
   #panel .note{font-size:12px;color:#8c93b8;line-height:1.45}
   #panel .note b{color:#cfd6ff}
+  #panel select{width:100%;box-sizing:border-box;padding:10px;border:1px solid #46516d;border-radius:8px;background:#101729;color:#e2e8ff;font:inherit}
+  #panel a{color:#a9c3ef;text-underline-offset:3px}
+  #panel .city-links{display:flex;justify-content:space-between;gap:12px;margin-top:9px}
+  #panel select:focus-visible,#panel a:focus-visible{outline:2px solid #b7ceff;outline-offset:3px}
   #panel kbd{font:600 11px ui-monospace,monospace;border:1px solid #444a6a;border-radius:4px;padding:0 4px}
 </style>
 </head>
@@ -101,6 +110,10 @@
 
 <div id="panel" role="dialog" aria-label="Projector settings">
   <h2>Projector</h2>
+  <div class="row"><label class="lab" for="citySelect">City panorama</label>
+    <select id="citySelect" aria-label="Projector city"></select>
+    <div class="city-links note"><a href="projector-cities.html">Explore all 13 cities</a><a id="cityBoard">City board ↗</a></div>
+  </div>
   <div class="row"><div class="lab">Pointed at</div>
     <div class="seg" id="surfSeg">
       <button class="b" data-surf="ceiling">Ceiling</button>
@@ -118,6 +131,10 @@
       <button class="b" id="linesBtn">Constellations</button>
       <button class="b" id="labelsBtn">Labels</button>
     </div></div>
+  <div class="row" id="sceneRow"><div class="seg">
+    <button class="b" id="detailBtn">Fine detail</button>
+    <button class="b" id="motionBtn">Water shimmer</button>
+  </div><p class="note" id="sceneNote"></p></div>
   <div class="row"><div class="lab">Keystone</div>
     <div class="seg">
       <button class="b" id="ksBtn" title="K">Adjust corners</button>
@@ -141,30 +158,47 @@ const lsJSON = (k,d) => { try{ const v=JSON.parse(localStorage.getItem(k)||"null
 const Q = new URLSearchParams(location.search);
 const DEMO = Q.get("demo")==="1";
 
-const DEFAULT_LOC = { lat:38.9582, lon:-77.1080, label:"Bethesda, MD" };   // dc.html's default
-const loc = (()=>{ const s=lsJSON("transitboard.loc",null); return s&&s.lat ? s : DEFAULT_LOC; })();
+const cityData=window.TBProjectorCities;
+const savedLocation=lsJSON("transitboard.loc",null);
+const requestedCity=cityData.get(Q.get("city"));
+const city=requestedCity||cityData.get(lsGet("tb.proj.city",""))||cityData.nearest(savedLocation);
+// Explicit city pages use that city's observer, independently of the board's
+// location. Opening the original generic URL still honours a nearby observer.
+const useSavedObserver=!requestedCity&&cityData.validLocation(savedLocation)&&cityData.nearest(savedLocation).id===city.id;
+const loc=useSavedObserver?{...savedLocation,label:city.name}:{lat:city.lat,lon:city.lon,label:city.name};
+document.title=`${city.name} — Projector | Transit Project`;
+document.documentElement.dataset.city=city.id;
+lsSet("tb.proj.city",city.id);
 const wmataKey = lsGet("transitboard.wmataKey","") || ((window.TB_CONFIG||{}).wmataKey||"");
 const adsbUrl = (lsGet("tb.adsbUrl","")||"").trim().replace(/\/+$/,"");
 
 const RAIL_COLORS = { RD:"#BF0D3E", BL:"#009CDE", YL:"#FFD100", OR:"#ED8B00", GR:"#00B140", SV:"#919D9D" };
 const RAIL_NAMES  = { RD:"Red", BL:"Blue", YL:"Yellow", OR:"Orange", GR:"Green", SV:"Silver" };
+city.routes.forEach(r=>{if(!RAIL_COLORS[r[0]])RAIL_COLORS[r[0]]=r[2];});
 
 /* ---- settings ----------------------------------------------------------- */
+function finiteSetting(value,fallback){const n=Number(value);return Number.isFinite(n)?n:fallback;}
+function degrees(value,fallback){const n=finiteSetting(value,fallback);return ((n%360)+360)%360;}
+const savedKeystone=lsJSON("tb.proj.keystone",null);
+const validKeystone=Array.isArray(savedKeystone)&&savedKeystone.length===4&&savedKeystone.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite));
 const S = {
-  surface: (Q.get("surface")||lsGet("tb.proj.surface","ceiling"))==="wall" ? "wall" : "ceiling",
-  face:  +((Q.get("face")!=null ? Q.get("face") : lsGet("tb.proj.face","180"))) % 360,
-  north: +lsGet("tb.proj.north","0") % 360,
-  bright:+lsGet("tb.proj.bright","85"),
+  surface: (Q.get("surface")||(requestedCity?"wall":lsGet("tb.proj.surface","ceiling")))==="wall" ? "wall" : "ceiling",
+  face:  degrees(Q.get("face")!=null?Q.get("face"):lsGet("tb.proj.face","180"),180),
+  north: degrees(lsGet("tb.proj.north","0"),0),
+  bright:Math.max(25,Math.min(100,finiteSetting(lsGet("tb.proj.bright","85"),85))),
   mirror: lsGet("tb.proj.mirror","0")==="1",
   lines:  lsGet("tb.proj.lines","1")==="1",
   labels: lsGet("tb.proj.labels","1")==="1",
-  ks:     lsJSON("tb.proj.keystone", null)      // [[fx,fy] x4] fractions of the viewport
+  detail: lsGet("tb.proj.detail","1")==="1",
+  motion: lsGet("tb.proj.motion","1")==="1" && !matchMedia("(prefers-reduced-motion: reduce)").matches,
+  ks:     validKeystone?savedKeystone:null      // [[fx,fy] x4] fractions of the viewport
 };
 function save(){
   lsSet("tb.proj.surface", S.surface); lsSet("tb.proj.face", String(S.face));
   lsSet("tb.proj.north", String(S.north)); lsSet("tb.proj.bright", String(S.bright));
   lsSet("tb.proj.mirror", S.mirror?"1":"0"); lsSet("tb.proj.lines", S.lines?"1":"0");
   lsSet("tb.proj.labels", S.labels?"1":"0");
+  lsSet("tb.proj.detail", S.detail?"1":"0");lsSet("tb.proj.motion", S.motion?"1":"0");
   lsSet("tb.proj.keystone", S.ks ? JSON.stringify(S.ks) : null);
 }
 
@@ -410,6 +444,10 @@ async function nearStations(){
   return stations;
 }
 async function refreshTrains(){
+  if(DEMO){demoTrains();setSrc("Metro","demo",`${city.name} sample trains (demo)`);return;}
+  if(city.id!=="dc"){
+    setSrc("Transit","off","Live arrivals available on the city board");return;
+  }
   if(!wmataKey){
     if(DEMO){ demoTrains(); setSrc("Metro","demo","Sample trains (demo)"); }
     else setSrc("Metro","off","Metro: add a WMATA key on the DC board");
@@ -436,11 +474,11 @@ function demoTrains(){
     trains=trains.filter(t=>liveMin(t)>-0.6);
     if(trains.length>=4) return;
   }
-  const at=Date.now(), pick=[["RD","Shady Grove","1"],["RD","Glenmont","2"]];
-  stations=[{n:"Bethesda"}];
+  const at=Date.now(), pick=city.routes.map((r,i)=>[r[0],r[1],String(i+1)]);
+  stations=[{n:city.station}];
   while(trains.length<5){
     const p=pick[trains.length%2], last=trains.filter(t=>t.group===p[2]).reduce((m,t)=>Math.max(m,liveMin(t)),-2);
-    trains.push({line:p[0], dest:p[1], min:last+4+Math.random()*6, at, group:p[2], stop:"Bethesda"});
+    trains.push({line:p[0], dest:p[1], min:last+4+Math.random()*6, at, group:p[2], stop:city.station});
   }
   trains.sort((a,b)=>liveMin(a)-liveMin(b));
 }
@@ -456,25 +494,10 @@ async function refreshWx(){
   }catch(e){ setSrc("Weather","bad","Weather not answering"); }
 }
 
-/* ---- skyline (wall) ------------------------------------------------------
-   Seeded, so the same wall shows the same town every night. A few windows
-   are lit and now and then one goes out or comes on. */
-let skyline=[];
-function rng(seed){ let s=seed>>>0; return ()=>((s=Math.imul(s^(s>>>15),2246822507)^Math.imul(s^(s>>>13),3266489909))>>>0)/4294967296; }
-function buildSkyline(){
-  const r=rng(Math.round(loc.lat*1000)^Math.round(loc.lon*1000)^Math.round(S.face));
-  skyline=[]; let x=-10;
-  while(x<W+10){
-    const tree=r()<0.28, w=tree? 20+r()*50 : 30+r()*110, h=tree? 10+r()*Math.min(36,H*0.045) : 12+r()*Math.min(70,H*0.075)*(r()<0.12?1.9:1);
-    const b={x,w,h,tree,win:[]};
-    if(!tree){
-      const cols=Math.max(1,Math.floor(w/14)), rows=Math.max(1,Math.floor(h/16));
-      for(let i=0;i<cols;i++) for(let j=0;j<rows;j++) if(r()<0.16)
-        b.win.push({x:x+5+i*14, y:j*16+7, on:true, warm:r()<0.8, flip:r()*600000});
-    }
-    skyline.push(b); x+=w+(r()<0.3?r()*30:0);
-  }
-}
+/* ---- city skyline (wall) -------------------------------------------------
+   The cached panorama is an artistic composition, independent of the true
+   sky bearings. Its vector artwork stays stable when the wall turns. */
+function buildSkyline(){ window.TBProjectorScene.clear(); }
 
 /* ---- drawing ------------------------------------------------------------ */
 let shooting=null, nextShoot=Date.now()+20000+Math.random()*40000;
@@ -606,12 +629,23 @@ function drawShooting(now){
   cx.strokeStyle=g; cx.lineWidth=G.fs*0.12; cx.beginPath(); cx.moveTo(q.x,q.y); cx.lineTo(p.x,p.y); cx.stroke();
 }
 
+// Wall artwork deliberately reserves clear air ABOVE the tallest roofline.
+// Bearings and altitude readouts stay geographic; the wall's aircraft layer
+// compresses its vertical display space. Ceiling projection is unchanged.
+function projectAircraft(az,alt){
+  const point=proj(az,alt);
+  if(!point||G.kind!=="wall")return point;
+  const span=Math.min(H*.40,W*.24);
+  const clearHorizon=Math.max(G.fs*3,G.hy-span*1.12-G.fs*2.5);
+  return {x:point.x,y:point.y>0?point.y*clearHorizon/G.hy:point.y};
+}
+
 let featured=null;
 function drawPlanes(now){
   let best=null;
   /* A busy sky (DC has 40+ in range) piles low, far aircraft onto the horizon.
      Only the highest few get a label and full size; the rest are quiet dots. */
-  const rank=[...planes.values()].map(p=>{ const l=lookAngles(planeNow(p,now)); return {p, el:l.alt, on:l.alt>0&&onScreen(proj(l.az,l.alt))}; })
+  const rank=[...planes.values()].map(p=>{ const l=lookAngles(planeNow(p,now)); return {p, el:l.alt, on:l.alt>0&&onScreen(projectAircraft(l.az,l.alt))}; })
     .filter(x=>x.on).sort((a,b)=>b.el-a.el), loud=new Set(rank.slice(0,9).filter(x=>x.el>(G.kind==="wall"?1:4)).map(x=>x.p));
   for(const p of planes.values()){
     const pos=planeNow(p,now), la=lookAngles(pos);
@@ -619,24 +653,24 @@ function drawPlanes(now){
     const last=p.trail[p.trail.length-1];
     if(!last || now-last.t>2000){ p.trail.push({...pos,t:now}); if(p.trail.length>60) p.trail.shift(); }
     if(la.alt<0) continue;
-    const sp=proj(la.az,la.alt); if(!onScreen(sp)) continue;
+    const sp=projectAircraft(la.az,la.alt); if(!onScreen(sp)) continue;
     if(!best || la.alt>best.la.alt) best={p,la,pos};
     // contrail
     if(p.trail.length>1 && loud.has(p)){
       cx.lineCap="round";
       for(let i=1;i<p.trail.length;i++){
         const A=lookAngles(p.trail[i-1]), B=lookAngles(p.trail[i]);
-        const pa=A.alt>0&&proj(A.az,A.alt), pb=B.alt>0&&proj(B.az,B.alt);
+        const pa=A.alt>0&&projectAircraft(A.az,A.alt), pb=B.alt>0&&projectAircraft(B.az,B.alt);
         if(!pa||!pb||Math.hypot(pa.x-pb.x,pa.y-pb.y)>W/3) continue;
         const k=i/p.trail.length;
         cx.strokeStyle=`rgba(190,205,255,${0.25*k})`; cx.lineWidth=G.fs*0.1*(0.4+k);
         cx.beginPath(); cx.moveTo(pa.x,pa.y); cx.lineTo(pb.x,pb.y); cx.stroke();
       }
-      const L=p.trail[p.trail.length-1], A=lookAngles(L), pa=A.alt>0&&proj(A.az,A.alt);
+      const L=p.trail[p.trail.length-1], A=lookAngles(L), pa=A.alt>0&&projectAircraft(A.az,A.alt);
       if(pa){ cx.strokeStyle="rgba(190,205,255,.28)"; cx.beginPath(); cx.moveTo(pa.x,pa.y); cx.lineTo(sp.x,sp.y); cx.stroke(); }
     }
     // heading on screen: project a point a little ahead along the track
-    const ahead=lookAngles({...moveLL(pos,p.trk,400),alt:pos.alt}), ap=proj(ahead.az,ahead.alt);
+    const ahead=lookAngles({...moveLL(pos,p.trk,400),alt:pos.alt}), ap=projectAircraft(ahead.az,ahead.alt);
     const ang=ap?Math.atan2(ap.y-sp.y,ap.x-sp.x):0;
     const isLoud=loud.has(p);
     if(!isLoud){
@@ -750,21 +784,8 @@ function drawWallGround(now){
       cx.fillText(L,p.x,hy-fs*0.9); }
     else if(mid){ cx.fillStyle="rgba(124,156,255,.35)"; cx.font=`500 ${fs*0.5}px system-ui`; cx.fillText(az+"°",p.x,hy-fs*0.55); }
   }
-  // skyline silhouettes
-  for(const b of skyline){
-    cx.fillStyle="#04050a";
-    if(b.tree){ cx.beginPath(); cx.ellipse(b.x+b.w/2, hy-b.h*0.55, b.w/2, b.h*0.6, 0, 0, Math.PI*2); cx.fill();
-                cx.fillRect(b.x+b.w/2-2, hy-b.h*0.2, 4, b.h*0.2); }
-    else{ cx.fillRect(b.x, hy-b.h, b.w, b.h);
-      for(const w of b.win){
-        const on=((now+w.flip)%600000)>40000;                       // each window goes dark for 40 s in every 10 min
-        if(!on) continue;
-        cx.fillStyle=w.warm?"rgba(255,190,110,.55)":"rgba(170,200,255,.45)";
-        cx.fillRect(w.x, hy-b.h+w.y, 6, 7);
-      }
-    }
-  }
-  cx.strokeStyle="rgba(124,156,255,.25)"; cx.beginPath(); cx.moveTo(0,hy+0.5); cx.lineTo(W,hy+0.5); cx.stroke();
+  window.TBProjectorScene.draw(cx,{city,width:W,height:H,baseline:hy,
+    detail:S.detail,labels:S.labels,motion:S.motion,now});
 
   // the track
   const ty=hy+(H-hy)*0.40, sx=W/2, half=W*0.46, MAXM=20;
@@ -808,15 +829,28 @@ function drawWallGround(now){
 }
 
 /* Corner text: clock, weather, what is overhead, any problems. */
-function clock(d){ let h=d.getHours(), m=d.getMinutes(); const ap=h>=12?"PM":"AM"; h=((h+11)%12)+1; return `${h}:${String(m).padStart(2,"0")} ${ap}`; }
+const cityClock=new Intl.DateTimeFormat(undefined,{timeZone:city.tz,hour:"numeric",minute:"2-digit"});
+function clock(d){return cityClock.format(d);}
 function drawCorners(now){
   const d=new Date(now), fs=Math.max(12,Math.min(W,H)*0.024), pad=fs*1.2;
   cx.textBaseline="alphabetic";
   cx.textAlign="left"; cx.fillStyle="rgba(207,214,255,.85)"; cx.font=`300 ${fs*2.6}px system-ui`;
   cx.fillText(clock(d), pad, pad+fs*2.2);
   cx.font=`500 ${fs*0.8}px system-ui`; cx.fillStyle="rgba(207,214,255,.5)";
-  cx.fillText(d.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})+(wx?`  ·  ${Math.round(wx.temperature_2m)}°  ·  ${wx.cloud_cover}% cloud`:""), pad, pad+fs*3.4);
+  cx.fillText(d.toLocaleDateString(undefined,{timeZone:city.tz,weekday:"long",month:"long",day:"numeric"})+(wx?`  ·  ${Math.round(wx.temperature_2m)}°  ·  ${wx.cloud_cover}% cloud`:""), pad, pad+fs*3.4);
   if(G.kind==="wall"){ cx.fillText(`Facing ${["N","NE","E","SE","S","SW","W","NW"][Math.round(S.face/45)%8]} · ${Math.round(S.face)}°`, pad, pad+fs*4.5); }
+
+  // A quiet city identity, separate from the observed sky's compass bearings.
+  cx.textAlign="right";cx.fillStyle=city.accent;cx.font=`600 ${fs*.68}px system-ui`;
+  cx.fillText("TRANSIT PROJECT  /  "+city.short,W-pad, pad+fs*1.2);
+  cx.fillStyle="rgba(218,227,245,.82)";cx.font=`300 ${fs*1.65}px system-ui`;
+  cx.fillText(city.name,W-pad,pad+fs*3.0);
+  cx.fillStyle="rgba(207,214,255,.40)";cx.font=`500 ${fs*.62}px system-ui`;
+  cx.fillText(G.kind==="wall"?city.description:"The sky above "+city.name,W-pad,pad+fs*4.3);
+  if(G.kind==="wall"&&S.labels&&W>=680){
+    cx.fillStyle="rgba(207,214,255,.34)";cx.font=`500 ${fs*.56}px system-ui`;
+    cx.fillText("ILLUSTRATED PANORAMA · "+city.district,W-pad,H-pad-fs*3.8);
+  }
 
   // the highest aircraft gets the bottom-left caption
   cx.textAlign="left";
@@ -907,6 +941,13 @@ function toggleKs(on){ document.body.classList.toggle("ks-edit", on); $("#ks").c
 
 /* ---- settings panel ----------------------------------------------------- */
 const DIRS=["N","NE","E","SE","S","SW","W","NW"];
+cityData.all.forEach(c=>{const option=document.createElement("option");option.value=c.id;option.textContent=c.name;$("#citySelect").appendChild(option);});
+$("#citySelect").value=city.id;
+$("#cityBoard").href=city.board;
+$("#sceneNote").textContent="An illustrated city panorama. Stars and aircraft follow your observer location and wall direction; the skyline is an artistic composition. In wall mode, aircraft are lifted above the roofs for visibility.";
+$("#citySelect").onchange=e=>{
+  const url=new URL(location.href);url.searchParams.set("city",e.target.value);url.searchParams.set("surface",S.surface);url.searchParams.set("face",String(S.face));location.assign(url.href);
+};
 DIRS.forEach((d,i)=>{ const b=document.createElement("button"); b.className="b"; b.textContent=d; b.dataset.az=i*45;
   b.onclick=()=>{ S.face=i*45; changed(); }; $("#faceSeg").appendChild(b); });
 document.querySelectorAll("[data-surf]").forEach(b=>b.onclick=()=>{ S.surface=b.dataset.surf; changed(); });
@@ -916,35 +957,40 @@ $("#bright").oninput=e=>{ S.bright=+e.target.value; changed(); };
 $("#mirrorBtn").onclick=()=>{ S.mirror=!S.mirror; changed(); };
 $("#linesBtn").onclick=()=>{ S.lines=!S.lines; changed(); };
 $("#labelsBtn").onclick=()=>{ S.labels=!S.labels; changed(); };
+$("#detailBtn").onclick=()=>{S.detail=!S.detail;changed();};
+$("#motionBtn").onclick=()=>{S.motion=!S.motion;changed();};
 $("#ksBtn").onclick=()=>toggleKs(!document.body.classList.contains("ks-edit"));
 $("#ksReset").onclick=()=>{ S.ks=null; changed(); };
 $("#fsBtn").onclick=fullscreen;
 $("#gear").onclick=()=>$("#panel").classList.toggle("open");
 function fullscreen(){ const d=document; if(d.fullscreenElement) d.exitFullscreen&&d.exitFullscreen(); else (d.documentElement.requestFullscreen||function(){}).call(d.documentElement); }
-let lastFace=null;
 function changed(){
   save(); syncPanel(); applyKeystone(); placeHandles();
-  if(lastFace!==S.face){ lastFace=S.face; buildSkyline(); }
 }
 function syncPanel(){
   document.querySelectorAll("[data-surf]").forEach(b=>b.classList.toggle("on", b.dataset.surf===S.surface));
   document.querySelectorAll("#faceSeg .b").forEach(b=>b.classList.toggle("on", +b.dataset.az===S.face));
   $("#faceRow").style.display=S.surface==="wall"?"":"none";
+  $("#sceneRow").style.display=S.surface==="wall"?"":"none";
   $("#northRow").style.display=S.surface==="ceiling"?"":"none";
   $("#face").value=S.face; $("#faceVal").textContent=`${DIRS[Math.round(S.face/45)%8]} · ${S.face}°`;
   $("#north").value=S.north; $("#northVal").textContent=`${S.north}°`;
   $("#bright").value=S.bright; $("#brightVal").textContent=`${S.bright}%`;
+  [["mirrorBtn",S.mirror],["linesBtn",S.lines],["labelsBtn",S.labels],["detailBtn",S.detail],["motionBtn",S.motion]].forEach(([id,on])=>{const b=$("#"+id);b.classList.toggle("on",on);b.setAttribute("aria-pressed",String(on));});
   $("#mirrorBtn").classList.toggle("on",S.mirror); $("#linesBtn").classList.toggle("on",S.lines); $("#labelsBtn").classList.toggle("on",S.labels);
 }
 function renderStatus(){
   const el=$("#status"); if(!el) return;
-  el.innerHTML=`<b>${(loc.label||"Saved location")}</b> · ${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}<br>`+
-    Object.entries(src).map(([k,s])=>`${k}: ${s.state==="ok"?"✓":s.state==="demo"?"demo":s.state==="off"?"off":"✗"}${s.note?" — "+s.note:""}`).join("<br>");
+  el.textContent="";
+  const place=document.createElement("b");place.textContent=loc.label||city.name;el.append(place,` · ${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`,document.createElement("br"));
+  const info=document.createElement("span");
+  info.textContent=
+    Object.entries(src).map(([k,s])=>`${k}: ${s.state==="ok"?"✓":s.state==="demo"?"demo":s.state==="off"?"off":"✗"}${s.note?" — "+s.note:""}`).join("\n");info.style.whiteSpace="pre-line";el.appendChild(info);
 }
 
 /* Keys: built for a remote (arrows + OK) as much as a keyboard. */
 addEventListener("keydown",e=>{
-  if(e.target.tagName==="INPUT") return;
+  if(["INPUT","SELECT","TEXTAREA"].includes(e.target.tagName)) return;
   const k=e.key, ks=document.body.classList.contains("ks-edit");
   if(ks && /^[1-4]$/.test(k)){ ksSel=+k-1; placeHandles(); return; }
   if(ks && k.startsWith("Arrow")){
@@ -973,10 +1019,10 @@ addEventListener("pointermove",wake); addEventListener("keydown",wake); wake();
 addEventListener("resize",resize);
 
 /* ---- go ------------------------------------------------------------------ */
-syncPanel(); resize(); lastFace=S.face; renderStatus();
+syncPanel(); resize(); renderStatus();
 requestAnimationFrame(frame);
 refreshPlanes(); setInterval(refreshPlanes, 10000);
-refreshTrains(); setInterval(refreshTrains, DEMO&&!wmataKey?5000:25000);
+refreshTrains(); setInterval(refreshTrains, DEMO?5000:25000);
 refreshWx(); setInterval(refreshWx, 15*60000);
 </script>
 </body>
