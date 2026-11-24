@@ -55,6 +55,7 @@
     var link = document.getElementById(linkId);
     var title = document.getElementById(titleId);
     var action = actionId ? document.getElementById(actionId) : null;
+    var livery = document.getElementById('previewLivery');
     var choices = document.querySelectorAll('[' + attribute + ']');
     if (!image || !link || !choices.length) return;
 
@@ -73,6 +74,7 @@
         action.setAttribute('aria-label', selected.label);
       }
       if (title) title.textContent = selected.title;
+      if (livery) livery.hidden = view !== 'sky';
     }
 
     choices.forEach(function (button) {
