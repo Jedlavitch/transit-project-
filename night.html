@@ -26,7 +26,7 @@
   if(v==="glass"||(v!=="starfield"&&(!y||y==="glass")))document.documentElement.setAttribute("data-sky-glass","");
   if(localStorage.getItem("nightmode.dark")==="1")document.documentElement.setAttribute("data-sky-dark","");}catch(e){
   document.documentElement.setAttribute("data-sky-glass","");}})();</script>
-<script src="settings-ui.js?v=19" defer></script>
+<script src="settings-ui.js?v=20" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
      page's own inline code had already begun fetching. -->

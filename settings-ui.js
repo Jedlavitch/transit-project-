@@ -769,25 +769,40 @@
     var l = document.querySelectorAll("[" + SNAP + "]");
     for (var i = 0; i < l.length; i++) { l[i].style.removeProperty("max-height"); l[i].removeAttribute(SNAP); }
   }
+  /* The re-measure runs with transitions off. .list animates max-height
+     (0.26s), so clearing the cap and setting it back -- even to the same
+     value, in the same task -- started two animations every pass, and on a
+     phone, where a box grows with its list, the box and everything under
+     it bounced about 20px every second. With transitions off, clearing and
+     restoring the cap in one task never reaches the screen. */
   function snapList(card) {
     var list = card.querySelector(".list");
     if (!list || list.hasAttribute("data-scroll-list") || list.scrollTop > 0) return;
-    if (list.hasAttribute(SNAP)) { list.style.removeProperty("max-height"); list.removeAttribute(SNAP); }
+    var before = list.hasAttribute(SNAP);
+    list.style.setProperty("transition", "none", "important");
+    if (before) list.style.removeProperty("max-height");
+    var cap = "";
     var lb = list.getBoundingClientRect();
-    if (!lb.height || list.scrollHeight <= list.clientHeight + 1) return;   // nothing overflows
-    var scale = lb.height / (list.offsetHeight || lb.height) || 1, fit = lb.top;
-    var items = list.children;
-    for (var i = 0; i < items.length; i++) {
-      var r = items[i].getBoundingClientRect();
-      if (!r.height) continue;
-      if (r.bottom <= lb.bottom + 1) fit = Math.max(fit, r.bottom); else break;
+    if (lb.height && list.scrollHeight > list.clientHeight + 1) {          // something overflows
+      var scale = lb.height / (list.offsetHeight || lb.height) || 1, fit = lb.top;
+      var items = list.children;
+      for (var i = 0; i < items.length; i++) {
+        var r = items[i].getBoundingClientRect();
+        if (!r.height) continue;
+        if (r.bottom <= lb.bottom + 1) fit = Math.max(fit, r.bottom); else break;
+      }
+      if (fit > lb.top && fit < lb.bottom - 1) cap = Math.floor((fit - lb.top) / scale) + "px";
     }
-    if (fit > lb.top && fit < lb.bottom - 1) {
+    if (cap) {
       /* important: the fitter sizes lists with !important rules, which a
          plain inline value does not beat. */
-      list.style.setProperty("max-height", Math.floor((fit - lb.top) / scale) + "px", "important");
+      list.style.setProperty("max-height", cap, "important");
       list.setAttribute(SNAP, "1");
+    } else if (before) {
+      list.removeAttribute(SNAP);
     }
+    void list.offsetHeight;                 // settle at the new value before animations return
+    list.style.removeProperty("transition");
   }
   function trimKids(card, head, bottom) {
     var kids = card.children;
