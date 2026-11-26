@@ -58,7 +58,15 @@
     return Math.round((new Date(y, m - 1, d) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
   }
 
+  /* Other scripts that want each timetable as it arrives (holiday.js) take it
+     from here rather than wrapping fetch again and parsing a 12 MB file twice.
+     Nothing is replayed to late subscribers: keeping every parsed bundle for
+     that would double the memory a board holds, so subscribe before boot. */
+  const listeners = [];
+  function onBundle(fn) { if (typeof fn === "function") listeners.push(fn); }
+
   function note(name, bundle) {
+    listeners.forEach(fn => { try { fn(name, bundle); } catch (_) {} });
     try {
       const end = coverageEnd(bundle);
       if (!end) return;                       // not a schedule bundle after all
@@ -107,5 +115,6 @@
     report: () => JSON.parse(JSON.stringify(seen)),
     expired: () => Object.keys(seen).filter(k => seen[k].expired),
     coverageEnd: coverageEnd,
+    onBundle: onBundle,
   };
 })();

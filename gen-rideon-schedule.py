@@ -81,8 +81,11 @@ def main():
                              "start": c["start_date"], "end": c["end_date"]} for c in rows(zf, "calendar.txt")}
     exc = {}
     for c in rows(zf, "calendar_dates.txt"):
-        e = exc.setdefault(c["date"], {"add": [], "rem": []})
-        (e["add"] if c["exception_type"] == "1" else e["rem"]).append(c["service_id"])
+        # Ride On's calendar_dates.txt pads service_id (" 3"), which matches no
+        # service in calendar.txt or trips.txt -- so every holiday exception was
+        # silently ignored and Thanksgiving drew a weekday timetable. Strip it.
+        e = exc.setdefault(c["date"].strip(), {"add": [], "rem": []})
+        (e["add"] if c["exception_type"].strip() == "1" else e["rem"]).append(c["service_id"].strip())
 
     out = {"generated": datetime.date.today().isoformat(),
            "note": f"Ride On GTFS ({GTFS_URL}), " + ("all routes" if ROUTES is None else f"routes {sorted(ROUTES)}"),

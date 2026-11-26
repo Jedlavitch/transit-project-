@@ -54,6 +54,7 @@ window.TB_CONFIG = {
   amsLiveUrl:   "",       // ovapi-worker.js
   romeLiveUrl:  "",       // rome-worker.js
   chicagoLiveUrl: "https://cta.jacklemonade2.workers.dev",  // cta-worker.js (Train Tracker key set; Bus Tracker key still to add)
+  flightNotesUrl: "",     // flight-notes-worker.js — Claude-written delay notes on flights (needs an Anthropic API key in the Worker)
 
   /* ---- shared spotter feed --------------------------------------------- */
   spotBlob:     "",       // share code from the phone app

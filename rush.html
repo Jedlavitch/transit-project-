@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="apple-touch-icon" href="brand/icon-dark-180.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#081020" />
+<title>Holiday Travel Rush — Transit Project</title>
+<!--
+  The national picture for the end-of-year travel season, on one screen:
+  which hub airports the FAA has a problem at right now, and how late Amtrak
+  is running, worst first. Everything here is live and needs no key:
+    - faa-delays.json, the FAA airport status the deploy republishes every 15 min
+    - api-v3.amtraker.com, every Amtrak train with scheduled and actual times
+  SEASONAL, like holiday.js: 1 Nov - 1 Jan only (owner's choice). Outside that
+  window the page says when it is back instead of showing anything.
+-->
+<link rel="stylesheet" href="theme.css?v=35" />
+<script src="polyfills.js?v=1"></script>
+<script src="feed-backoff.js?v=1"></script>
+<script src="paywall.js"></script>
+<script src="license.js?v=3" defer></script>
+<script src="kiosk-reload.js?v=2" defer></script>
+<script src="keepalive.js?v=2" defer></script>
+<script src="gate.js?v=3" defer></script>
+<script src="config.js?v=2"></script>
+<script src="delays.js?v=2"></script>
+<script src="licence-proxy.js?v=1"></script>
+<script>(function(){try{var t=localStorage.getItem("tb.theme")||localStorage.getItem("transitboard.theme");if(t&&t!=="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);
+    font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1500px;margin:0 auto;padding:18px 22px 28px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header .home{display:flex;flex:none}
+  header h1{margin:0;font-size:clamp(20px,2.4vw,30px);letter-spacing:-.01em}
+  header h1 small{display:block;font-size:.5em;font-weight:500;color:var(--muted);letter-spacing:0}
+  header .clock{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums}
+  header .clock b{display:block;font-size:clamp(20px,2.2vw,30px)}
+  header .clock span{color:var(--muted);font-size:13px}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:18px 0}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+  .stat .k{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .stat .v{font-size:clamp(26px,3vw,40px);font-weight:750;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:2px}
+  .stat .s{font-size:13px;color:var(--muted)}
+  .v.bad{color:var(--late)} .v.ok{color:var(--good)} .v.warn{color:var(--delay-mid,#ff9f6b)}
+
+  .cols{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start}
+  @media (max-width:980px){.cols{grid-template-columns:1fr}}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px 16px;min-width:0}
+  section h2{margin:0 0 4px;font-size:17px}
+  section .lead{margin:0 0 12px;color:var(--muted);font-size:13px}
+
+  .airports{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:8px}
+  .ap{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel2);min-width:0}
+  .ap .c{font-weight:800;font-size:18px;letter-spacing:.02em}
+  .ap .n{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ap .st{font-size:13px;margin-top:3px}
+  .ap.ok .st{color:var(--good)}
+  .ap.delay{border-color:color-mix(in srgb,var(--line) 40%,#ffb454)}
+  .ap.delay .st{color:var(--delay-mid,#ff9f6b)}
+  .ap.major{border-color:var(--late);background:color-mix(in srgb,var(--panel2) 85%,var(--late))}
+  .ap.major .st{color:var(--late);font-weight:650}
+  .ap.ok{opacity:.72}
+  .elsewhere{margin-top:12px;font-size:13px;color:var(--muted)}
+  .elsewhere b{color:var(--text)}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;font-weight:600;padding:4px 6px}
+  td{padding:7px 6px;border-top:1px solid var(--line);vertical-align:top}
+  td.num,th.num{text-align:right}
+  .sub{font-size:12px;color:var(--muted)}
+  .late{display:inline-block;min-width:3.6em;text-align:right;font-weight:700}
+  h3{margin:16px 0 6px;font-size:14px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+  .note{margin-top:16px;color:var(--muted);font-size:12.5px}
+  .empty{color:var(--muted);padding:10px 0}
+  .offseason{max-width:560px;margin:14vh auto;text-align:center}
+  .offseason h1{font-size:28px;margin:0 0 8px}
+  .offseason p{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap" id="page">
+  <header>
+    <a class="home" href="index.html" title="Transit Project — all cities"><img src="brand/mark-small.svg" alt="" width="30" height="30"></a>
+    <h1>Holiday Travel Rush <small id="season">US airports &amp; Amtrak, live</small></h1>
+    <div class="clock"><b id="clock">--:--</b><span id="updated">loading…</span></div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Hub airports with problems</div><div class="v" id="sProb">—</div><div class="s" id="sProbSub">of the 33 busiest</div></div>
+    <div class="stat"><div class="k">Ground stops &amp; delay programs</div><div class="v" id="sStops">—</div><div class="s" id="sStopsSub">anywhere in the US</div></div>
+    <div class="stat"><div class="k">Amtrak on time</div><div class="v" id="sOnTime">—</div><div class="s" id="sOnTimeSub">within 5 minutes</div></div>
+    <div class="stat"><div class="k">Worst Amtrak delay</div><div class="v" id="sWorst">—</div><div class="s" id="sWorstSub">—</div></div>
+  </div>
+
+  <div class="cols">
+    <section>
+      <h2>Airports</h2>
+      <p class="lead">The FAA's own status for each airport, problems first. This is airport-wide, not your flight: check with your airline before you leave.</p>
+      <div class="airports" id="airports"><div class="empty">Loading FAA status…</div></div>
+      <div class="elsewhere" id="elsewhere"></div>
+    </section>
+    <section>
+      <h2>Amtrak</h2>
+      <p class="lead">Every Amtrak train running now, by route, most late first. Lateness is worked out from each train's scheduled and actual times.</p>
+      <table id="routes"><thead><tr><th>Route</th><th class="num">Trains</th><th class="num">Typical</th><th class="num">Worst</th></tr></thead><tbody><tr><td colspan="4" class="empty">Loading trains…</td></tr></tbody></table>
+      <h3>Most delayed trains</h3>
+      <table id="worst"><tbody><tr><td class="empty">—</td></tr></tbody></table>
+    </section>
+  </div>
+  <p class="note">FAA status refreshes about every 15 minutes, Amtrak every minute. Holiday schedules for local transit show on each city board. <a href="index.html">All boards ›</a></p>
+</div>
+
+<script>
+"use strict";
+/* Same season as holiday.js: 1 Nov - 1 Jan. */
+const SEASON_FROM="1101", SEASON_TO="0101";
+const TZ="America/New_York";
+function etParts(d){ const p={}; new Intl.DateTimeFormat("en-CA",{timeZone:TZ,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).formatToParts(d||new Date()).forEach(x=>p[x.type]=x.value); return p; }
+function inSeason(){ const p=etParts(); const md=p.month+p.day; return md>=SEASON_FROM || md<=SEASON_TO; }
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function clock12(d){ return d.toLocaleTimeString("en-US",{timeZone:TZ,hour:"numeric",minute:"2-digit"}); }
+
+if(!inSeason()){
+  $("#page").innerHTML='<div class="offseason"><h1>The holiday rush board is resting</h1>'+
+    '<p>It runs from November 1 through New Year\'s Day, for the end-of-year travel season. See you in November.</p>'+
+    '<p><a href="index.html">Back to the live boards ›</a></p></div>';
+} else boot();
+
+function boot(){
+  const tick=()=>{ $("#clock").textContent=clock12(new Date()); }; tick(); setInterval(tick,10000);
+  loadFaa(); setInterval(loadFaa,120000);
+  loadAmtrak(); setInterval(loadAmtrak,60000);
+}
+
+/* ---------- airports ---------- */
+const HUBS=[["ATL","Atlanta"],["ORD","Chicago O'Hare"],["DFW","Dallas–Fort Worth"],["DEN","Denver"],["LAX","Los Angeles"],
+  ["JFK","New York JFK"],["LGA","New York LaGuardia"],["EWR","Newark"],["BOS","Boston"],["PHL","Philadelphia"],
+  ["DCA","Washington National"],["IAD","Washington Dulles"],["BWI","Baltimore"],["CLT","Charlotte"],["MIA","Miami"],
+  ["MCO","Orlando"],["FLL","Fort Lauderdale"],["SEA","Seattle"],["SFO","San Francisco"],["LAS","Las Vegas"],
+  ["PHX","Phoenix"],["IAH","Houston"],["MSP","Minneapolis"],["DTW","Detroit"],["SLC","Salt Lake City"],
+  ["SAN","San Diego"],["TPA","Tampa"],["MDW","Chicago Midway"],["BNA","Nashville"],["AUS","Austin"],
+  ["PDX","Portland"],["STL","St. Louis"],["RDU","Raleigh–Durham"]];
+const HUB_SET=new Set(HUBS.map(h=>h[0]));
+/* FAA reasons are written in traffic-management shorthand ("TM Initiatives:MIT:WX"). */
+function plainReason(r){
+  const s=String(r||"").toUpperCase(), out=[];
+  if(/TSTM|THUNDER/.test(s)) out.push("thunderstorms");
+  else if(/SNOW|ICE|DEICING/.test(s)) out.push("snow/ice");
+  else if(/LOW ?CIG|CEILING|FOG|VIS/.test(s)) out.push("low clouds");
+  else if(/WIND|WND/.test(s)) out.push("wind");
+  else if(/WX|WEATHER/.test(s)) out.push("weather");
+  if(/VOL|VOLUME|COMPACTED/.test(s)) out.push("traffic volume");
+  if(/RWY|RUNWAY/.test(s)) out.push("runway work");
+  if(/EQUIP|EQ\b|OUTAGE/.test(s)) out.push("equipment");
+  if(/STAFF/.test(s)) out.push("staffing");
+  return out.join(", ");
+}
+const RANK={ground_stop:4,closure:4,ground_delay:3,delay:2};
+function statusOf(list){
+  /* Worst entry wins the tile; ties keep the first. */
+  let best=null;
+  (list||[]).forEach(e=>{ if(!best || (RANK[e.kind]||1)>(RANK[best.kind]||1)) best=e; });
+  return best;
+}
+function tileText(e){
+  const why=plainReason(e.reason);
+  if(e.kind==="ground_stop") return "Ground stop"+(why?" · "+why:"");
+  if(e.kind==="closure") return "Closed"+(e.text&&/reopens/.test(e.text)?" · "+e.text.split("—").pop().trim():"");
+  if(e.kind==="ground_delay") return "Ground delay"+(e.avg?" · avg "+e.avg.replace(/ minutes?/," min"):"")+(why?" · "+why:"");
+  /* "Departure delays 16 minutes–30 minutes" -> "Departures 16–30 min" */
+  const m=/(Arrival|Departure) delays (\d+)(?: minutes?)?(?:\s*[–-]\s*(\d+))?/.exec(e.text||"");
+  return (m?(m[1]==="Arrival"?"Arrivals ":"Departures ")+m[2]+(m[3]?"–"+m[3]:"")+" min":"Delays")+(why?" · "+why:"");
+}
+async function loadFaa(){
+  let d=null;
+  const tries=["faa-delays.json?t="+Math.floor(Date.now()/120000)];
+  try{ const u=(localStorage.getItem("tb.faaUrl")||"").trim().replace(/\/+$/,""); if(u) tries.push(u+"/delays"); }catch(_){}
+  for(const src of tries){ try{ const r=await fetch(src,{cache:"no-cache"}); if(r.ok){ const j=await r.json(); if(j&&j.ok&&j.airports){ d=j; break; } } }catch(_){} }
+  if(!d){ $("#airports").innerHTML='<div class="empty">FAA status is unavailable right now.</div>'; return; }
+  const ap=d.airports||{};
+  const tiles=HUBS.map(([c,n])=>{ const e=statusOf(ap[c]); return {c,n,e,rank:e?(RANK[e.kind]||1):0}; })
+    .sort((a,b)=>b.rank-a.rank || HUBS.findIndex(h=>h[0]===a.c)-HUBS.findIndex(h=>h[0]===b.c));
+  $("#airports").innerHTML=tiles.map(t=>{
+    const cls=!t.e?"ok":t.rank>=3?"major":"delay";
+    return `<div class="ap ${cls}" title="${esc(t.e?(t.e.text||"")+(t.e.reason?"\n"+t.e.reason:""):"No FAA delays reported")}">`+
+      `<div class="c">${t.c}</div><div class="n">${esc(t.n)}</div><div class="st">${esc(t.e?tileText(t.e):"Normal")}</div></div>`;
+  }).join("");
+  const prob=tiles.filter(t=>t.e).length;
+  $("#sProb").textContent=prob; $("#sProb").className="v "+(prob?(tiles.some(t=>t.rank>=3)?"bad":"warn"):"ok");
+  $("#sProbSub").textContent=prob?("of the 33 busiest · "+tiles.filter(t=>t.e).slice(0,4).map(t=>t.c).join(", ")):"of the 33 busiest — all normal";
+  const majors=Object.keys(ap).filter(c=>(ap[c]||[]).some(e=>(RANK[e.kind]||0)>=3));
+  $("#sStops").textContent=majors.length; $("#sStops").className="v "+(majors.length?"bad":"ok");
+  $("#sStopsSub").textContent=majors.length?majors.slice(0,6).join(", "):"anywhere in the US";
+  const other=Object.keys(ap).filter(c=>!HUB_SET.has(c)).map(c=>({c,e:statusOf(ap[c])})).filter(x=>x.e).sort((a,b)=>(RANK[b.e.kind]||1)-(RANK[a.e.kind]||1));
+  $("#elsewhere").innerHTML=other.length?"Elsewhere: "+other.slice(0,12).map(x=>`<b>${esc(x.c)}</b> ${esc(tileText(x.e).toLowerCase())}`).join(" · "):"";
+  const when=d.fetched?new Date(d.fetched):null;
+  window.__faaAt=when; paintUpdated();
+}
+
+/* ---------- Amtrak ---------- */
+/* A train's lateness now: at its next stop (amtraker's estimate), else at the
+   stop it last left. amtrakLateMin() is the boards' shared rule (delays.js). */
+function trainLate(t){
+  const st=t.stations||[];
+  const next=st.find(s=>s.status==="Enroute"||s.status==="Station");
+  let m=null;
+  if(next && typeof amtrakLateMin==="function") m=amtrakLateMin(next);
+  if(m==null){ const gone=st.filter(s=>s.status==="Departed").pop(); if(gone&&typeof amtrakLateMin==="function") m=amtrakLateMin(gone); }
+  if(m==null || m<-30 || m>720) return null;     // feed glitches, not delays
+  return { min:Math.max(0,m), next: next?next.name:"" };
+}
+function lateChip(m){
+  const info = typeof liveLateInfo==="function" ? liveLateInfo(m, 600) : null;
+  const txt = m<=0 ? "on time" : "+"+(m>=60?Math.floor(m/60)+"h "+String(m%60).padStart(2,"0"):m)+(m>=60?"":" min");
+  return `<span class="late ${info?info.cls:""}">${txt}</span>`;
+}
+const median=a=>{ if(!a.length) return null; const s=a.slice().sort((x,y)=>x-y), i=s.length>>1; return s.length%2?s[i]:Math.round((s[i-1]+s[i])/2); };
+async function loadAmtrak(){
+  let d;
+  try{ const r=await fetch("https://api-v3.amtraker.com/v3/trains",{cache:"no-cache"}); if(!r.ok) throw 0; d=await r.json(); }
+  catch(_){ if(!window.__amAt) $("#routes tbody").innerHTML='<tr><td colspan="4" class="empty">Amtrak data is unavailable right now.</td></tr>'; return; }
+  const trains=[];
+  Object.values(d||{}).forEach(list=>(list||[]).forEach(t=>{
+    if(t.trainState!=="Active" || t.provider && t.provider!=="Amtrak") return;
+    const l=trainLate(t); if(!l) return;
+    trains.push({num:t.trainNum, route:t.routeName||"Amtrak", from:t.origName, to:t.destName, ...l});
+  }));
+  const byRoute={};
+  trains.forEach(t=>(byRoute[t.route]=byRoute[t.route]||[]).push(t));
+  const rows=Object.keys(byRoute).map(r=>{ const ts=byRoute[r], mins=ts.map(t=>t.min); const w=ts.slice().sort((a,b)=>b.min-a.min)[0];
+    return {r, n:ts.length, med:median(mins), worst:w}; }).sort((a,b)=>b.med-a.med || b.worst.min-a.worst.min);
+  $("#routes tbody").innerHTML=rows.length?rows.map(x=>`<tr><td>${esc(x.r)}</td><td class="num">${x.n}</td><td class="num">${lateChip(x.med)}</td>`+
+    `<td class="num">${lateChip(x.worst.min)}<div class="sub">#${esc(x.worst.num)}</div></td></tr>`).join(""):'<tr><td colspan="4" class="empty">No trains running.</td></tr>';
+  const worst=trains.slice().sort((a,b)=>b.min-a.min).filter(t=>t.min>=15).slice(0,8);
+  $("#worst tbody").innerHTML=worst.length?worst.map(t=>`<tr><td><b>#${esc(t.num)}</b> ${esc(t.route)}<div class="sub">${esc(t.from)} → ${esc(t.to)}${t.next?" · next: "+esc(t.next):""}</div></td><td class="num">${lateChip(t.min)}</td></tr>`).join("")
+    :'<tr><td class="empty">No train is more than 15 minutes late.</td></tr>';
+  const on=trains.filter(t=>t.min<=5).length, pct=trains.length?Math.round(100*on/trains.length):null;
+  $("#sOnTime").textContent=pct==null?"—":pct+"%"; $("#sOnTime").className="v "+(pct==null?"":pct>=80?"ok":pct>=60?"warn":"bad");
+  $("#sOnTimeSub").textContent=trains.length?`${on} of ${trains.length} trains within 5 minutes`:"within 5 minutes";
+  const w=trains.slice().sort((a,b)=>b.min-a.min)[0];
+  if(w){ $("#sWorst").innerHTML=lateChip(w.min); $("#sWorstSub").textContent=`#${w.num} ${w.route}`; }
+  window.__amAt=new Date(); paintUpdated();
+}
+function paintUpdated(){
+  const parts=[];
+  if(window.__faaAt && !isNaN(window.__faaAt)) parts.push("FAA "+clock12(window.__faaAt));
+  if(window.__amAt) parts.push("Amtrak "+clock12(window.__amAt));
+  $("#updated").textContent=parts.length?"as of "+parts.join(" · "):"loading…";
+}
+</script>
+</body>
+</html>
