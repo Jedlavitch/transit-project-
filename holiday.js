@@ -314,7 +314,8 @@
   function whenText(d) {
     var dt = dateOf(d.ymd), wd = DAYS[dowOf(d.ymd)].slice(0, 3),
         md = dt.toLocaleDateString(/^Europe\//.test(tz()) ? "en-GB" : "en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-    return (d.offset === 0 ? "today" : d.offset === 1 ? "tomorrow" : wd) + " · " + wd + " " + md;
+    /* "tomorrow · Thu Nov 26", but two days out the weekday already says it: "Fri Nov 27". */
+    return (d.offset === 0 ? "today · " : d.offset === 1 ? "tomorrow · " : "") + wd + " " + md;
   }
 
   function dismissed(key) { try { return localStorage.getItem(DISMISS_KEY) === key; } catch (_) { return false; } }
