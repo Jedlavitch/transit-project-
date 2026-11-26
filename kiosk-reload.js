@@ -139,9 +139,96 @@
       if (!ok) return;
       if (!due()) return;                 // something changed during the probe
       set(LS_LAST, String(Date.now()));
-      try { location.reload(); } catch (_) {}
+      freshStart();
     });
   }
+
+  /* ---- full screen: the reload must not be the thing that ends it ----
+     A page reload always ends a Fullscreen-API session, and nothing can
+     re-enter one without a tap. On a wall display that is "the board quietly
+     drops out of full screen some night and stays out" -- seen on a Facebook
+     Portal. So while full screen we restart the board INSIDE a fresh
+     same-origin iframe (the cityswitch.js shell trick): the outer document,
+     which owns full screen, survives; the board inside is brand new. Inside a
+     shell already, location.reload() only reloads the frame, which is fine. */
+  function fsDoc() {
+    try { if (window.top && window.top !== window && window.top.document) return window.top.document; } catch (_) {}
+    return document;
+  }
+  function fsOn() { var d = fsDoc(); return !!(d.fullscreenElement || d.webkitFullscreenElement); }
+  /* inside OUR shell iframe (same origin), as opposed to merely being framed
+     by somebody else's page, which for these purposes is the same as top */
+  function inShell() { return fsDoc() !== document; }
+  function freshStart() {
+    if (inShell() || !fsOn()) { try { location.reload(); } catch (_) {} return; }
+    try {
+      /* silence the old board so it does not keep fetching under the new one */
+      try { var i = window.setInterval(function () {}, 1e9); while (i > 0) { clearInterval(i); clearTimeout(i); i--; } } catch (_) {}
+      try { var r = window.requestAnimationFrame(function () {}); while (r > 0) { cancelAnimationFrame(r); r--; } } catch (_) {}
+      var old = document.getElementById("cityShell");
+      var f = document.createElement("iframe");
+      f.id = "cityShell";
+      f.allow = "fullscreen"; f.allowFullscreen = true;
+      f.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;width:100vw;height:100vh;border:0;z-index:2147483000;background:#081020";
+      f.onload = function () {
+        /* and drop the old board's DOM, which is most of what a reload frees */
+        var kids = [].slice.call(document.body.children);
+        for (var k = 0; k < kids.length; k++) if (kids[k] !== f) { try { document.body.removeChild(kids[k]); } catch (_) {} }
+        try { f.contentWindow.focus(); } catch (_) {}
+      };
+      f.src = location.href.replace(/[?&]tbping=\d+/, "");
+      if (old) old.parentNode.removeChild(old);
+      document.body.appendChild(f);
+    } catch (_) { try { location.reload(); } catch (__) {} }
+  }
+
+  /* ---- full screen: come back when the device takes it away ----
+     A Portal (and other kiosk browsers) also drop full screen by themselves:
+     the screen sleeps, ambient mode takes over, the app is backgrounded.
+     Nothing in the page did it, so nothing put it back. Now: an exit that
+     nobody asked for -- no tap or key on the board in the moment before it --
+     is remembered, and full screen is re-entered at once where the browser
+     allows it, otherwise on the very next tap. An exit somebody DID ask for
+     (the board's exit button, F, Esc) is respected and forgotten. Remembered
+     in sessionStorage so it also survives a reload in the same tab. */
+  var FS_KEY = "tb.kioskFSWanted";
+  var lastPress = 0, wasFs = fsOn();
+  function onPress() { lastPress = Date.now(); }
+  function wantFs() { try { return sessionStorage.getItem(FS_KEY) === "1"; } catch (_) { return false; } }
+  function setWant(on) { try { if (on) sessionStorage.setItem(FS_KEY, "1"); else sessionStorage.removeItem(FS_KEY); } catch (_) {} }
+  function reenter() {
+    if (!wantFs() || fsOn()) return;
+    /* the shell's outer page stands down: the board inside it owns this */
+    if (!inShell() && document.getElementById("cityShell")) return;
+    var el = fsDoc().documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) return;
+    try { var p = req.call(el); if (p && p.catch) p.catch(function () {}); } catch (_) {}
+  }
+  function onFsChange() {
+    if (!inShell() && document.getElementById("cityShell")) return;
+    var on = fsOn();
+    if (on) setWant(true);
+    else if (wasFs) {
+      /* Esc on a keyboard leaves full screen without the page ever seeing the
+         key, so on a mouse-and-keyboard machine every exit counts as chosen.
+         The touch screens this is for (a Portal) have no Esc. */
+      var touch = false;
+      try { touch = window.matchMedia("(pointer: coarse)").matches; } catch (_) {}
+      if (!touch || Date.now() - lastPress < 1500) setWant(false);   // somebody chose to leave
+      else setTimeout(reenter, 300);                       // the device took it
+    }
+    wasFs = on;
+  }
+  try { window.addEventListener("pointerdown", onPress, true); window.addEventListener("keydown", onPress, true); } catch (_) {}
+  ["fullscreenchange", "webkitfullscreenchange"].forEach(function (ev) {
+    document.addEventListener(ev, onFsChange);
+    try { if (fsDoc() !== document) fsDoc().addEventListener(ev, onFsChange); } catch (_) {}
+  });
+  /* the next tap anywhere is the user gesture a re-entry needs. Runs AFTER
+     onPress in the same event, but the decision above already happened. */
+  try { window.addEventListener("pointerup", reenter, true); window.addEventListener("keyup", reenter, true); } catch (_) {}
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") setTimeout(reenter, 300); });
+  reenter();
 
   setInterval(consider, CFG.checkEvery);
 
@@ -150,6 +237,7 @@
     due: due,
     reachable: reachable,
     consider: consider,
+    freshStart: freshStart,
     config: CFG,
     startedAt: function () { return startedAt; },
     lastInput: function () { return lastInput; }
