@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=35" />
+<link rel="stylesheet" href="theme.css?v=36" />
 <script src="settings-ui.js?v=20" defer></script>
 <!-- NOT deferred, and first: it wraps window.fetch, so it has to be in place
      before any other script can start a feed. Deferred would run after the
@@ -741,7 +741,7 @@ async function collectScheduleRows(cfg){
       s=await getJSON(cfg.url, 15000);
       s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
       s._dep={};
-      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
       scheduleCache[cfg.url]=s;
     }
     const nowP=schedNowParts(s.tz), nowMin=nowP.min, active=activeServices(s, nowP);
@@ -796,7 +796,7 @@ async function collectSeptaByLine(cfg){
       s=await getJSON(cfg.url, 15000);
       s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon,st.name]; });
       s._dep={};
-      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, n:tr.n, t:min}); }));
+      (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, n:tr.n, t:min}); }));
       scheduleCache[cfg.url]=s;
     }
     const nowP=schedNowParts(s.tz), nowMin=nowP.min, active=activeServices(s, nowP);

@@ -1295,3 +1295,19 @@ header{ box-shadow:inset 0 2px 0 0 var(--accent); }
 @media (max-width:1220px){
   body .list .stop-label{ display:none }
 }
+
+/* ---- cancelled and delayed departures (every board) -------------------------
+   A delayed row keeps its countdown (it is still coming) and says DELAYED in
+   its delay band, with the timetable time struck through beside the expected
+   one. A cancelled row stays in its slot, struck through, so the gap in the
+   service is visible instead of silently closing up. Colour is never the only
+   signal: both carry the word. */
+body .row.cancelled .dest,
+body .row.cancelled .badge{ text-decoration:line-through; opacity:.6 }
+body .row.cancelled .sub{ opacity:.8 }
+body .row .live.cancelled-tag,
+body .row .live.status-tag{ color:var(--late-ink); font-weight:800; text-transform:uppercase; letter-spacing:.04em; font-size:.82em }
+body .row .sched s{ opacity:.75 }
+body .row .live-tag.delayed-tag{ border-radius:4px; padding:0 4px }
+/* A vehicle whose last fix the operator itself reports as old. */
+.leaflet-marker-icon.veh-stale{ opacity:.45; filter:grayscale(.6) }

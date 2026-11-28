@@ -59,6 +59,7 @@ METRO_LINES = {"50", "51", "52", "53", "54"}
 # International operators serving the Netherlands in the national feed. The
 # eastern cross-border regionals (DB/Eurobahn/NMBS) never call inside the
 # Amsterdam box, so they filter themselves out naturally.
+EMPTY = []   # groups that matched nothing this run (see emit)
 INTL_AGENCIES = {"IFF:NS_INT", "IFF:EU_SLEEPER", "IFF:GV", "IFF:DB", "IFF:NMBS", "IFF:EUROBAHN"}
 
 
@@ -139,8 +140,14 @@ def main():
     metro_routes = {rid for rid in gvb if routes[rid].get("route_type") == "1"}
     tram_routes  = {rid for rid in gvb if routes[rid].get("route_type") == "0"}
     ferry_routes = {rid for rid in gvb if routes[rid].get("route_type") == "4"}
+    # NS has been published as both "IFF:NS" and plain "NS"; the 16 Nov refresh
+    # matched neither and wrote a rail bundle with no trains in it, which the
+    # board showed as an empty card. Match the agency, not one spelling of it.
+    agencies = {a["agency_id"]: (a.get("agency_name") or "").strip() for a in rows(zf, "agency.txt")}
+    ns_ids = {aid for aid, name in agencies.items()
+              if aid in ("IFF:NS", "NS") or name in ("NS", "Nederlandse Spoorwegen")}
     rail_routes  = {rid for rid, r in routes.items()
-                    if r.get("agency_id") == "IFF:NS" and r.get("route_type") == "2"}
+                    if r.get("agency_id") in ns_ids and r.get("route_type") == "2"}
     intl_routes  = {rid for rid, r in routes.items()
                     if r.get("agency_id") in INTL_AGENCIES and r.get("route_type") == "2"}
     print(f"Routes: metro={sorted(short(r) for r in metro_routes)} "
@@ -247,6 +254,12 @@ def main():
                "routeLines": {rid: line_label(rid) for rid in sorted(used_routes)},
                "stations": stations, "svc": {}, "exc": exc, "trips": trips_out}
         path = os.path.join(HERE, out_name)
+        if not trips_out:
+            # Never replace a working bundle with an empty one: a board can show
+            # a stale timetable (and says so), but not a missing one.
+            print(f"!! {group}: 0 trips matched -- keeping the existing {out_name}", file=sys.stderr)
+            EMPTY.append(group)
+            return
         with open(path, "w") as fh:
             json.dump(out, fh, separators=(",", ":"))
         print(f"Wrote {path}: {len(trips_out)} trips, {len(stations)} stations, {os.path.getsize(path)} bytes")
@@ -288,3 +301,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Warn, but exit 0: a failing generator stops the refresh workflow from
+    # committing ANY bundle, which would take every other city down with this
+    # one. The kept bundle still reads EXPIRED, and the workflow's final
+    # --days 0 audit is what flags it.
+    if EMPTY:
+        print(f"!! empty bundle(s) not written: {', '.join(EMPTY)}", file=sys.stderr)

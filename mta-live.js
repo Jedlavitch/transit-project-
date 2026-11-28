@@ -85,11 +85,18 @@
         for(const [df, dwt, dv] of gtfsrtFields(b, tv[0], tv[1])){
           if(df === 1) u.tripId = gtfsrtStr(b, dv[0], dv[1]);
           else if(df === 5) u.routeId = gtfsrtStr(b, dv[0], dv[1]);
+          // schedule_relationship: 3 = CANCELED. A cancelled run is published
+          // as a trip update with no times at all, so this flag is the only
+          // thing that says it is not coming.
+          else if(df === 4 && dwt === 0) u.cancelled = Number(dv) === 3;
         }
       } else if(tf === 2 && twt === 2){         // stop_time_update (repeated)
         const stu = {};
         for(const [sf, swt, sv] of gtfsrtFields(b, tv[0], tv[1])){
           if(sf === 4 && swt === 2) stu.stopId = gtfsrtStr(b, sv[0], sv[1]);
+          else if(sf === 1 && swt === 0) stu.seq = Number(sv);
+          // schedule_relationship 1 = SKIPPED: the run continues but will not call here.
+          else if(sf === 5 && swt === 0) stu.skipped = Number(sv) === 1;
           else if(sf === 2 && swt === 2){       // arrival (StopTimeEvent)
             for(const [af, awt, av] of gtfsrtFields(b, sv[0], sv[1])){
               if(af === 1 && awt === 0) stu.delaySec = gtfsrtInt32(av);
@@ -108,6 +115,11 @@
         u.stops.push(stu);
       } else if(tf === 5 && twt === 0){         // TripUpdate.delay (trip-level fallback)
         u.tripDelaySec = gtfsrtInt32(tv);
+      } else if(tf === 3 && twt === 2){         // vehicle (VehicleDescriptor)
+        for(const [vf, vwt, vv] of gtfsrtFields(b, tv[0], tv[1])){
+          if(vf === 1 && vwt === 2) u.vehicleId = gtfsrtStr(b, vv[0], vv[1]);
+          else if(vf === 2 && vwt === 2) u.vehicleLabel = gtfsrtStr(b, vv[0], vv[1]);
+        }
       }
     }
     return u;
@@ -167,7 +179,8 @@
     const out = [];
     Object.keys(updates).forEach(tripId => {
       const u = updates[tripId];
-      const idx = u.stops.findIndex(s => stationOf(s.stopId) === stationId && s.timeSec);
+      if (u.cancelled) return;
+      const idx = u.stops.findIndex(s => stationOf(s.stopId) === stationId && s.timeSec && !s.skipped);
       if (idx < 0) return;
       const here = u.stops[idx];
       const mins = (here.timeSec - now) / 60;
@@ -194,5 +207,5 @@
     return out.sort((a, b) => a.atSec - b.atSec);
   }
 
-  window.TBMta = { fetchAll, arrivalsAt, stationOf, dirOf, SUBWAY_COL, SUBWAY_FEEDS };
+  window.TBMta = { fetchAll, arrivalsAt, stationOf, dirOf, decodeGtfsRt, SUBWAY_COL, SUBWAY_FEEDS };
 })();

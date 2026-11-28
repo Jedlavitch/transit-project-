@@ -22,7 +22,7 @@
   var root=new URL('.',document.currentScript.src);
   var WMATA={RD:'#BF0D3E',OR:'#ED8B00',BL:'#009CDE',SV:'#919D9D',GR:'#00B140',YL:'#FFD100'};
   var FAMILY={rail:'Trains',metro:'Metro',tram:'Trams',bus:'Buses',ferry:'Ferries'};
-  var PAGE=40,LIVE_MS=60000;
+  var PAGE=40,LIVE_MS=60000,TICK_MS=15000;
   var PLANE='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 15.5v-2l-8-5V3.6a1.6 1.6 0 0 0-3.2 0v4.9l-8 5v2l8-2.5v5.2l-2 1.5V21l3.6-1 3.6 1v-1.3l-2-1.5V13z" transform="translate(.6 0)"/></svg>';
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -110,11 +110,16 @@
         line=(bundle.routeLines&&bundle.routeLines[line])||line;
         /* LA Metro publishes no headsigns, so fall back to where the train ends. */
         var last=ids[ids.length-1],end=pats&&bundle.v===2?last:last[0];
-        out.push({line:line,hs:tidy(hs||names[end]),s:t.s,min:min});
+        /* The run and the stop's place in it ride along (v1 bundles only), so a
+           board with a live view of its runs (window.TBHubLive) can lay the
+           same live time on this row that it shows on its own cards. */
+        var row={line:line,hs:tidy(hs||names[end]),s:t.s,min:min};
+        if(bundle.v!==2&&(t.id!=null||t.n)){row.trip=t;row.k=i;}
+        out.push(row);
         break;
       }
     });
-    return {key:key,feed:feed,rows:out,svc:bundle.svc||{},exc:bundle.exc||{},generated:bundle.generated,days:{}};
+    return {key:key,feed:feed,rows:out,svc:bundle.svc||{},exc:bundle.exc||{},generated:bundle.generated,days:{},nameOf:function(id){return names[id];}};
   }
 
   function attach(map,opts){
@@ -233,7 +238,7 @@
     var mtaReady=null;
     function mta(){
       if(!mtaReady)mtaReady=Promise.all([
-        global.TBMta?Promise.resolve():new Promise(function(ok,no){var s=document.createElement('script');s.src=new URL('mta-live.js?v=2',root).href;s.onload=ok;s.onerror=function(){mtaReady=null;no(Error('mta-live'));};document.head.appendChild(s);}),
+        global.TBMta?Promise.resolve():new Promise(function(ok,no){var s=document.createElement('script');s.src=new URL('mta-live.js?v=3',root).href;s.onload=ok;s.onerror=function(){mtaReady=null;no(Error('mta-live'));};document.head.appendChild(s);}),
         fetch(new URL('mta-stations.json',root)).then(function(r){return r.json();}).then(function(d){return d.stations||d;})
       ]).then(function(x){return x[1];});
       return mtaReady;
@@ -317,23 +322,40 @@
         [-1,0,1].forEach(function(off){
           var day=shift(today.ymd,off),res=hubServices(tab,day);
           if(res.stale&&off===0&&state.staleFeeds.indexOf(tab.feed.label)<0)state.staleFeeds.push(tab.feed.label);
+          /* Where the hub also has the live subway (hub.mta), the live rows ARE
+             the next hour of this feed; the timetable copy of the same trains
+             would list each one twice, at two different times. */
+          var liveCovers=tab.key==='subway'&&state.hub.mta&&state.liveOk.mta&&!state.errs.mta;
           tab.rows.forEach(function(e){
             if(!(res.borrowed[e.line]||res.act).has(e.s))return;
-            var inMin=e.min+off*1440-now.min;if(inMin<0||inMin>1440)return;
-            out.push({service:tab.feed.label,color:routeColor(tab.feed,e.line),line:e.line,hs:e.hs,inMin:inMin,time:clock(e.min,cfg.clock24)});
+            var inMin=e.min+off*1440-now.min;
+            var lv=off===0&&e.trip&&typeof global.TBHubLive==='function'?safeLive(tab,e):null;
+            if(lv&&lv.gone)return;
+            var row={service:tab.feed.label,color:routeColor(tab.feed,e.line),line:e.line,hs:e.hs,inMin:inMin,time:clock(e.min,cfg.clock24)};
+            if(lv&&lv.cancelled){row.cancelled=true;row.live=true;}
+            else if(lv&&lv.min!=null){
+              row.inMin=lv.min-now.min;row.time=clock(lv.min,cfg.clock24);row.live=true;
+              if(lv.late>=2){row.delay=lv.late;row.sched=clock(e.min,cfg.clock24);}
+            }
+            if(row.inMin<0||row.inMin>1440)return;
+            if(liveCovers&&row.inMin<=60)return;
+            out.push(row);
           });
         });
       });
       return out;
     }
+    function safeLive(tab,e){try{return global.TBHubLive(tab.key,e.trip,e.k,tab.nameOf);}catch(_){return null;}}
     function allRows(state){
       var live=state.live.map(function(r){var x=Object.assign({},r);x.inMin=Math.round((r.when-Date.now())/60000);x.time=r.flight&&r.flight!=='arr'?(r.flight==='dep'?'Departed':'At airport'):clockMs(r.when,cfg);if(r.flight&&r.flight!=='arr')x.inMin=-1;return x;}).filter(function(r){return r.inMin>=-1;});
       return scheduled(state).concat(live).sort(function(a,b){return a.inMin-b.inMin;});
     }
     function untilText(r){if(r.flight==='arr')return 'lands in ~'+r.inMin+' min';if(r.flight==='dep')return 'just departed';if(r.flight==='gnd')return 'on the ground';if(r.arriving)return 'Now';if(r.inMin<=0)return 'Now';if(r.inMin<60)return 'in '+r.inMin+' min';var h=Math.floor(r.inMin/60);return 'in '+h+' h'+(r.inMin%60?' '+(r.inMin%60)+' min':'');}
     function rowHtml(r){
-      var status=r.cancelled?'<span class="tsh-late">Cancelled</span>':r.delay>0?'<span class="tsh-late">'+r.delay+' min late</span>':r.live?'<span class="tsh-live">Live</span>':'';
-      return '<li class="tsh-dep'+(r.cancelled?' tsh-cancelled':'')+'"><span class="tsh-line" style="background:'+esc(r.color)+';color:'+esc(r.textColor||ink(r.color))+'" title="'+esc(r.line)+'">'+esc(r.line)+'</span><span class="tsh-where"><strong>'+esc(r.hs||'—')+'</strong><small>'+esc(r.detail||r.service+(r.number?' · '+r.number:''))+'</small></span><span class="tsh-when"><strong>'+esc(r.time)+'</strong><small>'+untilText(r)+(status?' · '+status:'')+'</small></span></li>';
+      var status=r.cancelled?'<span class="tsh-late">Cancelled</span>':r.delay>0?'<span class="tsh-late">Delayed '+r.delay+' min</span>':r.live?'<span class="tsh-live">Live</span>':'';
+      var when=r.cancelled?'Cancelled':untilText(r);
+      if(r.sched&&!r.cancelled)status+=' · <s>'+esc(r.sched)+'</s>';
+      return '<li class="tsh-dep'+(r.cancelled?' tsh-cancelled':'')+(r.delay>0&&!r.cancelled?' tsh-delayed':'')+'"><span class="tsh-line" style="background:'+esc(r.color)+';color:'+esc(r.textColor||ink(r.color))+'" title="'+esc(r.line)+'">'+esc(r.line)+'</span><span class="tsh-where"><strong>'+esc(r.hs||'—')+'</strong><small>'+esc(r.detail||r.service+(r.number?' · '+r.number:''))+'</small></span><span class="tsh-when"><strong>'+esc(r.time)+'</strong><small>'+(r.cancelled?status:when+(status?' · '+status:''))+'</small></span></li>';
     }
     function draw(){
       var state=current;if(!state||!panel)return;
@@ -371,7 +393,7 @@
       if(state.hub.airport&&state.liveOk.flights)src.push('Aircraft data adsb.lol (ODbL), routes adsbdb');
       if(state.hub.live&&state.liveOk.europe)src.push(state.hub.live==='ch'?'Swiss transport API':'Transitous')&&src.push('next 40 departures');
       panel.querySelector('.tsh-notes').innerHTML=notes.map(function(n){return '<p class="tsh-note">'+esc(n)+'</p>';}).join('')+(src.length?'<p>'+esc(src.join(' · '))+'</p>':'');
-      var sub=state.tables.length?(state.live.length?'Scheduled and live times':'Scheduled times'):(state.hub.live?'Next departures':'Live times');
+      var sub=state.tables.length?(state.live.length||rows.some(function(r){return r.live;})?'Live and scheduled times':'Scheduled times'):(state.hub.live?'Next departures':'Live times');
       panel.querySelector('.tsh-sub').textContent=state.hub.airport?'Flights now, and trains and buses leaving · '+sub.toLowerCase():sub;
     }
 
@@ -406,11 +428,15 @@
         loadFeed(hub,key).then(function(tab){if(current===state)state.tables.push(tab);}).catch(function(){state.errs[key]=cfg.feeds[key].label+' timetable could not be loaded.';}).then(function(){state.pending--;if(current===state){syncErrors(state);draw();}});
       });
       loadLive(state);draw();
-      clearInterval(timer);timer=setInterval(function(){if(document.hidden||current!==state)return;loadLive(state);draw();},LIVE_MS);
+      /* Fetch live every minute, but repaint on the half-minute grid the board's
+         cards use, so "in 4 min" here turns into "in 3 min" when theirs does. */
+      clearTimeout(timer);var ticks=0,next=function(){return TICK_MS-(Date.now()%TICK_MS)+300;};
+      var tick=function(){if(current!==state)return;if(!document.hidden){if(++ticks%Math.round(LIVE_MS/TICK_MS)===0)loadLive(state);draw();}timer=setTimeout(tick,next());};
+      timer=setTimeout(tick,next());
       panel.querySelector('.tsh-close').focus();
     }
     function close(){
-      if(!current)return;var m=current.marker;current=null;clearInterval(timer);panel.hidden=true;
+      if(!current)return;var m=current.marker;current=null;clearTimeout(timer);panel.hidden=true;
       markers.forEach(function(x){var e=x.getElement();if(e)e.classList.remove('tsh-selected');});
       var el=m&&m.getElement();if(el)el.focus();
     }
@@ -432,7 +458,7 @@
     function keyboard(e){if(e.key==='Escape'&&current){e.preventDefault();e.stopImmediatePropagation();close();}}
     window.addEventListener('keydown',keyboard,true);
     map.on('zoomend',refresh);
-    map.once('unload',function(){dead=true;clearInterval(timer);window.removeEventListener('keydown',keyboard,true);if(panel)panel.remove();});
+    map.once('unload',function(){dead=true;clearTimeout(timer);window.removeEventListener('keydown',keyboard,true);if(panel)panel.remove();});
 
     var ready=fetch(new URL('map-data/station-hubs.json',root)).then(function(r){if(!r.ok)throw Error(r.status);return r.json();}).then(function(data){
       if(dead)return;cfg=data.cities[city];if(!cfg)return;
