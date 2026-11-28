@@ -43,3 +43,5 @@
 .tsh-note{color:var(--ink)}
 .tsh-panel button:focus-visible,.tsh-hub:focus-visible{outline:2px solid #2382d1}
 @media(max-width:600px){.tsh-panel{left:0;right:0;top:auto;bottom:0;width:auto;max-width:none;height:74dvh;border-width:1px 0 0;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom)}}
+.tsh-delayed .tsh-when strong{color:var(--late)}
+.tsh-when s{opacity:.75}

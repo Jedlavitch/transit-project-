@@ -11,7 +11,7 @@
 <title>Philadelphia Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=35" />
+<link rel="stylesheet" href="theme.css?v=36" />
 <link rel="stylesheet" href="board-designs.css?v=1" />
 <link rel="stylesheet" href="city-shortcuts.css?v=2" />
 <link rel="stylesheet" href="city-board.css?v=1" />
@@ -65,7 +65,8 @@
 <script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=4" defer></script>
 <script src="departures.js?v=3" defer></script>
-<script src="commute.js?v=7" defer></script>
+<script src="mta-live.js?v=3" defer></script>
+<script src="commute.js?v=8" defer></script>
 <script src="ontime.js?v=27" defer></script>
 <script src="ontime-tile.js?v=2" defer></script>
 <script src="weather-radar.js?v=2" defer></script>
@@ -851,7 +852,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
 <link rel="stylesheet" href="transit-map.css?v=1" />
-<script src="transit-map.js?v=8"></script>
+<script src="transit-map.js?v=9"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -1176,12 +1177,17 @@ function updateFleet(fleet, items, dur){
       F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon,
         route:it.route, label:it.label, color:it.color };
     } else {
-      const c=v.marker.getLatLng();                 // animate from current interpolated spot
-      v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
+      // animate from where the glide has got to (the marker itself may lag a
+      // sub-pixel step behind, or sit parked off screen: see animateFleets)
+      const pp=v.dur>1?Math.min(1,(now-v.t0)/v.dur):1;
+      v.from=[v.from[0]+(v.to[0]-v.from[0])*pp, v.from[1]+(v.to[1]-v.from[1])*pp]; v.at=null; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
       v.route=it.route; v.label=it.label; v.color=it.color;
       if(it.tip) v.marker.setTooltipContent(it.tip);
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
     }
+    /* A fix the operator itself says is old draws faded, not as if it were now. */
+    const e=F[it.id].marker.getElement();
+    if(e && e.classList.contains("veh-stale")!==!!it.stale) e.classList.toggle("veh-stale", !!it.stale);
   }
   scheduleDeclutter();          // new arrivals bring new labels to test
   for(const id in F){ if(!keep.has(id)){ layer.removeLayer(F[id].marker); delete F[id]; } }
@@ -1292,12 +1298,24 @@ function updateLabelVisibility(){
 }
 function animateFleets(){
   const now=performance.now();
+  /* Hundreds of markers glide at once, and moving one costs Leaflet a DOM
+     write. Most frames move most of them by a fraction of a pixel, which
+     nobody can see, so a marker is only re-placed once it has moved about
+     half a pixel; and one outside the visible map is left until it has
+     arrived. Same glide, a fraction of the work per frame. */
+  const map=state.map, z=map?map.getZoom():12;
+  const eps=0.5*360/(256*Math.pow(2,z));          // ~half a pixel, in degrees of longitude
+  const vb=map?map.getBounds().pad(0.15):null;
   for(const f in state.fleets){ const F=state.fleets[f];
     for(const id in F){ const v=F[id];
       if(v.dur<=1) continue;
       const p=(now-v.t0)/v.dur;
-      if(p>=1){ v.marker.setLatLng(v.to); v.dur=1; continue; }
-      v.marker.setLatLng([ v.from[0]+(v.to[0]-v.from[0])*p, v.from[1]+(v.to[1]-v.from[1])*p ]);
+      if(p>=1){ v.marker.setLatLng(v.to); v.dur=1; v.at=v.to; continue; }
+      const lat=v.from[0]+(v.to[0]-v.from[0])*p, lon=v.from[1]+(v.to[1]-v.from[1])*p;
+      const at=v.at||v.from;
+      if(Math.abs(lat-at[0])<eps*0.75 && Math.abs(lon-at[1])<eps) continue;
+      if(vb && !vb.contains([lat,lon]) && !vb.contains(v.to)) continue;
+      v.at=[lat,lon]; v.marker.setLatLng(v.at);
     }
   }
   if(state.follow){
@@ -1447,8 +1465,9 @@ function groupDepsByDirection(deps, perDir=2, maxDirs=2, sys, nowMin){
   // Tagged calls record the soonest upcoming departure for the stats strip:
   // calls within the same render pass (≤1.5s apart) keep the smallest value,
   // a new pass overwrites. deps are already filtered to >= now by callers.
-  if(sys && out.length){
-    const d=out[0][0];
+  const firstOk=out.map(g=>g.find(x=>!x.cancelled)).filter(Boolean).sort((a,b)=>a.min-b.min)[0];
+  if(sys && firstOk){
+    const d=firstOk;
     if(nowMin==null) nowMin=new Date().getHours()*60+new Date().getMinutes();
     const rec={min:Math.max(0,d.min-nowMin), label:[d.line,d.hs].filter(Boolean).join(" → "), at:Date.now()};
     const S=(state._schedNexts=state._schedNexts||{}), ex=S[sys];
@@ -2493,7 +2512,7 @@ async function ensureMarcSchedule(){
   try{ const s=await getJSON("marc-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.marcSched=s;
   }catch(e){}
   return state.marcSched;
@@ -2522,7 +2541,7 @@ async function refreshMarc(){
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","MARC schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
@@ -2589,7 +2608,7 @@ async function ensureRideOnSchedule(){
     const s=await getJSON("rideon-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.roSched=s;
   }catch(e){}
   return state.roSched;
@@ -2599,7 +2618,7 @@ async function refreshRideOn(){
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","Ride On schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);                 // same calendar logic (svc/exc) as MARC
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   box.innerHTML=""; let shown=0, used=0;
   for(const {st,mi} of near){
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
@@ -2733,7 +2752,7 @@ async function ensureSeptaRailSchedule(){
     const s=await getJSON("septa-rail-schedule.json", 15000, "no-cache");
     s._coord={}; s._name={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k)=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
     state.septaSched=s;
     // Thirteen lines in one colour: they are context for the Metro, not the subject.
     drawScheduleRouteLines(s, state.septaRailRouteLayer, ()=>SEPTA_COL, 2, .32);
@@ -2753,13 +2772,13 @@ function feedFromBundle(key, s, mode, color, maxMi, nameFn){
   if(!s){ TBDep.clear(key); return; }
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now), here=state.loc;
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   for(const {st,mi} of near){
     if(mi>maxMi) break;
     /* Every platform of the nearest station, not just the first one found: the
        GTFS splits a station into one stop per direction (see refreshSeptaSubway). */
     const plats=near.filter(n=>n.st.name===st.name && n.mi-mi<0.25).map(n=>n.st);
-    const deps=plats.flatMap(p=>septaDeps(s, s._dep[p.id], active, nowMin));
+    const deps=plats.flatMap(p=>septaDeps(s, s._dep[p.id], active, nowMin)).filter(d=>!d.cancelled);
     if(!deps.length) continue;
     TBDep.feed(key, deps.slice().sort((a,b)=>a.min-b.min).slice(0,24).map(d=>
       septaPoolRow(d, nowMin, mode, (nameFn?nameFn(st.name):st.name), (typeof color==="function"?color(d.line):color))));
@@ -2779,7 +2798,7 @@ async function refreshSeptaRail(){
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA Regional Rail schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   box.innerHTML=""; let shown=0, used=0, live=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   for(const {st,mi} of near){
@@ -2791,7 +2810,7 @@ async function refreshSeptaRail(){
     /* Fed from the stop's whole `deps` list rather than the three-per-direction
        slice the card shows: the countdown wants every departure you could still
        walk to, not only the ones that fitted in the box. */
-    depFeed.push(...deps.slice().sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "train", st.name, SEPTA_COL)));
+    depFeed.push(...deps.filter(d=>!d.cancelled).sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "train", st.name, SEPTA_COL)));
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "septaRail", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
@@ -2809,7 +2828,7 @@ async function refreshSeptaRail(){
   fitList(box);
 }
 async function drawSeptaRailScheduledMap(){
-  if(state.septaUrl) return;   // the live Worker owns train positions once configured
+  if(septaLiveOwns("trains")) return;   // the live Worker owns train positions while it is answering
   const s=await ensureSeptaRailSchedule(); if(!s || !s.trips) return;
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
@@ -2850,7 +2869,7 @@ async function ensureSeptaBusSchedule(){
     const s=await getJSON("septa-bus-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k)=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
     state.septaBusSched=s;
     drawScheduleRouteLines(s, state.septaBusRouteLayer, ()=>SEPTA_BUS_COL, 2, .28);
   }catch(e){}
@@ -2858,57 +2877,71 @@ async function ensureSeptaBusSchedule(){
 }
 async function refreshSeptaBusScheduled(){
   // ensureSeptaBusSchedule() also draws the route line on the map as a side
-  // effect the first time it loads, so it must always run even when the live
-  // Worker owns the departures list below -- otherwise the route line never
-  // gets drawn at all when live tracking is on.
+  // effect the first time it loads, so it must always run.
   const s=await ensureSeptaBusSchedule();
-  if(state.septaUrl){ feedFromBundle("septaBus", s, "bus", SEPTA_BUS_COL, 10); return; }   // the live Worker owns this CARD; the pool still comes from the timetable
+  /* One card, live or not: departures from your stop, by the timetable, made
+     live by SEPTA's own feeds where they report the run (septaDeps). With the
+     Worker it used to swap to "every bus within 15 miles, by distance", which
+     never said when one would reach you and disagreed with the countdown
+     beside it, which was reading this timetable all along. */
   const box=$("#septaBusList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA bus schedule unavailable.")); return; }
-  const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
+  const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  const near=nearStations(s);
+  const frag=document.createDocumentFragment(); let shown=0, used=0, live=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   for(const {st,mi} of near){
     if(mi>10) break;
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
-    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin);
+    /* Both kerbs of the street: a route's two directions are two GTFS stops a
+       few metres apart, and the nearest alone shows one direction only. */
+    const kerbs=near.filter(n=>n.mi-mi<0.08 && (n.st.name===st.name || n.st===st)).map(n=>n.st);
+    const deps=kerbs.flatMap(k=>septaDeps(s, s._dep[k.id], active, nowMin));
     if(!deps.length) continue;
     used++;
-    /* Fed from the stop's whole `deps` list rather than the three-per-direction
-       slice the card shows: the countdown wants every departure you could still
-       walk to, not only the ones that fitted in the box. */
-    depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
-      mode:"bus", stop:st.name, route:d.line||"", dest:d.hs||"",
-      min:d.t-nowMin, color:SEPTA_BUS_COL, live:false })));
-    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
-    groupDepsByDirection(deps, 3, 1, "septaBus", nowMin).forEach(group=>{
-      box.appendChild(el("div","dir-label","→ "+(group[0].hs||("Route "+group[0].line))));
+    depFeed.push(...deps.filter(d=>!d.cancelled).sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "bus", st.name, SEPTA_BUS_COL)));
+    frag.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    groupDepsByDirection(deps, 3, 2, "septaBus", nowMin).forEach(group=>{
+      frag.appendChild(el("div","dir-label","→ "+(group[0].hs||("Route "+group[0].line))));
       group.forEach(d=>{
-        const row=el("div","row");
-        const b=el("div","badge", d.line); b.style.background=SEPTA_BUS_COL; b.style.color="#2a1c00";
-        const mid=el("div");
-        mid.appendChild(el("div","dest", d.hs||("Route "+d.line)));
-        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-        mid.appendChild(el("div","sub", "Route "+d.line+" · "+relTxt));
-        const times=el("div","times");
-        const t=el("div","live"); t.style.color="#e0b466"; t.textContent=marcClock(d.t);
-        times.append(t, dualTime(t, rel));
-        row.append(b, mid, el("div"), times);
-        wireFollowRow(row, "septaBus", "sb", d);
-        box.appendChild(row); shown++;
+        const b=el("div","badge", d.line); b.style.background=SEPTA_BUS_COL; b.style.color="#fff";
+        const row=septaDepRow(d, nowMin, b, "Route "+d.line, "#e0b466", "septaBus", "sb");
+        if(d.live) live++;
+        frag.appendChild(row); shown++;
       });
     });
   }
+  /* Nowhere near routes 3/4/16 (a custom location elsewhere in the city) but
+     the Worker is on: list the live buses that are near, with where each is
+     headed next, rather than an empty card. */
+  const nb=state.septaNearBuses;
+  if(!shown && state.septaUrl && nb && nb.length && Date.now()-state.septaLive.tripsAt<SEPTA_LIVE_MAX_AGE){
+    nb.slice(0,20).forEach(({b,mi})=>{
+      const row=el("div","row");
+      const bd=el("div","badge", b.route_id); bd.style.background=SEPTA_BUS_COL; bd.style.color="#fff";
+      const mid=el("div");
+      mid.appendChild(el("div","dest", b.destination||"—"));
+      const bSub=el("div","sub", `${mi.toFixed(1)} mi${b.next_stop_name?` · next: ${b.next_stop_name}`:(b.Direction?` · ${b.Direction}`:"")}`);
+      const bLi=liveLateInfo(b.late);
+      if(bLi && bLi.mins>0) bSub.appendChild(delayFragment(bLi));
+      mid.appendChild(bSub);
+      row.append(bd, mid, el("div"));
+      appendLiveTimes(row, b.late);
+      const fid="slb"+b._key;
+      row.classList.add("followable"); row.title="Follow this bus on the map";
+      row.onclick=()=>{ if((state.fleets.septaBus||{})[fid]) startFollow("septaBus", fid); };
+      frag.appendChild(row); shown++; live++;
+    });
+  }
+  box.innerHTML=""; box.appendChild(frag);
   if(!shown) box.appendChild(el("div","empty","No Route 3/4/16 buses nearby (or none scheduled soon)."));
   if(window.TBDep) TBDep.feed("septaBus", depFeed);
-  $("#septaBusCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
+  $("#septaBusCount").textContent = s && s._stale ? "stale schedule" : live ? "live" : "scheduled";
   fitList(box);
 }
 async function drawSeptaBusScheduledMap(){
-  if(state.septaUrl) return;   // the live Worker owns bus positions once configured
+  if(septaLiveOwns("trips")) return;    // the live Worker owns bus positions while it is answering
   const s=await ensureSeptaBusSchedule(); if(!s || !s.trips) return;
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
@@ -2956,10 +2989,15 @@ function septaRailBadge(line){
 }
 
 /* ---------- live times on the timetable rows -------------------------------
-   The Worker publishes where each vehicle is and how late it is, never an
-   arrival time for your stop. The timetable has the arrival time but not the
-   lateness. Together they make a live departure: scheduled time + SEPTA's own
-   `late` for that exact run.
+   Three SEPTA sources, each saying something the others cannot:
+     TrainView / TransitView   where each vehicle IS and how late it runs
+                               (`late`, minutes behind SEPTA's own schedule)
+     GTFS-RT TripUpdates       a predicted time AT EACH STOP, and the only
+                               place SEPTA marks a run CANCELLED or a stop
+                               SKIPPED (Worker route /tripupdates; an older
+                               Worker answers 404 and this is simply skipped)
+     the bundled timetable     when each run is due at your stop
+   A row is the timetable entry made live by whichever of those reports its run.
 
    Matching is exact, not guessed. TransitView's `trip` IS the GTFS trip_id
    (checked: T5 971966, G1 967111, route 23 999954 all appear in trips.txt), and
@@ -2969,66 +3007,213 @@ function septaRailBadge(line){
    A matched vehicle whose next stop is already PAST yours has left: that row
    is dropped rather than shown as a departure you have missed. A run SEPTA is
    not reporting (not started yet, or a line it doesn't publish — the L and the
-   B are absent from TransitView) stays "scheduled", unchanged. */
+   B are absent from TransitView) stays "scheduled", unchanged.
+
+   Every surface that shows a SEPTA time — these cards, the commute countdown,
+   the stats strip and the station timetables on the map (TBHubLive below) —
+   goes through septaLiveForTrip(), so they all show the same number. */
 state.septaLive={trips:new Map(), trains:new Map(), tripsAt:0, trainsAt:0};
-function septaLiveOf(s, d){
-  const L=state.septaLive;
-  const tr=s && s.trips && s.trips[d.ti]; if(!state.septaUrl || !tr) return null;
-  const at = tr.id!=null ? L.tripsAt : L.trainsAt;
-  if(!at || Date.now()-at>180000) return null;   // 3 min without a fix: stop claiming live
-  let v=null, idx=-1;
-  if(tr.id!=null){
-    v=L.trips.get(String(tr.id));
-    if(v) idx=tr.st.findIndex(x=>x[0]===v.next);
-  }else if(tr.n){
-    v=L.trains.get(String(tr.n).replace(/^\D+/,""));
-    if(v && s._name) idx=tr.st.findIndex(x=>s._name[x[0]]===v.next);
+state.septaRt={byTrip:new Map(), byTrain:new Map(), at:0, off:false};
+const SEPTA_LIVE_MAX_AGE=180000;   // 3 min without a fix: stop claiming live
+function trainNo(n){ return String(n||"").replace(/^\D+/,""); }
+/* The live Worker draws a fleet only while it is answering. Before its first
+   reply nothing draws (so the timetable markers don't flash up and vanish);
+   once it has gone quiet for SEPTA_LIVE_MAX_AGE the timetable positions come
+   back, rather than the map emptying of trains and buses. */
+function septaLiveOwns(kind){
+  if(!state.septaUrl) return false;
+  const L=state.septaLive, at=kind==="trains"?L.trainsAt:L.tripsAt;
+  if(!L.tried) return true;
+  return !!at && Date.now()-at<SEPTA_LIVE_MAX_AGE;
+}
+/* Minute of the day (same clock the cards count in) for a POSIX second. */
+function minuteOfDay(sec, nowMin){
+  const d=new Date(sec*1000), m=d.getHours()*60+d.getMinutes()+(d.getSeconds()>=30?1:0);
+  // bundles run past midnight as 24:xx; keep a prediction on the same side
+  return (nowMin!=null && nowMin>=1200 && m<240) ? m+1440 : m;
+}
+/* The one answer to "what is this run doing at stop k". Returns null when no
+   live source reports the run, else {late, li, min, fid, away, cancelled, gone}. */
+function septaLiveForTrip(tr, k, nameOf, nowMin){
+  if(!state.septaUrl || !tr) return null;
+  const L=state.septaLive, R=state.septaRt, now=Date.now();
+  const isRail = tr.id==null;
+  const sid = tr.st && tr.st[k] ? tr.st[k][0] : null;
+  const sched = tr.st && tr.st[k] ? tr.st[k][1] : null;
+  /* GTFS-RT first: it is the only source that can say "cancelled". */
+  let u=null;
+  if(R.at && now-R.at<SEPTA_LIVE_MAX_AGE){
+    u = isRail ? (R.byTrain.get(trainNo(tr.n)) || null) : (R.byTrip.get(String(tr.id)) || null);
   }
-  if(!v) return null;
-  const li=liveLateInfo(v.late); if(!li) return null;
-  if(idx>=0 && d.k!=null && idx>d.k) return {gone:true};
-  return {late:li.mins, li, fid:v.fid};
+  if(u && u.cancelled) return {cancelled:true, live:true};
+  let stu=null;
+  if(u && sid!=null) stu=u.stops.find(x=>x.stopId===String(sid)) || null;
+  if(stu && stu.skipped) return {cancelled:true, skipped:true, live:true};
+  /* Vehicle position feed: where the run is, and its lateness. */
+  let v=null, idx=-1;
+  const at = isRail ? L.trainsAt : L.tripsAt;
+  if(at && now-at<SEPTA_LIVE_MAX_AGE){
+    if(!isRail){
+      v=L.trips.get(String(tr.id));
+      if(v) idx=tr.st.findIndex(x=>x[0]===v.next);
+    }else if(tr.n){
+      v=L.trains.get(trainNo(tr.n));
+      if(v && nameOf) idx=tr.st.findIndex(x=>nameOf(x[0])===v.next);
+    }
+  }
+  if(idx>=0 && k!=null && idx>k) return {gone:true};
+  let late=null, min=null;
+  if(stu && stu.timeSec){
+    min=minuteOfDay(stu.timeSec, nowMin);
+    if(sched!=null) late=min-sched;
+  }else if(stu && stu.delaySec!=null && sched!=null){
+    late=Math.round(stu.delaySec/60); min=sched+late;
+  }else if(v){
+    const li0=liveLateInfo(v.late);
+    if(li0){ late=li0.mins; if(sched!=null) min=sched+late; }
+  }else if(u && u.tripDelaySec!=null && sched!=null){
+    late=Math.round(u.tripDelaySec/60); min=sched+late;
+  }
+  if(late==null) return null;
+  const li=liveLateInfo(late); if(!li) return null;
+  return { live:true, late:li.mins, li, min, fid:v?v.fid:null,
+           away: (idx>=0 && k!=null) ? k-idx : null };
+}
+function septaLiveOf(s, d, nowMin){
+  const tr=s && s.trips && s.trips[d.ti];
+  return septaLiveForTrip(tr, d.k, s && s._name ? (id=>s._name[id]) : null, nowMin);
 }
 /* Raw `_dep` entries for one stop → card rows, live where SEPTA reports the run.
    Looks back an hour, because a run that was due 4 minutes ago and is 6 late
    is still coming. `min` is the expected minute of day (what the rows sort and
-   count down by); `t` stays the timetable minute for the "sched" line. */
+   count down by); `t` stays the timetable minute for the "sched" line.
+   Cancelled runs are KEPT, flagged, so the card can say so; septaPoolRow and
+   the stats strip leave them out — nobody can catch one. */
 function septaDeps(s, list, active, nowMin){
   const out=[];
   for(const d of (list||[])){
     if(!active.has(d.s) || d.t<nowMin-60) continue;
-    const lv=septaLiveOf(s, d);
+    const lv=septaLiveOf(s, d, nowMin);
     if(lv && lv.gone) continue;
-    const min=d.t+(lv?lv.late:0);
+    if(lv && lv.cancelled){
+      if(d.t<nowMin) continue;            // a cancellation already past is not news
+      out.push({...d, min:d.t, live:true, cancelled:true});
+      continue;
+    }
+    const min = lv && lv.min!=null ? lv.min : d.t;
     if(min<nowMin) continue;
-    out.push(lv ? {...d, min, live:true, late:lv.late, li:lv.li, fid:lv.fid} : {...d, min});
+    out.push(lv ? {...d, min, live:true, late:lv.late, li:lv.li, fid:lv.fid, away:lv.away} : {...d, min});
   }
   return out;
 }
-/* One departure row's right-hand side and sub-line, shared by the three SEPTA
-   timetable cards so live and scheduled rows read the same way everywhere. */
+/* How far off the vehicle is, in the words a rider uses. */
+function awayText(n, mode){
+  if(n==null) return "";
+  if(n<=0) return mode==="bus" ? "next stop is yours" : "arriving";
+  return n===1 ? "1 stop away" : `${n} stops away`;
+}
+/* One departure row, shared by every SEPTA timetable card so scheduled, live,
+   delayed and cancelled rows read the same way everywhere:
+     scheduled   in 6 min            sched 4:05
+     on time     in 6 min · on time  live 4:05
+     delayed     in 13 min · +7 min  4:12 · sched 4:05 (struck)   DELAYED
+     cancelled   Cancelled           sched 4:05 (struck)          row struck through */
 function septaDepRow(d, nowMin, badge, label, hue, fleet, prefix){
   const row=el("div","row");
   const mid=el("div");
   mid.appendChild(el("div","dest", d.hs||label));
   const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-  const sub=el("div","sub", (prefix==="sb"?"Route ":"")+d.line+" · "+relTxt);
-  if(d.live) sub.appendChild(delayFragment(d.li));
-  mid.appendChild(sub);
+  const lineTxt=(prefix==="sb"?"Route ":"")+d.line;
   const times=el("div","times");
+  if(d.cancelled){
+    row.classList.add("cancelled");
+    mid.appendChild(el("div","sub", lineTxt+" · cancelled by SEPTA"));
+    const t=el("div","live cancelled-tag","Cancelled");
+    const sch=el("div","sched"); sch.append("sched "); const sx=document.createElement("s"); sx.textContent=marcClock(d.t); sch.appendChild(sx);
+    times.append(t, sch);
+    row.append(badge, mid, el("div"), times);
+    row.title="SEPTA has cancelled this run";
+    return row;
+  }
+  const sub=el("div","sub", lineTxt+" · "+relTxt);
+  if(d.live){
+    const dl=delayFragment(d.li); if(dl) sub.appendChild(dl);
+    const aw=awayText(d.away, prefix==="sb"?"bus":"rail"); if(aw) sub.append(" · "+aw);
+  }
+  mid.appendChild(sub);
   const t=el("div","live"); t.style.color=hue; t.textContent=marcClock(d.t);
-  times.append(t, dualTime(t, rel));
-  if(d.live) times.appendChild(el("div","live-tag","live"));
+  times.append(t);
+  dualTime(t, rel);                        // big line: the countdown, by expected time
+  const delayed = d.live && d.late>=2;
+  const sch=el("div","sched");
+  if(delayed){
+    sch.append(marcClock(d.min)+" · sched ");
+    const sx=document.createElement("s"); sx.textContent=marcClock(d.t); sch.appendChild(sx);
+  }else sch.textContent=(d.live?"live ":"sched ")+marcClock(d.live?d.min:d.t);
+  times.appendChild(sch);
+  if(delayed){ const tag=el("div","live-tag delayed-tag","delayed"); paintDelay(tag, d.li); times.appendChild(tag); row.classList.add("delayed"); }
+  else if(d.live) times.appendChild(el("div","live-tag","live"));
   row.append(badge, mid, el("div"), times);
   if(d.live && d.fid){
     row.classList.add("followable"); row.title="Follow this vehicle on the map";
-    row.onclick=()=>startFollow(fleet, d.fid);
+    row.onclick=()=>{
+      const F=state.fleets[fleet]||{};
+      if(F[d.fid]) startFollow(fleet, d.fid);
+      else row.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450});
+    };
   }else wireFollowRow(row, fleet, prefix, d);
   return row;
 }
 function septaPoolRow(d, nowMin, mode, stop, color){
   return { mode, stop, route:d.line||"", dest:d.hs||"", min:d.min-nowMin, color,
            live:!!d.live, late:d.live?d.late:null };
+}
+/* Nearest-first station list, cached per bundle and location: every card
+   re-render (every live fix, every 30 s) used to haversine and sort all 711
+   Metro stops and every bus stop again for a location that had not moved. */
+function nearStations(s){
+  const here=state.loc, key=here.lat.toFixed(5)+","+here.lon.toFixed(5);
+  if(s._nearKey!==key){
+    s._near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+    s._nearKey=key;
+  }
+  return s._near;
+}
+/* The station timetables on the map (station-hubs.js) read the same bundles.
+   Handing them this board's live view of each run is what keeps a station's
+   panel and the card beside it from disagreeing about the same train. */
+window.TBHubLive=function(feed, trip, k, nameOf){
+  if(feed!=="rail" && feed!=="subway") return null;
+  const now=new Date();
+  return septaLiveForTrip(trip, k, nameOf, now.getHours()*60+now.getMinutes());
+};
+
+/* ---------- SEPTA GTFS-Realtime trip updates --------------------------------
+   Decoded with the same parser the NYC boards use (mta-live.js). Rail trip ids
+   are not the bundle's, so rail updates are indexed by the train number found
+   in the id; bus and trolley trip ids are the GTFS trip_id the bundles carry. */
+async function fetchSeptaTripUpdates(){
+  const R=state.septaRt;
+  if(!state.septaUrl || R.off || !window.TBMta || !TBMta.decodeGtfsRt) return false;
+  const byTrip=new Map(), byTrain=new Map(); let ok=0, missing=0;
+  await Promise.all(["bus","rail"].map(async feed=>{
+    const ctl=new AbortController(), timer=setTimeout(()=>ctl.abort(), 12000);
+    try{
+      const r=await fetch(`${state.septaUrl}/tripupdates?feed=${feed}`, {cache:"no-store", signal:ctl.signal});
+      if(r.status===404){ missing++; return; }        // a Worker from before this route
+      if(!r.ok) return;
+      const {updates}=TBMta.decodeGtfsRt(new Uint8Array(await r.arrayBuffer()));
+      for(const id in updates){
+        const u=updates[id];
+        if(feed==="rail"){ (id.match(/\d{3,4}/g)||[]).forEach(n=>{ if(!byTrain.has(n)) byTrain.set(n,u); }); }
+        else byTrip.set(id, u);
+      }
+      ok++;
+    }catch(_){ } finally{ clearTimeout(timer); }
+  }));
+  if(missing===2){ R.off=true; return false; }       // don't ask again this session
+  if(ok){ if(byTrip.size||!R.byTrip.size) R.byTrip=byTrip; if(byTrain.size||!R.byTrain.size) R.byTrain=byTrain; R.at=Date.now(); }
+  return ok>0;
 }
 
 /* ---------- SEPTA's own lateness, which is the real thing -------------------
@@ -3060,10 +3245,16 @@ async function fetchSeptaLive(){
   const lateRows=[];
   const liveTrips=new Map(), liveTrains=new Map();
   let gotRail=false, gotBus=false;
+  /* All three in parallel: they are independent, and doing them one after the
+     other made every live refresh wait for the slowest SEPTA endpoint twice. */
+  const [tvRes, trRes, rtOk]=await Promise.all([
+    getJSON(`${base}/trainview`, 12000).catch(()=>null),
+    getJSON(`${base}/transitview`, 12000).catch(()=>null),
+    fetchSeptaTripUpdates().catch(()=>false)]);
   try{
-    const data=await getJSON(`${base}/trainview`, 12000);
+    const data=tvRes; if(!data) throw 0;
     (Array.isArray(data)?data:[]).forEach(t=>{
-      if(t.trainno) liveTrains.set(String(t.trainno), {late:t.late, next:t.nextstop||"", fid:"slt"+t.trainno});
+      if(t.trainno) liveTrains.set(String(t.trainno), {late:t.late, next:t.nextstop||"", fid:"slt"+t.trainno, track:t.TRACK||""});
     });
     gotRail=true;
     const trains=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon)
@@ -3086,7 +3277,7 @@ async function fetchSeptaLive(){
        near you by distance, which never said when one would reach you. */
   }catch(e){}
   try{
-    const data=await getJSON(`${base}/transitview`, 12000);
+    const data=trRes; if(!data) throw 0;
     /* SEPTA's transitview feed is one list for everything that is not Regional
        Rail: the ~300 numbered bus routes AND the Metro lines that are not the
        subway — the T trolleys, the G on Girard, the D to Media and Sharon Hill,
@@ -3126,17 +3317,30 @@ async function fetchSeptaLive(){
       if(b.BlockID) return "k"+b.BlockID;
       return "p"+b.route_id+"@"+b.lat+","+b.lng;   // last resort, and it will flicker
     };
-    (data.bus||[]).forEach(b=>{
-      if(b.trip) liveTrips.set(String(b.trip), {late:b.late, next:String(b.next_stop_id||""), fid:"slb"+vehKey(b)});
+    /* A position SEPTA has not refreshed in ten minutes is a bus parked at a
+       depot with its radio on, or one that has dropped off the network; either
+       way a marker there says a bus is somewhere it is not. Offset_sec is how
+       old SEPTA's own fix is. Older than two minutes still draws, but faded. */
+    const ageOf=b=>{ const o=+(b.Offset_sec!=null?b.Offset_sec:(b.Offset!=null?b.Offset*60:0)); return isFinite(o)?o:0; };
+    const all=(data.bus||[]).filter(b=>ageOf(b)<=600);
+    all.forEach(b=>{ b._key=vehKey(b);
+      if(b.trip) liveTrips.set(String(b.trip), {late:b.late, next:String(b.next_stop_id||""), fid:"slb"+b._key});
     });
     gotBus=true;
-    const near=(data.bus||[]).filter(b=>b.lat&&b.lng)
+    /* Buses on the routes this board times (the bundle's) are never cut for
+       budget: a departure row that says "live" must have its bus on the map
+       to follow. Everything else is nearest first, as before. */
+    const sb=state.septaBusSched, mine=new Set(sb ? sb.trips.map(t=>String(t.line)) : []);
+    const near=all.filter(b=>b.lat&&b.lng)
       .map(b=>({ b, mi: kmToMi(haversine(here,{lat:+b.lat,lon:+b.lng})) }))
       .filter(x=>x.mi<=25).sort((a,b2)=>a.mi-b2.mi);
     // 25 mi, not 15: Norristown is 17 miles out and the M is a Metro line the
     // whole way, not a suburban afterthought.
     const metroVeh=near.filter(x=>isMetro(x.b)).slice(0,120);
-    const buses=near.filter(x=>!isMetro(x.b) && x.mi<=15).slice(0,60);
+    const others=near.filter(x=>!isMetro(x.b) && x.mi<=15);
+    const buses=others.filter(x=>mine.has(String(x.b.route_id)))
+      .concat(others.filter(x=>!mine.has(String(x.b.route_id))).slice(0,60));
+    state.septaNearBuses=others.slice(0,20);
 
     metroVeh.forEach(({b})=>{
       const m=septaMetro(b.route_id); if(!m) return;
@@ -3150,46 +3354,41 @@ async function fetchSeptaLive(){
         label:"Route "+b.route_id, color:SEPTA_BUS_COL, late:b.late });
     });
 
-    const row=({b})=>({
-      id:"slb"+vehKey(b), lat:+b.lat, lon:+b.lng,
-      icon:()=>septaMetroIcon(b.route_id, `${b.route_id} → ${b.destination||"?"}`)
-               || labelIcon(SEPTA_BUS_COL, `${b.route_id} → ${b.destination||"?"}`, "bus"),
-      ik:"slb-"+b.route_id+"-"+septaMarkerStyle(),
-      tip:`SEPTA ${isMetro(b)?b.route_id:("Route "+b.route_id)} → ${b.destination}${delayHtml(liveLateInfo(b.late))} (live)`
-    });
+    const row=({b})=>{
+      const stale=ageOf(b)>120, li=liveLateInfo(b.late);
+      const name=isMetro(b)?b.route_id:("Route "+b.route_id);
+      return {
+        id:"slb"+b._key, lat:+b.lat, lon:+b.lng,
+        icon:()=>septaMetroIcon(b.route_id, `${b.route_id} → ${b.destination||"?"}`)
+                 || labelIcon(SEPTA_BUS_COL, `${b.route_id} → ${b.destination||"?"}`, "bus"),
+        ik:"slb-"+b.route_id+"-"+septaMarkerStyle(),
+        stale,
+        color: isMetro(b) ? (septaMetro(b.route_id)||{}).color : SEPTA_BUS_COL,
+        label: `SEPTA ${name} → ${b.destination||"?"}`,
+        tip:`SEPTA ${esc(name)} → ${esc(b.destination||"?")}${delayHtml(li)}`
+          + (b.next_stop_name?`<br>next stop: ${esc(b.next_stop_name)}`:"")
+          + (stale?`<br><i>position ${Math.round(ageOf(b)/60)} min old</i>`:" (live)")
+      };
+    };
     // Metro rides the subway card's layer alongside the L and the B; only the
     // numbered routes stay on the bus one.
-    updateFleet("septaSubway", metroVeh.map(row), CFG.septaEveryMs);
+    /* The L and the B are not in TransitView. With the Worker on they used to
+       vanish from the map entirely; they are drawn from the timetable here,
+       in the same call, for any line the live feed is not reporting. */
+    const liveLetters=new Set(metroVeh.map(x=>(septaMetro(x.b.route_id)||{}).letter).filter(Boolean));
+    const schedMetro=septaSubwayScheduledItems(state.septaSubwaySched, line=>!liveLetters.has((septaMetro(line)||{}).letter));
+    updateFleet("septaSubway", metroVeh.map(row).concat(schedMetro), CFG.septaEveryMs);
     const items=buses.map(row);
     updateFleet("septaBus", items, CFG.septaEveryMs);
     $("#septaBusCard").style.display = "flex";
-    $("#septaBusCount").textContent = items.length ? `${items.length} nearby` : "";
-    const box=$("#septaBusList");
-    if(box){
-      box.innerHTML="";
-      if(!buses.length) box.appendChild(el("div","empty","No SEPTA buses/trolleys within 15 mi right now."));
-      buses.slice(0,20).forEach(({b,mi})=>{
-        const row=el("div","row");
-        const bd=el("div","badge", b.route_id); bd.style.background=SEPTA_BUS_COL; bd.style.color="#fff";
-        const mid=el("div");
-        mid.appendChild(el("div","dest", b.destination||"—"));
-        const bSub=el("div","sub", `${mi.toFixed(1)} mi · ${b.Direction||""}`);
-        const bLi=liveLateInfo(b.late);
-        if(bLi && bLi.mins>0) bSub.appendChild(delayFragment(bLi));
-        mid.appendChild(bSub);
-        row.append(bd, mid, el("div"));
-        appendLiveTimes(row, b.late);
-        row.classList.add("followable"); row.title="Follow this bus on the map";
-        row.onclick=()=>startFollow("septaBus", "slb"+b.VehicleID);
-        box.appendChild(row);
-      });
-      fitList(box);
-    }
+    /* The card is refreshSeptaBusScheduled()'s (departures at your stop,
+       made live below); this feed only places the buses. */
   }catch(e){}
 
   if(window.TBOnTime && TBOnTime.late) TBOnTime.late(lateRows);
+  state.septaLive.tried=true;
   /* Both feeds, or the index would lose one half on the other's blip. */
-  if(gotRail || gotBus){
+  if(gotRail || gotBus || rtOk){
     const L=state.septaLive;
     if(gotRail){ L.trains=liveTrains; L.trainsAt=Date.now(); }
     if(gotBus){ L.trips=liveTrips; L.tripsAt=Date.now(); }
@@ -3276,7 +3475,7 @@ async function ensureSeptaSubwaySchedule(){
     const s=await getJSON("septa-subway-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k)=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
     state.septaSubwaySched=s;
   }catch(e){}
   return state.septaSubwaySched;
@@ -3286,7 +3485,7 @@ async function refreshSeptaSubway(){
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA subway schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   box.innerHTML=""; let shown=0, used=0, live=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   /* Cover LINES, not merely the nearest stop. The bundle went from 107 stations
@@ -3316,7 +3515,7 @@ async function refreshSeptaSubway(){
     /* Fed from the stop's whole `deps` list rather than the three-per-direction
        slice the card shows: the countdown wants every departure you could still
        walk to, not only the ones that fitted in the box. */
-    depFeed.push(...deps.slice().sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "metro", st.name, septaMetroCol(d.line))));
+    depFeed.push(...deps.filter(d=>!d.cancelled).sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "metro", st.name, septaMetroCol(d.line))));
     if(!sibling) box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "septaSubway", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
@@ -3335,14 +3534,21 @@ async function refreshSeptaSubway(){
 }
 async function drawSeptaSubwayScheduledMap(){
   const s=await ensureSeptaSubwaySchedule(); if(!s || !s.trips) return;
-  /* The live Worker owns this fleet once configured — it publishes the real L
-     and B cars, plus every other Metro line. Two writers on one fleet would
-     thrash, each updateFleet() removing the other's markers. */
-  if(state.septaUrl) return;
+  /* While the live Worker is answering it owns this fleet: fetchSeptaLive()
+     writes the live trolleys, G, D and M AND the timetable L and B (which
+     TransitView does not carry) in one updateFleet() call. Two writers on one
+     fleet would thrash, each removing the other's markers. */
+  if(septaLiveOwns("trips")) return;
+  updateFleet("septaSubway", septaSubwayScheduledItems(s), CFG.septaEveryMs);
+}
+/* Timetable positions for the Metro, optionally only for some lines. */
+function septaSubwayScheduledItems(s, keep){
+  if(!s || !s.trips) return [];
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
   s.trips.forEach((tr,i)=>{
     if(!active.has(tr.s)) return;
+    if(keep && !keep(tr.line)) return;
     const seq=tr.st; if(seq.length<2) return;
     for(const nm of [nowMin, nowMin+1440]){
       if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
@@ -3358,7 +3564,7 @@ async function drawSeptaSubwayScheduledMap(){
       break;
     }
   });
-  updateFleet("septaSubway", items, CFG.septaEveryMs);
+  return items;
 }
 
 /* ---------- PATCO — Philadelphia <-> Camden, NJ high-speed line ----------
@@ -3373,7 +3579,7 @@ async function ensurePatcoSchedule(){
     const s=await getJSON("patco-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.patcoSched=s;
     drawScheduleRouteLines(s, state.patcoRouteLayer, ()=>PATCO_COL, 3, .5);
   }catch(e){}
@@ -3384,7 +3590,7 @@ async function refreshPatco(){
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","PATCO schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   box.innerHTML=""; let shown=0, used=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   for(const {st,mi} of near){
@@ -3471,7 +3677,7 @@ async function ensureNjtSchedule(){
     const s=await getJSON("njt-phl-schedule.json", 20000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.njtSched=s;
     drawScheduleRouteLines(s, state.njtRouteLayer, tr=>njtCol(tr.line), 2.5, .38);
   }catch(e){}
@@ -3488,7 +3694,7 @@ async function refreshNjt(){
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","NJ Transit schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
-  const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
+  const near=nearStations(s);
   box.innerHTML=""; let shown=0, used=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   for(const {st,mi} of near){
@@ -4341,6 +4547,12 @@ async function refreshAlertTicker(){
 }
 
 /* ---------- boot ---------- */
+function everyHalfMinute(fn){
+  const go=()=>{ if(!document.hidden){ try{ fn(); }catch(_){} } setTimeout(go, 30000-(Date.now()%30000)+300); };
+  setTimeout(go, 30000-(Date.now()%30000)+300);
+  // a tab coming back to the front repaints at once rather than at the next grid tick
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden){ try{ fn(); }catch(_){} } });
+}
 function boot(){
   setBoardAccent(TBBoardPreferences.get("accent")||localStorage.getItem("transitboardphl.accent")||getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#4ea1ff"); buildAccentSwatches();
   setBoardTheme(TBBoardPreferences.get("theme")||localStorage.getItem("transitboardphl.theme")||"dark"); buildThemeButtons();
@@ -4360,13 +4572,13 @@ function boot(){
   refreshEverythingForNewLocation();
   setInterval(refreshPlanes, CFG.planeEveryMs);
   setInterval(fetchAmtrak, CFG.amtrakEveryMs);
-  setInterval(refreshSeptaRail, 30000);        // recompute next scheduled SEPTA Regional Rail (card)
-  setInterval(refreshSeptaSubway, 30000);      // recompute next scheduled SEPTA Subway (card)
-  setInterval(refreshSeptaBusScheduled, 30000);// recompute next scheduled SEPTA bus (card, if not using live Worker)
+  /* The departure cards count in clock minutes, so they repaint on the
+     half-minute grid (just after :00 and :30) rather than 30 s from whenever the
+     page loaded — otherwise a card could sit on last minute's number for up to
+     30 s while the commute card (same grid) had already moved on. */
+  everyHalfMinute(()=>{ refreshSeptaRail(); refreshSeptaSubway(); refreshSeptaBusScheduled(); refreshPatco(); refreshNjt(); });
   setInterval(septaMapTick, CFG.septaEveryMs); // SEPTA positions on the map (scheduled, or live via Worker)
-  setInterval(refreshPatco, 30000);            // recompute next scheduled PATCO (card)
   setInterval(drawPatcoScheduledMap, CFG.septaEveryMs); // PATCO positions on the map (scheduled)
-  setInterval(refreshNjt, 30000);               // next scheduled NJ Transit (card)
   setInterval(drawNjtScheduledMap, CFG.septaEveryMs);  // NJ Transit positions on the map (scheduled)
   refreshAlertTicker(); setInterval(refreshAlertTicker, 120000);
 
@@ -4429,7 +4641,16 @@ function railBundles(){
   try{ if(typeof SYSTEMS==="object" && SYSTEMS) for(const k in SYSTEMS) take(k, SYSTEMS[k] && SYSTEMS[k].sched, railOnly); }catch(e){}
   return out;
 }
+/* computeHubs walks every trip of every bundle (the SEPTA Metro one alone is
+   3.4 MB), and drawBigStops calls it on every pan, which while following a
+   vehicle is every frame. The answer only changes when a bundle loads or the
+   Big stops setting changes, so remember it until one of those does. */
 function computeHubs(){
+  const b=railBundles(), mode=bigStopsMode(), m=state._hubMemo;
+  if(m && m.mode===mode && m.b.length===b.length && m.b.every((x,i)=>x===b[i])) return m.out;
+  const out=computeHubsRaw(); state._hubMemo={b, mode, out}; return out;
+}
+function computeHubsRaw(){
   const byKey=new Map();                 // rounded lat/lon -> merged hub
   railBundles().forEach(s=>{
     const lines={};                      // station id -> Set(line)
@@ -4495,7 +4716,7 @@ function drawBigStops(){
     clearInterval(t);
     drawBigStops();
     setInterval(drawBigStops, 20000);                   // schedules load lazily; keep it current
-    state.map.on("zoomend moveend", drawBigStops);      // viewport-scoped: redraw on pan too
+    let bsT=0; state.map.on("zoomend moveend", ()=>{ clearTimeout(bsT); bsT=setTimeout(drawBigStops, 200); });   // one redraw per gesture, not one per frame of a follow      // viewport-scoped: redraw on pan too
   }, 600);
 })();
 

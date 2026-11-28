@@ -11,7 +11,7 @@
 <title>Washington DC Live Transit Project</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<link rel="stylesheet" href="theme.css?v=35" />
+<link rel="stylesheet" href="theme.css?v=36" />
 <link rel="stylesheet" href="board-designs.css?v=1" />
 <link rel="stylesheet" href="city-shortcuts.css?v=2" />
 <link rel="stylesheet" href="city-board.css?v=1" />
@@ -62,7 +62,7 @@
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=14" defer></script>
 <script src="departures.js?v=2" defer></script>
-<script src="commute.js?v=7" defer></script>
+<script src="commute.js?v=8" defer></script>
 <script src="ontime.js?v=27" defer></script>
 <script src="ontime-tile.js?v=2" defer></script>
 <script src="weather-radar.js?v=2" defer></script>
@@ -852,7 +852,7 @@ var y=g("tb.style");if(y&&y!=="classic")d.setAttribute("data-style",y);}catch(e)
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css" />
 <link rel="stylesheet" href="transit-map.css?v=1" />
-<script src="transit-map.js?v=8"></script>
+<script src="transit-map.js?v=9"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -1377,8 +1377,10 @@ function updateFleet(fleet, items, dur){
       F[it.id]={ marker:m, from:[it.lat,it.lon], to:[it.lat,it.lon], t0:now, dur:1, ik:it.ik, iconFn:it.icon,
         route:it.route, label:it.label, color:it.color };
     } else {
-      const c=v.marker.getLatLng();                 // animate from current interpolated spot
-      v.from=[c.lat,c.lng]; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
+      // animate from where the glide has got to (the marker itself may lag a
+      // sub-pixel step behind, or sit parked off screen: see animateFleets)
+      const pp=v.dur>1?Math.min(1,(now-v.t0)/v.dur):1;
+      v.from=[v.from[0]+(v.to[0]-v.from[0])*pp, v.from[1]+(v.to[1]-v.from[1])*pp]; v.at=null; v.to=[it.lat,it.lon]; v.t0=now; v.dur=Math.max(1, dur||1); v.iconFn=it.icon;
       v.route=it.route; v.label=it.label; v.color=it.color;
       if(it.tip) v.marker.setTooltipContent(it.tip);
       if(it.ik!==v.ik){ v.marker.setIcon(it.icon()); v.ik=it.ik; }
@@ -1493,12 +1495,24 @@ function updateLabelVisibility(){
 }
 function animateFleets(){
   const now=performance.now();
+  /* Hundreds of markers glide at once, and moving one costs Leaflet a DOM
+     write. Most frames move most of them by a fraction of a pixel, which
+     nobody can see, so a marker is only re-placed once it has moved about
+     half a pixel; and one outside the visible map is left until it has
+     arrived. Same glide, a fraction of the work per frame. */
+  const map=state.map, z=map?map.getZoom():12;
+  const eps=0.5*360/(256*Math.pow(2,z));          // ~half a pixel, in degrees of longitude
+  const vb=map?map.getBounds().pad(0.15):null;
   for(const f in state.fleets){ const F=state.fleets[f];
     for(const id in F){ const v=F[id];
       if(v.dur<=1) continue;
       const p=(now-v.t0)/v.dur;
-      if(p>=1){ v.marker.setLatLng(v.to); v.dur=1; continue; }
-      v.marker.setLatLng([ v.from[0]+(v.to[0]-v.from[0])*p, v.from[1]+(v.to[1]-v.from[1])*p ]);
+      if(p>=1){ v.marker.setLatLng(v.to); v.dur=1; v.at=v.to; continue; }
+      const lat=v.from[0]+(v.to[0]-v.from[0])*p, lon=v.from[1]+(v.to[1]-v.from[1])*p;
+      const at=v.at||v.from;
+      if(Math.abs(lat-at[0])<eps*0.75 && Math.abs(lon-at[1])<eps) continue;
+      if(vb && !vb.contains([lat,lon]) && !vb.contains(v.to)) continue;
+      v.at=[lat,lon]; v.marker.setLatLng(v.at);
     }
   }
   if(state.follow){
@@ -1580,6 +1594,12 @@ function railMinCell(min){
   if(min==="BRD"){ v.textContent="BRD"; v.className="live brd"; }
   else if(min==="ARR"){ v.textContent="ARR"; v.className="live arr"; }
   else if(min===""||min==="---"||min==null){ v.textContent="—"; v.style.color="var(--muted)"; }
+  /* WMATA writes "DLY" in place of the minutes when a train is held with no
+     estimate. It used to print as the bare code over "min · live". */
+  else if(String(min).toUpperCase()==="DLY"){
+    v.textContent="Delayed"; v.className="live status-tag";
+    const u=el("div","sched"); u.textContent="live · no estimate yet";
+    wrap.append(v,u); return wrap; }
   else { const n=parseInt(min,10);
     if(isFinite(n)){ v.textContent=countdownText(n); v.classList.add("eta", etaClass(n)); }
     else v.textContent=min;
@@ -2573,7 +2593,7 @@ async function ensureMarcSchedule(){
   try{ const s=await getJSON("marc-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.marcSched=s;
     drawScheduleRouteLines(s, state.marcRouteLayer, l=>MARC_COL[l]||"#e8792b");
   }catch(e){}
@@ -2694,7 +2714,7 @@ async function ensureRideOnSchedule(){
     const s=await getJSON("rideon-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });   // stop_id -> [lat,lon]
     s._dep={};                                                                          // stop_id -> departures (for the card)
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
     state.roSched=s;
   }catch(e){}
   return state.roSched;
@@ -3767,7 +3787,16 @@ function railBundles(){
   try{ if(typeof SYSTEMS==="object" && SYSTEMS) for(const k in SYSTEMS) take(k, SYSTEMS[k] && SYSTEMS[k].sched, railOnly); }catch(e){}
   return out;
 }
+/* computeHubs walks every trip of every bundle (the SEPTA Metro one alone is
+   3.4 MB), and drawBigStops calls it on every pan, which while following a
+   vehicle is every frame. The answer only changes when a bundle loads or the
+   Big stops setting changes, so remember it until one of those does. */
 function computeHubs(){
+  const b=railBundles(), mode=bigStopsMode(), m=state._hubMemo;
+  if(m && m.mode===mode && m.b.length===b.length && m.b.every((x,i)=>x===b[i])) return m.out;
+  const out=computeHubsRaw(); state._hubMemo={b, mode, out}; return out;
+}
+function computeHubsRaw(){
   const byKey=new Map();                 // rounded lat/lon -> merged hub
   railBundles().forEach(s=>{
     const lines={};                      // station id -> Set(line)
@@ -3825,7 +3854,7 @@ function drawBigStops(){
     clearInterval(t);
     drawBigStops();
     setInterval(drawBigStops, 20000);                   // schedules load lazily; keep it current
-    state.map.on("zoomend moveend", drawBigStops);      // viewport-scoped: redraw on pan too
+    let bsT=0; state.map.on("zoomend moveend", ()=>{ clearTimeout(bsT); bsT=setTimeout(drawBigStops, 200); });   // one redraw per gesture, not one per frame of a follow      // viewport-scoped: redraw on pan too
   }, 600);
 })();
 

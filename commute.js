@@ -141,7 +141,12 @@
     for (var k in by) {
       if (!Array.isArray(by[k])) continue;
       by[k].forEach(function (d) {
-        var m = d.at ? d.min - Math.floor((now - d.at) / 60000) : d.min;
+        /* Count minute boundaries crossed, not whole minutes elapsed: the cards
+           compute "in N min" from the clock minute (due minute − this minute),
+           so a row fed at 10:00:50 must read one less at 10:01:05, not at
+           10:01:50. Elapsed-time ageing left this card a minute behind the
+           departure card beside it for most of every minute. */
+        var m = d.at ? d.min - (Math.floor(now / 60000) - Math.floor(d.at / 60000)) : d.min;
         if (m < 0) return;
         out.push(m === d.min ? d : Object.assign({}, d, { min: m }));
       });
@@ -524,7 +529,11 @@
     try {
       ensureCard();
       paint();
-      setInterval(onData, 30000);
+      /* On the half-minute grid (:00 and :30, a beat after), not 30 s from
+         whenever the page loaded: the minute ticks over at :00 for every card
+         on the board at once, and this one should not trail them by up to 30 s. */
+      var tick = function () { onData(); setTimeout(tick, 30000 - (Date.now() % 30000) + 300); };
+      setTimeout(tick, 30000 - (Date.now() % 30000) + 300);
     } catch (_) {}
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

@@ -213,7 +213,8 @@
       "lirr",
       "njt"
      ],
-     "amtrak": "NYP"
+     "amtrak": "NYP",
+     "mta": "128,A28"
     },
     {
      "name": "Grand Central",
@@ -223,7 +224,8 @@
      "feeds": [
       "subway",
       "mnr"
-     ]
+     ],
+     "mta": "631,723,901"
     },
     {
      "name": "Times Sq-42 St",
@@ -232,7 +234,8 @@
      "r": 260,
      "feeds": [
       "subway"
-     ]
+     ],
+     "mta": "127,725,902,R16,A27"
     },
     {
      "name": "Fulton St",
@@ -241,7 +244,8 @@
      "r": 250,
      "feeds": [
       "subway"
-     ]
+     ],
+     "mta": "229,418,A38,M22"
     },
     {
      "name": "World Trade Center",
@@ -251,7 +255,8 @@
      "feeds": [
       "subway",
       "path"
-     ]
+     ],
+     "mta": "E01,R25,138,A36"
     },
     {
      "name": "Union Sq",
@@ -260,7 +265,8 @@
      "r": 200,
      "feeds": [
       "subway"
-     ]
+     ],
+     "mta": "635,L03,R20"
     },
     {
      "name": "Atlantic Terminal",

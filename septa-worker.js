@@ -17,6 +17,12 @@
  *   /transitview  -> live bus/trolley positions (system-wide)
  *   /arrivals?station=NAME  -> next arrivals at a named Regional Rail station
  *   /alerts       -> system-wide service alerts/advisories/detours
+ *   /tripupdates?feed=bus|rail -> SEPTA's GTFS-Realtime TripUpdates, passed
+ *                    through as binary protobuf (the board decodes it). This is
+ *                    the only SEPTA feed that marks a run CANCELLED and gives a
+ *                    predicted time at each stop; TrainView/TransitView give
+ *                    positions and lateness only. Boards on an older copy of
+ *                    this Worker get a 404 here and simply carry on without it.
  *
  * No API key required. No dependencies.
  */
@@ -26,6 +32,10 @@ const UPSTREAM = {
   transitview: "https://www3.septa.org/api/TransitView/index.php",
   arrivals:    "https://www3.septa.org/api/Arrivals/index.php",
   alerts:      "https://www3.septa.org/api/Alerts/index.php?req1=all",
+};
+const TRIP_UPDATES = {
+  bus:  "https://www3.septa.org/gtfsrt/septa-pa-us/Trip/rtTripUpdates.pb",
+  rail: "https://www3.septa.org/gtfsrt/septarail-pa-us/Trip/rtTripUpdates.pb",
 };
 
 const CORS = {
@@ -39,9 +49,23 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
     const url = new URL(request.url);
     const route = url.pathname.replace(/^\/+/, "");
+    if (route === "tripupdates") {
+      const feed = TRIP_UPDATES[url.searchParams.get("feed") || "bus"];
+      if (!feed) return json({ ok: false, error: "feed must be bus or rail" }, 400);
+      try {
+        const res = await fetch(feed, { cf: { cacheTtl: 10, cacheEverything: true } });
+        if (!res.ok) throw new Error("upstream " + res.status);
+        return new Response(await res.arrayBuffer(), {
+          status: 200,
+          headers: { "Content-Type": "application/x-protobuf", "Cache-Control": "no-store", ...CORS },
+        });
+      } catch (e) {
+        return json({ ok: false, error: String(e) }, 502);
+      }
+    }
     const upstream = UPSTREAM[route];
     if (!upstream) {
-      return json({ ok: false, error: "unknown route", routes: Object.keys(UPSTREAM) }, 404);
+      return json({ ok: false, error: "unknown route", routes: Object.keys(UPSTREAM).concat("tripupdates") }, 404);
     }
     try {
       let target = upstream;

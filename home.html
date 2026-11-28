@@ -39,7 +39,7 @@
 
   URL:  home.html?theme=auto|dark|day|black   (auto: day while the sun is up)
 -->
-<link rel="stylesheet" href="theme.css?v=35" />
+<link rel="stylesheet" href="theme.css?v=36" />
 <!-- The boards' current palette, from the file that owns it, so this page cannot
      drift from them. Its layout rules target `header`, `footer`, `main` and `.card`,
      so this page uses none of those and only the tokens apply. One of them hides
@@ -448,7 +448,7 @@ async function loadSched(file){
   try{
     const s=await getJSON(file, 20000);
     s._dep={};
-    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
+    (s.trips||[]).forEach(tr=>tr.st.forEach(([sid,min],k,arr)=>{ if(k===arr.length-1 && k>0) return; /* ends here: an arrival */ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min}); }));
     scheds[file]=s;
   }catch(e){ return null; }     // not remembered: one failed load must not end a timetable on a screen nobody restarts
   return scheds[file];
