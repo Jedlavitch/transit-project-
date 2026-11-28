@@ -2828,7 +2828,7 @@ async function refreshSeptaRail(){
   fitList(box);
 }
 async function drawSeptaRailScheduledMap(){
-  if(state.septaUrl) return;   // the live Worker owns train positions once configured
+  if(septaLiveOwns("trains")) return;   // the live Worker owns train positions while it is answering
   const s=await ensureSeptaRailSchedule(); if(!s || !s.trips) return;
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
@@ -2941,7 +2941,7 @@ async function refreshSeptaBusScheduled(){
   fitList(box);
 }
 async function drawSeptaBusScheduledMap(){
-  if(state.septaUrl) return;   // the live Worker owns bus positions once configured
+  if(septaLiveOwns("trips")) return;    // the live Worker owns bus positions while it is answering
   const s=await ensureSeptaBusSchedule(); if(!s || !s.trips) return;
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
@@ -3016,6 +3016,16 @@ state.septaLive={trips:new Map(), trains:new Map(), tripsAt:0, trainsAt:0};
 state.septaRt={byTrip:new Map(), byTrain:new Map(), at:0, off:false};
 const SEPTA_LIVE_MAX_AGE=180000;   // 3 min without a fix: stop claiming live
 function trainNo(n){ return String(n||"").replace(/^\D+/,""); }
+/* The live Worker draws a fleet only while it is answering. Before its first
+   reply nothing draws (so the timetable markers don't flash up and vanish);
+   once it has gone quiet for SEPTA_LIVE_MAX_AGE the timetable positions come
+   back, rather than the map emptying of trains and buses. */
+function septaLiveOwns(kind){
+  if(!state.septaUrl) return false;
+  const L=state.septaLive, at=kind==="trains"?L.trainsAt:L.tripsAt;
+  if(!L.tried) return true;
+  return !!at && Date.now()-at<SEPTA_LIVE_MAX_AGE;
+}
 /* Minute of the day (same clock the cards count in) for a POSIX second. */
 function minuteOfDay(sec, nowMin){
   const d=new Date(sec*1000), m=d.getHours()*60+d.getMinutes()+(d.getSeconds()>=30?1:0);
@@ -3362,7 +3372,12 @@ async function fetchSeptaLive(){
     };
     // Metro rides the subway card's layer alongside the L and the B; only the
     // numbered routes stay on the bus one.
-    updateFleet("septaSubway", metroVeh.map(row), CFG.septaEveryMs);
+    /* The L and the B are not in TransitView. With the Worker on they used to
+       vanish from the map entirely; they are drawn from the timetable here,
+       in the same call, for any line the live feed is not reporting. */
+    const liveLetters=new Set(metroVeh.map(x=>(septaMetro(x.b.route_id)||{}).letter).filter(Boolean));
+    const schedMetro=septaSubwayScheduledItems(state.septaSubwaySched, line=>!liveLetters.has((septaMetro(line)||{}).letter));
+    updateFleet("septaSubway", metroVeh.map(row).concat(schedMetro), CFG.septaEveryMs);
     const items=buses.map(row);
     updateFleet("septaBus", items, CFG.septaEveryMs);
     $("#septaBusCard").style.display = "flex";
@@ -3371,6 +3386,7 @@ async function fetchSeptaLive(){
   }catch(e){}
 
   if(window.TBOnTime && TBOnTime.late) TBOnTime.late(lateRows);
+  state.septaLive.tried=true;
   /* Both feeds, or the index would lose one half on the other's blip. */
   if(gotRail || gotBus || rtOk){
     const L=state.septaLive;
@@ -3518,14 +3534,21 @@ async function refreshSeptaSubway(){
 }
 async function drawSeptaSubwayScheduledMap(){
   const s=await ensureSeptaSubwaySchedule(); if(!s || !s.trips) return;
-  /* The live Worker owns this fleet once configured — it publishes the real L
-     and B cars, plus every other Metro line. Two writers on one fleet would
-     thrash, each updateFleet() removing the other's markers. */
-  if(state.septaUrl) return;
+  /* While the live Worker is answering it owns this fleet: fetchSeptaLive()
+     writes the live trolleys, G, D and M AND the timetable L and B (which
+     TransitView does not carry) in one updateFleet() call. Two writers on one
+     fleet would thrash, each removing the other's markers. */
+  if(septaLiveOwns("trips")) return;
+  updateFleet("septaSubway", septaSubwayScheduledItems(s), CFG.septaEveryMs);
+}
+/* Timetable positions for the Metro, optionally only for some lines. */
+function septaSubwayScheduledItems(s, keep){
+  if(!s || !s.trips) return [];
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes(), active=marcActiveServices(s, now);
   const items=[];
   s.trips.forEach((tr,i)=>{
     if(!active.has(tr.s)) return;
+    if(keep && !keep(tr.line)) return;
     const seq=tr.st; if(seq.length<2) return;
     for(const nm of [nowMin, nowMin+1440]){
       if(nm < seq[0][1] || nm > seq[seq.length-1][1]) continue;
@@ -3541,7 +3564,7 @@ async function drawSeptaSubwayScheduledMap(){
       break;
     }
   });
-  updateFleet("septaSubway", items, CFG.septaEveryMs);
+  return items;
 }
 
 /* ---------- PATCO — Philadelphia <-> Camden, NJ high-speed line ----------
