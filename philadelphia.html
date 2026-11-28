@@ -2756,9 +2756,12 @@ function feedFromBundle(key, s, mode, color, maxMi, nameFn){
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
   for(const {st,mi} of near){
     if(mi>maxMi) break;
-    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s) && d.t>=nowMin);
+    /* Every platform of the nearest station, not just the first one found: the
+       GTFS splits a station into one stop per direction (see refreshSeptaSubway). */
+    const plats=near.filter(n=>n.st.name===st.name && n.mi-mi<0.25).map(n=>n.st);
+    const deps=plats.flatMap(p=>(s._dep[p.id]||[]).filter(d=>active.has(d.s) && d.t>=nowMin));
     if(!deps.length) continue;
-    TBDep.feed(key, deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
+    TBDep.feed(key, deps.slice().sort((a,b)=>a.t-b.t).slice(0,24).map(d=>({
       mode, stop:(nameFn?nameFn(st.name):st.name), route:d.line||"", dest:d.hs||"",
       min:d.t-nowMin, color:(typeof color==="function"?color(d.line):color), live:false })));
     return;                       // nearest stop with service, same as the cards
@@ -3231,23 +3234,31 @@ async function refreshSeptaSubway(){
      two lines most people actually want, off their own card. A stop earns a
      slot only if it brings a line the card is not already showing. */
   const shownLines=new Set();
+  /* The GTFS gives each PLATFORM its own stop: Cecil B. Moore is 1277 (to Fern
+     Rock) and 32148 (to NRG). Judged on lines alone, the second platform "brings
+     nothing new" (it is B1 again) and was skipped, so a station showed one
+     direction only. A platform of a station already shown always comes in, and
+     doesn't use up one of the three slots. */
+  const shownStations=new Set();
   for(const {st,mi} of near){
     if(mi>15) break;         // Metro stops only matter if genuinely nearby
-    if(used>=3) break;       // three line-groups is what the card's height affords
+    const sibling=shownStations.has(st.name);
+    if(used>=3 && !sibling) continue;   // three line-groups is what the card's height affords
     const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
       .filter(d=>d.min>=nowMin);
     if(!deps.length) continue;
     const here=new Set(deps.map(d=>(septaMetro(d.line)||{}).letter || d.line));
-    if([...here].every(l=>shownLines.has(l))) continue;   // nothing new to say
+    if(!sibling && [...here].every(l=>shownLines.has(l))) continue;   // nothing new to say
     here.forEach(l=>shownLines.add(l));
-    used++;
+    if(!sibling) used++;
+    shownStations.add(st.name);
     /* Fed from the stop's whole `deps` list rather than the three-per-direction
        slice the card shows: the countdown wants every departure you could still
        walk to, not only the ones that fitted in the box. */
     depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
       mode:"metro", stop:st.name, route:d.line||"", dest:d.hs||"",
       min:d.t-nowMin, color:septaMetroCol(d.line), live:false })));
-    box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
+    if(!sibling) box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "septaSubway", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
       group.forEach(d=>{
