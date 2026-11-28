@@ -19,6 +19,7 @@
    min    WHOLE MINUTES from now until it departs — 0 for boarding, never negative
    color  the line colour the board already uses, for the badge
    live   true for a real-time prediction, false for a timetable
+   late   optional: minutes behind the operator's schedule (SEPTA reports it), else omitted
 
    Bucketed by `key` rather than concatenated, so each render owns exactly its
    own rows: a feed that stops updating goes stale on its own instead of leaving
@@ -63,6 +64,8 @@
         mode: d.mode || "", stop: String(d.stop), route: d.route == null ? "" : String(d.route),
         dest: d.dest == null ? "" : String(d.dest), min: m,
         color: d.color || "#556", live: !!d.live, at: Date.now(),
+        // minutes behind the operator's own schedule, where the feed says so
+        late: (d.late == null || !isFinite(+d.late)) ? null : Math.round(+d.late),
       });
     }
     if (!st._depBy) st._depBy = {};

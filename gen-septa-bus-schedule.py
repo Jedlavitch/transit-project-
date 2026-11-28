@@ -70,6 +70,10 @@ def main():
         for _, sid, _ in s:
             used_stops.add(sid)
         trips_out.append({
+            # GTFS trip_id: SEPTA's live TransitView reports the same id per
+            # vehicle ("trip"), which is how the board lays real lateness onto
+            # this exact scheduled run.
+            "id": tid,
             "line": (routes[t["route_id"]].get("route_short_name") or "").strip(),
             "hs": (t.get("trip_headsign") or "").strip(),
             "s": t["service_id"],

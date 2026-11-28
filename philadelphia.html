@@ -64,7 +64,7 @@
 <script src="admin.js?v=5" defer></script>
 <script src="spotlog.js?v=14" defer></script>
 <script src="interesting.js?v=4" defer></script>
-<script src="departures.js?v=2" defer></script>
+<script src="departures.js?v=3" defer></script>
 <script src="commute.js?v=7" defer></script>
 <script src="ontime.js?v=27" defer></script>
 <script src="ontime-tile.js?v=2" defer></script>
@@ -2731,9 +2731,9 @@ async function ensureSeptaRailSchedule(){
   if(state.septaSched) return state.septaSched;
   try{
     const s=await getJSON("septa-rail-schedule.json", 15000, "no-cache");
-    s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
+    s._coord={}; s._name={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; s._name[st.id]=st.name; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k)=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
     state.septaSched=s;
     // Thirteen lines in one colour: they are context for the Metro, not the subject.
     drawScheduleRouteLines(s, state.septaRailRouteLayer, ()=>SEPTA_COL, 2, .32);
@@ -2759,11 +2759,10 @@ function feedFromBundle(key, s, mode, color, maxMi, nameFn){
     /* Every platform of the nearest station, not just the first one found: the
        GTFS splits a station into one stop per direction (see refreshSeptaSubway). */
     const plats=near.filter(n=>n.st.name===st.name && n.mi-mi<0.25).map(n=>n.st);
-    const deps=plats.flatMap(p=>(s._dep[p.id]||[]).filter(d=>active.has(d.s) && d.t>=nowMin));
+    const deps=plats.flatMap(p=>septaDeps(s, s._dep[p.id], active, nowMin));
     if(!deps.length) continue;
-    TBDep.feed(key, deps.slice().sort((a,b)=>a.t-b.t).slice(0,24).map(d=>({
-      mode, stop:(nameFn?nameFn(st.name):st.name), route:d.line||"", dest:d.hs||"",
-      min:d.t-nowMin, color:(typeof color==="function"?color(d.line):color), live:false })));
+    TBDep.feed(key, deps.slice().sort((a,b)=>a.min-b.min).slice(0,24).map(d=>
+      septaPoolRow(d, nowMin, mode, (nameFn?nameFn(st.name):st.name), (typeof color==="function"?color(d.line):color))));
     return;                       // nearest stop with service, same as the cards
   }
   TBDep.clear(key);
@@ -2774,49 +2773,39 @@ async function refreshSeptaRail(){
   // Worker owns the departures list below -- otherwise the route line never
   // gets drawn at all when live tracking is on.
   const s=await ensureSeptaRailSchedule();
-  if(state.septaUrl){ feedFromBundle("septaRail", s, "train", SEPTA_COL, 40); return; }   // the live Worker owns this CARD; the pool still comes from the timetable
+  // With the Worker configured the rows below go live (septaLiveOf); the
+  // Worker itself only owns the train MARKERS.
   const box=$("#septaRailList"); if(!box) return;
   if(!s){ box.innerHTML=""; box.appendChild(el("div","empty","SEPTA Regional Rail schedule unavailable.")); return; }
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  box.innerHTML=""; let shown=0, used=0, live=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   for(const {st,mi} of near){
     if(mi>40) break;         // Regional Rail spans a wide area; skip stations far from wherever you are
     if(used>=1) break;   // nearest stop only: a 2nd stop header costs a departure
-    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin);
+    const deps=septaDeps(s, s._dep[st.id], active, nowMin);
     if(!deps.length) continue;
     used++;
     /* Fed from the stop's whole `deps` list rather than the three-per-direction
        slice the card shows: the countdown wants every departure you could still
        walk to, not only the ones that fitted in the box. */
-    depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
-      mode:"train", stop:st.name, route:d.line||"", dest:d.hs||"",
-      min:d.t-nowMin, color:SEPTA_COL, live:false })));
+    depFeed.push(...deps.slice().sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "train", st.name, SEPTA_COL)));
     box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "septaRail", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
       group.forEach(d=>{
-        const row=el("div","row");
         const b=el("div","badge rail", d.line); b.style.background=SEPTA_COL;
-        const mid=el("div");
-        mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
-        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-        mid.appendChild(el("div","sub", d.line+" · "+relTxt));
-        const times=el("div","times");
-        const t=el("div","live"); t.style.color="#8fb3c7"; t.textContent=marcClock(d.t);
-        times.append(t, dualTime(t, rel));
-        row.append(b, mid, el("div"), times);
-        wireFollowRow(row, "septaRail", "sr", d);
+        const row=septaDepRow(d, nowMin, b, d.line+" Line", "#8fb3c7", "septaRail", "sr");
+        if(d.live) live++;
         box.appendChild(row); shown++;
       });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No SEPTA Regional Rail nearby (or none scheduled soon)."));
   if(window.TBDep) TBDep.feed("septaRail", depFeed);
-  $("#septaRailCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
+  $("#septaRailCount").textContent = s && s._stale ? "stale schedule" : live ? "live" : "scheduled";
   fitList(box);
 }
 async function drawSeptaRailScheduledMap(){
@@ -2861,7 +2850,7 @@ async function ensureSeptaBusSchedule(){
     const s=await getJSON("septa-bus-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k)=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
     state.septaBusSched=s;
     drawScheduleRouteLines(s, state.septaBusRouteLayer, ()=>SEPTA_BUS_COL, 2, .28);
   }catch(e){}
@@ -2966,10 +2955,86 @@ function septaRailBadge(line){
   return (words[0]||"?").slice(0,3).toUpperCase();
 }
 
+/* ---------- live times on the timetable rows -------------------------------
+   The Worker publishes where each vehicle is and how late it is, never an
+   arrival time for your stop. The timetable has the arrival time but not the
+   lateness. Together they make a live departure: scheduled time + SEPTA's own
+   `late` for that exact run.
+
+   Matching is exact, not guessed. TransitView's `trip` IS the GTFS trip_id
+   (checked: T5 971966, G1 967111, route 23 999954 all appear in trips.txt), and
+   the subway/bus bundles carry it as `id`. Regional Rail matches by train
+   number, which the rail bundle carries as `n` ("CYN1052" → 1052).
+
+   A matched vehicle whose next stop is already PAST yours has left: that row
+   is dropped rather than shown as a departure you have missed. A run SEPTA is
+   not reporting (not started yet, or a line it doesn't publish — the L and the
+   B are absent from TransitView) stays "scheduled", unchanged. */
+state.septaLive={trips:new Map(), trains:new Map(), tripsAt:0, trainsAt:0};
+function septaLiveOf(s, d){
+  const L=state.septaLive;
+  const tr=s && s.trips && s.trips[d.ti]; if(!state.septaUrl || !tr) return null;
+  const at = tr.id!=null ? L.tripsAt : L.trainsAt;
+  if(!at || Date.now()-at>180000) return null;   // 3 min without a fix: stop claiming live
+  let v=null, idx=-1;
+  if(tr.id!=null){
+    v=L.trips.get(String(tr.id));
+    if(v) idx=tr.st.findIndex(x=>x[0]===v.next);
+  }else if(tr.n){
+    v=L.trains.get(String(tr.n).replace(/^\D+/,""));
+    if(v && s._name) idx=tr.st.findIndex(x=>s._name[x[0]]===v.next);
+  }
+  if(!v) return null;
+  const li=liveLateInfo(v.late); if(!li) return null;
+  if(idx>=0 && d.k!=null && idx>d.k) return {gone:true};
+  return {late:li.mins, li, fid:v.fid};
+}
+/* Raw `_dep` entries for one stop → card rows, live where SEPTA reports the run.
+   Looks back an hour, because a run that was due 4 minutes ago and is 6 late
+   is still coming. `min` is the expected minute of day (what the rows sort and
+   count down by); `t` stays the timetable minute for the "sched" line. */
+function septaDeps(s, list, active, nowMin){
+  const out=[];
+  for(const d of (list||[])){
+    if(!active.has(d.s) || d.t<nowMin-60) continue;
+    const lv=septaLiveOf(s, d);
+    if(lv && lv.gone) continue;
+    const min=d.t+(lv?lv.late:0);
+    if(min<nowMin) continue;
+    out.push(lv ? {...d, min, live:true, late:lv.late, li:lv.li, fid:lv.fid} : {...d, min});
+  }
+  return out;
+}
+/* One departure row's right-hand side and sub-line, shared by the three SEPTA
+   timetable cards so live and scheduled rows read the same way everywhere. */
+function septaDepRow(d, nowMin, badge, label, hue, fleet, prefix){
+  const row=el("div","row");
+  const mid=el("div");
+  mid.appendChild(el("div","dest", d.hs||label));
+  const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
+  const sub=el("div","sub", (prefix==="sb"?"Route ":"")+d.line+" · "+relTxt);
+  if(d.live) sub.appendChild(delayFragment(d.li));
+  mid.appendChild(sub);
+  const times=el("div","times");
+  const t=el("div","live"); t.style.color=hue; t.textContent=marcClock(d.t);
+  times.append(t, dualTime(t, rel));
+  if(d.live) times.appendChild(el("div","live-tag","live"));
+  row.append(badge, mid, el("div"), times);
+  if(d.live && d.fid){
+    row.classList.add("followable"); row.title="Follow this vehicle on the map";
+    row.onclick=()=>startFollow(fleet, d.fid);
+  }else wireFollowRow(row, fleet, prefix, d);
+  return row;
+}
+function septaPoolRow(d, nowMin, mode, stop, color){
+  return { mode, stop, route:d.line||"", dest:d.hs||"", min:d.min-nowMin, color,
+           live:!!d.live, late:d.live?d.late:null };
+}
+
 /* ---------- SEPTA's own lateness, which is the real thing -------------------
-   Every departure this board pools is `live:false`: all five feeds are bundled
-   GTFS timetables, so the wait-time recorder in ontime.js correctly records
-   nothing here and its card takes itself off the screen.
+   All five feeds are bundled GTFS timetables. With the Worker configured, SEPTA
+   rows whose run it reports become `live:true` (see septaLiveOf above); PATCO,
+   NJ Transit and SEPTA runs it does not report stay `live:false`.
 
    But SEPTA publishes something better than a prediction. TrainView and
    TransitView both carry `late` per vehicle — minutes behind SEPTA'S OWN
@@ -2993,8 +3058,14 @@ async function fetchSeptaLive(){
   /* Collected across both fetches and reported once. ontime.js throttles to one
      observation per 25s, so two calls would silently drop the second. */
   const lateRows=[];
+  const liveTrips=new Map(), liveTrains=new Map();
+  let gotRail=false, gotBus=false;
   try{
     const data=await getJSON(`${base}/trainview`, 12000);
+    (Array.isArray(data)?data:[]).forEach(t=>{
+      if(t.trainno) liveTrains.set(String(t.trainno), {late:t.late, next:t.nextstop||"", fid:"slt"+t.trainno});
+    });
+    gotRail=true;
     const trains=(Array.isArray(data)?data:[]).filter(t=>t.lat&&t.lon)
       .map(t=>({ t, mi: kmToMi(haversine(here,{lat:+t.lat,lon:+t.lon})) }))
       .sort((a,b)=>a.mi-b.mi);
@@ -3010,29 +3081,9 @@ async function fetchSeptaLive(){
       tip:`SEPTA ${t.line} train #${t.trainno} → ${t.dest}${delayHtml(liveLateInfo(t.late))} (live)`
     }));
     updateFleet("septaRail", items, CFG.septaEveryMs);
-    $("#septaRailCount").textContent = trains.length ? `${trains.length} nearby` : "";
-    const box=$("#septaRailList");
-    if(box){
-      box.innerHTML="";
-      if(!trains.length) box.appendChild(el("div","empty","No SEPTA Regional Rail trains running right now."));
-      trains.slice(0,20).forEach(({t,mi})=>{
-        const row=el("div","row");
-        const bd=el("div","badge rail", (t.line||"?").slice(0,4)); bd.style.background=SEPTA_COL;
-        const mid=el("div");
-        mid.appendChild(el("div","dest", t.dest||"—"));
-        const tSub=el("div","sub", `${mi.toFixed(1)} mi · ${t.line||""}`);
-        const tLi=liveLateInfo(t.late);
-        if(tLi && tLi.mins>0) tSub.appendChild(delayFragment(tLi));
-        mid.appendChild(tSub);
-        row.append(bd, mid, el("div"));
-        appendLiveTimes(row, t.late);
-        // live rows map 1:1 to their marker -- follow directly by train number
-        row.classList.add("followable"); row.title="Follow this train on the map";
-        row.onclick=()=>startFollow("septaRail", "slt"+t.trainno);
-        box.appendChild(row);
-      });
-      fitList(box);
-    }
+    /* The card itself is refreshSeptaRail()'s: departures from your station,
+       made live from this feed by septaLiveOf(). It used to list every train
+       near you by distance, which never said when one would reach you. */
   }catch(e){}
   try{
     const data=await getJSON(`${base}/transitview`, 12000);
@@ -3075,6 +3126,10 @@ async function fetchSeptaLive(){
       if(b.BlockID) return "k"+b.BlockID;
       return "p"+b.route_id+"@"+b.lat+","+b.lng;   // last resort, and it will flicker
     };
+    (data.bus||[]).forEach(b=>{
+      if(b.trip) liveTrips.set(String(b.trip), {late:b.late, next:String(b.next_stop_id||""), fid:"slb"+vehKey(b)});
+    });
+    gotBus=true;
     const near=(data.bus||[]).filter(b=>b.lat&&b.lng)
       .map(b=>({ b, mi: kmToMi(haversine(here,{lat:+b.lat,lon:+b.lng})) }))
       .filter(x=>x.mi<=25).sort((a,b2)=>a.mi-b2.mi);
@@ -3133,6 +3188,13 @@ async function fetchSeptaLive(){
   }catch(e){}
 
   if(window.TBOnTime && TBOnTime.late) TBOnTime.late(lateRows);
+  /* Both feeds, or the index would lose one half on the other's blip. */
+  if(gotRail || gotBus){
+    const L=state.septaLive;
+    if(gotRail){ L.trains=liveTrains; L.trainsAt=Date.now(); }
+    if(gotBus){ L.trips=liveTrips; L.tripsAt=Date.now(); }
+    refreshSeptaRail(); refreshSeptaSubway(); refreshSeptaBusScheduled();
+  }
 }
 function septaMapTick(){
   drawSeptaRailScheduledMap(); drawSeptaSubwayScheduledMap(); drawSeptaBusScheduledMap();
@@ -3214,7 +3276,7 @@ async function ensureSeptaSubwaySchedule(){
     const s=await getJSON("septa-subway-schedule.json", 15000, "no-cache");
     s._coord={}; (s.stations||[]).forEach(st=>{ s._coord[st.id]=[st.lat,st.lon]; });
     s._dep={};
-    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min])=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti}); }));
+    (s.trips||[]).forEach((tr,ti)=>tr.st.forEach(([sid,min],k)=>{ (s._dep[sid]=s._dep[sid]||[]).push({line:tr.line, hs:tr.hs, s:tr.s, t:min, ti, k}); }));
     state.septaSubwaySched=s;
   }catch(e){}
   return state.septaSubwaySched;
@@ -3225,7 +3287,7 @@ async function refreshSeptaSubway(){
   const here=state.loc, now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const active=marcActiveServices(s, now);
   const near=s.stations.map(st=>({st, mi:kmToMi(haversine(here,{lat:st.lat,lon:st.lon}))})).sort((a,b)=>a.mi-b.mi);
-  box.innerHTML=""; let shown=0, used=0;
+  box.innerHTML=""; let shown=0, used=0, live=0;
   const depFeed=[];   // rows for the commute countdown (departures.js)
   /* Cover LINES, not merely the nearest stop. The bundle went from 107 stations
      to 711 when the trolleys were added, and trolley stops come every couple of
@@ -3244,8 +3306,7 @@ async function refreshSeptaSubway(){
     if(mi>15) break;         // Metro stops only matter if genuinely nearby
     const sibling=shownStations.has(st.name);
     if(used>=3 && !sibling) continue;   // three line-groups is what the card's height affords
-    const deps=(s._dep[st.id]||[]).filter(d=>active.has(d.s)).map(d=>({...d, min:d.t}))
-      .filter(d=>d.min>=nowMin);
+    const deps=septaDeps(s, s._dep[st.id], active, nowMin);
     if(!deps.length) continue;
     const here=new Set(deps.map(d=>(septaMetro(d.line)||{}).letter || d.line));
     if(!sibling && [...here].every(l=>shownLines.has(l))) continue;   // nothing new to say
@@ -3255,31 +3316,21 @@ async function refreshSeptaSubway(){
     /* Fed from the stop's whole `deps` list rather than the three-per-direction
        slice the card shows: the countdown wants every departure you could still
        walk to, not only the ones that fitted in the box. */
-    depFeed.push(...deps.slice().sort((a,b)=>a.t-b.t).slice(0,12).map(d=>({
-      mode:"metro", stop:st.name, route:d.line||"", dest:d.hs||"",
-      min:d.t-nowMin, color:septaMetroCol(d.line), live:false })));
+    depFeed.push(...deps.slice().sort((a,b)=>a.min-b.min).slice(0,12).map(d=>septaPoolRow(d, nowMin, "metro", st.name, septaMetroCol(d.line))));
     if(!sibling) box.appendChild(el("div","stop-label","◼ "+st.name+`  ·  ${mi.toFixed(1)} mi`));
     groupDepsByDirection(deps, 3, 1, "septaSubway", nowMin).forEach(group=>{
       box.appendChild(el("div","dir-label","→ "+(group[0].hs||(group[0].line+" Line"))));
       group.forEach(d=>{
-        const row=el("div","row");
         const b=el("div","badge rail", d.line); b.style.background=septaMetroCol(d.line);
-        const mid=el("div");
-        mid.appendChild(el("div","dest", d.hs||(d.line+" Line")));
-        const rel=d.min-nowMin, relTxt = rel<=0?"now" : rel<60?`in ${rel} min` : `in ${Math.floor(rel/60)}h ${String(rel%60).padStart(2,"0")}m`;
-        mid.appendChild(el("div","sub", d.line+" · "+relTxt));
-        const times=el("div","times");
-        const t=el("div","live"); t.style.color="#7fb0e0"; t.textContent=marcClock(d.t);
-        times.append(t, dualTime(t, rel));
-        row.append(b, mid, el("div"), times);
-        wireFollowRow(row, "septaSubway", "ss", d);
+        const row=septaDepRow(d, nowMin, b, d.line+" Line", "#7fb0e0", "septaSubway", "ss");
+        if(d.live) live++;
         box.appendChild(row); shown++;
       });
     });
   }
   if(!shown) box.appendChild(el("div","empty","No SEPTA subway nearby (or none scheduled soon)."));
   if(window.TBDep) TBDep.feed("septaSubway", depFeed);
-  $("#septaSubwayCount").textContent = s && s._stale ? "stale schedule" : "scheduled";
+  $("#septaSubwayCount").textContent = s && s._stale ? "stale schedule" : live ? "live" : "scheduled";
   fitList(box);
 }
 async function drawSeptaSubwayScheduledMap(){
